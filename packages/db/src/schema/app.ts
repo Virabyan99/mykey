@@ -132,6 +132,8 @@ export const environment = appSchema.table(
     }),
     unique("environment_project_name_key").on(t.projectId, t.name),
     unique("environment_organization_id_key").on(t.organizationId, t.id),
+    // Target of foreign keys that must also match the project (machine_credential).
+    unique("environment_organization_project_id_key").on(t.organizationId, t.projectId, t.id),
     check(
       "environment_name_check",
       sql`${t.name} ~ ${sql.raw(`'${ENVIRONMENT_NAME_PATTERN.source}'`)}`,
@@ -227,6 +229,11 @@ export const secretVersionEvent = appSchema.table(
     occurredAt: timestamptz("occurred_at").notNull(),
   },
   (t) => [
+    foreignKey({
+      name: "secret_version_event_environment_fk",
+      columns: [t.organizationId, t.environmentId],
+      foreignColumns: [environment.organizationId, environment.id],
+    }),
     index("secret_version_event_name_version_idx").on(t.environmentId, t.name, t.version),
     check(
       "secret_version_event_actor_kind_check",
@@ -255,8 +262,8 @@ export const machineCredential = appSchema.table(
   (t) => [
     foreignKey({
       name: "machine_credential_environment_fk",
-      columns: [t.organizationId, t.environmentId],
-      foreignColumns: [environment.organizationId, environment.id],
+      columns: [t.organizationId, t.projectId, t.environmentId],
+      foreignColumns: [environment.organizationId, environment.projectId, environment.id],
     }),
     unique("machine_credential_organization_accessor_key").on(t.organizationId, t.accessor),
     check(
@@ -369,19 +376,29 @@ export const outbox = appSchema.table(
 );
 
 /** `entries` holds names, classifications, observed versions and tags only. */
-export const importPreview = appSchema.table("import_preview", {
-  id: uuid("id").primaryKey(),
-  organizationId: uuid("organization_id").notNull(),
-  environmentId: uuid("environment_id").notNull(),
-  ownerUserId: uuid("owner_user_id").notNull(),
-  fileHmac: bytea("file_hmac").notNull(),
-  hmacKeyId: text("hmac_key_id").notNull(),
-  expiresAt: timestamptz("expires_at").notNull(),
-  entries: jsonb("entries").notNull(),
-  claimedByOperationId: uuid("claimed_by_operation_id").unique(
-    "import_preview_claimed_by_operation_key",
-  ),
-});
+export const importPreview = appSchema.table(
+  "import_preview",
+  {
+    id: uuid("id").primaryKey(),
+    organizationId: uuid("organization_id").notNull(),
+    environmentId: uuid("environment_id").notNull(),
+    ownerUserId: uuid("owner_user_id").notNull(),
+    fileHmac: bytea("file_hmac").notNull(),
+    hmacKeyId: text("hmac_key_id").notNull(),
+    expiresAt: timestamptz("expires_at").notNull(),
+    entries: jsonb("entries").notNull(),
+    claimedByOperationId: uuid("claimed_by_operation_id").unique(
+      "import_preview_claimed_by_operation_key",
+    ),
+  },
+  (t) => [
+    foreignKey({
+      name: "import_preview_environment_fk",
+      columns: [t.organizationId, t.environmentId],
+      foreignColumns: [environment.organizationId, environment.id],
+    }),
+  ],
+);
 
 export const importEntry = appSchema.table(
   "import_entry",

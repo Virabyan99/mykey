@@ -168,7 +168,9 @@ describe("migrate", () => {
     const doctored = mkdtempSync(join(tmpdir(), "mykey-migrations-"));
     directories.push(doctored);
     cpSync(migrationsDir, doctored, { recursive: true });
-    const snapshotFile = join(doctored, "meta", "0001_snapshot.json");
+    const latest = String(migrationFiles.length - 1).padStart(4, "0");
+    const next = String(migrationFiles.length).padStart(4, "0");
+    const snapshotFile = join(doctored, "meta", `${latest}_snapshot.json`);
     const snapshot = JSON.parse(readFileSync(snapshotFile, "utf8")) as {
       tables: Record<string, unknown>;
     };
@@ -178,6 +180,8 @@ describe("migrate", () => {
 
     const drift = findSchemaDrift(doctored);
     expect(drift).toContain("meta/_journal.json");
-    expect(drift.filter((path) => /^0002_.+\.sql$/.test(path))).toHaveLength(1);
+    expect(
+      drift.filter((path) => path.startsWith(`${next}_`) && path.endsWith(".sql")),
+    ).toHaveLength(1);
   });
 });

@@ -57,5 +57,6 @@ What the tests prove:
 ## Open issues
 
 - By the plan's rule `api_runtime` can update the non-identity columns of `secret_version_event` and `membership.user_id`. That is wider than those tables need; the owning runs (4.2, 3.7) should narrow it when they know their statements.
-- `import_preview` has no foreign key to `environment`, as in the plan's table. Run 4.7 should decide whether to add one.
+- **Closed by the session review (migration `0002_ancestry_foreign_keys.sql`):** `import_preview` and `secret_version_event` had no foreign key to `environment`, and `machine_credential.project_id` was not tied to the environment's project. All three now have composite foreign keys, each with a tenancy test.
+- `api_runtime` can also update `effect_slot.operation_id` (found by the session review; same class as the two columns above).
 - Database-level `REVOKE`/`GRANT CONNECT` must be re-applied by hand after a restore without `--create` (inventory, step 5).

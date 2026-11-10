@@ -53,6 +53,12 @@ const insertSecret =
 const insertCredential = `INSERT INTO app.machine_credential
     (id, organization_id, project_id, environment_id, name, issuance_operation_id, requested_expires_at, state, issued_by)
   VALUES (gen_random_uuid(), $1, $2, $3, 'ci', gen_random_uuid(), now() + interval '1 day', 'issuing', gen_random_uuid())`;
+const insertVersionEvent = `INSERT INTO app.secret_version_event
+    (id, organization_id, environment_id, name, version, actor_kind, action, occurred_at)
+  VALUES (gen_random_uuid(), $1, $2, 'API_KEY', 1, 'system', 'created', now())`;
+const insertPreview = `INSERT INTO app.import_preview
+    (id, organization_id, environment_id, owner_user_id, file_hmac, hmac_key_id, expires_at, entries)
+  VALUES (gen_random_uuid(), $1, $2, gen_random_uuid(), decode('00', 'hex'), 'k1', now() + interval '10 minutes', '[]')`;
 const insertGrant =
   "INSERT INTO app.access_grant (id, organization_id, user_id, project_id, environment_id, role) VALUES (gen_random_uuid(), $1, $2, $3, $4, 'reader')";
 
@@ -99,6 +105,32 @@ describe("tenant boundaries are enforced by the database", () => {
     expect(
       await attempt(maintenance(), insertCredential, [a.organization, a.project, b.environment]),
     ).toBe(FOREIGN_KEY);
+  });
+
+  it("rejects a machine credential whose project is not the environment's project", async () => {
+    // A's organization and A's environment, but B's project or a project that does not exist.
+    expect(
+      await attempt(maintenance(), insertCredential, [a.organization, b.project, a.environment]),
+    ).toBe(FOREIGN_KEY);
+    expect(
+      await attempt(maintenance(), insertCredential, [a.organization, randomUUID(), a.environment]),
+    ).toBe(FOREIGN_KEY);
+  });
+
+  it("rejects a version event with A's organization and B's environment", async () => {
+    expect(await attempt(maintenance(), insertVersionEvent, [a.organization, a.environment])).toBe(
+      "ok",
+    );
+    expect(await attempt(maintenance(), insertVersionEvent, [a.organization, b.environment])).toBe(
+      FOREIGN_KEY,
+    );
+  });
+
+  it("rejects an import preview with A's organization and B's environment", async () => {
+    expect(await attempt(maintenance(), insertPreview, [a.organization, a.environment])).toBe("ok");
+    expect(await attempt(maintenance(), insertPreview, [a.organization, b.environment])).toBe(
+      FOREIGN_KEY,
+    );
   });
 
   it("rejects a grant that names both a project and an environment, or neither", async () => {
