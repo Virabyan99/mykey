@@ -6,7 +6,9 @@
   "devDependencies": {
     "@mykey/cli": "workspace:*",
     "@mykey/contracts": "workspace:*",
+    "@scalar/openapi-parser": "catalog:",
     "@types/pg": "catalog:",
-    "pg": "catalog:"
+    "pg": "catalog:",
+    "zod": "catalog:"
   }
 }
