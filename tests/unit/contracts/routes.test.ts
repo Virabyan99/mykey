@@ -282,3 +282,30 @@ describe("response schemas the specification already fixes", () => {
     expect(route("machine.resolve").request.body).toBeUndefined();
   });
 });
+
+describe("review fixes", () => {
+  it("every route but health can answer quarantined: the gate comes before everything", () => {
+    // Doc 06 §9: "GET /v1/version — gate still applies"; /health answers down instead.
+    for (const candidate of ROUTES) {
+      expect(candidate.errors.includes("quarantined"), candidate.id).toBe(
+        candidate.id !== "health.get",
+      );
+    }
+  });
+
+  it("project and credential names are returned in NFC, whatever form was sent", () => {
+    const nfd = "cafe" + String.fromCodePoint(0x301);
+    const nfc = "caf" + String.fromCodePoint(0xe9);
+    expect(nfd).not.toBe(nfc);
+    for (const id of ["projects.create", "projects.rename", "credentials.issue"]) {
+      const parsed = body(id).safeParse({ name: nfd });
+      expect(parsed.success, id).toBe(true);
+      expect((parsed.data as { name: string }).name, id).toBe(nfc);
+    }
+    // 64 code points in NFC, 128 as sent: the limit is counted after normalising.
+    const long = ("e" + String.fromCodePoint(0x301)).repeat(64);
+    const created = body("projects.create").safeParse({ name: long });
+    expect(created.success).toBe(true);
+    expect(Array.from((created.data as { name: string }).name)).toHaveLength(64);
+  });
+});

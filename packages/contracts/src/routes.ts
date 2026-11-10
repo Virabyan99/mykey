@@ -55,6 +55,8 @@ export const DENIED_ALIASES: readonly { readonly method: HttpMethod; readonly pa
 const projectName = z
   .string()
   .refine((value) => checkProjectName(value).ok)
+  // Handlers receive the NFC form, which is what the database constraint requires.
+  .transform((value) => value.normalize("NFC"))
   .describe(
     `${String(LIMITS.project.nameMinCodePoints)} to ${String(LIMITS.project.nameMaxCodePoints)} Unicode code points after NFC normalisation; no control characters; not whitespace only.`,
   );
@@ -98,7 +100,8 @@ const secretsListQuery = z.strictObject({
 
 // ----------------------------------------------------------------- error lists
 
-const EVERY: readonly ErrorCode[] = ["malformed_request", "rate_limited", "busy"];
+// The quarantine gate is the first step of every request (Doc 06 §9: even /v1/version).
+const EVERY: readonly ErrorCode[] = ["malformed_request", "rate_limited", "busy", "quarantined"];
 const SESSION: readonly ErrorCode[] = [
   "mixed_authentication",
   "unauthenticated",
@@ -170,7 +173,6 @@ function define(
   if (auth === "reset_flow") add(["unauthenticated", "dependency_unavailable"]);
   if (auth !== "public" && auth !== "machine" && method !== "GET") add(["origin_rejected"]);
   if (path.includes("/:")) add(["not_found"]);
-  if (path.includes("/:org") || auth === "machine") add(["quarantined"]);
   if (input.body !== undefined || input.query !== undefined) add(["validation_failed"]);
   if (id.endsWith(".list")) add(["listing_changed"]);
   if (idempotent) add(IDEMPOTENT);

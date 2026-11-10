@@ -38,7 +38,7 @@ Ten codes are named literally by Documents 04 and 06 (marked ★). The other twe
 | 503  | `outcome_unknown` ★             | The outcome of the operation is not known. The envelope carries the `operationId`.  |
 | 503  | `backend_inconsistent` ★        | A required namespace, mount, policy or role is missing or does not match.           |
 | 503  | `backend_sealed`                | OpenBao is sealed.                                                                  |
-| 503  | `quarantined`                   | The organization or environment is in maintenance quarantine.                       |
+| 503  | `quarantined`                   | The quarantine gate is closed. Every route except `/health` can answer this.        |
 | 503  | `audit_unavailable`             | The required audit record cannot be written, so the action is refused.              |
 | 503  | `dependency_unavailable`        | PostgreSQL or OpenBao cannot be reached.                                            |
 | 507  | `capacity_exceeded`             | A stored-size limit (names per environment, live value bytes, disk reserve) is hit. |

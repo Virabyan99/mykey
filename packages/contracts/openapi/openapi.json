@@ -98,7 +98,7 @@
             }
           },
           "503": {
-            "description": "Service unavailable. Codes: busy.",
+            "description": "Service unavailable. Codes: busy, quarantined.",
             "content": {
               "application/json": {
                 "schema": {
@@ -182,7 +182,7 @@
             }
           },
           "503": {
-            "description": "Service unavailable. Codes: busy, dependency_unavailable.",
+            "description": "Service unavailable. Codes: busy, quarantined, dependency_unavailable.",
             "content": {
               "application/json": {
                 "schema": {
@@ -286,7 +286,7 @@
             }
           },
           "503": {
-            "description": "Service unavailable. Codes: busy, dependency_unavailable, quarantined.",
+            "description": "Service unavailable. Codes: busy, quarantined, dependency_unavailable.",
             "content": {
               "application/json": {
                 "schema": {
@@ -332,8 +332,8 @@
                 "type": "object",
                 "properties": {
                   "name": {
-                    "type": "string",
-                    "description": "1 to 64 Unicode code points after NFC normalisation; no control characters; not whitespace only."
+                    "description": "1 to 64 Unicode code points after NFC normalisation; no control characters; not whitespace only.",
+                    "type": "string"
                   }
                 },
                 "required": [
@@ -436,7 +436,7 @@
             }
           },
           "503": {
-            "description": "Service unavailable. Codes: busy, dependency_unavailable, quarantined, outcome_unknown, audit_unavailable.",
+            "description": "Service unavailable. Codes: busy, quarantined, dependency_unavailable, outcome_unknown, audit_unavailable.",
             "content": {
               "application/json": {
                 "schema": {
@@ -492,8 +492,8 @@
                 "type": "object",
                 "properties": {
                   "name": {
-                    "type": "string",
-                    "description": "1 to 64 Unicode code points after NFC normalisation; no control characters; not whitespace only."
+                    "description": "1 to 64 Unicode code points after NFC normalisation; no control characters; not whitespace only.",
+                    "type": "string"
                   }
                 },
                 "required": [
@@ -596,7 +596,7 @@
             }
           },
           "503": {
-            "description": "Service unavailable. Codes: busy, dependency_unavailable, quarantined, outcome_unknown, audit_unavailable.",
+            "description": "Service unavailable. Codes: busy, quarantined, dependency_unavailable, outcome_unknown, audit_unavailable.",
             "content": {
               "application/json": {
                 "schema": {
@@ -756,7 +756,7 @@
             }
           },
           "503": {
-            "description": "Service unavailable. Codes: busy, dependency_unavailable, quarantined, outcome_unknown, audit_unavailable, backend_sealed, backend_inconsistent.",
+            "description": "Service unavailable. Codes: busy, quarantined, dependency_unavailable, outcome_unknown, audit_unavailable, backend_sealed, backend_inconsistent.",
             "content": {
               "application/json": {
                 "schema": {
@@ -916,7 +916,7 @@
             }
           },
           "503": {
-            "description": "Service unavailable. Codes: busy, dependency_unavailable, quarantined, outcome_unknown, audit_unavailable, backend_sealed, backend_inconsistent.",
+            "description": "Service unavailable. Codes: busy, quarantined, dependency_unavailable, outcome_unknown, audit_unavailable, backend_sealed, backend_inconsistent.",
             "content": {
               "application/json": {
                 "schema": {
@@ -1028,7 +1028,7 @@
             }
           },
           "503": {
-            "description": "Service unavailable. Codes: busy, dependency_unavailable, quarantined.",
+            "description": "Service unavailable. Codes: busy, quarantined, dependency_unavailable.",
             "content": {
               "application/json": {
                 "schema": {
@@ -1186,7 +1186,7 @@
             }
           },
           "503": {
-            "description": "Service unavailable. Codes: busy, dependency_unavailable, quarantined, outcome_unknown, audit_unavailable, backend_sealed, backend_inconsistent.",
+            "description": "Service unavailable. Codes: busy, quarantined, dependency_unavailable, outcome_unknown, audit_unavailable, backend_sealed, backend_inconsistent.",
             "content": {
               "application/json": {
                 "schema": {
@@ -1354,7 +1354,7 @@
             }
           },
           "503": {
-            "description": "Service unavailable. Codes: busy, dependency_unavailable, quarantined, outcome_unknown, audit_unavailable.",
+            "description": "Service unavailable. Codes: busy, quarantined, dependency_unavailable, outcome_unknown, audit_unavailable.",
             "content": {
               "application/json": {
                 "schema": {
@@ -1522,7 +1522,7 @@
             }
           },
           "503": {
-            "description": "Service unavailable. Codes: busy, dependency_unavailable, quarantined, outcome_unknown, audit_unavailable, backend_sealed, backend_inconsistent.",
+            "description": "Service unavailable. Codes: busy, quarantined, dependency_unavailable, outcome_unknown, audit_unavailable, backend_sealed, backend_inconsistent.",
             "content": {
               "application/json": {
                 "schema": {
@@ -1690,7 +1690,7 @@
             }
           },
           "503": {
-            "description": "Service unavailable. Codes: busy, dependency_unavailable, quarantined, outcome_unknown, audit_unavailable, backend_sealed, backend_inconsistent.",
+            "description": "Service unavailable. Codes: busy, quarantined, dependency_unavailable, outcome_unknown, audit_unavailable, backend_sealed, backend_inconsistent.",
             "content": {
               "application/json": {
                 "schema": {
@@ -1849,7 +1849,7 @@
             }
           },
           "503": {
-            "description": "Service unavailable. Codes: busy, dependency_unavailable, quarantined.",
+            "description": "Service unavailable. Codes: busy, quarantined, dependency_unavailable.",
             "content": {
               "application/json": {
                 "schema": {
@@ -2021,7 +2021,7 @@
             }
           },
           "503": {
-            "description": "Service unavailable. Codes: busy, dependency_unavailable, quarantined, outcome_unknown, audit_unavailable, backend_sealed, backend_inconsistent.",
+            "description": "Service unavailable. Codes: busy, quarantined, dependency_unavailable, outcome_unknown, audit_unavailable, backend_sealed, backend_inconsistent.",
             "content": {
               "application/json": {
                 "schema": {
@@ -2160,7 +2160,7 @@
             }
           },
           "503": {
-            "description": "Service unavailable. Codes: busy, dependency_unavailable, quarantined, backend_sealed, backend_inconsistent.",
+            "description": "Service unavailable. Codes: busy, quarantined, dependency_unavailable, backend_sealed, backend_inconsistent.",
             "content": {
               "application/json": {
                 "schema": {
@@ -2317,7 +2317,7 @@
             }
           },
           "503": {
-            "description": "Service unavailable. Codes: busy, dependency_unavailable, quarantined, audit_unavailable, backend_sealed, backend_inconsistent.",
+            "description": "Service unavailable. Codes: busy, quarantined, dependency_unavailable, audit_unavailable, backend_sealed, backend_inconsistent.",
             "content": {
               "application/json": {
                 "schema": {
@@ -2505,7 +2505,7 @@
             }
           },
           "503": {
-            "description": "Service unavailable. Codes: busy, dependency_unavailable, quarantined, outcome_unknown, audit_unavailable, backend_sealed, backend_inconsistent.",
+            "description": "Service unavailable. Codes: busy, quarantined, dependency_unavailable, outcome_unknown, audit_unavailable, backend_sealed, backend_inconsistent.",
             "content": {
               "application/json": {
                 "schema": {
@@ -2703,7 +2703,7 @@
             }
           },
           "503": {
-            "description": "Service unavailable. Codes: busy, dependency_unavailable, quarantined, outcome_unknown, audit_unavailable, backend_sealed, backend_inconsistent.",
+            "description": "Service unavailable. Codes: busy, quarantined, dependency_unavailable, outcome_unknown, audit_unavailable, backend_sealed, backend_inconsistent.",
             "content": {
               "application/json": {
                 "schema": {
@@ -2891,7 +2891,7 @@
             }
           },
           "503": {
-            "description": "Service unavailable. Codes: busy, dependency_unavailable, quarantined, outcome_unknown, audit_unavailable, backend_sealed, backend_inconsistent.",
+            "description": "Service unavailable. Codes: busy, quarantined, dependency_unavailable, outcome_unknown, audit_unavailable, backend_sealed, backend_inconsistent.",
             "content": {
               "application/json": {
                 "schema": {
@@ -3095,7 +3095,7 @@
             }
           },
           "503": {
-            "description": "Service unavailable. Codes: busy, dependency_unavailable, quarantined, outcome_unknown, audit_unavailable, backend_sealed, backend_inconsistent.",
+            "description": "Service unavailable. Codes: busy, quarantined, dependency_unavailable, outcome_unknown, audit_unavailable, backend_sealed, backend_inconsistent.",
             "content": {
               "application/json": {
                 "schema": {
@@ -3246,7 +3246,7 @@
             }
           },
           "503": {
-            "description": "Service unavailable. Codes: busy, dependency_unavailable, quarantined.",
+            "description": "Service unavailable. Codes: busy, quarantined, dependency_unavailable.",
             "content": {
               "application/json": {
                 "schema": {
@@ -3423,7 +3423,7 @@
             }
           },
           "503": {
-            "description": "Service unavailable. Codes: busy, dependency_unavailable, quarantined, outcome_unknown, audit_unavailable, backend_sealed, backend_inconsistent.",
+            "description": "Service unavailable. Codes: busy, quarantined, dependency_unavailable, outcome_unknown, audit_unavailable, backend_sealed, backend_inconsistent.",
             "content": {
               "application/json": {
                 "schema": {
@@ -3591,7 +3591,7 @@
             }
           },
           "503": {
-            "description": "Service unavailable. Codes: busy, dependency_unavailable, quarantined, outcome_unknown, audit_unavailable, backend_sealed, backend_inconsistent.",
+            "description": "Service unavailable. Codes: busy, quarantined, dependency_unavailable, outcome_unknown, audit_unavailable, backend_sealed, backend_inconsistent.",
             "content": {
               "application/json": {
                 "schema": {
@@ -3757,7 +3757,7 @@
             }
           },
           "503": {
-            "description": "Service unavailable. Codes: busy, dependency_unavailable, quarantined, audit_unavailable, backend_sealed, backend_inconsistent.",
+            "description": "Service unavailable. Codes: busy, quarantined, dependency_unavailable, audit_unavailable, backend_sealed, backend_inconsistent.",
             "content": {
               "application/json": {
                 "schema": {
@@ -3877,7 +3877,7 @@
             }
           },
           "503": {
-            "description": "Service unavailable. Codes: busy, dependency_unavailable, quarantined.",
+            "description": "Service unavailable. Codes: busy, quarantined, dependency_unavailable.",
             "content": {
               "application/json": {
                 "schema": {
@@ -3939,8 +3939,8 @@
                 "type": "object",
                 "properties": {
                   "name": {
-                    "type": "string",
-                    "description": "1 to 64 Unicode code points after NFC normalisation; no control characters; not whitespace only."
+                    "description": "1 to 64 Unicode code points after NFC normalisation; no control characters; not whitespace only.",
+                    "type": "string"
                   },
                   "ttlSeconds": {
                     "default": 2592000,
@@ -4050,7 +4050,7 @@
             }
           },
           "503": {
-            "description": "Service unavailable. Codes: busy, dependency_unavailable, quarantined, outcome_unknown, audit_unavailable, backend_sealed, backend_inconsistent.",
+            "description": "Service unavailable. Codes: busy, quarantined, dependency_unavailable, outcome_unknown, audit_unavailable, backend_sealed, backend_inconsistent.",
             "content": {
               "application/json": {
                 "schema": {
@@ -4226,7 +4226,7 @@
             }
           },
           "503": {
-            "description": "Service unavailable. Codes: busy, dependency_unavailable, quarantined, outcome_unknown, audit_unavailable, backend_sealed, backend_inconsistent.",
+            "description": "Service unavailable. Codes: busy, quarantined, dependency_unavailable, outcome_unknown, audit_unavailable, backend_sealed, backend_inconsistent.",
             "content": {
               "application/json": {
                 "schema": {
@@ -4319,7 +4319,7 @@
             }
           },
           "503": {
-            "description": "Service unavailable. Codes: busy, dependency_unavailable.",
+            "description": "Service unavailable. Codes: busy, quarantined, dependency_unavailable.",
             "content": {
               "application/json": {
                 "schema": {
@@ -4439,7 +4439,7 @@
             }
           },
           "503": {
-            "description": "Service unavailable. Codes: busy, dependency_unavailable, quarantined.",
+            "description": "Service unavailable. Codes: busy, quarantined, dependency_unavailable.",
             "content": {
               "application/json": {
                 "schema": {
@@ -4543,7 +4543,7 @@
             }
           },
           "503": {
-            "description": "Service unavailable. Codes: busy, dependency_unavailable, quarantined.",
+            "description": "Service unavailable. Codes: busy, quarantined, dependency_unavailable.",
             "content": {
               "application/json": {
                 "schema": {
@@ -4647,7 +4647,7 @@
             }
           },
           "503": {
-            "description": "Service unavailable. Codes: busy, dependency_unavailable, quarantined.",
+            "description": "Service unavailable. Codes: busy, quarantined, dependency_unavailable.",
             "content": {
               "application/json": {
                 "schema": {
@@ -4741,7 +4741,7 @@
             }
           },
           "503": {
-            "description": "Service unavailable. Codes: busy, dependency_unavailable, quarantined.",
+            "description": "Service unavailable. Codes: busy, quarantined, dependency_unavailable.",
             "content": {
               "application/json": {
                 "schema": {
@@ -4835,7 +4835,7 @@
             }
           },
           "503": {
-            "description": "Service unavailable. Codes: busy, dependency_unavailable, quarantined.",
+            "description": "Service unavailable. Codes: busy, quarantined, dependency_unavailable.",
             "content": {
               "application/json": {
                 "schema": {
@@ -4929,7 +4929,7 @@
             }
           },
           "503": {
-            "description": "Service unavailable. Codes: busy, dependency_unavailable, quarantined.",
+            "description": "Service unavailable. Codes: busy, quarantined, dependency_unavailable.",
             "content": {
               "application/json": {
                 "schema": {
@@ -5003,7 +5003,7 @@
             }
           },
           "503": {
-            "description": "Service unavailable. Codes: busy, dependency_unavailable.",
+            "description": "Service unavailable. Codes: busy, quarantined, dependency_unavailable.",
             "content": {
               "application/json": {
                 "schema": {
@@ -5094,7 +5094,7 @@
             }
           },
           "503": {
-            "description": "Service unavailable. Codes: busy, dependency_unavailable.",
+            "description": "Service unavailable. Codes: busy, quarantined, dependency_unavailable.",
             "content": {
               "application/json": {
                 "schema": {
@@ -5168,7 +5168,7 @@
             }
           },
           "503": {
-            "description": "Service unavailable. Codes: busy, dependency_unavailable.",
+            "description": "Service unavailable. Codes: busy, quarantined, dependency_unavailable.",
             "content": {
               "application/json": {
                 "schema": {
@@ -5242,7 +5242,7 @@
             }
           },
           "503": {
-            "description": "Service unavailable. Codes: busy, dependency_unavailable.",
+            "description": "Service unavailable. Codes: busy, quarantined, dependency_unavailable.",
             "content": {
               "application/json": {
                 "schema": {
@@ -5355,7 +5355,7 @@
             }
           },
           "503": {
-            "description": "Service unavailable. Codes: busy, dependency_unavailable, quarantined, backend_sealed, backend_inconsistent.",
+            "description": "Service unavailable. Codes: busy, quarantined, dependency_unavailable, backend_sealed, backend_inconsistent.",
             "content": {
               "application/json": {
                 "schema": {
@@ -5521,7 +5521,7 @@
             }
           },
           "503": {
-            "description": "Service unavailable. Codes: busy, dependency_unavailable, quarantined, audit_unavailable, backend_sealed, backend_inconsistent.",
+            "description": "Service unavailable. Codes: busy, quarantined, dependency_unavailable, audit_unavailable, backend_sealed, backend_inconsistent.",
             "content": {
               "application/json": {
                 "schema": {
