@@ -4,6 +4,8 @@
   "private": true,
   "type": "module",
   "devDependencies": {
-    "@mykey/cli": "workspace:*"
+    "@mykey/cli": "workspace:*",
+    "@types/pg": "catalog:",
+    "pg": "catalog:"
   }
 }

@@ -18,6 +18,9 @@ export default defineConfig({
           name: "integration",
           include: ["tests/integration/**/*.test.ts", "tests/fault/**/*.test.ts"],
           exclude: [cloudTests],
+          globalSetup: ["tests/harness/global-setup.ts"],
+          testTimeout: 120_000,
+          hookTimeout: 300_000,
         },
       },
       {

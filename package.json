@@ -15,7 +15,10 @@
     "build": "tsc -b",
     "test": "vitest run --project unit",
     "test:integration": "vitest run --project integration",
-    "pins:verify": "node scripts/pins-verify.ts"
+    "pins:verify": "node scripts/pins-verify.ts",
+    "stack:up": "node scripts/stack.ts up",
+    "stack:down": "node scripts/stack.ts down",
+    "stack:status": "node scripts/stack.ts status"
   },
   "packageManager": "pnpm@10.20.0+sha512.cf9998222162dd85864d0a8102e7892e7ba4ceadebbf5a31f9c2fce48dfce317a9c53b9f6464d1ef9042cba2e02ae02a9f7c143a2b438cd93c91840f0192b9dd",
   "devDependencies": {
@@ -26,6 +29,8 @@
     "prettier": "3.9.10",
     "typescript": "6.0.3",
     "typescript-eslint": "8.72.2",
-    "vitest": "5.1.0"
+    "vitest": "5.1.0",
+    "pg": "catalog:",
+    "@types/pg": "catalog:"
   }
 }

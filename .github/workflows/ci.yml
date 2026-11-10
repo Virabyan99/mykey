@@ -60,6 +60,9 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm run test:integration
+      - name: Remove every test stack
+        if: always()
+        run: node scripts/stack.ts down --all
 
   secret-scan:
     runs-on: ubuntu-24.04
