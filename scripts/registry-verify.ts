@@ -16,6 +16,16 @@ import {
 const ROOT = resolve(import.meta.dirname, "..");
 const STATUSES = ["OPEN", "SPIKE_PASS", "PASS", "FAIL", "WATCH", "CUT"];
 
+const DECISIONS = "docs/decisions/";
+const EVIDENCE_ROOTS = ["docs/evidence/", DECISIONS];
+
+/** Whether one line of the text names exactly this id (not a longer one) together with the status. */
+function statesClaim(text: string, id: string, status: string): boolean {
+  const escaped = id.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const exactId = new RegExp(`(?<![A-Za-z0-9-])${escaped}(?![0-9])`);
+  return text.split("\n").some((line) => exactId.test(line) && line.includes(status));
+}
+
 function expectedIds(): string[] {
   const two = (n: number) => String(n).padStart(2, "0");
   return [
@@ -55,6 +65,23 @@ export function registryProblems(registry: Registry, root: string = ROOT): strin
     for (const path of item.evidence) {
       if (!existsSync(join(root, path)))
         problems.push(`${item.id}: evidence ${path} does not exist`);
+      if (!EVIDENCE_ROOTS.some((prefix) => path.startsWith(prefix))) {
+        problems.push(`${item.id}: evidence ${path} is not under ${EVIDENCE_ROOTS.join(" or ")}`);
+      }
+    }
+    if (item.status !== "OPEN" && item.evidence.length > 0) {
+      // The registry may not claim more than a note says: one evidence file must
+      // name the item and the status on the same line.
+      const stated = item.evidence.some((path) => {
+        const file = join(root, path);
+        return existsSync(file) && statesClaim(readFileSync(file, "utf8"), item.id, item.status);
+      });
+      if (!stated) {
+        problems.push(`${item.id}: no evidence file states ${item.id} ${item.status} on one line`);
+      }
+    }
+    if (item.status === "CUT" && !item.evidence.some((path) => path.startsWith(DECISIONS))) {
+      problems.push(`${item.id}: CUT needs a decision record under ${DECISIONS}`);
     }
   }
   let rebuilt: string;

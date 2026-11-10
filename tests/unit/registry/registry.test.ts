@@ -175,6 +175,47 @@ describe("evidence:verify", () => {
       tamper((copy) => (copy.items[0]!.evidence = ["docs/evidence/does-not-exist.md"])).join("\n"),
     ).toMatch(/does-not-exist/);
     expect(tamper((copy) => (copy.items[200 - 60]!.gate = "F")).join("\n")).toMatch(/gate/);
+  });
+
+  it("refuses a claim its evidence file does not state", () => {
+    const claim = (id: string, status: Registry["items"][number]["status"], evidence: string[]) => {
+      const copy = structuredClone(registry);
+      const item = copy.items.find((candidate) => candidate.id === id)!;
+      item.status = status;
+      item.evidence = evidence;
+      return registryProblems(copy, root).join("\n");
+    };
+    // The Run 1.9 note exists and names R2-L1, but says it stays OPEN.
+    expect(claim("R2-L1", "SPIKE_PASS", ["docs/evidence/session-1/run-1.9.md"])).toMatch(
+      /R2-L1: no evidence file states R2-L1 SPIKE_PASS/,
+    );
+    // The Run 1.8 note states SPIKE_PASS for FR-1.33, not for FR-1.3 or FR-1.35.
+    expect(claim("FR-1.35", "SPIKE_PASS", ["docs/evidence/session-1/run-1.8.md"])).toMatch(
+      /FR-1\.35: no evidence file states/,
+    );
+    expect(claim("FR-1.03", "SPIKE_PASS", ["docs/evidence/session-1/run-1.8.md"])).toMatch(
+      /FR-1\.03: no evidence file states/,
+    );
+    // A real claim, backed by its own note, is accepted.
+    expect(claim("FR-1.33", "SPIKE_PASS", ["docs/evidence/session-1/run-1.8.md"])).not.toMatch(
+      /FR-1\.33:/,
+    );
+    // Evidence is a file under docs/evidence or docs/decisions, not any file that exists.
+    expect(claim("FR-1.33", "SPIKE_PASS", ["package.json"])).toMatch(
+      /FR-1\.33: evidence package\.json is not under docs\/evidence\/ or docs\/decisions\//,
+    );
+    // Cutting an item needs a decision record.
+    expect(claim("FR-1.33", "CUT", ["docs/evidence/session-1/run-1.8.md"])).toMatch(
+      /FR-1\.33: CUT needs a decision record under docs\/decisions\//,
+    );
+  });
+
+  it("reports a registry that differs from a rebuild", () => {
+    const tamper = (change: (copy: Registry) => void): string[] => {
+      const copy = structuredClone(registry);
+      change(copy);
+      return registryProblems(copy, root);
+    };
     expect(tamper((copy) => (copy.items[0]!.title = "changed")).join("\n")).toMatch(/rebuild/);
   });
 });

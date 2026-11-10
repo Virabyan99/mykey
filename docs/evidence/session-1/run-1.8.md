@@ -13,7 +13,7 @@ Registry note for Run 1.10: **FR-1.33, FR-1.34 and FR-1.38 become `SPIKE_PASS`**
 
 ## Commits
 
-Branch `run-1.8`, rebased onto `session-1` at `192e083`. Not pushed, not merged.
+Branch `run-1.8`, rebased onto `session-1` at `192e083`; merged into `session-1` with merge commit `a8901aa` and pushed (CI green, including the first Linux run of the loader test).
 
 - `3c50e8a` feat(contracts): strict dotenv parser, canonical writer and loader warnings
 - this commit: feat(contracts): strict dotenv codec v1 with loader compatibility evidence

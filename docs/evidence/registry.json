@@ -470,7 +470,7 @@
       "evidence": [
         "docs/evidence/session-1/run-1.8.md"
       ],
-      "note": "Codec level only: serialise then parse reproduces names and values exactly in property tests. The export and re-import of a real environment is still to come."
+      "note": "Codec level only, and only within the 1 MiB import limit: serialise then parse reproduces names and values exactly in property tests. An environment may hold 8 MiB of values, so a large export is refused on re-import today. The export and re-import of a real environment is still to come."
     },
     {
       "id": "FR-1.39",
