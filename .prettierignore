@@ -5,3 +5,4 @@ packages/contracts/openapi/
 packages/db/migrations/
 tests/fixtures/
 .superpowers/
+.trivyignore.images

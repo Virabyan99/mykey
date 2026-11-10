@@ -22,6 +22,12 @@ export default defineConfig({
       },
       {
         test: {
+          name: "cli",
+          include: ["tests/cli/**/*.test.ts"],
+        },
+      },
+      {
+        test: {
           name: "cloud",
           include: [cloudTests],
         },

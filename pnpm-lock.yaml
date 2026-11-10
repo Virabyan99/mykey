@@ -55,7 +55,11 @@ importers:
 
   packages/operations: {}
 
-  tests: {}
+  tests:
+    devDependencies:
+      '@mykey/cli':
+        specifier: workspace:*
+        version: link:../apps/cli
 
   workers/probe: {}
 

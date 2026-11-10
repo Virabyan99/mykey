@@ -1,0 +1,9 @@
+{
+  "name": "mykey-ci-vulnerable-dependency-fixture",
+  "version": "0.0.0",
+  "private": true,
+  "description": "NOT a workspace member. Seeded so the dependency scanner self-test has something to find (lodash 4.17.20, GHSA-35jh-r3h4-6jhm).",
+  "dependencies": {
+    "lodash": "4.17.20"
+  }
+}

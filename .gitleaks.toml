@@ -1,0 +1,19 @@
+# gitleaks configuration for the MyKey repository.
+# The default rule set, plus one rule for MyKey's own synthetic canary format.
+title = "MyKey secret scanning"
+
+[extend]
+useDefault = true
+
+[[rules]]
+id = "mykey-canary"
+description = "MyKey synthetic canary secret"
+regex = '''MYKEY_CANARY_[A-Z0-9]{32}'''
+keywords = ["mykey_canary_"]
+
+# The one place a canary may be committed: the fixture that proves the scanner
+# works. tests/fixtures/ci/gitleaks-selftest.toml is this file without the
+# allowlist, and the scanner-selftest CI job fails unless it finds the canary.
+[[allowlists]]
+description = "seeded canary used by the scanner self-test"
+paths = ['''^tests/fixtures/ci/seeded-secret/''']

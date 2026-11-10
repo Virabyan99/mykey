@@ -1,0 +1,2 @@
+# Synthetic canary. Not a credential for anything. Seeded so the scanner self-test has something to find.
+SMOKE_VALUE=MYKEY_CANARY_HO3VEY81D44V0LL7C2KZ2NGF6P3VSRXG

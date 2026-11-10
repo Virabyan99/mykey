@@ -1,0 +1,4 @@
+# Reviewed gitleaks false positives, one fingerprint per line (commit:file:rule:line).
+# The line below is a prose table row in specification document 02 (a work-package title
+# and its hour estimate); the generic-api-key rule matches ordinary words. No credential.
+c6f52f4956e2b39f86c8f37e169151b186f011c4:docs/doc_02_mykey_project_stage_breakdown_v0.3_preimplementation_audited.md:generic-api-key:264
