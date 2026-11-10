@@ -1,0 +1,8 @@
+# Credential custody list
+
+Names and locations only. **No value ever appears in this file, in Git, in logs or in chat.**
+Agent-held credentials for Stage 1 live on the owner's workstation under `~/.mykey/` (outside the repository and outside OneDrive); CI-needed copies are GitHub Actions secrets (planner decision P-17).
+
+| Name | Purpose | Location | Who can read | Created in run | Off-host copy needed |
+| --- | --- | --- | --- | --- | --- |
+| `mykey_ops_ed25519` (SSH key pair, comment `mykey-ops`) | Initial root SSH access to the OVHcloud hosts `mykey-prod` and `mykey-staging` (OWN-2), later operations over WireGuard | `~/.mykey/ssh/mykey_ops_ed25519` (private), `~/.mykey/ssh/mykey_ops_ed25519.pub` (public) | Workstation user (owner and agents running as the owner) | 1.1 | Yes — the owner copies the private key to a password manager or offline store before Run 2.5; losing it means console recovery on OVHcloud |
