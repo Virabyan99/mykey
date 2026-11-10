@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
@@ -6,6 +7,7 @@ import {
   dependencyScanCoverageProblem,
   imageScanArgs,
   secretHistoryScanArgs,
+  secretScanCoverageProblem,
   selftestSecretArgs,
   selftestVerdict,
   selftestVulnerabilityArgs,
@@ -101,5 +103,99 @@ describe("scanner self-test verdict", () => {
   it("fails when a finding is reported but not the seeded one", () => {
     const verdict = selftestVerdict("vulnerability", FOUND_EXIT_CODE, "other-package", "lodash");
     expect(verdict.ok).toBe(false);
+  });
+});
+
+describe("secret scan coverage", () => {
+  it("a history scan that read no commit is a failure, not a pass", () => {
+    const nothing = [
+      "fatal: not a git repository (or any of the parent directories): .git",
+      "INF 0 commits scanned.",
+      "INF no leaks found",
+    ].join("\n");
+    // The git error is reported first; without it the zero count is.
+    expect(secretScanCoverageProblem(nothing, false)).toMatch(/error/);
+    expect(secretScanCoverageProblem("INF 0 commits scanned.", false)).toMatch(/no commit/);
+    expect(secretScanCoverageProblem("INF no leaks found", false)).toMatch(/no commit/);
+  });
+
+  it("a scan that printed a git or gitleaks error is a failure even with commits", () => {
+    const broken =
+      "ERR git error encountered, see logs\nINF 19 commits scanned.\nINF no leaks found";
+    expect(secretScanCoverageProblem(broken, false)).toMatch(/error/);
+    const fatal = "fatal: bad object HEAD\nINF 3 commits scanned.";
+    expect(secretScanCoverageProblem(fatal, false)).toMatch(/error/);
+  });
+
+  it("a shallow checkout is a failure: the scan must see the whole history", () => {
+    expect(secretScanCoverageProblem("INF 1 commits scanned.\nINF no leaks found", true)).toMatch(
+      /shallow/,
+    );
+  });
+
+  it("accepts a full-history scan that read commits", () => {
+    const fine = "INF 19 commits scanned.\nINF scanned ~1.2 MB in 2s\nINF no leaks found";
+    expect(secretScanCoverageProblem(fine, false)).toBeUndefined();
+  });
+
+  it("the CI job checks out the whole history", () => {
+    const workflow = readFileSync(resolve(root, ".github/workflows/ci.yml"), "utf8");
+    const job = /\n {2}secret-scan:\n([\s\S]*?)\n {2}[a-z-]+:\n/.exec(workflow)?.[1] ?? "";
+    expect(job).toContain("fetch-depth: 0");
+    expect(job).toContain("node scripts/ci-scan.ts secrets");
+  });
+});
+
+describe("dependency scan coverage of the lockfile row", () => {
+  it("a pnpm-lock.yaml row without a count means it was not scanned", () => {
+    const notScanned = "│ pnpm-lock.yaml │ pnpm │        -        │";
+    expect(dependencyScanCoverageProblem(notScanned)).toBe(
+      "dependency scan did not cover pnpm-lock.yaml",
+    );
+    expect(dependencyScanCoverageProblem("Scanning pnpm-lock.yaml ... skipped")).toBe(
+      "dependency scan did not cover pnpm-lock.yaml",
+    );
+    expect(dependencyScanCoverageProblem("│ pnpm-lock.yaml │ pnpm │ 12 │")).toBeUndefined();
+  });
+});
+
+describe("gitleaks configuration", () => {
+  /** The lines that carry meaning: no comments, no blank lines, no title. */
+  const meaningful = (text: string) =>
+    text
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter((line) => line !== "" && !line.startsWith("#") && !line.startsWith("title ="));
+  const production = meaningful(readFileSync(resolve(root, ".gitleaks.toml"), "utf8"));
+  const selftest = meaningful(
+    readFileSync(resolve(root, "tests/fixtures/ci/gitleaks-selftest.toml"), "utf8"),
+  );
+
+  it("allows exactly one path, the seeded fixture, and nothing else", () => {
+    const start = production.indexOf("[[allowlists]]");
+    expect(start).toBeGreaterThan(0);
+    expect(production.slice(start)).toEqual([
+      "[[allowlists]]",
+      'description = "seeded canary used by the scanner self-test"',
+      "paths = ['''^tests/fixtures/ci/seeded-secret/''']",
+    ]);
+    expect(production.filter((line) => /allowlist/i.test(line))).toEqual(["[[allowlists]]"]);
+  });
+
+  it("is what the self-test runs, minus that allowlist", () => {
+    expect(selftest).toEqual(production.slice(0, production.indexOf("[[allowlists]]")));
+    expect(selftest.join("\n")).not.toMatch(/allowlist/i);
+  });
+});
+
+describe("secret scan coverage with coloured output", () => {
+  const esc = String.fromCharCode(27);
+  it("reads the level and the count through gitleaks' colour codes", () => {
+    const fine = `${esc}[90m3:48PM${esc}[0m ${esc}[32mINF${esc}[0m ${esc}[1m19 commits scanned.${esc}[0m`;
+    expect(secretScanCoverageProblem(fine, false)).toBeUndefined();
+    const broken = `${esc}[31mERR${esc}[0m ${esc}[1mgit error${esc}[0m\n${fine}`;
+    expect(secretScanCoverageProblem(broken, false)).toMatch(/error/);
+    const zero = `${esc}[32mINF${esc}[0m ${esc}[1m0 commits scanned.${esc}[0m`;
+    expect(secretScanCoverageProblem(zero, false)).toMatch(/no commit/);
   });
 });

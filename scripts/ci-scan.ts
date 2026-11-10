@@ -88,9 +88,27 @@ export function dependencyScanArgs(lock: DependenciesLock, repository: string): 
  * failure, not a pass.
  */
 export function dependencyScanCoverageProblem(output: string): string | undefined {
-  return output.includes("pnpm-lock.yaml")
+  // The summary row must carry a count: "pnpm-lock.yaml │ pnpm │ 0 │". A dash means "not scanned".
+  return /pnpm-lock\.yaml\s*│\s*pnpm\s*│\s*\d+\s*│/.test(output)
     ? undefined
     : "dependency scan did not cover pnpm-lock.yaml";
+}
+
+/**
+ * gitleaks exits 0 with "0 commits scanned" when it is pointed at something that
+ * is not a Git repository, and a shallow checkout hides the history from it. A
+ * scan that read no commit, printed an error, or saw a shallow history is a
+ * failure, not a pass.
+ */
+export function secretScanCoverageProblem(output: string, shallow: boolean): string | undefined {
+  if (shallow) return "secret scan ran on a shallow checkout; the whole history is required";
+  // gitleaks colours its log lines; the colour codes would hide the level from \b.
+  // eslint-disable-next-line no-control-regex
+  const plain = output.replace(/\u001b\[[0-9;]*m/g, "");
+  if (/^fatal:|\b(ERR|FTL)\b/m.test(plain)) return "secret scan printed a git or gitleaks error";
+  const commits = /\b(\d+) commits scanned/.exec(plain);
+  if (commits === null || Number(commits[1]) === 0) return "secret scan read no commit";
+  return undefined;
 }
 
 /**
@@ -190,9 +208,21 @@ if (import.meta.main) {
   const mode = process.argv[2];
   let ok: boolean;
   switch (mode) {
-    case "secrets":
-      ok = scan("secrets in Git history", secretHistoryScanArgs(lock, repository));
+    case "secrets": {
+      console.log("scan: secrets in Git history");
+      const shallow =
+        spawnSync("git", ["-C", repository, "rev-parse", "--is-shallow-repository"], {
+          encoding: "utf8",
+        }).stdout.trim() !== "false";
+      const { status, output } = runDocker(secretHistoryScanArgs(lock, repository), true);
+      console.log(output);
+      const problem = secretScanCoverageProblem(output, shallow);
+      if (problem !== undefined) console.error(`scan: ${problem}`);
+      if (status === FOUND_EXIT_CODE)
+        console.error("scan: secrets in Git history reported findings");
+      ok = status === 0 && problem === undefined;
       break;
+    }
     case "dependencies": {
       console.log("scan: dependency vulnerabilities");
       const { status, output } = runDocker(dependencyScanArgs(lock, repository), true);
