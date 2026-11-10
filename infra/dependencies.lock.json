@@ -1,0 +1,195 @@
+{
+  "reviewedAt": "2026-11-10",
+  "node": {
+    "version": "24.22.2",
+    "line": "24-lts"
+  },
+  "pnpm": {
+    "version": "10.20.0"
+  },
+  "images": {
+    "postgres": {
+      "image": "postgres",
+      "tag": "18.6",
+      "digest": "sha256:e3d24f6906d0760bf4da0dae872415391ededefad23fd471c47dc53b0ddf3c42",
+      "releaseUrl": "https://www.postgresql.org/docs/release/18.6/",
+      "advisoriesChecked": "2026-11-10"
+    },
+    "openbao": {
+      "image": "openbao/openbao",
+      "tag": "2.7.2",
+      "digest": "sha256:5046911075e137e154ce49ab051502f4ec7cf367d484ae4a4dce665d9b90561f",
+      "releaseUrl": "https://github.com/openbao/openbao/releases/tag/v2.7.2",
+      "advisoriesChecked": "2026-11-10"
+    },
+    "traefik": {
+      "image": "traefik",
+      "tag": "3.7.17",
+      "digest": "sha256:f4bb143d1135a579b630ed491e17ec50f6f7c9c6a30585ff3d385471d2a86f5a",
+      "releaseUrl": "https://github.com/traefik/traefik/releases/tag/v3.7.17",
+      "advisoriesChecked": "2026-11-10"
+    },
+    "restic": {
+      "image": "restic/restic",
+      "tag": "0.19.1",
+      "digest": "sha256:136600b6ff6843d61d355f7f71f460a166429f35de6fd11b568fece3c9a4d510",
+      "releaseUrl": "https://github.com/restic/restic/releases/tag/v0.19.1",
+      "advisoriesChecked": "2026-11-10"
+    },
+    "gitleaks": {
+      "image": "zricethezav/gitleaks",
+      "tag": "v8.30.1",
+      "digest": "sha256:c00b6bd0aeb3071cbcb79009cb16a60dd9e0a7c60e2be9ab65d25e6bc8abbb7f",
+      "releaseUrl": "https://github.com/gitleaks/gitleaks/releases/tag/v8.30.1",
+      "advisoriesChecked": "2026-11-10"
+    },
+    "trivy": {
+      "image": "aquasec/trivy",
+      "tag": "0.76.2",
+      "digest": "sha256:8f6bb947dbc528902e11f2f5be52f7b519f6a39d5d148f41166f2040499768fb",
+      "releaseUrl": "https://github.com/aquasecurity/trivy/releases/tag/v0.76.2",
+      "advisoriesChecked": "2026-11-10"
+    }
+  },
+  "npm": {
+    "typescript": {
+      "version": "6.0.3",
+      "advisoriesChecked": "2026-11-10",
+      "note": "7.0.2 is stable but typescript-eslint 8.72.2 supports <6.1.0 only"
+    },
+    "vitest": {
+      "version": "5.1.0",
+      "advisoriesChecked": "2026-11-10",
+      "note": ""
+    },
+    "fast-check": {
+      "version": "4.10.2",
+      "advisoriesChecked": "2026-11-10",
+      "note": ""
+    },
+    "eslint": {
+      "version": "10.14.0",
+      "advisoriesChecked": "2026-11-10",
+      "note": ""
+    },
+    "@eslint/js": {
+      "version": "10.0.1",
+      "advisoriesChecked": "2026-11-10",
+      "note": ""
+    },
+    "typescript-eslint": {
+      "version": "8.72.2",
+      "advisoriesChecked": "2026-11-10",
+      "note": ""
+    },
+    "prettier": {
+      "version": "3.9.10",
+      "advisoriesChecked": "2026-11-10",
+      "note": ""
+    },
+    "@types/node": {
+      "version": "24.19.2",
+      "advisoriesChecked": "2026-11-10",
+      "note": "matches the Node 24 line"
+    },
+    "zod": {
+      "version": "4.6.7",
+      "advisoriesChecked": "2026-11-10",
+      "note": ""
+    },
+    "hono": {
+      "version": "4.13.17",
+      "advisoriesChecked": "2026-11-10",
+      "note": "catalog only until Run 3.1"
+    },
+    "drizzle-orm": {
+      "version": "0.45.4",
+      "advisoriesChecked": "2026-11-10",
+      "note": ""
+    },
+    "drizzle-kit": {
+      "version": "0.31.11",
+      "advisoriesChecked": "2026-11-10",
+      "note": ""
+    },
+    "pg": {
+      "version": "8.23.1",
+      "advisoriesChecked": "2026-11-10",
+      "note": ""
+    },
+    "@types/pg": {
+      "version": "8.23.1",
+      "advisoriesChecked": "2026-11-10",
+      "note": ""
+    },
+    "pg-boss": {
+      "version": "12.38.1",
+      "advisoriesChecked": "2026-11-10",
+      "note": "catalog only until Run 3.1; needs Node >=22.12"
+    },
+    "better-auth": {
+      "version": "1.7.19",
+      "advisoriesChecked": "2026-11-10",
+      "note": "catalog only until Run 2.3; Doc 06 names 1.7.18, 1.7.19 is the newer stable patch"
+    },
+    "react": {
+      "version": "19.3.1",
+      "advisoriesChecked": "2026-11-10",
+      "note": "catalog only until Run 7.1"
+    },
+    "react-dom": {
+      "version": "19.3.1",
+      "advisoriesChecked": "2026-11-10",
+      "note": "catalog only until Run 7.1"
+    },
+    "@tanstack/react-query": {
+      "version": "5.107.1",
+      "advisoriesChecked": "2026-11-10",
+      "note": "catalog only until Run 7.1"
+    },
+    "@scalar/api-reference": {
+      "version": "1.77.0",
+      "advisoriesChecked": "2026-11-10",
+      "note": "catalog only until Run 5.9; needs Node >=22"
+    },
+    "@scalar/openapi-parser": {
+      "version": "0.29.20",
+      "advisoriesChecked": "2026-11-10",
+      "note": "needs Node >=22"
+    },
+    "@aws-sdk/client-s3": {
+      "version": "3.1165.0",
+      "advisoriesChecked": "2026-11-10",
+      "note": ""
+    },
+    "@next/env": {
+      "version": "16.4.6",
+      "advisoriesChecked": "2026-11-10",
+      "note": "test-only loader for the dotenv compatibility evidence"
+    }
+  },
+  "python": {
+    "python-dotenv": {
+      "version": "1.2.4",
+      "sha256": "42269a8a5b3fd54ffa6f3d84b18abed50064717576b4ecf03dc4a55d8aa04fdc"
+    }
+  },
+  "actions": {
+    "actions/checkout": {
+      "sha": "3d3c42e5aac5ba805825da76410c181273ba90b1",
+      "tag": "v7.0.1"
+    },
+    "actions/setup-node": {
+      "sha": "949feb2413d6458794dcd2491c4babbbce0c15c1",
+      "tag": "v7.1.0"
+    },
+    "pnpm/action-setup": {
+      "sha": "73e46992e05b19abd31f2f3c20e0e7370d762115",
+      "tag": "v6.1.1"
+    },
+    "actions/setup-python": {
+      "sha": "6d4fd22b20465ccc0f7354476588e8df7c9ca0e0",
+      "tag": "v7.1.0"
+    }
+  }
+}

@@ -7,14 +7,15 @@
     "node": ">=24.18.0 <25"
   },
   "scripts": {
-    "check": "pnpm run format:check && pnpm run lint && pnpm run typecheck",
+    "check": "pnpm run format:check && pnpm run lint && pnpm run typecheck && pnpm run pins:verify",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "lint": "eslint .",
     "typecheck": "tsc -b",
     "build": "tsc -b",
     "test": "vitest run --project unit",
-    "test:integration": "vitest run --project integration"
+    "test:integration": "vitest run --project integration",
+    "pins:verify": "node scripts/pins-verify.ts"
   },
   "packageManager": "pnpm@10.20.0+sha512.cf9998222162dd85864d0a8102e7892e7ba4ceadebbf5a31f9c2fce48dfce317a9c53b9f6464d1ef9042cba2e02ae02a9f7c143a2b438cd93c91840f0192b9dd",
   "devDependencies": {

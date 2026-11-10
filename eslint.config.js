@@ -28,6 +28,12 @@ export default defineConfig(
     },
   },
   {
+    files: ["tests/**/*.ts"],
+    rules: {
+      "@typescript-eslint/no-non-null-assertion": "off",
+    },
+  },
+  {
     files: ["**/*.js", "**/*.mjs"],
     extends: [tseslint.configs.disableTypeChecked],
   },
