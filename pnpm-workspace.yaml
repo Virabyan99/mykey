@@ -4,6 +4,11 @@ packages:
   - "workers/*"
   - "tests"
 
+# Dependency install scripts are never run. esbuild (pulled in by drizzle-kit and
+# vitest) works without its script.
+ignoredBuiltDependencies:
+  - esbuild
+
 catalog:
   "zod": 4.6.7
   "hono": 4.13.17

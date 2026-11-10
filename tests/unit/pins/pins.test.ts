@@ -140,6 +140,23 @@ describe("dependency pins", () => {
       ),
     ).toEqual(["redis", "ioredis", "bullmq", "@modelcontextprotocol/"]);
     expect(forbiddenComponents("  '@temporalio/client@1.0.0':\n")).toEqual(["temporalio"]);
+    // Installed packages are the two-space keys. A package that only names a
+    // forbidden one as an optional peer has not installed it.
+    expect(
+      forbiddenComponents(
+        [
+          "  drizzle-orm@0.45.4:",
+          "    peerDependencies:",
+          "      '@upstash/redis': '>=1.34.7'",
+          "    peerDependenciesMeta:",
+          "      '@upstash/redis':",
+          "        optional: true",
+          "",
+        ].join("\n"),
+      ),
+    ).toEqual([]);
+    expect(forbiddenComponents("  '@upstash/redis@1.34.7':\n")).toEqual(["redis"]);
+    expect(forbiddenComponents("  redis@4.6.0(some-peer@1.0.0):\n")).toEqual(["redis"]);
   });
 
   it("lock, catalog, package.json files and .node-version agree", () => {

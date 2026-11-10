@@ -281,9 +281,20 @@ export function workflowActionProblems(
   return problems;
 }
 
+/**
+ * Forbidden components among the packages the lockfile installs. An installed
+ * package is a two-space key `name@version:` of pnpm-lock.yaml. A name that
+ * appears only deeper, as another package's optional peer, is not installed.
+ */
 export function forbiddenComponents(lockfileText: string): string[] {
-  const haystack = lockfileText.toLowerCase();
-  return FORBIDDEN_COMPONENTS.filter((name) => haystack.includes(name));
+  const installed = new Set<string>();
+  for (const line of lockfileText.split("\n")) {
+    const match = /^ {2}'?((?:@[^/@\s']+\/)?[^@\s']+)@/.exec(line);
+    if (match?.[1] !== undefined) installed.add(match[1].toLowerCase());
+  }
+  return FORBIDDEN_COMPONENTS.filter((name) =>
+    [...installed].some((packageName) => packageName.includes(name)),
+  );
 }
 
 export function consistencyProblems(root: string, lock: DependenciesLock): string[] {

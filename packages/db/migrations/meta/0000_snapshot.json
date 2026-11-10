@@ -1,0 +1,1776 @@
+{
+  "id": "3ca53b5c-fc2b-41d2-a354-63c043917a11",
+  "prevId": "00000000-0000-0000-0000-000000000000",
+  "version": "7",
+  "dialect": "postgresql",
+  "tables": {
+    "app.access_grant": {
+      "name": "access_grant",
+      "schema": "app",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "organization_id": {
+          "name": "organization_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "project_id": {
+          "name": "project_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "environment_id": {
+          "name": "environment_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "role": {
+          "name": "role",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "access_grant_membership_fk": {
+          "name": "access_grant_membership_fk",
+          "tableFrom": "access_grant",
+          "tableTo": "membership",
+          "schemaTo": "app",
+          "columnsFrom": [
+            "organization_id",
+            "user_id"
+          ],
+          "columnsTo": [
+            "organization_id",
+            "user_id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "access_grant_project_fk": {
+          "name": "access_grant_project_fk",
+          "tableFrom": "access_grant",
+          "tableTo": "project",
+          "schemaTo": "app",
+          "columnsFrom": [
+            "organization_id",
+            "project_id"
+          ],
+          "columnsTo": [
+            "organization_id",
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "access_grant_environment_fk": {
+          "name": "access_grant_environment_fk",
+          "tableFrom": "access_grant",
+          "tableTo": "environment",
+          "schemaTo": "app",
+          "columnsFrom": [
+            "organization_id",
+            "environment_id"
+          ],
+          "columnsTo": [
+            "organization_id",
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "access_grant_role_check": {
+          "name": "access_grant_role_check",
+          "value": "\"app\".\"access_grant\".\"role\" in ('reader', 'editor')"
+        },
+        "access_grant_one_target_check": {
+          "name": "access_grant_one_target_check",
+          "value": "num_nonnulls(\"app\".\"access_grant\".\"project_id\", \"app\".\"access_grant\".\"environment_id\") = 1"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "app.backup_pair": {
+      "name": "backup_pair",
+      "schema": "app",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "capture_started_at": {
+          "name": "capture_started_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "boundary": {
+          "name": "boundary",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "artifact_hashes": {
+          "name": "artifact_hashes",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "schema_revision": {
+          "name": "schema_revision",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "release_commit": {
+          "name": "release_commit",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "key_refs": {
+          "name": "key_refs",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "validation_status": {
+          "name": "validation_status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "eligible_until": {
+          "name": "eligible_until",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "backup_pair_validation_status_check": {
+          "name": "backup_pair_validation_status_check",
+          "value": "\"app\".\"backup_pair\".\"validation_status\" in ('candidate', 'eligible', 'ineligible', 'expired')"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "app.effect_slot": {
+      "name": "effect_slot",
+      "schema": "app",
+      "columns": {
+        "scope_key": {
+          "name": "scope_key",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "operation_id": {
+          "name": "operation_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "step_id": {
+          "name": "step_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "generation": {
+          "name": "generation",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "acquired_at": {
+          "name": "acquired_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "effect_slot_operation_id_operation_id_fk": {
+          "name": "effect_slot_operation_id_operation_id_fk",
+          "tableFrom": "effect_slot",
+          "tableTo": "operation",
+          "schemaTo": "app",
+          "columnsFrom": [
+            "operation_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "app.environment": {
+      "name": "environment",
+      "schema": "app",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "organization_id": {
+          "name": "organization_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "project_id": {
+          "name": "project_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "state": {
+          "name": "state",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "kv_ready": {
+          "name": "kv_ready",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "policy_digest": {
+          "name": "policy_digest",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "metadata_generation": {
+          "name": "metadata_generation",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "0"
+        },
+        "live_value_bytes": {
+          "name": "live_value_bytes",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "lock_key": {
+          "name": "lock_key",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "nextval('app.environment_lock_key_seq')"
+        },
+        "archive_origin": {
+          "name": "archive_origin",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "archive_operation_id": {
+          "name": "archive_operation_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "environment_organization_project_fk": {
+          "name": "environment_organization_project_fk",
+          "tableFrom": "environment",
+          "tableTo": "project",
+          "schemaTo": "app",
+          "columnsFrom": [
+            "organization_id",
+            "project_id"
+          ],
+          "columnsTo": [
+            "organization_id",
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "environment_lock_key_key": {
+          "name": "environment_lock_key_key",
+          "nullsNotDistinct": false,
+          "columns": [
+            "lock_key"
+          ]
+        },
+        "environment_project_name_key": {
+          "name": "environment_project_name_key",
+          "nullsNotDistinct": false,
+          "columns": [
+            "project_id",
+            "name"
+          ]
+        },
+        "environment_organization_id_key": {
+          "name": "environment_organization_id_key",
+          "nullsNotDistinct": false,
+          "columns": [
+            "organization_id",
+            "id"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "environment_name_check": {
+          "name": "environment_name_check",
+          "value": "\"app\".\"environment\".\"name\" ~ '^[a-z][a-z0-9-]{0,62}$'"
+        },
+        "environment_state_check": {
+          "name": "environment_state_check",
+          "value": "\"app\".\"environment\".\"state\" in ('pending', 'active', 'revoking', 'archived', 'needs_review')"
+        },
+        "environment_live_value_bytes_check": {
+          "name": "environment_live_value_bytes_check",
+          "value": "\"app\".\"environment\".\"live_value_bytes\" between 0 and 8388608"
+        },
+        "environment_archive_origin_check": {
+          "name": "environment_archive_origin_check",
+          "value": "\"app\".\"environment\".\"archive_origin\" in ('self', 'project')"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "app.import_entry": {
+      "name": "import_entry",
+      "schema": "app",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "parent_operation_id": {
+          "name": "parent_operation_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "ordinal": {
+          "name": "ordinal",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "classification": {
+          "name": "classification",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "expected_version": {
+          "name": "expected_version",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "expected_state_tag": {
+          "name": "expected_state_tag",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "child_operation_id": {
+          "name": "child_operation_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "outcome": {
+          "name": "outcome",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "import_entry_parent_operation_id_operation_id_fk": {
+          "name": "import_entry_parent_operation_id_operation_id_fk",
+          "tableFrom": "import_entry",
+          "tableTo": "operation",
+          "schemaTo": "app",
+          "columnsFrom": [
+            "parent_operation_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "import_entry_parent_ordinal_key": {
+          "name": "import_entry_parent_ordinal_key",
+          "nullsNotDistinct": false,
+          "columns": [
+            "parent_operation_id",
+            "ordinal"
+          ]
+        },
+        "import_entry_parent_name_key": {
+          "name": "import_entry_parent_name_key",
+          "nullsNotDistinct": false,
+          "columns": [
+            "parent_operation_id",
+            "name"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "import_entry_classification_check": {
+          "name": "import_entry_classification_check",
+          "value": "\"app\".\"import_entry\".\"classification\" in ('create', 'update', 'unchanged', 'invalid', 'duplicate', 'conflict')"
+        },
+        "import_entry_outcome_check": {
+          "name": "import_entry_outcome_check",
+          "value": "\"app\".\"import_entry\".\"outcome\" in ('created', 'updated', 'unchanged', 'conflict', 'rejected', 'uncertain', 'not_attempted')"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "app.import_preview": {
+      "name": "import_preview",
+      "schema": "app",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "organization_id": {
+          "name": "organization_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "environment_id": {
+          "name": "environment_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "owner_user_id": {
+          "name": "owner_user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "file_hmac": {
+          "name": "file_hmac",
+          "type": "bytea",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "hmac_key_id": {
+          "name": "hmac_key_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "expires_at": {
+          "name": "expires_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "entries": {
+          "name": "entries",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "claimed_by_operation_id": {
+          "name": "claimed_by_operation_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "import_preview_claimed_by_operation_key": {
+          "name": "import_preview_claimed_by_operation_key",
+          "nullsNotDistinct": false,
+          "columns": [
+            "claimed_by_operation_id"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "app.machine_credential": {
+      "name": "machine_credential",
+      "schema": "app",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "organization_id": {
+          "name": "organization_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "project_id": {
+          "name": "project_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "environment_id": {
+          "name": "environment_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "issuance_operation_id": {
+          "name": "issuance_operation_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "accessor": {
+          "name": "accessor",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "requested_expires_at": {
+          "name": "requested_expires_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "effective_expires_at": {
+          "name": "effective_expires_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "state": {
+          "name": "state",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "issued_by": {
+          "name": "issued_by",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "last_used_at": {
+          "name": "last_used_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "machine_credential_environment_fk": {
+          "name": "machine_credential_environment_fk",
+          "tableFrom": "machine_credential",
+          "tableTo": "environment",
+          "schemaTo": "app",
+          "columnsFrom": [
+            "organization_id",
+            "environment_id"
+          ],
+          "columnsTo": [
+            "organization_id",
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "machine_credential_organization_accessor_key": {
+          "name": "machine_credential_organization_accessor_key",
+          "nullsNotDistinct": false,
+          "columns": [
+            "organization_id",
+            "accessor"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "machine_credential_state_check": {
+          "name": "machine_credential_state_check",
+          "value": "\"app\".\"machine_credential\".\"state\" in ('issuing', 'active', 'revoking', 'revoked', 'expired', 'needs_review')"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "app.membership": {
+      "name": "membership",
+      "schema": "app",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "organization_id": {
+          "name": "organization_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "role": {
+          "name": "role",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "state": {
+          "name": "state",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "membership_organization_id_organization_id_fk": {
+          "name": "membership_organization_id_organization_id_fk",
+          "tableFrom": "membership",
+          "tableTo": "organization",
+          "schemaTo": "app",
+          "columnsFrom": [
+            "organization_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "membership_organization_user_key": {
+          "name": "membership_organization_user_key",
+          "nullsNotDistinct": false,
+          "columns": [
+            "organization_id",
+            "user_id"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "membership_role_check": {
+          "name": "membership_role_check",
+          "value": "\"app\".\"membership\".\"role\" in ('owner', 'admin', 'member')"
+        },
+        "membership_state_check": {
+          "name": "membership_state_check",
+          "value": "\"app\".\"membership\".\"state\" in ('active', 'revoked')"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "app.operation": {
+      "name": "operation",
+      "schema": "app",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "organization_id": {
+          "name": "organization_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "principal_kind": {
+          "name": "principal_kind",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "principal_id": {
+          "name": "principal_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "action": {
+          "name": "action",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "target": {
+          "name": "target",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "idempotency_key": {
+          "name": "idempotency_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "fingerprint": {
+          "name": "fingerprint",
+          "type": "bytea",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "fingerprint_key_id": {
+          "name": "fingerprint_key_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "expected": {
+          "name": "expected",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "state": {
+          "name": "state",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "executor_boot_id": {
+          "name": "executor_boot_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "dispatched_at": {
+          "name": "dispatched_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "heartbeat_at": {
+          "name": "heartbeat_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "result": {
+          "name": "result",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "error_code": {
+          "name": "error_code",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "replay_expires_at": {
+          "name": "replay_expires_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "audit_event_id": {
+          "name": "audit_event_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "completed_at": {
+          "name": "completed_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "operation_idempotency_key": {
+          "name": "operation_idempotency_key",
+          "nullsNotDistinct": false,
+          "columns": [
+            "principal_kind",
+            "principal_id",
+            "action",
+            "target",
+            "idempotency_key"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "operation_principal_kind_check": {
+          "name": "operation_principal_kind_check",
+          "value": "\"app\".\"operation\".\"principal_kind\" in ('user', 'machine', 'operator', 'system')"
+        },
+        "operation_state_check": {
+          "name": "operation_state_check",
+          "value": "\"app\".\"operation\".\"state\" in ('accepted', 'executing', 'awaiting_input', 'uncertain', 'succeeded', 'partial', 'rejected')"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "app.operation_step": {
+      "name": "operation_step",
+      "schema": "app",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "operation_id": {
+          "name": "operation_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "ordinal": {
+          "name": "ordinal",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "target": {
+          "name": "target",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "before_state": {
+          "name": "before_state",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "dispatch_attempt_id": {
+          "name": "dispatch_attempt_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "outcome": {
+          "name": "outcome",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "backend_ref": {
+          "name": "backend_ref",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "operation_step_operation_id_operation_id_fk": {
+          "name": "operation_step_operation_id_operation_id_fk",
+          "tableFrom": "operation_step",
+          "tableTo": "operation",
+          "schemaTo": "app",
+          "columnsFrom": [
+            "operation_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "operation_step_operation_ordinal_key": {
+          "name": "operation_step_operation_ordinal_key",
+          "nullsNotDistinct": false,
+          "columns": [
+            "operation_id",
+            "ordinal"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "app.operation_tombstone": {
+      "name": "operation_tombstone",
+      "schema": "app",
+      "columns": {
+        "principal_kind": {
+          "name": "principal_kind",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "principal_id": {
+          "name": "principal_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "action": {
+          "name": "action",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "target": {
+          "name": "target",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "idempotency_key": {
+          "name": "idempotency_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "expired_at": {
+          "name": "expired_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {
+        "operation_tombstone_pkey": {
+          "name": "operation_tombstone_pkey",
+          "columns": [
+            "principal_kind",
+            "principal_id",
+            "action",
+            "target",
+            "idempotency_key"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "app.organization": {
+      "name": "organization",
+      "schema": "app",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "namespace": {
+          "name": "namespace",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "state": {
+          "name": "state",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "config_digest": {
+          "name": "config_digest",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "provisioning_operation_id": {
+          "name": "provisioning_operation_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "organization_namespace_unique": {
+          "name": "organization_namespace_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "namespace"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "organization_state_check": {
+          "name": "organization_state_check",
+          "value": "\"app\".\"organization\".\"state\" in ('provisioning', 'active', 'failed', 'needs_review')"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "app.outbox": {
+      "name": "outbox",
+      "schema": "app",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "operation_id": {
+          "name": "operation_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "job_kind": {
+          "name": "job_kind",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "state": {
+          "name": "state",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "delivered_at": {
+          "name": "delivered_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "outbox_operation_id_operation_id_fk": {
+          "name": "outbox_operation_id_operation_id_fk",
+          "tableFrom": "outbox",
+          "tableTo": "operation",
+          "schemaTo": "app",
+          "columnsFrom": [
+            "operation_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "outbox_operation_job_kind_key": {
+          "name": "outbox_operation_job_kind_key",
+          "nullsNotDistinct": false,
+          "columns": [
+            "operation_id",
+            "job_kind"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "outbox_state_check": {
+          "name": "outbox_state_check",
+          "value": "\"app\".\"outbox\".\"state\" in ('pending', 'delivered')"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "app.project": {
+      "name": "project",
+      "schema": "app",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "organization_id": {
+          "name": "organization_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "state": {
+          "name": "state",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "archive_operation_id": {
+          "name": "archive_operation_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "project_organization_id_organization_id_fk": {
+          "name": "project_organization_id_organization_id_fk",
+          "tableFrom": "project",
+          "tableTo": "organization",
+          "schemaTo": "app",
+          "columnsFrom": [
+            "organization_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "project_organization_name_key": {
+          "name": "project_organization_name_key",
+          "nullsNotDistinct": false,
+          "columns": [
+            "organization_id",
+            "name"
+          ]
+        },
+        "project_organization_id_key": {
+          "name": "project_organization_id_key",
+          "nullsNotDistinct": false,
+          "columns": [
+            "organization_id",
+            "id"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "project_name_length_check": {
+          "name": "project_name_length_check",
+          "value": "char_length(\"app\".\"project\".\"name\") between 1 and 64"
+        },
+        "project_name_nfc_check": {
+          "name": "project_name_nfc_check",
+          "value": "\"app\".\"project\".\"name\" = normalize(\"app\".\"project\".\"name\", NFC)"
+        },
+        "project_state_check": {
+          "name": "project_state_check",
+          "value": "\"app\".\"project\".\"state\" in ('pending', 'active', 'revoking', 'archived', 'needs_review')"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "app.rate_limit": {
+      "name": "rate_limit",
+      "schema": "app",
+      "columns": {
+        "scope": {
+          "name": "scope",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "key_digest": {
+          "name": "key_digest",
+          "type": "bytea",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "window_start": {
+          "name": "window_start",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "count": {
+          "name": "count",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {
+        "rate_limit_pkey": {
+          "name": "rate_limit_pkey",
+          "columns": [
+            "scope",
+            "key_digest",
+            "window_start"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "rate_limit_count_check": {
+          "name": "rate_limit_count_check",
+          "value": "\"app\".\"rate_limit\".\"count\" >= 0"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "app.secret_index": {
+      "name": "secret_index",
+      "schema": "app",
+      "columns": {
+        "environment_id": {
+          "name": "environment_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "organization_id": {
+          "name": "organization_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "current_version": {
+          "name": "current_version",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "state_tag": {
+          "name": "state_tag",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "state": {
+          "name": "state",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "live_value_bytes": {
+          "name": "live_value_bytes",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "last_changed_at": {
+          "name": "last_changed_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "last_operation_id": {
+          "name": "last_operation_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "secret_index_environment_fk": {
+          "name": "secret_index_environment_fk",
+          "tableFrom": "secret_index",
+          "tableTo": "environment",
+          "schemaTo": "app",
+          "columnsFrom": [
+            "organization_id",
+            "environment_id"
+          ],
+          "columnsTo": [
+            "organization_id",
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "secret_index_pkey": {
+          "name": "secret_index_pkey",
+          "columns": [
+            "environment_id",
+            "name"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "secret_index_name_check": {
+          "name": "secret_index_name_check",
+          "value": "\"app\".\"secret_index\".\"name\" ~ '^[A-Z][A-Z0-9_]{0,127}$'"
+        },
+        "secret_index_state_check": {
+          "name": "secret_index_state_check",
+          "value": "\"app\".\"secret_index\".\"state\" in ('live', 'deleted', 'needs_review')"
+        },
+        "secret_index_live_value_bytes_check": {
+          "name": "secret_index_live_value_bytes_check",
+          "value": "\"app\".\"secret_index\".\"live_value_bytes\" between 0 and 65536"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "app.secret_version_event": {
+      "name": "secret_version_event",
+      "schema": "app",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "organization_id": {
+          "name": "organization_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "environment_id": {
+          "name": "environment_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "version": {
+          "name": "version",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "operation_id": {
+          "name": "operation_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "actor_kind": {
+          "name": "actor_kind",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "actor_id": {
+          "name": "actor_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "action": {
+          "name": "action",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "occurred_at": {
+          "name": "occurred_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {
+        "secret_version_event_name_version_idx": {
+          "name": "secret_version_event_name_version_idx",
+          "columns": [
+            {
+              "expression": "environment_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "name",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "version",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "secret_version_event_actor_kind_check": {
+          "name": "secret_version_event_actor_kind_check",
+          "value": "\"app\".\"secret_version_event\".\"actor_kind\" in ('user', 'operator', 'system', 'unknown')"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "app.service_control": {
+      "name": "service_control",
+      "schema": "app",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "boolean",
+          "primaryKey": true,
+          "notNull": true,
+          "default": true
+        },
+        "capture_mode": {
+          "name": "capture_mode",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'idle'"
+        },
+        "epoch": {
+          "name": "epoch",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "0"
+        },
+        "owner": {
+          "name": "owner",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "pair_id": {
+          "name": "pair_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "service_control_single_row_check": {
+          "name": "service_control_single_row_check",
+          "value": "\"app\".\"service_control\".\"id\""
+        },
+        "service_control_capture_mode_check": {
+          "name": "service_control_capture_mode_check",
+          "value": "\"app\".\"service_control\".\"capture_mode\" in ('idle', 'draining', 'capturing')"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "audit.event": {
+      "name": "event",
+      "schema": "audit",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "occurred_at": {
+          "name": "occurred_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "actor_kind": {
+          "name": "actor_kind",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "actor_id": {
+          "name": "actor_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "source_category": {
+          "name": "source_category",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "organization_id": {
+          "name": "organization_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "action": {
+          "name": "action",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "target_kind": {
+          "name": "target_kind",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "target_id": {
+          "name": "target_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "outcome": {
+          "name": "outcome",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "request_id": {
+          "name": "request_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "operation_id": {
+          "name": "operation_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "details": {
+          "name": "details",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "event_organization_occurred_idx": {
+          "name": "event_organization_occurred_idx",
+          "columns": [
+            {
+              "expression": "organization_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "occurred_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    }
+  },
+  "enums": {},
+  "schemas": {
+    "app": "app",
+    "audit": "audit",
+    "auth": "auth",
+    "jobs": "jobs"
+  },
+  "sequences": {
+    "app.environment_lock_key_seq": {
+      "name": "environment_lock_key_seq",
+      "schema": "app",
+      "increment": "1",
+      "startWith": "1",
+      "minValue": "1",
+      "maxValue": "9223372036854775807",
+      "cache": "1",
+      "cycle": false
+    }
+  },
+  "roles": {},
+  "policies": {},
+  "views": {},
+  "_meta": {
+    "columns": {},
+    "schemas": {},
+    "tables": {}
+  }
+}
