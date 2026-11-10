@@ -14,11 +14,11 @@
 
 ## Commands and results
 
-| Command | Exit | Proof line |
-| --- | --- | --- |
-| `git init -b main` + first commit | 0 | `c6f52f4 docs: import specification documents 01-10 and session 1 plan` |
-| `ls docs/decisions` | 0 | eleven files `D-01-fourteen-day-timebox.md` … `D-11-owner-and-agent-duties.md` |
-| `ssh-keygen -t ed25519 -C mykey-ops -f ~/.mykey/ssh/mykey_ops_ed25519 -N ""` | 0 | public key ends `…Gly8qBal mykey-ops` |
+| Command                                                                      | Exit | Proof line                                                                     |
+| ---------------------------------------------------------------------------- | ---- | ------------------------------------------------------------------------------ |
+| `git init -b main` + first commit                                            | 0    | `c6f52f4 docs: import specification documents 01-10 and session 1 plan`        |
+| `ls docs/decisions`                                                          | 0    | eleven files `D-01-fourteen-day-timebox.md` … `D-11-owner-and-agent-duties.md` |
+| `ssh-keygen -t ed25519 -C mykey-ops -f ~/.mykey/ssh/mykey_ops_ed25519 -N ""` | 0    | public key ends `…Gly8qBal mykey-ops`                                          |
 
 ## Deviations and decisions
 
