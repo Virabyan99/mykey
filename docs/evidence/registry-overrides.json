@@ -17,6 +17,24 @@
       "status": "SPIKE_PASS",
       "evidence": ["docs/evidence/session-1/run-1.3.md"],
       "note": "Pins chosen and verified; two clean builds with identical hashes. Generated auth schema and release scans are still to come."
+    },
+    {
+      "id": "FR-1.33",
+      "status": "SPIKE_PASS",
+      "evidence": ["docs/evidence/session-1/run-1.8.md"],
+      "note": "Strict parser and canonical writer for format v1, with accepted and rejected fixtures and the rule and line of every rejection. Not yet wired to the import and export routes."
+    },
+    {
+      "id": "FR-1.34",
+      "status": "SPIKE_PASS",
+      "evidence": ["docs/evidence/session-1/run-1.8.md"],
+      "note": "Canonical output checked with pinned @next/env and python-dotenv on a 65-case corpus; no value changed without a warning by key name. The export screen that shows the warnings is still to come."
+    },
+    {
+      "id": "FR-1.38",
+      "status": "SPIKE_PASS",
+      "evidence": ["docs/evidence/session-1/run-1.8.md"],
+      "note": "Codec level only: serialise then parse reproduces names and values exactly in property tests. The export and re-import of a real environment is still to come."
     }
   ]
 }
