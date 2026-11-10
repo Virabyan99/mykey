@@ -1,0 +1,348 @@
+{
+  "description": "Synthetic values for the dotenv loader compatibility test. Each set is written as one canonical MyKey dotenv file and read back by the pinned loaders. Names sort in the order listed.",
+  "sets": [
+    {
+      "name": "main",
+      "description": "One file with every case; neighbours matter, so the order is part of the test.",
+      "cases": [
+        {
+          "name": "DL_01_PLAIN",
+          "about": "plain text",
+          "value": "plain"
+        },
+        {
+          "name": "DL_02_EMPTY",
+          "about": "empty value",
+          "value": ""
+        },
+        {
+          "name": "DL_03_SPACES_INSIDE",
+          "about": "interior spaces",
+          "value": "two  words"
+        },
+        {
+          "name": "DL_04_SPACES_AROUND",
+          "about": "leading and trailing spaces",
+          "value": "  padded  "
+        },
+        {
+          "name": "DL_05_ONLY_SPACES",
+          "about": "only spaces",
+          "value": "   "
+        },
+        {
+          "name": "DL_06_EQUALS",
+          "about": "equals signs",
+          "value": "a=b=c"
+        },
+        {
+          "name": "DL_07_HASH_INSIDE",
+          "about": "hash after a space",
+          "value": "a # b"
+        },
+        {
+          "name": "DL_08_HASH_FIRST",
+          "about": "hash as first character",
+          "value": "#not a comment"
+        },
+        {
+          "name": "DL_09_SINGLE_QUOTE",
+          "about": "single quote inside",
+          "value": "it's"
+        },
+        {
+          "name": "DL_10_SINGLE_QUOTED",
+          "about": "wrapped in single quotes",
+          "value": "'quoted'"
+        },
+        {
+          "name": "DL_11_BACKTICK",
+          "about": "backticks",
+          "value": "`tick`"
+        },
+        {
+          "name": "DL_12_DOUBLE_QUOTE",
+          "about": "double quotes inside",
+          "value": "say \"hi\""
+        },
+        {
+          "name": "DL_13_ONLY_DOUBLE_QUOTE",
+          "about": "one double quote",
+          "value": "\""
+        },
+        {
+          "name": "DL_14_LINE_FEED",
+          "about": "line feed (two lines)",
+          "value": "line one\nline two"
+        },
+        {
+          "name": "DL_15_CARRIAGE_RETURN",
+          "about": "carriage return",
+          "value": "a\rb"
+        },
+        {
+          "name": "DL_16_CRLF",
+          "about": "CRLF inside the value",
+          "value": "a\r\nb"
+        },
+        {
+          "name": "DL_17_TAB",
+          "about": "tab",
+          "value": "a\tb"
+        },
+        {
+          "name": "DL_18_BACKSLASH",
+          "about": "backslash",
+          "value": "a\\b"
+        },
+        {
+          "name": "DL_19_BACKSLASH_N",
+          "about": "backslash followed by n (not a line feed)",
+          "value": "a\\nb"
+        },
+        {
+          "name": "DL_20_WINDOWS_PATH",
+          "about": "Windows path",
+          "value": "C:\\temp\\new"
+        },
+        {
+          "name": "DL_21_DOLLAR_VAR",
+          "about": "$NAME of another entry",
+          "value": "$DL_01_PLAIN"
+        },
+        {
+          "name": "DL_22_DOLLAR_BRACE",
+          "about": "${NAME} of another entry",
+          "value": "${DL_01_PLAIN}"
+        },
+        {
+          "name": "DL_23_DOLLAR_UNDEFINED",
+          "about": "$NAME that is not defined",
+          "value": "$DL_UNDEFINED_X"
+        },
+        {
+          "name": "DL_24_BRACE_UNDEFINED",
+          "about": "${NAME} that is not defined",
+          "value": "${DL_UNDEFINED_X}"
+        },
+        {
+          "name": "DL_25_BRACE_DEFAULT",
+          "about": "${NAME:-default}",
+          "value": "${DL_UNDEFINED_X:-fallback}"
+        },
+        {
+          "name": "DL_26_ESCAPED_DOLLAR",
+          "about": "backslash before a dollar",
+          "value": "\\$DL_01_PLAIN"
+        },
+        {
+          "name": "DL_27_LONE_DOLLAR",
+          "about": "dollar at the end",
+          "value": "cost 5$"
+        },
+        {
+          "name": "DL_28_DOLLAR_DIGITS",
+          "about": "dollar before digits",
+          "value": "$100 off"
+        },
+        {
+          "name": "DL_29_DOUBLE_DOLLAR",
+          "about": "two dollars",
+          "value": "a$$b"
+        },
+        {
+          "name": "DL_30_DOLLAR_PAREN",
+          "about": "dollar before a parenthesis",
+          "value": "$(echo x)"
+        },
+        {
+          "name": "DL_31_UNCLOSED_BRACE",
+          "about": "dollar-brace never closed",
+          "value": "a${b"
+        },
+        {
+          "name": "DL_32_UNICODE",
+          "about": "non-ASCII text",
+          "value": "na\u00efve \ud83d\udd11 \u65e5\u672c\u8a9e"
+        },
+        {
+          "name": "DL_33_NBSP_AROUND",
+          "about": "no-break spaces at both ends",
+          "value": "\u00a0x\u00a0"
+        },
+        {
+          "name": "DL_34_CONTROL",
+          "about": "control characters U+0001 and U+001B",
+          "value": "a\u0001b\u001bc"
+        },
+        {
+          "name": "DL_35_VTAB_FORM_FEED",
+          "about": "vertical tab and form feed",
+          "value": "a\u000bb\fc"
+        },
+        {
+          "name": "DL_36_LINE_SEPARATOR",
+          "about": "U+2028 and U+2029 inside",
+          "value": "a\u2028b\u2029c"
+        },
+        {
+          "name": "DL_37_BOM_CHARACTER",
+          "about": "U+FEFF as first character",
+          "value": "\ufeffx"
+        },
+        {
+          "name": "DL_38_EXPORT_WORD",
+          "about": "looks like an export line",
+          "value": "export X=1"
+        },
+        {
+          "name": "DL_39_LOOKS_LIKE_ENTRIES",
+          "about": "two lines that look like entries",
+          "value": "A=1\nB=2"
+        },
+        {
+          "name": "DL_40_PUNCTUATION",
+          "about": "other punctuation",
+          "value": "100% !done; (a) [b] {c} <d> ~ ^ & * ? , . : @"
+        },
+        {
+          "name": "DL_41_ENDS_BACKSLASH",
+          "about": "ends with a backslash, next value starts with a hash",
+          "value": "ends with backslash\\"
+        },
+        {
+          "name": "DL_42_HASH_AFTER_BACKSLASH",
+          "about": "starts with a hash, after a value that ends with a backslash",
+          "value": "#swallowed"
+        },
+        {
+          "name": "DL_43_AFTER_SWALLOWED",
+          "about": "plain text after the two entries above",
+          "value": "still here"
+        },
+        {
+          "name": "DL_44_ENDS_BACKSLASH_2",
+          "about": "ends with a backslash, next value is plain",
+          "value": "C:\\dir\\"
+        },
+        {
+          "name": "DL_45_PLAIN_AFTER_BACKSLASH",
+          "about": "plain text after a value that ends with a backslash",
+          "value": "plain after backslash"
+        },
+        {
+          "name": "DL_46_ENDS_BACKSLASH_3",
+          "about": "ends with two backslashes, next value starts with space and hash",
+          "value": "two\\\\"
+        },
+        {
+          "name": "DL_47_SPACE_HASH_AFTER",
+          "about": "space then hash, after a value that ends with a backslash",
+          "value": " # spaced"
+        },
+        {
+          "name": "DL_48_ENDS_QUOTE",
+          "about": "ends with a double quote, next value starts with a hash",
+          "value": "ends with quote\""
+        },
+        {
+          "name": "DL_49_HASH_AFTER_QUOTE",
+          "about": "starts with a hash, after a value that ends with a quote",
+          "value": "#after quote"
+        },
+        {
+          "name": "DL_50_BACKSLASH_QUOTE",
+          "about": "backslash directly before a double quote",
+          "value": "a\\\"b"
+        },
+        {
+          "name": "DL_51_URL",
+          "about": "URL with a query",
+          "value": "http://localhost:3000/path?x=1&y=2"
+        },
+        {
+          "name": "DL_52_JSON",
+          "about": "JSON text",
+          "value": "{\"a\": [1, 2]}"
+        },
+        {
+          "name": "DL_53_ENDS_BACKSLASH_4",
+          "about": "ends with a backslash, next value starts with a line feed and a hash",
+          "value": "four\\"
+        },
+        {
+          "name": "DL_54_LF_HASH_AFTER",
+          "about": "line feed then hash, after a value that ends with a backslash",
+          "value": "\n#after line feed"
+        },
+        {
+          "name": "DL_55_ENDS_BACKSLASH_5",
+          "about": "ends with a backslash, next value starts with other whitespace and a hash",
+          "value": "five\\"
+        },
+        {
+          "name": "DL_56_NBSP_HASH_AFTER",
+          "about": "no-break space, vertical tab, then hash, after a value that ends with a backslash",
+          "value": "\u00a0\u000b#after no-break space"
+        },
+        {
+          "name": "DL_57_LAST_ENDS_BACKSLASH",
+          "about": "last line of the file ends with a backslash",
+          "value": "last\\"
+        }
+      ]
+    },
+    {
+      "name": "separator-after-backslash",
+      "description": "A value that starts with U+2028 directly after a value that ends with a backslash.",
+      "cases": [
+        {
+          "name": "DLX_0_TARGET",
+          "about": "sorted first; a later value names it after a line separator",
+          "value": "original"
+        },
+        {
+          "name": "DLX_1_ENDS_BACKSLASH",
+          "about": "ends with a backslash",
+          "value": "x\\"
+        },
+        {
+          "name": "DLX_2_SEPARATOR_FIRST",
+          "about": "U+2028 first, then text shaped like an entry",
+          "value": "\u2028DLX_0_TARGET=injected"
+        },
+        {
+          "name": "DLX_3_AFTER",
+          "about": "plain text after",
+          "value": "after"
+        }
+      ]
+    },
+    {
+      "name": "hash-separator-after-backslash",
+      "description": "A value that starts with a hash and contains U+2029, directly after a value that ends with a backslash.",
+      "cases": [
+        {
+          "name": "DLY_0_TARGET",
+          "about": "sorted first; a later value names it after a paragraph separator",
+          "value": "original"
+        },
+        {
+          "name": "DLY_1_ENDS_BACKSLASH",
+          "about": "ends with a backslash",
+          "value": "y\\"
+        },
+        {
+          "name": "DLY_2_HASH_SEPARATOR",
+          "about": "hash first, then U+2029, then text shaped like an entry",
+          "value": "# note\u2029DLY_0_TARGET=injected"
+        },
+        {
+          "name": "DLY_3_AFTER",
+          "about": "plain text after",
+          "value": "after"
+        }
+      ]
+    }
+  ]
+}
