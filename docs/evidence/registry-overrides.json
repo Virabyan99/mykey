@@ -1,0 +1,22 @@
+{
+  "owners": [
+    {
+      "id": "PO-24",
+      "ownerRun": "1.3",
+      "reason": "D08-S02 became Runs 1.2 to 1.6 and no Covers line names PO-24. The heading of Run 1.3 does: 'Version pins (G-PINS spike, PO-24)'."
+    },
+    {
+      "id": "AC-1.58",
+      "ownerRun": "9.8",
+      "reason": "D08-S47 became Runs 9.1, 9.2 and 9.5 to 9.9. Run 9.2 covers only the 'start of AC-1.58'. The exit dossier of Run 9.8 is where the first real consumer connection is verified and reported."
+    }
+  ],
+  "statuses": [
+    {
+      "id": "PO-24",
+      "status": "SPIKE_PASS",
+      "evidence": ["docs/evidence/session-1/run-1.3.md"],
+      "note": "Pins chosen and verified; two clean builds with identical hashes. Generated auth schema and release scans are still to come."
+    }
+  ]
+}
