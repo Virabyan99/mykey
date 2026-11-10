@@ -1,0 +1,18 @@
+{
+  "files": [],
+  "references": [
+    { "path": "./apps/api" },
+    { "path": "./apps/provisioner" },
+    { "path": "./apps/web" },
+    { "path": "./apps/cli" },
+    { "path": "./apps/ops" },
+    { "path": "./packages/contracts" },
+    { "path": "./packages/db" },
+    { "path": "./packages/auth" },
+    { "path": "./packages/openbao" },
+    { "path": "./packages/operations" },
+    { "path": "./packages/audit" },
+    { "path": "./workers/probe" },
+    { "path": "./tsconfig.root.json" }
+  ]
+}

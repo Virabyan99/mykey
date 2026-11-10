@@ -1,0 +1,12 @@
+# The repository rule set (.gitleaks.toml) WITHOUT its allowlist.
+# Used only by the scanner-selftest job, which must find the seeded canary.
+title = "MyKey secret scanning self-test"
+
+[extend]
+useDefault = true
+
+[[rules]]
+id = "mykey-canary"
+description = "MyKey synthetic canary secret"
+regex = '''MYKEY_CANARY_[A-Z0-9]{32}'''
+keywords = ["mykey_canary_"]

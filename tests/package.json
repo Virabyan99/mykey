@@ -1,0 +1,16 @@
+{
+  "name": "@mykey/tests",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "devDependencies": {
+    "@mykey/cli": "workspace:*",
+    "@mykey/contracts": "workspace:*",
+    "@mykey/db": "workspace:*",
+    "@next/env": "catalog:",
+    "@scalar/openapi-parser": "catalog:",
+    "@types/pg": "catalog:",
+    "pg": "catalog:",
+    "zod": "catalog:"
+  }
+}

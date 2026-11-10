@@ -1,0 +1,83 @@
+# Local development and test stack: PostgreSQL 18 (TLS) and OpenBao (Raft, TLS,
+# development static seal). Started by `pnpm run stack:up` and by the test
+# harness (tests/harness/stack.ts), locally and in CI.
+#
+# Images are pinned by digest; the digests must be in infra/dependencies.lock.json
+# (checked by `pnpm run pins:verify`).
+#
+# MYKEY_STACK_DIR is the per-project state directory (.stack/<project>), created
+# by the harness. Everything in it is synthetic, development-only material.
+name: mykey-dev
+
+services:
+  # One-shot: writes the development CA, server certificates and the static seal
+  # key into the `pki` volume. Idempotent.
+  pki-init:
+    image: postgres@sha256:e3d24f6906d0760bf4da0dae872415391ededefad23fd471c47dc53b0ddf3c42
+    user: "0:0"
+    network_mode: none
+    entrypoint: ["sh", "/init/pki-init.sh"]
+    environment:
+      # uid:gid each consuming image runs as, read with `id` from the pinned
+      # images (an integration test re-checks them).
+      POSTGRES_KEY_OWNER: "999:999"
+      OPENBAO_KEY_OWNER: "100:1000"
+    volumes:
+      - pki:/pki
+      - ./dev/pki-init.sh:/init/pki-init.sh:ro
+
+  postgres:
+    image: postgres@sha256:e3d24f6906d0760bf4da0dae872415391ededefad23fd471c47dc53b0ddf3c42
+    depends_on:
+      pki-init:
+        condition: service_completed_successfully
+    command: ["postgres", "-c", "config_file=/etc/mykey/postgresql.conf"]
+    environment:
+      POSTGRES_PASSWORD_FILE: /run/secrets/pg_superuser_password
+    secrets:
+      - pg_superuser_password
+    volumes:
+      - pgdata:/var/lib/postgresql
+      - pki:/pki:ro
+      - ./dev/postgresql.conf:/etc/mykey/postgresql.conf:ro
+      - ./dev/pg_hba.conf:/etc/mykey/pg_hba.conf:ro
+    ports:
+      - "127.0.0.1:${MYKEY_PG_PORT:-0}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -q -h /var/run/postgresql -U postgres -d postgres"]
+      interval: 2s
+      timeout: 3s
+      retries: 60
+
+  openbao:
+    image: openbao/openbao@sha256:5046911075e137e154ce49ab051502f4ec7cf367d484ae4a4dce665d9b90561f
+    depends_on:
+      pki-init:
+        condition: service_completed_successfully
+    command: ["bao", "server", "-config=/openbao/config/openbao.hcl"]
+    environment:
+      SKIP_CHOWN: "true"
+      BAO_ADDR: https://127.0.0.1:8200
+      BAO_CACERT: /pki/ca.crt
+    volumes:
+      - baodata:/openbao/file
+      - pki:/pki:ro
+      - ./dev/openbao.hcl:/openbao/config/openbao.hcl:ro
+    ports:
+      - "127.0.0.1:${MYKEY_BAO_PORT:-0}:8200"
+    healthcheck:
+      # `bao status` exits 0 when unsealed, 2 when sealed or not yet initialised,
+      # 1 when the server cannot be reached over verified TLS.
+      test: ["CMD-SHELL", "bao status >/dev/null 2>&1; [ $$? -ne 1 ]"]
+      interval: 2s
+      timeout: 3s
+      retries: 60
+
+volumes:
+  pki:
+  pgdata:
+  baodata:
+
+secrets:
+  pg_superuser_password:
+    file: ${MYKEY_STACK_DIR:?start the stack with pnpm run stack:up}/pg-superuser-password

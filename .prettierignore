@@ -1,0 +1,9 @@
+docs/doc_*.md
+docs/plans/
+pnpm-lock.yaml
+packages/contracts/openapi/
+packages/db/migrations/
+tests/fixtures/
+.superpowers/
+.trivyignore.images
+docs/evidence/registry.json
