@@ -1,12 +1,12 @@
 # Session 1 report — Foundation
 
-**Date:** 10 November 2026 (Day 1) · **Branch:** `session-1` · **Plan:** `docs/plans/session-1-plan.md`
+**Date:** 10 November 2026 (Day 1); Run 1.9 finished on 11 November 2026 · **Branch:** `session-1`, then `run-1.9-fixture` · **Plan:** `docs/plans/session-1-plan.md`
 
 ## Result
 
 **PASS WITH ISSUES.**
 
-Nine of ten runs are complete. **Run 1.9 (R2 retention fixture) is not done:** buckets and lock rules exist, but no token could be created, so nothing is uploaded and the retention clock has not started. Everything else the session promised works from a fresh clone.
+All ten runs are complete. Run 1.9 (R2 retention fixture) was finished one day late, on 11 November 2026, when the owner supplied the Cloudflare bootstrap token: the eight tokens exist, the fixture is uploaded and its lock clocks are running. The issues that keep this from a plain PASS are in the table below.
 
 ## What works now
 
@@ -29,19 +29,20 @@ What exists:
 - **Run 1.6 — contracts.** Limits, names, ids, 30 error codes, the operation envelope, 41 frozen routes, generated OpenAPI 3.1.
 - **Run 1.7 — database base.** 18 `app` tables, `audit.event`, five least-privilege roles, three migrations, a migrator with checksums, a drift check.
 - **Run 1.8 — dotenv codec.** Strict parser, canonical writer, loader warnings checked against the pinned `@next/env` and `python-dotenv`.
+- **Run 1.9 — R2 retention fixture.** Four buckets, three lock rules, eight scoped tokens; a synthetic fixture of three `pairs/` pairs (locked until 15 Nov 2026), two `probe/` pairs (locked ten minutes) and two unlocked controls; cloud tests that show R2 refusing overwrite, delete and bulk delete of locked objects; a cost sheet.
 - **Run 1.10 — registry.** 102 requirements, 60 acceptance criteria and 29 proofs mapped to runs; `evidence:verify` in `check`.
 
 ## What failed or was deferred
 
-| Item                                         | State                                                                                                                                                                                   |
-| -------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Run 1.9**                                  | NOT DONE. No Cloudflare bootstrap token; see `run-1.9.md`. PO-9, R2-L1, COST-B1 stay `OPEN`. `pnpm run test:cloud` exits 1 with `cloud credentials missing: …` — a failure, not a skip. |
-| `provision.ts`, `upload.ts`, the cloud tests | Not written. They can only be proven against Cloudflare.                                                                                                                                |
-| `retention-fixture.json`, `cost-sheet.md`    | Not written; they need a real upload.                                                                                                                                                   |
-| Image scan                                   | Green only through `.trivyignore.images` (46 upstream image CVEs without a fix), which expires on 20 Nov 2026.                                                                          |
-| Branch protection                            | Not available on a free private repository. Nothing stops a direct push to `main`.                                                                                                      |
-| Workstation Node                             | 24.18.0; the pin is 24.22.2 (`engines` allows `>=24.18.0 <25`). CI uses the pin.                                                                                                        |
-| Staging demonstration                        | Not applicable in Session 1 (Doc 10 §4.5 starts in Session 2).                                                                                                                          |
+| Item                                          | State                                                                                                                                                                                             |
+| --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Run 1.9**                                   | Done on 11 Nov 2026, one day late; see `run-1.9.md`. PO-9, R2-L1 and COST-B1 stay `OPEN` by design: the fixture is started, nothing is passed.                                                    |
+| GitHub Actions secrets for the fixture tokens | **Not set.** The agent session was not permitted to write to the secret store. No CI job runs the cloud tests yet, so nothing fails; see `run-1.9.md` for the five secret names.                  |
+| Cloud tests after 15 Nov 2026                 | The refusal tests stop with an error once the `pairs/` lock is within an hour of its end, so that they cannot delete the fixture. From then until Run 6.6, `pnpm run test:cloud` fails by design. |
+| Image scan                                    | Green only through `.trivyignore.images` (46 upstream image CVEs without a fix), which expires on 20 Nov 2026.                                                                                    |
+| Branch protection                             | Not available on a free private repository. Nothing stops a direct push to `main`.                                                                                                                |
+| Workstation Node                              | 24.18.0; the pin is 24.22.2 (`engines` allows `>=24.18.0 <25`). CI uses the pin.                                                                                                                  |
+| Staging demonstration                         | Not applicable in Session 1 (Doc 10 §4.5 starts in Session 2).                                                                                                                                    |
 
 Open issues carried forward:
 
@@ -55,7 +56,7 @@ Open issues carried forward:
 - **D-13** CI uses the same Compose stack as the workstation.
 - **D-14** Error code list (30 codes, one HTTP status each).
 - **D-15** Route list frozen (41 routes).
-- **D-16** R2 token model (decided; buckets and lock rules exist, no token yet).
+- **D-16** R2 token model (decided; tokens created 11 Nov 2026; the admin credential file also holds the API token).
 - No pre-authorised fallback of D-09 was used.
 - D-01 … D-11 are still "ASSUMED — awaiting owner".
 
@@ -109,7 +110,7 @@ One fresh-context reviewer (most capable model) read `git diff origin/main...ses
 9. The error envelope requires a UUID `requestId`; the plan says string.
 10. `RouteDef.request` has no schema for path parameters.
 11. `pins-verify` matches only block-style `image:` and `uses:` lines; `ci.yml` pins Python as `3.12` (floating patch).
-12. `deleteObjectsChecked` does not split more than 1,000 keys and has never run against R2.
+12. `deleteObjectsChecked` does not split more than 1,000 keys and has never run against R2. (Update: it ran against R2 in the cloud tests on 11 Nov 2026; the 1,000-key limit is still open.)
 13. Weak tests: the CLI target assertion runs only when `MYKEY_EXPECT_TARGET` is set; the "recorded" delete answer is hand-written; the wrong-password test accepts any restic failure; the pending-route snapshot cannot enforce "only shrink"; the "no secret column" test checks four exact names; the dotenv no-leak test places canaries only in invalid names and in values.
 
 ### Not judged by the reviewer
@@ -125,8 +126,9 @@ Found sound, with no false pass: the privilege matrix (exact SQLSTATE `42501`, c
 - **Schemas:** `app` (18 tables), `audit` (`event`), `meta` (`schema_migration`, created by the migrator), `auth` and `jobs` (empty, reserved for Better Auth and the job queue).
 - **Migrations:** `pnpm run db:generate` (Drizzle), hand-written files with `drizzle-kit generate --custom`; `migrate()` refuses a changed, missing or out-of-order file. `drizzle-kit` exits 0 when it crashes — `db:check` looks for its completion message.
 - **CI jobs:** `check`, `unit`, `integration`, `secret-scan`, `dependency-scan`, `image-scan`, `scanner-selftest`, `changes`, `cli-matrix`.
-- **Credentials:** on the owner's workstation under `~/.mykey/` (outside the repository and OneDrive): SSH key `~/.mykey/ssh/`, R2 token files `~/.mykey/secrets/r2/<token name>.json` (none yet), Cloudflare bootstrap token `~/.mykey/secrets/cloudflare/bootstrap-token` (absent), Restic fixture password `~/.mykey/secrets/retention-fixture/restic-password` (created on first use). The custody list is `docs/runbooks/credential-custody.md`.
-- **Retention fixture:** no object is uploaded, so there is **no `lockExpiresAt` and no checkpoint date yet**. First task of Session 2 once the bootstrap token exists: write and run `provision.ts` and `upload.ts`, run the cloud tests, wait 10 minutes for the probe test. The `pairs/` lock lasts four days from that upload.
+- **Credentials:** on the owner's workstation under `~/.mykey/` (outside the repository and OneDrive): SSH key `~/.mykey/ssh/`, eight R2 token files `~/.mykey/secrets/r2/<token name>.json`, Cloudflare bootstrap token `~/.mykey/secrets/cloudflare/bootstrap-token`, Restic fixture password `~/.mykey/secrets/retention-fixture/restic-password`. The custody list is `docs/runbooks/credential-custody.md`.
+- **Retention fixture:** uploaded on 11 Nov 2026 at 10:42 UTC to `mykey-retention-fixture`. Every object, its upload time as R2 reports it and its `lockExpiresAt` are in `docs/evidence/session-1/retention-fixture.json`. The `pairs/` lock ends on **15 Nov 2026 at 10:42 UTC**. Checkpoints: `pairs-lock-session-gate` (first session gate on or after that time) and `run-6.6-cleanup-and-restore`. One probe pair (`probe-20261111-2`) and two `scratch/` controls are left for Run 6.6 to clean up. `pnpm run test:cloud` needs the workstation's credential files.
+- **R2 findings:** a refused overwrite or delete answers HTTP 409 `ObjectLockedByBucketPolicy`; a bulk delete answers HTTP 200 and lists the refusal per object; R2 writes the id of one multipart upload as a different string every time it reports it, so ids cannot be compared, but each of them aborts the upload; a 600-second lock rule is accepted.
 - **Canaries:** never write a literal `MYKEY_CANARY_` followed by 32 characters outside `tests/fixtures/ci/seeded-secret/`; tests assemble canaries at run time.
 - **Pending routes (21):** `version.get`, `organizations.list`, `projects.list`, `environments.list`, `secrets.list`, `secrets.history`, `secrets.reveal`, `import.preview`, `credentials.list`, `credentials.issue` (201 body), `operations.list`, `audit.list`, `activity.list`, `overview.get`, `credentials.summary`, `metrics.get`, `session.activity`, `auth.reset.complete`, `reference.get`, `openapi.get`, `machine.keys`. The owning run fills each in with a commit titled `contract: …`.
 - **Idle memory of the stack:** PostgreSQL 37.5 MiB, OpenBao 22.1 MiB.
@@ -135,10 +137,10 @@ Found sound, with no false pass: the privilege matrix (exact SQLSTATE `42501`, c
 
 ## Owner actions pending
 
-| Action                                                                                                                                                                                           | Needed by                                                    |
-| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------ |
-| **Cloudflare bootstrap token** saved to `~/.mykey/secrets/cloudflare/bootstrap-token` (user API token, template "Create Additional Tokens", plus account-level R2 edit). Never pasted into chat. | **now** — every day of delay moves the retention checkpoints |
-| **OWN-1:** confirm D-01 … D-11 (D-04 and D-05 need an explicit yes); the domain for production and staging and whether Cloudflare manages it; where alerts go                                    | domain by Run 2.5, alerts by Run 2.6                         |
-| **OWN-2:** two OVHcloud instances (`mykey-prod`, `mykey-staging`, 4 vCPU / 8 GB / ≥ 80 GB, Ubuntu 24.04, one region that offers KMS, the `mykey-ops` public key)                                 | start of Run 2.5 (Day 2, midday)                             |
-| **OWN-3:** OVHcloud KMS activated in the same region                                                                                                                                             | Run 2.7 (Day 3)                                              |
-| Optional: update the workstation's Node to 24.22.2                                                                                                                                               | any time                                                     |
+| Action                                                                                                                                                                            | Needed by                            |
+| --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------ |
+| Optional: store the two fixture tokens as GitHub Actions secrets (command in `run-1.9.md`), and revoke the Cloudflare bootstrap token once no token needs to be created or rolled | before a CI job runs the cloud tests |
+| **OWN-1:** confirm D-01 … D-11 (D-04 and D-05 need an explicit yes); the domain for production and staging and whether Cloudflare manages it; where alerts go                     | domain by Run 2.5, alerts by Run 2.6 |
+| **OWN-2:** two OVHcloud instances (`mykey-prod`, `mykey-staging`, 4 vCPU / 8 GB / ≥ 80 GB, Ubuntu 24.04, one region that offers KMS, the `mykey-ops` public key)                  | start of Run 2.5 (Day 2, midday)     |
+| **OWN-3:** OVHcloud KMS activated in the same region                                                                                                                              | Run 2.7 (Day 3)                      |
+| Optional: update the workstation's Node to 24.22.2                                                                                                                                | any time                             |

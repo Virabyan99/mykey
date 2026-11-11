@@ -80,6 +80,29 @@ export function loadR2Credentials(tokenName: string, source: CredentialSource = 
   };
 }
 
+/**
+ * Loads the Cloudflare API token of an R2 token that also configures buckets
+ * (`mykey-r2-admin`): from `<TOKEN>_API_TOKEN` first, then the `apiToken` field
+ * of its credential file. The S3 secret cannot stand in for it: it is a hash.
+ */
+export function loadR2ApiToken(tokenName: string, source: CredentialSource = {}): string {
+  if (!TOKEN_NAME.test(tokenName)) throw new Error("R2 credentials: not a valid token name");
+  const fromEnv = (source.env ?? process.env)[`${envPrefix(tokenName)}_API_TOKEN`];
+  if (fromEnv) return fromEnv;
+  const file = r2CredentialFile(tokenName, source.home);
+  if (existsSync(file)) {
+    try {
+      const parsed = JSON.parse(readFileSync(file, "utf8")) as { apiToken?: unknown } | null;
+      if (typeof parsed?.apiToken === "string" && parsed.apiToken.length > 0) {
+        return parsed.apiToken;
+      }
+    } catch {
+      // Falls through to the error below, which names no content of the file.
+    }
+  }
+  throw new Error(`R2 API token for ${tokenName}: not in the environment or the file`);
+}
+
 /** The S3 endpoint of an R2 account. */
 export function r2Endpoint(accountId: string): string {
   return `https://${accountId}.r2.cloudflarestorage.com`;

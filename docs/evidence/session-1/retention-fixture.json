@@ -1,0 +1,367 @@
+{
+  "version": 1,
+  "accountId": "ddfa208f3f81d98c16e40b9da208c626",
+  "provisionedAt": "2026-11-11T10:53:13.863Z",
+  "buckets": [
+    {
+      "name": "mykey-prod-pairs",
+      "lockRules": [
+        {
+          "id": "pairs-30d",
+          "enabled": true,
+          "prefix": "pairs/",
+          "condition": {
+            "type": "Age",
+            "maxAgeSeconds": 2592000
+          }
+        }
+      ]
+    },
+    {
+      "name": "mykey-staging-pairs",
+      "lockRules": []
+    },
+    {
+      "name": "mykey-audit-archive",
+      "lockRules": []
+    },
+    {
+      "name": "mykey-retention-fixture",
+      "lockRules": [
+        {
+          "id": "fixture-pairs-4d",
+          "enabled": true,
+          "prefix": "pairs/",
+          "condition": {
+            "type": "Age",
+            "maxAgeSeconds": 345600
+          }
+        },
+        {
+          "id": "fixture-probe-10m",
+          "enabled": true,
+          "prefix": "probe/",
+          "condition": {
+            "type": "Age",
+            "maxAgeSeconds": 600
+          }
+        }
+      ]
+    }
+  ],
+  "tokens": [
+    {
+      "name": "mykey-r2-admin",
+      "bucket": null,
+      "permissionGroup": "Workers R2 Storage Write"
+    },
+    {
+      "name": "mykey-prod-pairs-upload",
+      "bucket": "mykey-prod-pairs",
+      "permissionGroup": "Workers R2 Storage Bucket Item Write"
+    },
+    {
+      "name": "mykey-prod-pairs-cleanup",
+      "bucket": "mykey-prod-pairs",
+      "permissionGroup": "Workers R2 Storage Bucket Item Write"
+    },
+    {
+      "name": "mykey-staging-pairs-upload",
+      "bucket": "mykey-staging-pairs",
+      "permissionGroup": "Workers R2 Storage Bucket Item Write"
+    },
+    {
+      "name": "mykey-staging-pairs-cleanup",
+      "bucket": "mykey-staging-pairs",
+      "permissionGroup": "Workers R2 Storage Bucket Item Write"
+    },
+    {
+      "name": "mykey-audit-archive-upload",
+      "bucket": "mykey-audit-archive",
+      "permissionGroup": "Workers R2 Storage Bucket Item Write"
+    },
+    {
+      "name": "mykey-fixture-upload",
+      "bucket": "mykey-retention-fixture",
+      "permissionGroup": "Workers R2 Storage Bucket Item Write"
+    },
+    {
+      "name": "mykey-fixture-cleanup",
+      "bucket": "mykey-retention-fixture",
+      "permissionGroup": "Workers R2 Storage Bucket Item Write"
+    }
+  ],
+  "lockChangeAttempts": [
+    {
+      "token": "mykey-prod-pairs-upload",
+      "bucket": "mykey-prod-pairs",
+      "verifiedActive": true,
+      "status": 403,
+      "code": 10000,
+      "denied": true,
+      "deniedAt": "2026-11-11T10:41:01.000Z"
+    },
+    {
+      "token": "mykey-prod-pairs-cleanup",
+      "bucket": "mykey-prod-pairs",
+      "verifiedActive": true,
+      "status": 403,
+      "code": 10000,
+      "denied": true,
+      "deniedAt": "2026-11-11T10:41:03.000Z"
+    },
+    {
+      "token": "mykey-staging-pairs-upload",
+      "bucket": "mykey-staging-pairs",
+      "verifiedActive": true,
+      "status": 403,
+      "code": 10000,
+      "denied": true,
+      "deniedAt": "2026-11-11T10:41:04.000Z"
+    },
+    {
+      "token": "mykey-staging-pairs-cleanup",
+      "bucket": "mykey-staging-pairs",
+      "verifiedActive": true,
+      "status": 403,
+      "code": 10000,
+      "denied": true,
+      "deniedAt": "2026-11-11T10:41:06.000Z"
+    },
+    {
+      "token": "mykey-audit-archive-upload",
+      "bucket": "mykey-audit-archive",
+      "verifiedActive": true,
+      "status": 403,
+      "code": 10000,
+      "denied": true,
+      "deniedAt": "2026-11-11T10:41:07.000Z"
+    },
+    {
+      "token": "mykey-fixture-upload",
+      "bucket": "mykey-retention-fixture",
+      "verifiedActive": true,
+      "status": 403,
+      "code": 10000,
+      "denied": true,
+      "deniedAt": "2026-11-11T10:41:10.000Z"
+    },
+    {
+      "token": "mykey-fixture-cleanup",
+      "bucket": "mykey-retention-fixture",
+      "verifiedActive": true,
+      "status": 403,
+      "code": 10000,
+      "denied": true,
+      "deniedAt": "2026-11-11T10:41:11.000Z"
+    }
+  ],
+  "upload": {
+    "bucket": "mykey-retention-fixture",
+    "uploadToken": "mykey-fixture-upload",
+    "cleanupToken": "mykey-fixture-cleanup",
+    "resticVersion": "0.19.1",
+    "pairBytes": {
+      "pair-20261111-1": {
+        "bundleBytes": 2238976,
+        "manifestBytes": 241
+      },
+      "pair-20261111-2": {
+        "bundleBytes": 2239488,
+        "manifestBytes": 241
+      },
+      "pair-20261111-3": {
+        "bundleBytes": 2240000,
+        "manifestBytes": 241
+      },
+      "probe-20261111-1": {
+        "bundleBytes": 2238976,
+        "manifestBytes": 242
+      },
+      "probe-20261111-2": {
+        "bundleBytes": 2240000,
+        "manifestBytes": 242
+      }
+    },
+    "operations": {
+      "ListObjectsV2": 1,
+      "PutObject": 12,
+      "HeadObject": 12,
+      "GetObject": 1,
+      "DeleteObject": 1
+    },
+    "verificationDownload": {
+      "key": "pairs/pair-20261111-1/bundle.tar",
+      "bytes": 2238976,
+      "sha256Matches": true
+    },
+    "probeDeleteInsideLock": {
+      "key": "probe/probe-20261111-1/manifest.json",
+      "status": 409,
+      "code": "ObjectLockedByBucketPolicy",
+      "at": "2026-11-11T10:42:23.674Z"
+    }
+  },
+  "objects": [
+    {
+      "key": "pairs/pair-20261111-1/bundle.tar",
+      "bytes": 2238976,
+      "etag": "\"ceba577b1f3421a18d3f337045ce7452\"",
+      "uploadedAt": "2026-11-11T10:42:18.000Z",
+      "captureTime": "2026-11-11T08:41:18.248Z",
+      "pairId": "pair-20261111-1",
+      "lockRule": "fixture-pairs-4d",
+      "lockExpiresAt": "2026-11-15T10:42:18.000Z"
+    },
+    {
+      "key": "pairs/pair-20261111-1/manifest.json",
+      "bytes": 241,
+      "etag": "\"87d52d101d105b7e285490b619e9c0be\"",
+      "uploadedAt": "2026-11-11T10:42:18.000Z",
+      "captureTime": "2026-11-11T08:41:18.248Z",
+      "pairId": "pair-20261111-1",
+      "lockRule": "fixture-pairs-4d",
+      "lockExpiresAt": "2026-11-15T10:42:18.000Z"
+    },
+    {
+      "key": "pairs/pair-20261111-2/bundle.tar",
+      "bytes": 2239488,
+      "etag": "\"c2ed6b9a2bcdb67ea209a1dda09380dc\"",
+      "uploadedAt": "2026-11-11T10:42:19.000Z",
+      "captureTime": "2026-11-11T09:41:18.248Z",
+      "pairId": "pair-20261111-2",
+      "lockRule": "fixture-pairs-4d",
+      "lockExpiresAt": "2026-11-15T10:42:19.000Z"
+    },
+    {
+      "key": "pairs/pair-20261111-2/manifest.json",
+      "bytes": 241,
+      "etag": "\"015bb48894840d224cb579e036611d3c\"",
+      "uploadedAt": "2026-11-11T10:42:19.000Z",
+      "captureTime": "2026-11-11T09:41:18.248Z",
+      "pairId": "pair-20261111-2",
+      "lockRule": "fixture-pairs-4d",
+      "lockExpiresAt": "2026-11-15T10:42:19.000Z"
+    },
+    {
+      "key": "pairs/pair-20261111-3/bundle.tar",
+      "bytes": 2240000,
+      "etag": "\"3e8a09d97eda6bee95efde61a5ff4509\"",
+      "uploadedAt": "2026-11-11T10:42:20.000Z",
+      "captureTime": "2026-11-11T10:41:18.248Z",
+      "pairId": "pair-20261111-3",
+      "lockRule": "fixture-pairs-4d",
+      "lockExpiresAt": "2026-11-15T10:42:20.000Z"
+    },
+    {
+      "key": "pairs/pair-20261111-3/manifest.json",
+      "bytes": 241,
+      "etag": "\"ff0fce13f3603091972f0829c5eca690\"",
+      "uploadedAt": "2026-11-11T10:42:20.000Z",
+      "captureTime": "2026-11-11T10:41:18.248Z",
+      "pairId": "pair-20261111-3",
+      "lockRule": "fixture-pairs-4d",
+      "lockExpiresAt": "2026-11-15T10:42:20.000Z"
+    },
+    {
+      "key": "probe/probe-20261111-1/bundle.tar",
+      "bytes": 2238976,
+      "etag": "\"f4d90d1a1dfa45dc33376194ac2bf884\"",
+      "uploadedAt": "2026-11-11T10:42:21.000Z",
+      "captureTime": "2026-11-11T10:11:18.248Z",
+      "pairId": "probe-20261111-1",
+      "lockRule": "fixture-probe-10m",
+      "lockExpiresAt": "2026-11-11T10:52:21.000Z"
+    },
+    {
+      "key": "probe/probe-20261111-1/manifest.json",
+      "bytes": 242,
+      "etag": "\"f8207504a1ce54397065f24f28c2938b\"",
+      "uploadedAt": "2026-11-11T10:42:21.000Z",
+      "captureTime": "2026-11-11T10:11:18.248Z",
+      "pairId": "probe-20261111-1",
+      "lockRule": "fixture-probe-10m",
+      "lockExpiresAt": "2026-11-11T10:52:21.000Z"
+    },
+    {
+      "key": "probe/probe-20261111-2/bundle.tar",
+      "bytes": 2240000,
+      "etag": "\"d7e3c1b10691537c1a06a2a316772953\"",
+      "uploadedAt": "2026-11-11T10:42:22.000Z",
+      "captureTime": "2026-11-11T10:41:18.248Z",
+      "pairId": "probe-20261111-2",
+      "lockRule": "fixture-probe-10m",
+      "lockExpiresAt": "2026-11-11T10:52:22.000Z"
+    },
+    {
+      "key": "probe/probe-20261111-2/manifest.json",
+      "bytes": 242,
+      "etag": "\"23be0bc4374659be8381e00fc5f3f795\"",
+      "uploadedAt": "2026-11-11T10:42:22.000Z",
+      "captureTime": "2026-11-11T10:41:18.248Z",
+      "pairId": "probe-20261111-2",
+      "lockRule": "fixture-probe-10m",
+      "lockExpiresAt": "2026-11-11T10:52:22.000Z"
+    },
+    {
+      "key": "scratch/control-1.txt",
+      "bytes": 53,
+      "etag": "\"ecc9bc3fb328bf3bbdedf726e00d3ba8\"",
+      "uploadedAt": "2026-11-11T10:42:23.000Z",
+      "captureTime": null,
+      "pairId": null,
+      "lockRule": null,
+      "lockExpiresAt": null
+    },
+    {
+      "key": "scratch/control-2.txt",
+      "bytes": 53,
+      "etag": "\"8fbb7aa5e7b7201e03230aab4b9400f5\"",
+      "uploadedAt": "2026-11-11T10:42:23.000Z",
+      "captureTime": null,
+      "pairId": null,
+      "lockRule": null,
+      "lockExpiresAt": null
+    }
+  ],
+  "checkpoints": [
+    {
+      "id": "probe-expiry",
+      "what": "After the probe lock has passed, a probe/ object can be deleted while a pairs/ object uploaded at the same time is still refused.",
+      "notBefore": "2026-11-11T10:52:22.000Z",
+      "status": "observed",
+      "observed": {
+        "test": "probe lock expires (tests/restore/retention/fixture.cloud.test.ts)",
+        "lockEndedAt": "2026-11-11T10:52:21.000Z",
+        "testRunStartedAt": "2026-11-11T10:52:45Z",
+        "testRunEndedAt": "2026-11-11T10:52:51Z",
+        "deletedKeys": [
+          "probe/probe-20261111-1/bundle.tar",
+          "probe/probe-20261111-1/manifest.json"
+        ],
+        "headAfterDelete": 404,
+        "pairsObjectStillRefused": {
+          "key": "pairs/pair-20261111-3/bundle.tar",
+          "status": 409,
+          "code": "ObjectLockedByBucketPolicy"
+        },
+        "leftForRun66": [
+          "probe/probe-20261111-2/bundle.tar",
+          "probe/probe-20261111-2/manifest.json"
+        ]
+      }
+    },
+    {
+      "id": "pairs-lock-session-gate",
+      "what": "At the first session gate on or after this time: repeat the refused delete on a pairs/ object before the lock ends, or record that the lock has ended after it.",
+      "notBefore": "2026-11-15T10:42:20.000Z",
+      "status": "pending"
+    },
+    {
+      "id": "run-6.6-cleanup-and-restore",
+      "what": "Run 6.6: clean up the fixture objects whose lock has ended and restore the oldest eligible pair.",
+      "notBefore": "2026-11-15T10:42:20.000Z",
+      "status": "pending"
+    }
+  ]
+}
