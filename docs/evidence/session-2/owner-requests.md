@@ -64,3 +64,10 @@ About twenty minutes in the OVHcloud Control Panel, in two sittings: order two K
 - The owner wants the least possible involvement: agents do everything they can, the owner does only what needs their permission. WireGuard for Windows was therefore installed by the agent (the owner approved the Windows permission prompt); item 5 shrinks to one more permission prompt when the tunnel file exists.
 - Correction to item 3: the token also needs **Zone → Workers Routes: Edit** for the chosen zone, so that the probe can be served at `mykey-probe.<domain>`.
 - Still open: the domain, the two servers (item 2), the Cloudflare token (item 3), the Telegram bot token (item 4).
+
+**2026-11-11, later**
+
+- The owner bought two OVHcloud **US** VPS of plan VPS-2 (4 vCores, 8 GB, 75 GB NVMe) instead of Public Cloud C3-8 instances. Accepted: Doc 10 asks for "two OVHcloud Linux servers"; the notes about "Basic IP" and the `default` security group in item 2 do not apply to VPS.
+- Addresses: `40.160.47.48` (assigned by the agent as `mykey-prod`) and `40.160.47.50` (`mykey-staging`). Both are in OpenStack region `os-us-east-va-2` (US East, Virginia), so the KMS region is `us-east-vin` and the KMIP endpoint `us-east-vin.okms.ovh.us:5696`, not the `.ovh.net` name the plan assumed.
+- The `mykey-ops` key was not installed at order: key login as `ubuntu` and as `root` is refused on both. The owner was asked to store the key in the account and reinstall both servers with Ubuntu 24.04 and that key.
+- Still open: the reinstall, the domain, the Cloudflare token (item 3), the Telegram bot token (item 4).
