@@ -1,0 +1,22 @@
+// The probe Worker (Run 2.6, D-22). Deployed by `node scripts/probe.ts deploy`
+// through the Cloudflare API (ruling R53); the layout is wrangler's, so a
+// wrangler that meets the pin rules can take it over unchanged.
+{
+  "name": "mykey-probe",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-11-01",
+  "triggers": { "crons": ["* * * * *"] },
+  "routes": [{ "pattern": "mykey-probe.nomikey.com", "custom_domain": true }],
+  "d1_databases": [
+    { "binding": "DB", "database_name": "mykey-probe", "migrations_dir": "migrations" },
+  ],
+  "vars": {
+    "HOSTS": "[{\"name\":\"staging\",\"hostname\":\"mykey-staging.nomikey.com\"},{\"name\":\"prod\",\"hostname\":\"mykey.nomikey.com\"}]",
+    "SINK": "telegram",
+    // LIMITS.monitoring (a unit test keeps them equal). D-22: the three graces are one number on purpose.
+    "HEARTBEAT_GRACE_SECONDS": "180",
+    "HEALTH_GRACE_SECONDS": "180",
+    "REPORTED_GRACE_SECONDS": "180",
+    "REMINDER_SECONDS": "3600",
+  },
+}

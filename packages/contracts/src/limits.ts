@@ -73,7 +73,14 @@ const VALUES = {
     cleanupLagTargetSeconds: 172800,
   },
   audit: { retentionDays: 365 },
-  monitoring: { probeIntervalSeconds: 60, heartbeatGraceSeconds: 180, kmipCertWarningDays: 30 },
+  monitoring: {
+    probeIntervalSeconds: 60,
+    heartbeatGraceSeconds: 180,
+    kmipCertWarningDays: 30,
+    // Not in Doc 06 §11: the reminder interval of an open alert, fixed by the
+    // Session 2 plan for the probe (Run 2.6, D-22).
+    alertReminderSeconds: 3600,
+  },
   reveal: { displayMaxSeconds: 30 },
 } as const;
 

@@ -11,6 +11,7 @@
     "@mykey/db": "workspace:*",
     "@mykey/openbao": "workspace:*",
     "@mykey/operations": "workspace:*",
+    "@mykey/probe": "workspace:*",
     "@next/env": "catalog:",
     "@scalar/openapi-parser": "catalog:",
     "@types/pg": "catalog:",

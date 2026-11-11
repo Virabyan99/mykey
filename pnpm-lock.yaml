@@ -235,6 +235,9 @@ importers:
       '@mykey/operations':
         specifier: workspace:*
         version: link:../packages/operations
+      '@mykey/probe':
+        specifier: workspace:*
+        version: link:../workers/probe
       '@next/env':
         specifier: 'catalog:'
         version: 16.4.6
