@@ -149,12 +149,19 @@ function baoRequest(
 ): Promise<Response> {
   const url = new URL(path, state.bao.url);
   const token = init.token ?? state.bao.rootToken;
-  const payload = init.body === undefined ? undefined : JSON.stringify(init.body);
+  // Bytes (a Raft snapshot) go as they are; anything else as JSON.
+  const raw = init.body instanceof Uint8Array;
+  const payload =
+    init.body === undefined
+      ? undefined
+      : init.body instanceof Uint8Array
+        ? Buffer.from(init.body)
+        : JSON.stringify(init.body);
   const headers: Record<string, string> = {};
   if (token !== "") headers["X-Vault-Token"] = token;
   if (init.namespace !== undefined) headers["X-Vault-Namespace"] = init.namespace;
   if (payload !== undefined) {
-    headers["Content-Type"] = "application/json";
+    headers["Content-Type"] = raw ? "application/octet-stream" : "application/json";
     headers["Content-Length"] = String(Buffer.byteLength(payload));
   }
   for (const [name, value] of Object.entries(init.headers ?? {})) {
@@ -584,4 +591,118 @@ export async function postgresLog(stack: Stack, since: string): Promise<string> 
     undefined,
     64 * 1024 * 1024,
   );
+}
+
+/**
+ * Copies database `from` into the existing database `to` with
+ * `pg_dump --format=custom | pg_restore --exit-on-error`, inside the
+ * PostgreSQL container, as the superuser. Throws when pg_restore fails.
+ */
+export async function copyDatabase(stack: Stack, from: string, to: string): Promise<void> {
+  if (!/^[a-z0-9_]+$/.test(from) || !/^[a-z0-9_]+$/.test(to))
+    throw new Error("invalid database name");
+  const user = stack.pg.superuser.user;
+  await compose(
+    stack.project,
+    [
+      "exec",
+      "-T",
+      "-e",
+      "PGPASSWORD",
+      "postgres",
+      "sh",
+      "-c",
+      `pg_dump -U ${user} -d ${from} --format=custom | pg_restore -U ${user} -d ${to} --exit-on-error`,
+    ],
+    { PGPASSWORD: stack.pg.superuser.password },
+  );
+}
+
+/** `pg_dump --format=custom` of one database into a local file (through the container). */
+export async function pgDumpToFile(
+  stack: Stack,
+  database: string,
+  localPath: string,
+): Promise<void> {
+  if (!/^[a-z0-9_]+$/.test(database)) throw new Error("invalid database name");
+  const inside = `/tmp/${database}.dump`;
+  await compose(
+    stack.project,
+    [
+      "exec",
+      "-T",
+      "-e",
+      "PGPASSWORD",
+      "postgres",
+      "pg_dump",
+      "-U",
+      stack.pg.superuser.user,
+      "-d",
+      database,
+      "--format=custom",
+      "-f",
+      inside,
+    ],
+    { PGPASSWORD: stack.pg.superuser.password },
+  );
+  await compose(stack.project, ["cp", `postgres:${inside}`, localPath]);
+  await compose(stack.project, ["exec", "-T", "postgres", "rm", "-f", inside]);
+}
+
+/** `pg_dumpall --globals-only --no-role-passwords` into a local file. */
+export async function pgGlobalsToFile(stack: Stack, localPath: string): Promise<void> {
+  const inside = "/tmp/globals.sql";
+  await compose(
+    stack.project,
+    [
+      "exec",
+      "-T",
+      "-e",
+      "PGPASSWORD",
+      "postgres",
+      "pg_dumpall",
+      "-U",
+      stack.pg.superuser.user,
+      "--globals-only",
+      "--no-role-passwords",
+      "-f",
+      inside,
+    ],
+    { PGPASSWORD: stack.pg.superuser.password },
+  );
+  await compose(stack.project, ["cp", `postgres:${inside}`, localPath]);
+  await compose(stack.project, ["exec", "-T", "postgres", "rm", "-f", inside]);
+}
+
+/** `pg_restore --exit-on-error` of a local custom-format dump into an existing database. */
+export async function pgRestoreFromFile(
+  stack: Stack,
+  localPath: string,
+  database: string,
+): Promise<void> {
+  if (!/^[a-z0-9_]+$/.test(database)) throw new Error("invalid database name");
+  const inside = `/tmp/restore-${database}.dump`;
+  await compose(stack.project, ["cp", localPath, `postgres:${inside}`]);
+  try {
+    await compose(
+      stack.project,
+      [
+        "exec",
+        "-T",
+        "-e",
+        "PGPASSWORD",
+        "postgres",
+        "pg_restore",
+        "-U",
+        stack.pg.superuser.user,
+        "-d",
+        database,
+        "--exit-on-error",
+        inside,
+      ],
+      { PGPASSWORD: stack.pg.superuser.password },
+    );
+  } finally {
+    await compose(stack.project, ["exec", "-T", "-u", "0", "postgres", "rm", "-f", inside]);
+  }
 }

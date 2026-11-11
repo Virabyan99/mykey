@@ -11,167 +11,22 @@ import {
   type Login,
   type TestDatabase,
 } from "./setup.ts";
+import {
+  GRANTEES,
+  I,
+  IDENTITY_COLUMNS,
+  RUNTIME_ROLES,
+  S,
+  SCHEMAS,
+  TABLE_PRIVILEGES,
+  TABLES,
+  U,
+  expectedColumnUpdate,
+  expectedTablePrivileges,
+  type ColumnRow,
+} from "../../harness/privilege-matrix.ts";
 
 const DENIED = "42501";
-const S = "SELECT";
-const I = "INSERT";
-const U = "UPDATE";
-const D = "DELETE";
-
-const RUNTIME_ROLES = ["api_runtime", "provisioner_runtime", "backup_reader", "maintenance"];
-const GRANTEES = [...RUNTIME_ROLES, "public"];
-const TABLE_PRIVILEGES = [S, I, U, D, "TRUNCATE", "REFERENCES", "TRIGGER", "MAINTAIN"];
-const SCHEMAS = ["app", "audit", "auth", "jobs", "meta"];
-
-/** Columns `api_runtime` may never update, in addition to primary-key columns. */
-const IDENTITY_COLUMNS = [
-  "id",
-  "organization_id",
-  "project_id",
-  "environment_id",
-  "namespace",
-  "lock_key",
-  "created_at",
-];
-const OPERATION_KEY_COLUMNS = [
-  "principal_kind",
-  "principal_id",
-  "action",
-  "target",
-  "idempotency_key",
-];
-
-interface Expected {
-  api: string[];
-  provisioner: string[];
-  /** Columns `provisioner_runtime` may update without table-level UPDATE. */
-  provisionerColumns?: string[];
-  /** Columns `api_runtime` may update in schema auth without table-level UPDATE. */
-  apiColumns?: string[];
-}
-
-/**
- * The expected-grants matrix. Every table in the database must be listed here;
- * a new table without an entry fails the sweep.
- */
-const TABLES: Record<string, Expected> = {
-  "app.organization": {
-    api: [S, I],
-    provisioner: [S],
-    provisionerColumns: ["state", "config_digest", "provisioning_operation_id"],
-  },
-  "app.membership": { api: [S, I], provisioner: [] },
-  "app.project": { api: [S, I], provisioner: [S] },
-  "app.environment": {
-    api: [S, I],
-    provisioner: [S],
-    provisionerColumns: ["state", "kv_ready", "policy_digest"],
-  },
-  "app.access_grant": { api: [S, I], provisioner: [] },
-  "app.secret_index": { api: [S, I], provisioner: [] },
-  "app.secret_version_event": { api: [S, I], provisioner: [] },
-  "app.machine_credential": { api: [S, I], provisioner: [] },
-  "app.operation": { api: [S, I], provisioner: [S, I, U] },
-  "app.operation_tombstone": { api: [S, I], provisioner: [] },
-  "app.operation_step": { api: [S, I], provisioner: [S, I, U] },
-  "app.effect_slot": { api: [S, I, D], provisioner: [S, I, D] },
-  "app.outbox": { api: [S, I], provisioner: [S, I, U] },
-  "app.import_preview": { api: [S, I, D], provisioner: [] },
-  "app.import_entry": { api: [S, I], provisioner: [] },
-  "app.service_control": { api: [S, I], provisioner: [] },
-  "app.backup_pair": { api: [S, I], provisioner: [] },
-  "app.rate_limit": { api: [S, I, D], provisioner: [] },
-  "audit.event": { api: [S, I], provisioner: [I] },
-  "meta.schema_migration": { api: [], provisioner: [] },
-  // Schema auth (Run 2.3): the session library's tables and the second factor.
-  // UPDATE by column as in app; never id, user_id, created_at, a stored verifier
-  // or a session's authenticated_at.
-  "auth.user": {
-    api: [S, I, D],
-    provisioner: [],
-    apiColumns: ["name", "email", "email_verified", "image", "updated_at"],
-  },
-  "auth.session": {
-    api: [S, I, D],
-    provisioner: [],
-    apiColumns: [
-      "expires_at",
-      "ip_address",
-      "user_agent",
-      "updated_at",
-      "phase",
-      "auth_epoch",
-      "last_user_activity_at",
-      "totp_verified_at",
-      "enrollment_id",
-    ],
-  },
-  "auth.account": { api: [S, I, D], provisioner: [], apiColumns: ["password", "updated_at"] },
-  "auth.verification": {
-    api: [S, I, D],
-    provisioner: [],
-    apiColumns: ["value", "expires_at", "updated_at"],
-  },
-  "auth.account_state": {
-    api: [S, I, D],
-    provisioner: [],
-    apiColumns: ["state", "auth_epoch", "credential_epoch", "updated_at"],
-  },
-  "auth.totp_enrollment": {
-    api: [S, I, D],
-    provisioner: [],
-    apiColumns: ["seed_jwe", "key_id", "state", "activated_at"],
-  },
-  // Written once: a used step is never changed or removed by the API.
-  "auth.totp_step_used": { api: [S, I], provisioner: [] },
-  "auth.recovery_code": {
-    api: [S, I],
-    provisioner: [],
-    apiColumns: ["consumed_at", "consumed_by_session"],
-  },
-};
-
-function expectedTablePrivileges(table: string, grantee: string): string[] {
-  const expected = TABLES[table];
-  if (expected === undefined) throw new Error(`table ${table} is not in the matrix`);
-  const schema = table.split(".")[0];
-  switch (grantee) {
-    case "api_runtime":
-      return expected.api;
-    case "provisioner_runtime":
-      return expected.provisioner;
-    case "backup_reader":
-      return [S];
-    case "maintenance":
-      if (schema === "app") return [S, I, U, D];
-      if (table === "audit.event") return [S, D];
-      return [S];
-    default:
-      return [];
-  }
-}
-
-interface ColumnRow {
-  table: string;
-  column: string;
-  primary_key: boolean;
-}
-
-function expectedColumnUpdate(row: ColumnRow, grantee: string): boolean {
-  if (expectedTablePrivileges(row.table, grantee).includes(U)) return true;
-  if (grantee === "provisioner_runtime") {
-    return TABLES[row.table]?.provisionerColumns?.includes(row.column) ?? false;
-  }
-  if (grantee === "api_runtime" && row.table.startsWith("auth.")) {
-    return TABLES[row.table]?.apiColumns?.includes(row.column) ?? false;
-  }
-  if (grantee === "api_runtime" && row.table.startsWith("app.")) {
-    if (row.primary_key || IDENTITY_COLUMNS.includes(row.column)) return false;
-    if (row.table === "app.operation" && OPERATION_KEY_COLUMNS.includes(row.column)) return false;
-    return true;
-  }
-  return false;
-}
 
 let db: TestDatabase;
 const organizationId = randomUUID();

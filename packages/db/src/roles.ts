@@ -91,3 +91,16 @@ export async function applyRoles(
     await client.end();
   }
 }
+
+/**
+ * The database-level statements of 0001_grants.sql, for a database that was
+ * created by hand (a restore, Run 2.9): nothing for PUBLIC, CONNECT for the
+ * four runtime roles. A dump does not carry them. Idempotent.
+ */
+export async function applyDatabaseAccess(pool: pg.Pool, database: string): Promise<void> {
+  const name = pg.escapeIdentifier(database);
+  await pool.query(`REVOKE ALL ON DATABASE ${name} FROM PUBLIC`);
+  await pool.query(
+    `GRANT CONNECT ON DATABASE ${name} TO api_runtime, provisioner_runtime, backup_reader, maintenance`,
+  );
+}
