@@ -2,12 +2,13 @@
 // only. No sign-up, no reset, no social provider, no plugin; the second factor
 // is product-owned (factors/). Session tokens reach the database only through
 // the protected adapter.
-import { randomUUID } from "node:crypto";
+import { randomBytes, randomUUID } from "node:crypto";
 import { LIMITS } from "@mykey/contracts";
 import { schema } from "@mykey/db";
 import { betterAuth, type BetterAuthOptions } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
-import type { NodePgDatabase } from "drizzle-orm/node-postgres";
+import { drizzle, type NodePgDatabase } from "drizzle-orm/node-postgres";
+import pg from "pg";
 import type { AuthKeys } from "./keys.ts";
 import { protectedAdapter } from "./protected-adapter.ts";
 
@@ -86,6 +87,26 @@ export function authOptions(deps: AuthDeps) {
 
 export function createAuth(deps: AuthDeps) {
   return betterAuth(authOptions(deps));
+}
+
+/**
+ * An instance whose database is never contacted and whose keys are thrown
+ * away: for reading the route inventory and the cookie settings only
+ * (scripts/auth-route-contract.ts, unit tests).
+ */
+export function offlineAuth(baseURL = "https://mykey.example") {
+  const ring = () => ({ current: "k1", keys: { k1: new Uint8Array(randomBytes(32)) } });
+  return createAuth({
+    // Port 1 on loopback: any query would fail at once; none is made.
+    db: drizzle(new pg.Pool({ host: "127.0.0.1", port: 1, max: 1 })),
+    keys: {
+      cookieSecret: randomBytes(32).toString("base64url"),
+      sessionLookup: ring(),
+      seedEncryption: ring(),
+      recoveryVerifier: ring(),
+    },
+    baseURL,
+  });
 }
 
 export type Auth = ReturnType<typeof createAuth>;

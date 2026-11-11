@@ -1,7 +1,16 @@
-export { AUTH_BASE_PATH, authOptions, createAuth, type Auth, type AuthDeps } from "./auth.ts";
+export {
+  AUTH_BASE_PATH,
+  authOptions,
+  createAuth,
+  offlineAuth,
+  type Auth,
+  type AuthDeps,
+} from "./auth.ts";
 export { loadAuthKeys, ringKey, type AuthKeys, type KeyRing } from "./keys.ts";
 export { UnsupportedTokenOperation, protectedAdapter } from "./protected-adapter.ts";
 export {
+  AUTH_BODIES,
+  authBodyJsonSchema,
   NATIVE_ALLOWED,
   NATIVE_DENIED,
   currentSession,

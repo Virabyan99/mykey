@@ -1,29 +1,15 @@
 // Run 2.3 Task A: the native Better Auth routes, each either allowed or denied (P-25).
-import { randomBytes } from "node:crypto";
 import {
-  createAuth,
   NATIVE_ALLOWED,
   NATIVE_DENIED,
   nativeRoutes,
+  offlineAuth,
   type NativeRoute,
 } from "@mykey/auth";
-import { drizzle } from "drizzle-orm/node-postgres";
-import pg from "pg";
 import { describe, expect, it } from "vitest";
 
-const ring = () => ({ current: "k1", keys: { k1: new Uint8Array(randomBytes(32)) } });
-
-// The pool never connects: listing routes reads no table.
-const auth = createAuth({
-  db: drizzle(new pg.Pool({ host: "127.0.0.1", port: 1 })),
-  keys: {
-    cookieSecret: randomBytes(32).toString("base64url"),
-    sessionLookup: ring(),
-    seedEncryption: ring(),
-    recoveryVerifier: ring(),
-  },
-  baseURL: "https://mykey.test",
-});
+// The database is never contacted: listing routes reads no table.
+const auth = offlineAuth();
 
 const key = (route: NativeRoute): string => `${route.method} ${route.path}`;
 

@@ -333,3 +333,18 @@ function closeAuthPaths(app: Hono): void {
   app.all(AUTH_BASE_PATH, () => errorResponse("not_found"));
   app.all(`${AUTH_BASE_PATH}/*`, () => errorResponse("not_found"));
 }
+
+/** The strict request bodies, for the route contract (scripts/auth-route-contract.ts). */
+export const AUTH_BODIES = {
+  signIn: signInBody,
+  changePassword: changePasswordBody,
+  empty: emptyBody,
+  code: codeBody,
+} as const;
+
+/** A request body as JSON Schema, for the route contract. */
+export function authBodyJsonSchema(name: keyof typeof AUTH_BODIES): Record<string, unknown> {
+  const schema = z.toJSONSchema(AUTH_BODIES[name]) as Record<string, unknown>;
+  // The dialect URL says nothing about the body.
+  return Object.fromEntries(Object.entries(schema).filter(([key]) => key !== "$schema"));
+}
