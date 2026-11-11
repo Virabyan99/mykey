@@ -35,6 +35,17 @@ export default defineConfig({
           include: [cloudTests],
         },
       },
+      {
+        // The staging host over the VPN; run through `pnpm run test:staging`.
+        test: {
+          name: "staging",
+          include: ["tests/staging/**/*.staging.test.ts"],
+          testTimeout: 300_000,
+          hookTimeout: 900_000,
+          // One host: suites must not reboot it under each other.
+          fileParallelism: false,
+        },
+      },
     ],
   },
 });
