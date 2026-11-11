@@ -62,28 +62,46 @@ export function buildManifest(input: Omit<PairManifest, "format" | "synthetic">)
   return { format: "mykey-pair-spike/1", synthetic: true, ...input };
 }
 
-/** Exactly the three artifacts (and manifest.json), each with its size and hash. */
-export function verifyArtifacts(
+/**
+ * Exactly the three artifacts (and manifest.json), each with its size and hash,
+ * from a listing of name → size and SHA-256 (made locally or on the host).
+ */
+export function verifyDigests(
   manifest: PairManifest,
-  directory: string,
-): Promise<{ ok: boolean; problems: string[] }> {
+  listing: Record<string, { bytes: number; sha256: string }>,
+): { ok: boolean; problems: string[] } {
   const problems: string[] = [];
-  const present = new Set(readdirSync(directory));
   for (const name of ARTIFACT_NAMES) {
-    if (!present.has(name)) {
+    const found = listing[name];
+    if (found === undefined) {
       problems.push(`missing: ${name}`);
       continue;
     }
-    const bytes = readFileSync(join(directory, name));
     const expected = manifest.artifacts[name];
-    const sha256 = createHash("sha256").update(bytes).digest("hex");
-    if (bytes.length !== expected.bytes || sha256 !== expected.sha256)
+    if (found.bytes !== expected.bytes || found.sha256 !== expected.sha256) {
       problems.push(`changed: ${name}`);
+    }
   }
-  for (const name of present) {
+  for (const name of Object.keys(listing)) {
     if (name !== "manifest.json" && !(ARTIFACT_NAMES as readonly string[]).includes(name)) {
       problems.push(`extra: ${name}`);
     }
   }
-  return Promise.resolve({ ok: problems.length === 0, problems });
+  return { ok: problems.length === 0, problems };
+}
+
+/** verifyDigests over a local directory. */
+export function verifyArtifacts(
+  manifest: PairManifest,
+  directory: string,
+): Promise<{ ok: boolean; problems: string[] }> {
+  const listing: Record<string, { bytes: number; sha256: string }> = {};
+  for (const name of readdirSync(directory)) {
+    const bytes = readFileSync(join(directory, name));
+    listing[name] = {
+      bytes: bytes.length,
+      sha256: createHash("sha256").update(bytes).digest("hex"),
+    };
+  }
+  return Promise.resolve(verifyDigests(manifest, listing));
 }
