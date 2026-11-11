@@ -60,7 +60,10 @@ export interface AuthFixture {
   /** Signs in and returns the cookie pair `name=value` to send back. */
   signIn(user: SeededUser): Promise<string>;
   /** Rebuilds auth and app over the same database, e.g. with other keys. */
-  rebuild(change: Partial<Pick<AuthDeps, "keys" | "observeAdapter">>): void;
+  rebuild(change: {
+    keys?: AuthKeys;
+    observeAdapter?: AuthDeps["observeAdapter"] | undefined;
+  }): void;
   close(): Promise<void>;
 }
 
