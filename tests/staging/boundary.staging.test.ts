@@ -389,15 +389,15 @@ async function expectHostEgressLimited(host: HostEntry): Promise<void> {
   expect(await curl(`https://${ARBITRARY}/`)).toEqual({ code: 7, status: "000" });
   // ACME is for the edge container on mk-pub, not for the host.
   expect((await curl("https://acme-v02.api.letsencrypt.org/directory")).status).toBe("000");
-  // An allowed name connects. The probe host name exists from Run 2.6 on; until
-  // then the R2 endpoint is the allowed name under test (run-2.5.md, R31).
-  const r2 = parseEgressNames(readFileSync(EGRESS_NAMES, "utf8")).find(
-    (entry) => entry.purpose === "r2",
-  )?.name;
-  if (r2 === undefined) throw new Error("egress-names.conf has no r2 name");
-  const allowed = await curl(`https://${r2}/`);
-  expect(allowed.code).toBe(0);
-  expect(allowed.status).toMatch(/^[1-5]\d\d$/);
+  // Allowed names connect: the R2 endpoint (R31) and, from Run 2.6 on, the probe.
+  const names = parseEgressNames(readFileSync(EGRESS_NAMES, "utf8"));
+  for (const purpose of ["r2", "probe"] as const) {
+    const name = names.find((entry) => entry.purpose === purpose)?.name;
+    if (name === undefined) throw new Error(`egress-names.conf has no ${purpose} name`);
+    const allowed = await curl(`https://${name}/`);
+    expect(allowed.code, purpose).toBe(0);
+    expect(allowed.status, purpose).toMatch(/^[1-5]\d\d$/);
+  }
 }
 
 async function expectPostgresThroughTunnel(stack: StagingStack): Promise<void> {

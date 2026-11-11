@@ -1,0 +1,6 @@
+# Probe drills on staging (mykey-staging.nomikey.com), times in seconds
+2026-11-11T19:59:41.753Z blackout: heartbeat_missing delivered 170 s, health_failing delivered 290 s after the host went dark
+2026-11-11T20:03:32.461Z blackout: both resolved 536 s after the host went dark (restore at 480 s)
+2026-11-11T20:07:44.401Z dead endpoint: health_failing delivered 232 s after edge stopped
+2026-11-11T20:09:31.899Z dead endpoint: resolved 356 s after edge stopped (restart at 300 s)
+2026-11-11T20:31:13.966Z sink failure: 24 attempts, none delivered, lastAlertAt null

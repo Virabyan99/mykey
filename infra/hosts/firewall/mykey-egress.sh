@@ -9,6 +9,7 @@
 #   mykey-egress.sh maint-end                 close the window
 #   mykey-egress.sh temp <name> on|off        a temporary include (public-ssh, drop-vpn-ssh); takes effect at the next apply
 #   mykey-egress.sh counts                    "<set> <elements>" per line
+#   mykey-egress.sh blackout <seconds>        drill: drop everything but loopback, restored by a timer armed first
 set -eu
 
 HERE=/opt/mykey/hosts
@@ -164,6 +165,24 @@ maint() {
 	fi
 }
 
+# Blackout drill (Run 2.6). The restore is armed first; the drop starts 5 s
+# later so the command that asked for it can return.
+blackout() {
+	seconds=$1
+	case "$seconds" in
+	'' | *[!0-9]*) echo "mykey-egress: seconds must be a number" >&2 && return 1 ;;
+	esac
+	if [ "$seconds" -lt 60 ] || [ "$seconds" -gt 900 ]; then
+		echo "mykey-egress: a blackout lasts 60 to 900 seconds" >&2
+		return 1
+	fi
+	stamp=$(now)
+	systemd-run --quiet --collect --on-active="$((seconds + 5))" --unit="mykey-blackout-end-$stamp" \
+		/usr/sbin/nft delete table inet mykey_blackout
+	systemd-run --quiet --collect --on-active=5 --unit="mykey-blackout-start-$stamp" "$0" blackout-start
+	echo "blackout starts in 5 s and ends ${seconds} s later"
+}
+
 maint_loop() {
 	while [ "$(until_of maint-until)" -gt "$(now)" ]; do
 		refresh >/dev/null 2>&1 || true
@@ -203,10 +222,12 @@ block) block "${2:-}" "${3:-}" ;;
 maint) maint "${2:-}" ;;
 maint-end) maint 0 ;;
 maint-loop) maint_loop ;;
+blackout) blackout "${2:-}" ;;
+blackout-start) nft -f "$HERE/firewall/mykey-blackout.nft" ;;
 temp) temp "${2:-}" "${3:-}" ;;
 counts) counts ;;
 *)
-	echo "usage: mykey-egress.sh apply|revert|refresh|block <purpose> <seconds>|maint <minutes>|maint-end|temp <name> on|off|counts" >&2
+	echo "usage: mykey-egress.sh apply|revert|refresh|block <purpose> <seconds>|maint <minutes>|maint-end|temp <name> on|off|counts|blackout <seconds>" >&2
 	exit 2
 	;;
 esac

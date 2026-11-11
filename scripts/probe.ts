@@ -151,8 +151,73 @@ async function migrate(accountId: string, databaseId: string, directory: string)
   }
 }
 
-async function deploy(): Promise<void> {
-  const config = workerConfig();
+/**
+ * The sink-failure test Worker (Run 2.6 Step 4): the same code with its own
+ * D1, watching a host that does not exist, alerting a webhook that answers
+ * 404 (a path of the real probe). No custom domain; read through D1.
+ */
+function sinkTestConfig(): WorkerConfig {
+  const base = workerConfig();
+  const probeHost = base.routes[0]?.pattern ?? "";
+  return {
+    ...base,
+    name: `${base.name}-sinktest`,
+    routes: [],
+    d1_databases: base.d1_databases.map((d1) => ({
+      ...d1,
+      database_name: `${d1.database_name}-sinktest`,
+    })),
+    vars: {
+      ...base.vars,
+      HOSTS: JSON.stringify([{ name: "nowhere", hostname: "mykey-nowhere.nomikey.com" }]),
+      SINK: "webhook",
+      WEBHOOK_URL: `https://${probeHost}/v1/sink-test`,
+    },
+  };
+}
+
+async function sinkTest(action: string | undefined): Promise<void> {
+  const config = sinkTestConfig();
+  const { accountId } = await zoneAndAccount();
+  const d1Name = config.d1_databases[0]?.database_name ?? "";
+  if (action === "up") {
+    await deploy(config);
+    return;
+  }
+  const found = await cf<{ uuid: string; name: string }[]>(
+    "GET",
+    `/accounts/${accountId}/d1/database?name=${d1Name}`,
+  );
+  const databaseId = found.find((db) => db.name === d1Name)?.uuid;
+  if (action === "rows") {
+    if (databaseId === undefined) throw new Error("no sink-test database");
+    const query = async (sql: string) =>
+      (
+        await cf<{ results: Record<string, unknown>[] }[]>(
+          "POST",
+          `/accounts/${accountId}/d1/database/${databaseId}/query`,
+          { sql },
+        )
+      )[0]?.results ?? [];
+    console.log(
+      JSON.stringify({
+        state: await query("SELECT host, json, updated_at FROM host_state"),
+        alerts: await query(
+          "SELECT host, condition, kind, at, delivered FROM alert_log ORDER BY id",
+        ),
+      }),
+    );
+  } else if (action === "down") {
+    await cf("DELETE", `/accounts/${accountId}/workers/scripts/${config.name}?force=true`);
+    console.log(`worker: removed ${config.name}`);
+    if (databaseId !== undefined) {
+      await cf("DELETE", `/accounts/${accountId}/d1/database/${databaseId}`);
+      console.log(`d1: removed ${d1Name}`);
+    }
+  } else throw new Error("sinktest needs up | rows | down");
+}
+
+async function deploy(config: WorkerConfig = workerConfig()): Promise<void> {
   const { zoneId, accountId } = await zoneAndAccount();
   const d1 = config.d1_databases[0];
   if (d1 === undefined) throw new Error("no d1 database in wrangler.jsonc");
@@ -281,8 +346,11 @@ if (import.meta.main) {
     if (command === "deploy") await deploy();
     else if (command === "secrets") await secrets();
     else if (command === "state" && argument !== undefined) await state(argument);
+    else if (command === "sinktest") await sinkTest(argument);
     else {
-      console.error("usage: node scripts/probe.ts deploy | secrets | state <host>");
+      console.error(
+        "usage: node scripts/probe.ts deploy | secrets | state <host> | sinktest up|rows|down",
+      );
       process.exitCode = 2;
     }
   } catch (error) {

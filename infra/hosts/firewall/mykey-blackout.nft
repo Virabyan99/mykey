@@ -1,0 +1,19 @@
+#!/usr/sbin/nft -f
+# Blackout drill (Run 2.6): from outside the host is switched off. Loaded by
+# `mykey-egress.sh blackout-start` only after a timer that deletes this table
+# has been armed; never part of /etc/nftables.conf, so a reboot also ends it.
+# Every packet in, out and through is dropped, the VPN included; loopback
+# stays so the host's own services are not part of the drill.
+table inet mykey_blackout {
+	chain input {
+		type filter hook input priority -50; policy drop;
+		iifname "lo" accept
+	}
+	chain output {
+		type filter hook output priority -50; policy drop;
+		oifname "lo" accept
+	}
+	chain forward {
+		type filter hook forward priority -50; policy drop;
+	}
+}
