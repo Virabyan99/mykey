@@ -12,6 +12,7 @@ import {
   bootstrapCommands,
   hostEnvDefaultCommand,
   imageLoadCommand,
+  kmsCsrCommands,
   imageParts,
   inParallel,
   localSecret,
@@ -177,5 +178,31 @@ describe("image upload", () => {
     await expect(failing).rejects.toThrow("part 2 failed");
     // Nothing new starts after a failure.
     expect(started.length).toBeLessThan(6);
+  });
+});
+
+// Run 2.7: the seal certificate's key is made on the host and never leaves it.
+describe("kms-csr", () => {
+  it("parses the certificate name", () => {
+    expect(parseHostArgs(["staging", "kms-csr", "staging-seal-1"])).toEqual({
+      host: "staging",
+      via: "vpn",
+      command: "kms-csr",
+      name: "staging-seal-1",
+    });
+    expect(() => parseHostArgs(["staging", "kms-csr"])).toThrow(/name/);
+    expect(() => parseHostArgs(["staging", "kms-csr", "../x"])).toThrow(/name/);
+  });
+
+  it("keeps the key in the secrets directory, refuses to replace it, and leaves only the CSR outside", () => {
+    const { create, read } = kmsCsrCommands("staging-seal-1");
+    expect(create).toContain("test ! -e /etc/mykey/secrets/kms/staging-seal-1.key");
+    expect(create).toContain("-keyout /etc/mykey/secrets/kms/staging-seal-1.key");
+    expect(create).toContain("ec_paramgen_curve:prime256v1");
+    expect(create).toContain("-subj /CN=staging-seal-1");
+    expect(create).toContain("-out /etc/mykey/kms-csr/staging-seal-1.csr");
+    expect(create).toContain("chmod 0400 /etc/mykey/secrets/kms/staging-seal-1.key");
+    expect(read).toBe("cat /etc/mykey/kms-csr/staging-seal-1.csr");
+    expect(read).not.toContain("secrets");
   });
 });

@@ -94,6 +94,7 @@ export const USAGE = `usage: node scripts/host.ts <staging|prod> <command> [--pu
   image <name> <tar>             docker load; records <NAME>_IMAGE in host.env
   maint <minutes> -- <command>   open registry egress, run the command, close it
   acme <staging|production>      choose the Let's Encrypt directory; drops the edge's certificates
+  kms-csr <name>                 new EC key on the host (kept there) and its CSR, printed
   up                             create missing host secrets, then docker compose up -d
   db-init                        roles and migrations through an SSH tunnel
   status                         print the host status as JSON
@@ -104,6 +105,7 @@ export type HostCommand = { host: HostName; via: Address } & (
   | { command: "apply"; target: "firewall" | "ssh" }
   | { command: "image"; name: string; tar: string }
   | { command: "acme"; directory: AcmeDirectory }
+  | { command: "kms-csr"; name: string }
   | { command: "maint"; minutes: number; argv: string[] }
 );
 
@@ -159,6 +161,13 @@ export function parseHostArgs(argv: string[]): HostCommand {
         throw new Error("acme needs one directory: staging|production");
       }
       return { ...base, command, directory };
+    }
+    case "kms-csr": {
+      const name = positional[0];
+      if (positional.length !== 1 || name === undefined || !/^[a-z][a-z0-9-]{0,39}$/.test(name)) {
+        throw new Error("kms-csr needs one certificate name: lower-case letters, digits, hyphens");
+      }
+      return { ...base, command, name };
     }
     case "maint": {
       const minutes = Number(positional[0]);
@@ -470,6 +479,27 @@ export function hostEnvDefaultCommand(key: string, value: string): string {
  * a certificate of the other directory must not be served or renewed. `up`
  * afterwards starts the edge, which asks the new directory once.
  */
+/**
+ * A KMS access certificate's key (Run 2.7): made on the host, kept in
+ * /etc/mykey/secrets/kms, never replaced; only the CSR is put where it can be read.
+ */
+export function kmsCsrCommands(name: string): { create: string; read: string } {
+  if (!/^[a-z][a-z0-9-]{0,39}$/.test(name)) throw new Error("invalid certificate name");
+  const key = `${REMOTE.secretsDir}/kms/${name}.key`;
+  const csr = `/etc/mykey/kms-csr/${name}.csr`;
+  return {
+    create: [
+      `install -d -m 0700 -o root -g root ${REMOTE.secretsDir}/kms`,
+      "install -d -m 0755 -o root -g root /etc/mykey/kms-csr",
+      `test ! -e ${key}`,
+      `(umask 077 && openssl req -new -newkey ec -pkeyopt ec_paramgen_curve:prime256v1 -nodes -keyout ${key} -out ${csr} -subj /CN=${name} 2>/dev/null)`,
+      `chmod 0400 ${key}`,
+      `chmod 0644 ${csr}`,
+    ].join(" && "),
+    read: `cat ${csr}`,
+  };
+}
+
 export function acmeCommands(directory: AcmeDirectory): string[] {
   return [
     hostEnvSetCommand("MYKEY_ACME_DIRECTORY", ACME_DIRECTORIES[directory]),
@@ -987,6 +1017,18 @@ async function main(argv: string[], log: Logger): Promise<number> {
       }
       log.info(`${host.name}: ACME directory is ${ACME_DIRECTORIES[command.directory]}`);
       log.info(`next: node scripts/host.ts ${host.name} up`);
+      return 0;
+    }
+    case "kms-csr": {
+      const { create, read } = kmsCsrCommands(command.name);
+      // The command names the secrets directory; it prints nothing.
+      expectSuccess(
+        await sshExec(host, create, { sudo: true, address, secretOutput: true }),
+        `kms-csr ${command.name} (an existing key is never replaced)`,
+      );
+      log.info(
+        expectSuccess(await sshExec(host, read, { address }), "reading the CSR").stdout.trimEnd(),
+      );
       return 0;
     }
     case "up":

@@ -85,3 +85,15 @@ About twenty minutes in the OVHcloud Control Panel, in two sittings: order two K
 - The tunnel was installed with one Windows permission prompt; item 5 is closed. Both servers are locked down (SSH on the VPN only, firewall loaded) and serve `/health` over Let's Encrypt certificates.
 - Method: on the owner's word the rest of Session 2 is executed inline, as in Session 1, with one fresh review at the gate (Run 2.10) instead of a reviewer after every unit. The executing model changed from Claude Fable 5.2 to Claude Opus 5.5 during Run 2.5.
 - Still open: the KMS steps of Run 2.7 (item 6, OWN-3).
+
+**2026-11-12 — Run 2.7, OVHcloud KMS sitting 1 (OWN-3)**
+
+Asked of the owner (about fifteen minutes in the OVHcloud US Control Panel):
+
+1. Key Management Service → order two OKMS domains in region `us-east-vin`: `mykey-staging-kms` and `mykey-losstest-kms`.
+2. IAM → local users `mykey-staging-seal` and `mykey-losstest-ops` (no console password).
+3. IAM → policies: `mykey-staging-kms-seal` (identity `mykey-staging-seal`, the staging domain; `okms:kmip:encrypt`, `decrypt`, `locate`, `get`, `getAttributes`, `create`, `activate`) and `mykey-losstest-kms-all` (identity `mykey-losstest-ops`, the losstest domain; all `okms:kmip:*`).
+4. Access certificates from the prepared CSRs in `C:\Users\gmpar\.mykey\kms\`: `staging-seal-1` (staging domain, `mykey-staging-seal`, 365 days), `losstest-ops` (losstest domain, `mykey-losstest-ops`, 365 days), `losstest-1day` (losstest domain, `mykey-losstest-ops`, 1 day); saved next to the CSRs as `<name>.crt`. Never root as identity.
+5. Reply with the two domain ids and the issue time of the 1-day certificate.
+
+The staging seal key was generated on the staging host and never left it (`host.ts staging kms-csr staging-seal-1`); the two losstest keys are on the workstation in `~/.mykey/kms/`.
