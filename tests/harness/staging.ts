@@ -436,6 +436,13 @@ export interface HostStatus {
   sealType: string | null;
   kmsReachable: boolean | null;
   pendingRevert: string[];
+  /** chrony's own measurement of the system clock offset; null while unsynchronised or not reported. */
+  chronyOffsetMs: number | null;
+  clockSynced: boolean | null;
+  /** Whether table `inet mykey` is loaded and how many addresses each set holds; null when not reported. */
+  firewall: { loaded: boolean; sets: Record<string, number> } | null;
+  /** Local addresses with a listener on TCP 22; null when not reported. */
+  sshListen: string[] | null;
 }
 
 /** The remote check; prints one JSON object (everything but `clockOffsetMs`). */
@@ -471,6 +478,18 @@ export function parseHostStatus(text: string, sentAt: number, receivedAt: number
     };
   }
   const pending = Array.isArray(raw.pendingRevert) ? raw.pendingRevert.map(String) : [];
+  let firewall: HostStatus["firewall"] = null;
+  if (typeof raw.firewall === "object" && raw.firewall !== null) {
+    const report = raw.firewall as { loaded?: unknown; sets?: unknown };
+    const sets: Record<string, number> = {};
+    for (const [name, count] of Object.entries((report.sets ?? {}) as Record<string, unknown>)) {
+      if (typeof count !== "number" || !Number.isInteger(count) || count < 0) {
+        throw new Error(`status.sh: firewall set ${name} has no count`);
+      }
+      sets[name] = count;
+    }
+    firewall = { loaded: report.loaded === true, sets };
+  }
   return {
     host: str("host"),
     bootId: str("bootId"),
@@ -481,6 +500,10 @@ export function parseHostStatus(text: string, sentAt: number, receivedAt: number
     sealType: typeof raw.sealType === "string" ? raw.sealType : null,
     kmsReachable: nullableBoolean(raw.kmsReachable),
     pendingRevert: pending,
+    chronyOffsetMs: typeof raw.chronyOffsetMs === "number" ? raw.chronyOffsetMs : null,
+    clockSynced: nullableBoolean(raw.clockSynced),
+    firewall,
+    sshListen: Array.isArray(raw.sshListen) ? raw.sshListen.map(String) : null,
   };
 }
 
