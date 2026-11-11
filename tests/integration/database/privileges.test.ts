@@ -46,6 +46,8 @@ interface Expected {
   provisioner: string[];
   /** Columns `provisioner_runtime` may update without table-level UPDATE. */
   provisionerColumns?: string[];
+  /** Columns `api_runtime` may update in schema auth without table-level UPDATE. */
+  apiColumns?: string[];
 }
 
 /**
@@ -81,6 +83,52 @@ const TABLES: Record<string, Expected> = {
   "app.rate_limit": { api: [S, I, D], provisioner: [] },
   "audit.event": { api: [S, I], provisioner: [I] },
   "meta.schema_migration": { api: [], provisioner: [] },
+  // Schema auth (Run 2.3): the session library's tables and the second factor.
+  // UPDATE by column as in app; never id, user_id, created_at, a stored verifier
+  // or a session's authenticated_at.
+  "auth.user": {
+    api: [S, I, D],
+    provisioner: [],
+    apiColumns: ["name", "email", "email_verified", "image", "updated_at"],
+  },
+  "auth.session": {
+    api: [S, I, D],
+    provisioner: [],
+    apiColumns: [
+      "expires_at",
+      "ip_address",
+      "user_agent",
+      "updated_at",
+      "phase",
+      "auth_epoch",
+      "last_user_activity_at",
+      "totp_verified_at",
+      "enrollment_id",
+    ],
+  },
+  "auth.account": { api: [S, I, D], provisioner: [], apiColumns: ["password", "updated_at"] },
+  "auth.verification": {
+    api: [S, I, D],
+    provisioner: [],
+    apiColumns: ["value", "expires_at", "updated_at"],
+  },
+  "auth.account_state": {
+    api: [S, I, D],
+    provisioner: [],
+    apiColumns: ["state", "auth_epoch", "credential_epoch", "updated_at"],
+  },
+  "auth.totp_enrollment": {
+    api: [S, I, D],
+    provisioner: [],
+    apiColumns: ["seed_jwe", "key_id", "state", "activated_at"],
+  },
+  // Written once: a used step is never changed or removed by the API.
+  "auth.totp_step_used": { api: [S, I], provisioner: [] },
+  "auth.recovery_code": {
+    api: [S, I],
+    provisioner: [],
+    apiColumns: ["consumed_at", "consumed_by_session"],
+  },
 };
 
 function expectedTablePrivileges(table: string, grantee: string): string[] {
@@ -113,6 +161,9 @@ function expectedColumnUpdate(row: ColumnRow, grantee: string): boolean {
   if (expectedTablePrivileges(row.table, grantee).includes(U)) return true;
   if (grantee === "provisioner_runtime") {
     return TABLES[row.table]?.provisionerColumns?.includes(row.column) ?? false;
+  }
+  if (grantee === "api_runtime" && row.table.startsWith("auth.")) {
+    return TABLES[row.table]?.apiColumns?.includes(row.column) ?? false;
   }
   if (grantee === "api_runtime" && row.table.startsWith("app.")) {
     if (row.primary_key || IDENTITY_COLUMNS.includes(row.column)) return false;
@@ -242,6 +293,34 @@ const CASES: Case[] = [
   ["provisioner_runtime", "cannot delete audit events", "DELETE FROM audit.event", DENIED],
   ["provisioner_runtime", "cannot create a table in app", "CREATE TABLE app.x ()", DENIED],
   ["provisioner_runtime", "cannot create a table in auth", "CREATE TABLE auth.x ()", DENIED],
+  ["api_runtime", "cannot delete a used TOTP step", "DELETE FROM auth.totp_step_used", DENIED],
+  [
+    "api_runtime",
+    "cannot rewrite a recovery code's verifier",
+    "UPDATE auth.recovery_code SET verifier = verifier",
+    DENIED,
+  ],
+  [
+    "api_runtime",
+    "marks a recovery code consumed (control)",
+    "UPDATE auth.recovery_code SET consumed_at = now() WHERE consumed_at IS NULL",
+    "ok",
+  ],
+  ["api_runtime", "removes sessions (control)", "DELETE FROM auth.session", "ok"],
+  [
+    "api_runtime",
+    "cannot rewrite a session's verifier",
+    "UPDATE auth.session SET token = token",
+    DENIED,
+  ],
+  [
+    "api_runtime",
+    "updates a session's phase (control)",
+    "UPDATE auth.session SET phase = phase",
+    "ok",
+  ],
+  ["maintenance", "reads sessions", "SELECT * FROM auth.session", "ok"],
+  ["maintenance", "cannot remove sessions", "DELETE FROM auth.session", DENIED],
   [
     "provisioner_runtime",
     "cannot alter a table",

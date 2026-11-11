@@ -5,6 +5,7 @@ import { SCANNED_IMAGES } from "../../../scripts/ci-scan.ts";
 import {
   OWN_IMAGES,
   REQUIRED_IMAGES,
+  REQUIRED_NPM,
   collectPinnedVersions,
   composeImageProblems,
   consistencyProblems,
@@ -154,6 +155,12 @@ describe("dependency pins", () => {
     expect(REQUIRED_IMAGES).toContain("node");
     expect(SCANNED_IMAGES).toContain("node");
     expect(lock.images.node?.tag).toBe(lock.node.version);
+  });
+
+  it("the libraries of the product-owned second factor are required in the lock (Run 2.3)", () => {
+    expect(REQUIRED_NPM).toEqual(expect.arrayContaining(["better-auth", "jose", "otpauth"]));
+    expect(lock.npm.jose?.version).toMatch(/^\d+\.\d+\.\d+$/);
+    expect(lock.npm.otpauth?.version).toMatch(/^\d+\.\d+\.\d+$/);
   });
 
   it("the nmap image of the outside scan is required in the lock by digest (Run 2.5)", () => {

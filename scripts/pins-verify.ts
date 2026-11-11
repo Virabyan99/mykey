@@ -57,6 +57,8 @@ export const REQUIRED_NPM = [
   "pg",
   "pg-boss",
   "better-auth",
+  "jose",
+  "otpauth",
   "react",
   "react-dom",
   "@tanstack/react-query",

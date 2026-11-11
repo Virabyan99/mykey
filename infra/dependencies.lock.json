@@ -149,8 +149,18 @@
     },
     "better-auth": {
       "version": "1.7.19",
-      "advisoriesChecked": "2026-11-10",
-      "note": "catalog only until Run 2.3; Doc 06 names 1.7.18, 1.7.19 is the newer stable patch"
+      "advisoriesChecked": "2026-11-11",
+      "note": "used by @mykey/auth from Run 2.3; Doc 06 names 1.7.18, 1.7.19 is the newer stable patch; 1.7.20 was one day old at Run 2.3"
+    },
+    "jose": {
+      "version": "6.2.17",
+      "advisoriesChecked": "2026-11-11",
+      "note": "JWE of the TOTP seed (Run 2.3, D-19)"
+    },
+    "otpauth": {
+      "version": "9.6.0",
+      "advisoriesChecked": "2026-11-11",
+      "note": "TOTP codes (Run 2.3, D-19)"
     },
     "react": {
       "version": "19.3.1",
