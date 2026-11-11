@@ -4,7 +4,10 @@
 // stays closed).
 import { randomBytes, randomUUID } from "node:crypto";
 import {
+  codeAt,
   createAuth,
+  stepAt,
+  type FactorDeps,
   mountAuthRoutes,
   type Auth,
   type AuthDeps,
@@ -13,6 +16,7 @@ import {
 } from "@mykey/auth";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { Hono } from "hono";
+import * as OTPAuth from "otpauth";
 import type pg from "pg";
 import { prepareDatabase, run, type TestDatabase } from "../database/setup.ts";
 
@@ -96,7 +100,7 @@ export async function authFixture(): Promise<AuthFixture> {
       ...(observeAdapter === undefined ? {} : { observeAdapter }),
     });
     app = new Hono();
-    mountAuthRoutes(app, auth);
+    mountAuthRoutes(app, auth, { pool, keys });
   };
   build();
 
@@ -181,4 +185,35 @@ export async function authRowCounts(pool: pg.Pool): Promise<Record<string, numbe
      SELECT 'verification', count(*) FROM auth.verification`,
   );
   return Object.fromEntries(rows.map((row) => [row.table, Number(row.count)]));
+}
+
+export interface EnrolledUser extends SeededUser {
+  /** The TOTP seed as the authenticator app holds it. */
+  seed: Uint8Array;
+  recoveryCodes: string[];
+  /** The mfa_complete cookie that activation set. */
+  elevatedCookie: string;
+}
+
+/** An account taken through the HTTP enrollment routes: sign-in, enroll, activate. */
+export async function enrolledUser(fixture: AuthFixture): Promise<EnrolledUser> {
+  const user = await fixture.seedUser("enrollment_pending");
+  const cookie = await fixture.signIn(user);
+  const enrolled = await fixture.request("POST", "/v1/auth/totp/enroll", { cookie, body: {} });
+  if (enrolled.status !== 200) throw new Error(`enroll answered ${enrolled.status}`);
+  const { secret } = (await enrolled.json()) as { secret: string };
+  const seed = OTPAuth.Secret.fromBase32(secret).bytes;
+  const activated = await fixture.request("POST", "/v1/auth/totp/activate", {
+    cookie,
+    body: { code: codeAt(seed, stepAt(new Date())) },
+  });
+  if (activated.status !== 200) throw new Error(`activate answered ${activated.status}`);
+  const { recoveryCodes } = (await activated.json()) as { recoveryCodes: string[] };
+  const elevatedCookie = cookieOf(activated);
+  if (elevatedCookie === undefined) throw new Error("activation set no session cookie");
+  return { ...user, seed, recoveryCodes, elevatedCookie };
+}
+
+export function factorDeps(fixture: AuthFixture): FactorDeps {
+  return { pool: fixture.pool, keys: fixture.keys, auth: fixture.auth };
 }

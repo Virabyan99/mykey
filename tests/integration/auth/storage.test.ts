@@ -6,6 +6,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { run } from "../database/setup.ts";
 import {
   COOKIE_NAME,
+  cookieOf,
   authFixture,
   keyRing,
   tokenOf,
@@ -95,6 +96,16 @@ describe("stored sessions", () => {
     expect(changed.status).toBe(200);
     expect(await changed.json()).not.toHaveProperty("token");
     expect(await storedTokens(other.id)).toHaveLength(1);
+    // Observed on 1.7.19 (D-19): the caller's session is replaced by a new one,
+    // which has passed the password only. The owner must pass the factor again.
+    expect(cookieOf(changed)).toBeDefined();
+    expect(await sessionOf(current)).toBeNull();
+    const kept = await run<{ phase: string }>(
+      fixture.pool,
+      "SELECT phase FROM auth.session WHERE user_id = $1",
+      [other.id],
+    );
+    expect(kept).toEqual([{ phase: "password_verified" }]);
 
     const fresh = await fixture.signIn({ ...other, password: newPassword });
     await elevateNewest(other.id);

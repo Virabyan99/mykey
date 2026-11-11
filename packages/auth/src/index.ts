@@ -12,3 +12,26 @@ export {
   type NativeRoute,
 } from "./routes.ts";
 export { sessionVerifier, sessionVerifierCandidates } from "./session-verifier.ts";
+export {
+  RECOVERY_ALPHABET,
+  formatRecoveryCode,
+  generateRecoveryCodes,
+  normalizeRecoveryCode,
+  recoveryVerifier,
+} from "./factors/recovery.ts";
+export { SEED_BYTES, decryptSeed, encryptSeed, type SeedBinding } from "./factors/seed.ts";
+export {
+  activateTotp,
+  elevateWithRecoveryCode,
+  elevateWithTotp,
+  enrollTotp,
+  regenerateRecoveryCodes,
+  sessionCookie,
+  type ActivateResult,
+  type ElevateResult,
+  type EnrollResult,
+  type FactorDeps,
+  type FailureReason,
+  type RegenerateResult,
+} from "./factors/elevate.ts";
+export { codeAt, matchStep, otpauthUri, stepAt } from "./factors/totp.ts";

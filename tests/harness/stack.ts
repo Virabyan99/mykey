@@ -530,3 +530,39 @@ export async function listStackProjects(): Promise<string[]> {
 export async function stopStack(project: string): Promise<void> {
   await removeStack(project);
 }
+
+/**
+ * A plain-format `pg_dump` of one database, made inside the PostgreSQL
+ * container. The superuser password travels in the environment of the docker
+ * client, never in an argument. The dump is returned, never printed.
+ */
+export async function pgDump(stack: Stack, database: string): Promise<string> {
+  return compose(
+    stack.project,
+    [
+      "exec",
+      "-T",
+      "-e",
+      "PGPASSWORD",
+      "postgres",
+      "pg_dump",
+      "-U",
+      stack.pg.superuser.user,
+      "-d",
+      database,
+      "--no-owner",
+    ],
+    { PGPASSWORD: stack.pg.superuser.password },
+    256 * 1024 * 1024,
+  );
+}
+
+/** The PostgreSQL container's log since `since` (RFC 3339). Returned, never printed. */
+export async function postgresLog(stack: Stack, since: string): Promise<string> {
+  return compose(
+    stack.project,
+    ["logs", "--no-color", "--since", since, "postgres"],
+    undefined,
+    64 * 1024 * 1024,
+  );
+}
