@@ -7,7 +7,7 @@ import { loadLock, type DependenciesLock } from "./pins-verify.ts";
 
 /** Exit code the scanners use for "finding reported", so a crash (1) is never mistaken for one. */
 export const FOUND_EXIT_CODE = 3;
-export const SCANNED_IMAGES = ["postgres", "openbao", "traefik", "restic"];
+export const SCANNED_IMAGES = ["postgres", "openbao", "traefik", "restic", "node"];
 
 const TRIVY_CACHE_VOLUME = "mykey-trivy-cache:/root/.cache/trivy";
 const TRIVY_FLAGS = [

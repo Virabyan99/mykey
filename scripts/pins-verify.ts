@@ -7,6 +7,8 @@ import { join, relative, resolve } from "node:path";
 export interface ImagePin {
   image: string;
   tag: string;
+  /** The flavour the digest belongs to when the tag alone does not say it (`alpine` → `<tag>-alpine`). */
+  variant?: string;
   digest: string;
   releaseUrl: string;
   advisoriesChecked: string;
@@ -26,7 +28,20 @@ export interface DependenciesLock {
   actions: Record<string, { sha: string; tag: string }>;
 }
 
-export const REQUIRED_IMAGES = ["postgres", "openbao", "traefik", "restic", "gitleaks", "trivy"];
+export const REQUIRED_IMAGES = [
+  "postgres",
+  "openbao",
+  "traefik",
+  "restic",
+  "gitleaks",
+  "trivy",
+  "node",
+];
+/**
+ * Images built from this repository. A Compose file names one as the required
+ * variable `${<NAME>_IMAGE:?…}`, which `host.ts image` sets to an image ID.
+ */
+export const OWN_IMAGES = ["api"];
 export const REQUIRED_NPM = [
   "typescript",
   "vitest",
@@ -249,12 +264,48 @@ export function composeImageProblems(text: string, lock: DependenciesLock, file:
     const match = /^\s*(?:-\s*)?image:\s*["']?([^"'\s#]+)/.exec(line);
     if (match?.[1] === undefined) return;
     const at = `${file}:${index + 1}`;
+    const own = /^\$\{([A-Z][A-Z0-9_]*)_IMAGE:\?/.exec(match[1]);
+    if (own?.[1] !== undefined && OWN_IMAGES.includes(own[1].toLowerCase())) return;
     const parsed = /^([^@:\s]+)(?::[\w.-]+)?@(sha256:[0-9a-f]{64})$/.exec(match[1]);
     if (parsed?.[1] === undefined || parsed[2] === undefined) {
       problems.push(`${at}: image is not pinned by digest`);
     } else if (known.get(parsed[2]) !== parsed[1]) {
       problems.push(`${at}: image digest is not in infra/dependencies.lock.json for ${parsed[1]}`);
     }
+  });
+  return problems;
+}
+
+/** `<group>/<workspace>/Dockerfile` of every app, package and worker that has one. */
+export function ownDockerfiles(root: string): string[] {
+  return WORKSPACE_GROUPS.flatMap((group) => {
+    const directory = join(root, group);
+    if (!existsSync(directory)) return [];
+    return readdirSync(directory)
+      .sort()
+      .map((workspace) => join(directory, workspace, "Dockerfile"))
+      .filter((file) => existsSync(file));
+  });
+}
+
+/** Checks every `FROM`: `name@sha256:…` with a digest recorded for that name, or an earlier stage. */
+export function dockerfileProblems(text: string, lock: DependenciesLock, file: string): string[] {
+  const problems: string[] = [];
+  const known = new Map(Object.values(lock.images).map((pin) => [pin.digest, pin.image]));
+  const stages = new Set<string>();
+  text.split(/\r?\n/).forEach((line, index) => {
+    const match = /^\s*FROM\s+(?:--platform=\S+\s+)?(\S+)(?:\s+AS\s+(\S+))?\s*$/i.exec(line);
+    if (match?.[1] === undefined) return;
+    const at = `${file}:${index + 1}`;
+    const parsed = /^([^@:\s]+)(?::[\w.-]+)?@(sha256:[0-9a-f]{64})$/.exec(match[1]);
+    if (stages.has(match[1].toLowerCase())) {
+      // A stage defined above.
+    } else if (parsed?.[1] === undefined || parsed[2] === undefined) {
+      problems.push(`${at}: FROM is not pinned by digest`);
+    } else if (known.get(parsed[2]) !== parsed[1]) {
+      problems.push(`${at}: FROM digest is not in infra/dependencies.lock.json for ${parsed[1]}`);
+    }
+    if (match[2] !== undefined) stages.add(match[2].toLowerCase());
   });
   return problems;
 }
@@ -344,6 +395,9 @@ export function verifyPins(root: string): string[] {
   ];
   for (const file of listFiles(join(root, "infra/compose"), /\.ya?ml$/)) {
     problems.push(...composeImageProblems(readFileSync(file, "utf8"), lock, relative(root, file)));
+  }
+  for (const file of ownDockerfiles(root)) {
+    problems.push(...dockerfileProblems(readFileSync(file, "utf8"), lock, relative(root, file)));
   }
   for (const file of listFiles(join(root, ".github/workflows"), /\.ya?ml$/)) {
     problems.push(

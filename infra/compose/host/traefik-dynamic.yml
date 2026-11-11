@@ -1,0 +1,41 @@
+# Traefik dynamic configuration (file provider). MYKEY_HOSTNAME comes from the
+# container environment, which Compose fills from /etc/mykey/host.env.
+http:
+  routers:
+    api:
+      rule: 'Host(`{{ env "MYKEY_HOSTNAME" }}`)'
+      entryPoints:
+        - websecure
+      service: api
+      middlewares:
+        - security-headers
+      tls:
+        certResolver: le
+        options: default
+
+  middlewares:
+    security-headers:
+      headers:
+        stsSeconds: 63072000
+
+  services:
+    api:
+      loadBalancer:
+        serversTransport: api
+        servers:
+          - url: "https://10.78.1.3:8443"
+
+  # The hop to the API is TLS, verified against the host's private CA and the
+  # name in the API certificate (Doc 06 §2).
+  serversTransports:
+    api:
+      serverName: api
+      rootCAs:
+        - /pki/ca.crt
+
+tls:
+  options:
+    default:
+      minVersion: VersionTLS12
+      # A handshake without a server name we serve gets no certificate.
+      sniStrict: true

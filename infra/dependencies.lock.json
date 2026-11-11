@@ -49,6 +49,14 @@
       "digest": "sha256:8f6bb947dbc528902e11f2f5be52f7b519f6a39d5d148f41166f2040499768fb",
       "releaseUrl": "https://github.com/aquasecurity/trivy/releases/tag/v0.76.2",
       "advisoriesChecked": "2026-11-10"
+    },
+    "node": {
+      "image": "node",
+      "tag": "24.22.2",
+      "variant": "alpine",
+      "digest": "sha256:a34ab6d7f6f4813f4d0c5469d74685604b962fbdbf5793a7bc7b4998ecb867c8",
+      "releaseUrl": "https://nodejs.org/en/blog/release/v24.22.2",
+      "advisoriesChecked": "2026-11-11"
     }
   },
   "npm": {
