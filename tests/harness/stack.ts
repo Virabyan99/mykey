@@ -24,6 +24,11 @@ export interface Stack {
     caCertPath: string;
   };
   bao: { url: string; caCertPath: string; rootToken: string };
+  /**
+   * A server certificate (names `api`, `localhost`, 127.0.0.1) signed by the
+   * stack's CA, for an API that a test starts in its own process.
+   */
+  api: { certPath: string; keyPath: string; certAuthorityPath: string };
   /** `docker compose down -v` and removal of `.stack/<project>`. */
   stop(): Promise<void>;
 }
@@ -290,6 +295,11 @@ export async function startStack(opts?: {
       caCertPath: join(directory, "ca.crt"),
       rootToken: previous?.bao.rootToken ?? "",
     },
+    api: {
+      certPath: join(directory, "api.crt"),
+      keyPath: join(directory, "api.key"),
+      certAuthorityPath: join(directory, "ca.crt"),
+    },
   };
 
   const fixed = opts?.fixedPorts === true;
@@ -300,6 +310,8 @@ export async function startStack(opts?: {
     });
     await refreshPorts(state);
     await compose(project, ["cp", "postgres:/pki/ca.crt", state.pg.caCertPath]);
+    await compose(project, ["cp", "postgres:/pki/api.crt", state.api.certPath]);
+    await compose(project, ["cp", "postgres:/pki/api.key", state.api.keyPath]);
     await waitForPostgres(state);
     await waitForOpenBaoListener(state);
     await initialiseOpenBao(state);
@@ -396,7 +408,16 @@ export async function mountKvV2(stack: Stack, namespace: string, mount = "kv"): 
 export async function restartService(stack: Stack, service: "postgres" | "openbao"): Promise<void> {
   await compose(stack.project, ["restart", "--timeout", "10", service]);
   // stack.pg and stack.bao are shared by reference, so the new ports land on `stack`.
-  const state: StackState = { project: stack.project, pg: stack.pg, bao: stack.bao };
+  await afterServiceStart(stack, service);
+}
+
+async function afterServiceStart(stack: Stack, service: "postgres" | "openbao"): Promise<void> {
+  const state: StackState = {
+    project: stack.project,
+    pg: stack.pg,
+    bao: stack.bao,
+    api: stack.api,
+  };
   await refreshPorts(state);
   if (service === "postgres") await waitForPostgres(stack);
   else {
@@ -404,6 +425,17 @@ export async function restartService(stack: Stack, service: "postgres" | "openba
     await waitForOpenBaoActive(stack);
   }
   writeState(state);
+}
+
+/** `docker compose stop`: the container is gone from the network until `startService`. */
+export async function stopService(stack: Stack, service: "postgres" | "openbao"): Promise<void> {
+  await compose(stack.project, ["stop", "--timeout", "10", service]);
+}
+
+/** Starts a stopped service and waits until it answers. Its published port may have changed. */
+export async function startService(stack: Stack, service: "postgres" | "openbao"): Promise<void> {
+  await compose(stack.project, ["start", service]);
+  await afterServiceStart(stack, service);
 }
 
 export interface AuditEntry {

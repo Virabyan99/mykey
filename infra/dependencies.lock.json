@@ -100,7 +100,12 @@
     "hono": {
       "version": "4.13.17",
       "advisoriesChecked": "2026-11-10",
-      "note": "catalog only until Run 3.1"
+      "note": ""
+    },
+    "@hono/node-server": {
+      "version": "2.1.6",
+      "advisoriesChecked": "2026-11-11",
+      "note": "HTTPS listener of apps/api (Run 2.5); 2.1.7 was published on the day of pinning and is deliberately not taken"
     },
     "drizzle-orm": {
       "version": "0.45.4",

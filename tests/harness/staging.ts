@@ -525,7 +525,8 @@ export async function hostStatus(
 
 // ------------------------------------------------------------- staging stack
 
-export interface StagingStack extends Stack {
+// No `api`: on a host the API is a container, not a process of the test.
+export interface StagingStack extends Omit<Stack, "api"> {
   host: HostEntry;
   status(): Promise<HostStatus>;
   reboot(): Promise<{ secondsUntilSsh: number }>;

@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "devDependencies": {
+    "@mykey/api": "workspace:*",
     "@mykey/cli": "workspace:*",
     "@mykey/contracts": "workspace:*",
     "@mykey/db": "workspace:*",

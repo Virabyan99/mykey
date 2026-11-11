@@ -5,5 +5,15 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@hono/node-server": "catalog:",
+    "@mykey/contracts": "workspace:*",
+    "@mykey/db": "workspace:*",
+    "hono": "catalog:",
+    "pg": "catalog:"
+  },
+  "devDependencies": {
+    "@types/pg": "catalog:"
   }
 }
