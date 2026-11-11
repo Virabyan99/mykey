@@ -83,8 +83,13 @@ Minor findings, not fixed:
 
 ## Not done
 
-- **GitHub Actions secrets for the two fixture tokens.** The agent session was not permitted to write to the secret store. No CI job runs the cloud tests today, so nothing depends on them yet. The five names the code reads are `MYKEY_R2_ACCOUNT_ID`, `MYKEY_FIXTURE_UPLOAD_ACCESS_KEY_ID`, `MYKEY_FIXTURE_UPLOAD_SECRET_ACCESS_KEY`, `MYKEY_FIXTURE_CLEANUP_ACCESS_KEY_ID`, `MYKEY_FIXTURE_CLEANUP_SECRET_ACCESS_KEY`. The cloud tests also need `MYKEY_R2_ADMIN_API_TOKEN` and the admin S3 pair, which D-16 keeps off CI; a CI job would need the lock-rule tests split out first.
+- **A CI job for the cloud tests.** The owner stored the two fixture tokens as GitHub Actions secrets on 11 Nov 2026, 11:27–11:28 UTC (`MYKEY_R2_ACCOUNT_ID`, `MYKEY_FIXTURE_UPLOAD_ACCESS_KEY_ID`, `MYKEY_FIXTURE_UPLOAD_SECRET_ACCESS_KEY`, `MYKEY_FIXTURE_CLEANUP_ACCESS_KEY_ID`, `MYKEY_FIXTURE_CLEANUP_SECRET_ACCESS_KEY`; the agent session was not permitted to write to the secret store). No CI job uses them yet. The cloud tests also need `MYKEY_R2_ADMIN_API_TOKEN` and the admin S3 pair, which D-16 keeps off CI; a CI job needs the lock-rule tests split out first.
 - The integration suite was not run again for this run: none of its code changed after the Session 1 gate.
+
+## After the run (11 Nov 2026)
+
+- The owner **revoked the bootstrap token** in the Cloudflare dashboard; `GET /user/tokens/verify` with the stored value answers HTTP 401. The eight R2 tokens are not affected: `pnpm run test:cloud` passed 8 of 8 afterwards. `provision.ts` needs a new bootstrap token at the same path before it can run again.
+- `gh secret list` shows the five fixture secrets.
 
 ## Checkpoints
 
