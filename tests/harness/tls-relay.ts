@@ -84,7 +84,11 @@ export async function startTlsRelay(
     requestForwarded,
     close: async () => {
       for (const socket of sockets) socket.destroy();
-      await new Promise<void>((resolveClose) => server.close(() => resolveClose()));
+      await new Promise<void>((resolveClose) =>
+        server.close(() => {
+          resolveClose();
+        }),
+      );
     },
   };
 }

@@ -143,7 +143,11 @@ describe("answers the server cannot be made to give", () => {
   });
 
   afterAll(async () => {
-    await new Promise<void>((resolveClose) => server.close(() => resolveClose()));
+    await new Promise<void>((resolveClose) =>
+      server.close(() => {
+        resolveClose();
+      }),
+    );
   });
 
   const answering = (nextStatus: number, nextBody: string): OpenBaoClient => {
