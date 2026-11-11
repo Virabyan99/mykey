@@ -71,3 +71,9 @@ About twenty minutes in the OVHcloud Control Panel, in two sittings: order two K
 - Addresses: `40.160.47.48` (assigned by the agent as `mykey-prod`) and `40.160.47.50` (`mykey-staging`). Both are in OpenStack region `os-us-east-va-2` (US East, Virginia), so the KMS region is `us-east-vin` and the KMIP endpoint `us-east-vin.okms.ovh.us:5696`, not the `.ovh.net` name the plan assumed.
 - The `mykey-ops` key was not installed at order: key login as `ubuntu` and as `root` is refused on both. The owner was asked to store the key in the account and reinstall both servers with Ubuntu 24.04 and that key.
 - Still open: the reinstall, the domain, the Cloudflare token (item 3), the Telegram bot token (item 4).
+
+**2026-11-11, evening**
+
+- Both servers were reinstalled with Ubuntu 24.04 and the `mykey-ops` key; the owner changed the forced initial password on each. Key login and passwordless `sudo` verified by the agent, which then switched SSH password login off on both (`/etc/ssh/sshd_config.d/05-mykey-early.conf`).
+- Domain: `nomikey.com`, registered at NameSilo. The owner allowed the agent to use the session's Cloudflare connection; the agent created the zone (Free plan) and the DNS-only records `mykey.nomikey.com` → `40.160.47.48` and `mykey-staging.nomikey.com` → `40.160.47.50`; the owner set the Cloudflare nameservers at NameSilo. A registrar transfer to Cloudflare is the owner's own later step and is not needed by MyKey.
+- Still open: the Cloudflare token (item 3, zone permissions scoped to `nomikey.com`), the Telegram bot token (item 4), one Windows permission prompt for the tunnel, the KMS steps of Run 2.7.
