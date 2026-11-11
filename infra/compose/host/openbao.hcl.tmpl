@@ -1,0 +1,38 @@
+# OpenBao on a MyKey host (Run 2.7, D-23). Rendered by scripts/host.ts from
+# this template; a unit test checks the rendered file line by line.
+storage "raft" {
+  path    = "/openbao/file"
+  node_id = "{{host}}"
+}
+
+listener "tcp" {
+  address                  = "0.0.0.0:8200"
+  tls_cert_file            = "/openbao/tls/server.crt"
+  tls_key_file             = "/openbao/tls/server.key"
+  tls_min_version          = "tls13"
+  # D-20: a request must arrive within these bounds; nothing lands later.
+  http_read_header_timeout = "10s"
+  http_read_timeout        = "30s"
+}
+
+# The seal key lives in OVHcloud KMS and never leaves it. The endpoint has a
+# public certificate, verified against the system roots (no ca_cert).
+seal "kmip" {
+  endpoint    = "{{kms_host}}:5696"
+  server_name = "{{kms_host}}"
+  kms_key_id  = "{{seal_key_id}}"
+  client_cert = "/openbao/kms/seal.crt"
+  client_key  = "/openbao/kms/seal.key"
+}
+
+audit "file" "main" {
+  options {
+    file_path = "/openbao/audit/audit.log"
+    mode      = "0600"
+  }
+}
+
+api_addr                     = "https://openbao:8200"
+cluster_addr                 = "https://openbao:8201"
+disable_mlock                = true
+default_max_request_duration = "{{max_request_duration}}"

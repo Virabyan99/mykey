@@ -6,7 +6,7 @@ import type { AddressInfo } from "node:net";
 import { serve } from "@hono/node-server";
 import type { DbTarget } from "@mykey/db";
 import { createApp, type RequestLogEntry } from "./app.ts";
-import { createHealthCheck } from "./health.ts";
+import { createHealthCheck, type OpenBaoHealthTarget } from "./health.ts";
 
 export interface ServerConfig {
   hostname: string;
@@ -14,6 +14,8 @@ export interface ServerConfig {
   port: number;
   tls: { certPath: string; keyPath: string };
   database: DbTarget;
+  /** On a host with OpenBao (Run 2.7): /health also requires it unsealed. */
+  openbao?: OpenBaoHealthTarget;
   log: (entry: RequestLogEntry) => void;
 }
 
@@ -23,7 +25,7 @@ export interface ApiServer {
 }
 
 export function startServer(config: ServerConfig): Promise<ApiServer> {
-  const health = createHealthCheck(config.database);
+  const health = createHealthCheck(config.database, config.openbao);
   const app = createApp({ health: () => health.check(), log: config.log });
   return new Promise((resolve, reject) => {
     const server = serve(
@@ -94,6 +96,10 @@ export function configFromEnvironment(env: NodeJS.ProcessEnv): Omit<ServerConfig
       password: readFileSync(required(env, "MYKEY_DB_PASSWORD_FILE"), "utf8").trim(),
       caCertPath: required(env, "MYKEY_DB_CA_FILE"),
     },
+    // Without MYKEY_BAO_URL (production in Session 2) /health checks PostgreSQL only.
+    ...(env.MYKEY_BAO_URL === undefined || env.MYKEY_BAO_URL === ""
+      ? {}
+      : { openbao: { url: env.MYKEY_BAO_URL, caCertPath: required(env, "MYKEY_BAO_CA_FILE") } }),
   };
 }
 

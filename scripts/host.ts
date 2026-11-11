@@ -483,6 +483,32 @@ export function hostEnvDefaultCommand(key: string, value: string): string {
  * A KMS access certificate's key (Run 2.7): made on the host, kept in
  * /etc/mykey/secrets/kms, never replaced; only the CSR is put where it can be read.
  */
+export interface OpenBaoConfigValues {
+  host: string;
+  /** The KMIP endpoint's host name, e.g. us-east-vin.okms.ovh.us. */
+  kmsHost: string;
+  sealKeyId: string;
+  /** D-20, e.g. "15s". */
+  maxRequestDuration: string;
+}
+
+/** infra/compose/host/openbao.hcl.tmpl with its placeholders filled; every value is checked first. */
+export function renderOpenBaoConfig(values: OpenBaoConfigValues): string {
+  if (!/^[a-z][a-z0-9-]{0,30}$/.test(values.host)) throw new Error("openbao.hcl: invalid host");
+  if (!isHostname(values.kmsHost)) throw new Error("openbao.hcl: invalid KMS host name");
+  if (!/^[A-Za-z0-9-]{1,64}$/.test(values.sealKeyId))
+    throw new Error("openbao.hcl: invalid key id");
+  if (!/^\d{1,4}s$/.test(values.maxRequestDuration)) {
+    throw new Error("openbao.hcl: invalid request duration");
+  }
+  const template = readFileSync(join(REPOSITORY, "infra/compose/host/openbao.hcl.tmpl"), "utf8");
+  return template
+    .replaceAll("{{host}}", values.host)
+    .replaceAll("{{kms_host}}", values.kmsHost)
+    .replaceAll("{{seal_key_id}}", values.sealKeyId)
+    .replaceAll("{{max_request_duration}}", values.maxRequestDuration);
+}
+
 export function kmsCsrCommands(name: string): { create: string; read: string } {
   if (!/^[a-z][a-z0-9-]{0,39}$/.test(name)) throw new Error("invalid certificate name");
   const key = `${REMOTE.secretsDir}/kms/${name}.key`;

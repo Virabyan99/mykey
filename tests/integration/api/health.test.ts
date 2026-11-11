@@ -17,7 +17,14 @@ import { startServer, type ApiServer, type RequestLogEntry } from "@mykey/api";
 import { ROUTES, errorEnvelopeSchema } from "@mykey/contracts";
 import { ROLE_NAMES, applyRoles, type DbTarget, type RoleName } from "@mykey/db";
 import type { z } from "zod";
-import { startService, startStack, stopService, type Stack } from "../../harness/stack.ts";
+import {
+  baoFetch,
+  restartService,
+  startService,
+  startStack,
+  stopService,
+  type Stack,
+} from "../../harness/stack.ts";
 
 interface Answer {
   status: number;
@@ -249,5 +256,99 @@ describe("API health stub", () => {
       await sleep(250);
     }
     expect(status).toBe(200);
+  });
+
+  describe("with OpenBao (Run 2.7)", () => {
+    let withBao: ApiServer;
+    let baoRelay: net.Server;
+    // A restarted OpenBao is published on another port; the relay follows it,
+    // the API keeps its configured address.
+    let baoTarget = { host: "", port: 0 };
+    const baoLog: RequestLogEntry[] = [];
+
+    const pointAtBao = (): void => {
+      const url = new URL(stack.bao.url);
+      baoTarget = { host: url.hostname, port: Number(url.port) };
+    };
+
+    beforeAll(async () => {
+      pointAtBao();
+      const open = new Set<net.Socket>();
+      baoRelay = net.createServer((client) => {
+        const upstream = net.connect(baoTarget);
+        open.add(client).add(upstream);
+        client.on("close", () => open.delete(client));
+        upstream.on("close", () => open.delete(upstream));
+        upstream.on("error", () => client.destroy());
+        client.on("error", () => upstream.destroy());
+        client.pipe(upstream).pipe(client);
+      });
+      await new Promise<void>((resolve) => baoRelay.listen(0, "127.0.0.1", resolve));
+      cleanup.push(
+        () =>
+          new Promise<void>((resolve) => {
+            // A connection to a stopped OpenBao may never end by itself.
+            for (const socket of open) socket.destroy();
+            baoRelay.close(() => {
+              resolve();
+            });
+          }),
+      );
+      withBao = await startServer({
+        hostname: "127.0.0.1",
+        port: 0,
+        tls: { certPath: stack.api.certPath, keyPath: stack.api.keyPath },
+        database,
+        openbao: {
+          url: `https://127.0.0.1:${(baoRelay.address() as net.AddressInfo).port}`,
+          caCertPath: stack.bao.caCertPath,
+        },
+        log: (entry) => baoLog.push(entry),
+      });
+      cleanup.push(() => withBao.close());
+    });
+
+    /** Polls /health until `status`, up to `ms`; returns the last answer. */
+    const healthUntil = async (status: number, ms: number): Promise<Answer> => {
+      const started = Date.now();
+      let answer = await request(stack, withBao.port, "/health");
+      while (answer.status !== status && Date.now() - started < ms) {
+        await sleep(250);
+        answer = await request(stack, withBao.port, "/health");
+      }
+      return answer;
+    };
+    const lastCause = (): string | undefined =>
+      baoLog
+        .filter((entry) => entry.event === "health_down")
+        .map((entry) => entry.cause)
+        .at(-1);
+
+    it("answers 200 only when PostgreSQL and an unsealed OpenBao both answer (control)", async () => {
+      expect((await healthUntil(200, 5_000)).status).toBe(200);
+    });
+
+    it("answers 503 while OpenBao is sealed, and 200 once it has unsealed", async () => {
+      const sealed = await baoFetch(stack, "/v1/sys/seal", { method: "PUT" });
+      expect(sealed.status).toBe(204);
+      const down = await healthUntil(503, 5_000);
+      expect(down.status).toBe(503);
+      expect(down.body).toEqual({ status: "down" });
+      expect(lastCause()).toBe("openbao_sealed");
+      // The development seal unseals on start.
+      await restartService(stack, "openbao");
+      pointAtBao();
+      expect((await healthUntil(200, 60_000)).status).toBe(200);
+    });
+
+    it("answers 503 while OpenBao is stopped: a refused connection counts as down", async () => {
+      await stopService(stack, "openbao");
+      const down = await healthUntil(503, 5_000);
+      expect(down.status).toBe(503);
+      expect(lastCause()).toBe("openbao_down");
+      await startService(stack, "openbao");
+      pointAtBao();
+      expect((await healthUntil(200, 60_000)).status).toBe(200);
+    });
   });
 });
