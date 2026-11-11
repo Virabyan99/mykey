@@ -1,30 +1,51 @@
-// A TCP relay in front of a TLS server, for client tests that need a
-// connection to fail AFTER the handshake (Run 2.4). It never decrypts: it reads
-// the TLS record headers of the client's stream. After the client's
-// ChangeCipherSpec record comes its Finished record; the record after that is
-// the first one carrying the request. From that record on the relay passes
-// nothing back to the client, and then either
-//   - "drop": closes both connections 300 ms later (the server has the request), or
-//   - "hold": keeps both open until close() (a server that never answers).
+// A TCP relay in front of a TLS server, for tests that need the network to
+// misbehave AFTER the handshake (Run 2.4, ruling R46). It never decrypts: it
+// reads the TLS record headers of the client's stream. After the client's
+// ChangeCipherSpec record comes its Finished record; every record after that
+// carries the request. The handshake itself always passes at once.
+//
+// Modes:
+//   - "pass": the request and the answer pass, each after the delay set with
+//     delayRequests / delayResponses (taken when a record or chunk arrives);
+//   - "drop": the first request record passes, nothing comes back, and both
+//     connections are closed 300 ms later (the server has the request);
+//   - "hold": the first request record passes and nothing ever comes back.
+//
+// A delayed request whose server connection has closed in the meantime is lost,
+// as it would be on a real network once the receiving process is gone.
 import net from "node:net";
 
-export type RelayMode = "drop" | "hold";
+export type RelayMode = "pass" | "drop" | "hold";
 
 export interface TlsRelay {
   port: number;
-  /** Resolves when a request record has been passed to the server. */
+  /** Resolves when the first request record has been passed to the server. */
   requestForwarded: Promise<void>;
+  /** Wall-clock times at which request records were passed to the server. */
+  forwardedAt: number[];
+  delayRequests(ms: number): void;
+  /** Delays every request record after a connection's first one: the headers arrive, the rest of a large body waits. */
+  delayRequestTail(ms: number): void;
+  delayResponses(ms: number): void;
+  clear(): void;
   close(): Promise<void>;
 }
 
 const RECORD_HEADER = 5;
 const CHANGE_CIPHER_SPEC = 0x14;
 
+const later = (ms: number): Promise<void> =>
+  new Promise((resolveLater) => setTimeout(resolveLater, Math.max(0, ms)));
+
 export async function startTlsRelay(
   target: { host: string; port: number },
-  mode: RelayMode,
+  mode: RelayMode = "pass",
 ): Promise<TlsRelay> {
   const sockets = new Set<net.Socket>();
+  const forwardedAt: number[] = [];
+  let requestDelay = 0;
+  let tailDelay = 0;
+  let responseDelay = 0;
   let markForwarded: () => void = () => undefined;
   const requestForwarded = new Promise<void>((resolveForwarded) => {
     markForwarded = resolveForwarded;
@@ -37,6 +58,20 @@ export async function startTlsRelay(
     // 0: before the client's ChangeCipherSpec; 1: its Finished is next; 2: request records.
     let phase = 0;
     let requestSeen = false;
+    // Keeps records in order when they are delayed.
+    let toServer = Promise.resolve();
+    let toClient = Promise.resolve();
+
+    const forward = (record: Buffer, delayMs: number): void => {
+      const due = Date.now() + delayMs;
+      toServer = toServer.then(async () => {
+        await later(due - Date.now());
+        if (upstream.destroyed) return;
+        upstream.write(record);
+        forwardedAt.push(Date.now());
+        markForwarded();
+      });
+    };
 
     client.on("data", (chunk: Buffer) => {
       pending = Buffer.concat([pending, chunk]);
@@ -46,23 +81,40 @@ export async function startTlsRelay(
         const record = pending.subarray(0, RECORD_HEADER + length);
         pending = pending.subarray(RECORD_HEADER + length);
         const type = record[0];
-        upstream.write(record);
-        if (phase === 0 && type === CHANGE_CIPHER_SPEC) phase = 1;
-        else if (phase === 1) phase = 2;
-        else if (phase === 2 && !requestSeen) {
+        if (phase < 2) {
+          upstream.write(record);
+          if (phase === 0 && type === CHANGE_CIPHER_SPEC) phase = 1;
+          else if (phase === 1) phase = 2;
+          continue;
+        }
+        if (mode !== "pass") {
+          if (requestSeen) continue;
           requestSeen = true;
-          markForwarded();
+          forward(record, 0);
           if (mode === "drop") {
             setTimeout(() => {
               client.destroy();
               upstream.destroy();
             }, 300);
           }
+          continue;
         }
+        // The first request record carries the HTTP headers; a large body follows in more records.
+        forward(record, requestSeen ? requestDelay + tailDelay : requestDelay);
+        requestSeen = true;
       }
     });
     upstream.on("data", (chunk: Buffer) => {
-      if (!requestSeen) client.write(chunk);
+      if (!requestSeen) {
+        client.write(chunk);
+        return;
+      }
+      if (mode !== "pass") return;
+      const due = Date.now() + responseDelay;
+      toClient = toClient.then(async () => {
+        await later(due - Date.now());
+        if (!client.destroyed) client.write(chunk);
+      });
     });
     const end = (): void => {
       client.destroy();
@@ -70,11 +122,13 @@ export async function startTlsRelay(
     };
     client.on("error", end);
     upstream.on("error", end);
-    client.on("close", () => {
-      sockets.delete(client);
-      if (mode === "drop" || !requestSeen) upstream.destroy();
+    // A frozen client keeps its socket; a dead one closes it. Either way the
+    // request already on its way still goes on, as on a real network.
+    client.on("close", () => sockets.delete(client));
+    upstream.on("close", () => {
+      sockets.delete(upstream);
+      void toClient.then(() => client.destroy());
     });
-    upstream.on("close", () => sockets.delete(upstream));
   });
 
   await new Promise<void>((resolveListen) => server.listen(0, "127.0.0.1", resolveListen));
@@ -82,6 +136,21 @@ export async function startTlsRelay(
   return {
     port: address.port,
     requestForwarded,
+    forwardedAt,
+    delayRequests: (ms) => {
+      requestDelay = ms;
+    },
+    delayRequestTail: (ms) => {
+      tailDelay = ms;
+    },
+    delayResponses: (ms) => {
+      responseDelay = ms;
+    },
+    clear: () => {
+      requestDelay = 0;
+      tailDelay = 0;
+      responseDelay = 0;
+    },
     close: async () => {
       for (const socket of sockets) socket.destroy();
       await new Promise<void>((resolveClose) =>

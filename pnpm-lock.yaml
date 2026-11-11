@@ -193,7 +193,24 @@ importers:
         specifier: workspace:*
         version: link:../contracts
 
-  packages/operations: {}
+  packages/operations:
+    dependencies:
+      '@mykey/contracts':
+        specifier: workspace:*
+        version: link:../contracts
+      '@mykey/db':
+        specifier: workspace:*
+        version: link:../db
+      '@mykey/openbao':
+        specifier: workspace:*
+        version: link:../openbao
+      pg:
+        specifier: 'catalog:'
+        version: 8.23.1
+    devDependencies:
+      '@types/pg':
+        specifier: 'catalog:'
+        version: 8.23.1
 
   tests:
     devDependencies:
@@ -215,6 +232,9 @@ importers:
       '@mykey/openbao':
         specifier: workspace:*
         version: link:../packages/openbao
+      '@mykey/operations':
+        specifier: workspace:*
+        version: link:../packages/operations
       '@next/env':
         specifier: 'catalog:'
         version: 16.4.6

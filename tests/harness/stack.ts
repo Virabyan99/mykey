@@ -432,6 +432,25 @@ export async function stopService(stack: Stack, service: "postgres" | "openbao")
   await compose(stack.project, ["stop", "--timeout", "10", service]);
 }
 
+/** `docker compose pause`: the processes are frozen; the kernel still accepts connections. */
+export async function pauseService(stack: Stack, service: "postgres" | "openbao"): Promise<void> {
+  await compose(stack.project, ["pause", service]);
+}
+
+/** `docker compose kill` (SIGKILL), also of a paused service. Start it again with startService. */
+export async function killService(stack: Stack, service: "postgres" | "openbao"): Promise<void> {
+  await compose(stack.project, ["kill", service]);
+}
+
+/** Whether the service's container is running (not stopped, killed or paused). */
+export async function serviceRunning(
+  stack: Stack,
+  service: "postgres" | "openbao",
+): Promise<boolean> {
+  const status = await stackStatus(stack.project);
+  return status.services.some((entry) => entry.service === service && entry.state === "running");
+}
+
 /** Starts a stopped service and waits until it answers. Its published port may have changed. */
 export async function startService(stack: Stack, service: "postgres" | "openbao"): Promise<void> {
   await compose(stack.project, ["start", service]);
