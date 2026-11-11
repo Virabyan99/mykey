@@ -34,15 +34,15 @@ What exists:
 
 ## What failed or was deferred
 
-| Item                                          | State                                                                                                                                                                                             |
-| --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Run 1.9**                                   | Done on 11 Nov 2026, one day late; see `run-1.9.md`. PO-9, R2-L1 and COST-B1 stay `OPEN` by design: the fixture is started, nothing is passed.                                                    |
-| GitHub Actions secrets for the fixture tokens | **Not set.** The agent session was not permitted to write to the secret store. No CI job runs the cloud tests yet, so nothing fails; see `run-1.9.md` for the five secret names.                  |
-| Cloud tests after 15 Nov 2026                 | The refusal tests stop with an error once the `pairs/` lock is within an hour of its end, so that they cannot delete the fixture. From then until Run 6.6, `pnpm run test:cloud` fails by design. |
-| Image scan                                    | Green only through `.trivyignore.images` (46 upstream image CVEs without a fix), which expires on 20 Nov 2026.                                                                                    |
-| Branch protection                             | Not available on a free private repository. Nothing stops a direct push to `main`.                                                                                                                |
-| Workstation Node                              | 24.18.0; the pin is 24.22.2 (`engines` allows `>=24.18.0 <25`). CI uses the pin.                                                                                                                  |
-| Staging demonstration                         | Not applicable in Session 1 (Doc 10 §4.5 starts in Session 2).                                                                                                                                    |
+| Item                          | State                                                                                                                                                                                             |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Run 1.9**                   | Done on 11 Nov 2026, one day late; see `run-1.9.md`. PO-9, R2-L1 and COST-B1 stay `OPEN` by design: the fixture is started, nothing is passed.                                                    |
+| CI job for the cloud tests    | None yet. The five fixture secrets are in GitHub Actions (set by the owner on 11 Nov 2026), but the cloud tests also need the admin token, which D-16 keeps off CI.                               |
+| Cloud tests after 15 Nov 2026 | The refusal tests stop with an error once the `pairs/` lock is within an hour of its end, so that they cannot delete the fixture. From then until Run 6.6, `pnpm run test:cloud` fails by design. |
+| Image scan                    | Green only through `.trivyignore.images` (46 upstream image CVEs without a fix), which expires on 20 Nov 2026.                                                                                    |
+| Branch protection             | Not available on a free private repository. Nothing stops a direct push to `main`.                                                                                                                |
+| Workstation Node              | 24.18.0; the pin is 24.22.2 (`engines` allows `>=24.18.0 <25`). CI uses the pin.                                                                                                                  |
+| Staging demonstration         | Not applicable in Session 1 (Doc 10 §4.5 starts in Session 2).                                                                                                                                    |
 
 Open issues carried forward:
 
@@ -126,7 +126,7 @@ Found sound, with no false pass: the privilege matrix (exact SQLSTATE `42501`, c
 - **Schemas:** `app` (18 tables), `audit` (`event`), `meta` (`schema_migration`, created by the migrator), `auth` and `jobs` (empty, reserved for Better Auth and the job queue).
 - **Migrations:** `pnpm run db:generate` (Drizzle), hand-written files with `drizzle-kit generate --custom`; `migrate()` refuses a changed, missing or out-of-order file. `drizzle-kit` exits 0 when it crashes — `db:check` looks for its completion message.
 - **CI jobs:** `check`, `unit`, `integration`, `secret-scan`, `dependency-scan`, `image-scan`, `scanner-selftest`, `changes`, `cli-matrix`.
-- **Credentials:** on the owner's workstation under `~/.mykey/` (outside the repository and OneDrive): SSH key `~/.mykey/ssh/`, eight R2 token files `~/.mykey/secrets/r2/<token name>.json`, Cloudflare bootstrap token `~/.mykey/secrets/cloudflare/bootstrap-token`, Restic fixture password `~/.mykey/secrets/retention-fixture/restic-password`. The custody list is `docs/runbooks/credential-custody.md`.
+- **Credentials:** on the owner's workstation under `~/.mykey/` (outside the repository and OneDrive): SSH key `~/.mykey/ssh/`, eight R2 token files `~/.mykey/secrets/r2/<token name>.json`, Cloudflare bootstrap token `~/.mykey/secrets/cloudflare/bootstrap-token` (**revoked on 11 Nov 2026**; `provision.ts` needs a new one at that path before it can run again), Restic fixture password `~/.mykey/secrets/retention-fixture/restic-password`. The custody list is `docs/runbooks/credential-custody.md`.
 - **Retention fixture:** uploaded on 11 Nov 2026 at 10:42 UTC to `mykey-retention-fixture`. Every object, its upload time as R2 reports it and its `lockExpiresAt` are in `docs/evidence/session-1/retention-fixture.json`. The `pairs/` lock ends on **15 Nov 2026 at 10:42 UTC**. Checkpoints: `pairs-lock-session-gate` (first session gate on or after that time) and `run-6.6-cleanup-and-restore`. One probe pair (`probe-20261111-2`) and two `scratch/` controls are left for Run 6.6 to clean up. `pnpm run test:cloud` needs the workstation's credential files.
 - **R2 findings:** a refused overwrite or delete answers HTTP 409 `ObjectLockedByBucketPolicy`; a bulk delete answers HTTP 200 and lists the refusal per object; R2 writes the id of one multipart upload as a different string every time it reports it, so ids cannot be compared, but each of them aborts the upload; a 600-second lock rule is accepted.
 - **Canaries:** never write a literal `MYKEY_CANARY_` followed by 32 characters outside `tests/fixtures/ci/seeded-secret/`; tests assemble canaries at run time.
@@ -137,10 +137,9 @@ Found sound, with no false pass: the privilege matrix (exact SQLSTATE `42501`, c
 
 ## Owner actions pending
 
-| Action                                                                                                                                                                            | Needed by                            |
-| --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------ |
-| Optional: store the two fixture tokens as GitHub Actions secrets (command in `run-1.9.md`), and revoke the Cloudflare bootstrap token once no token needs to be created or rolled | before a CI job runs the cloud tests |
-| **OWN-1:** confirm D-01 … D-11 (D-04 and D-05 need an explicit yes); the domain for production and staging and whether Cloudflare manages it; where alerts go                     | domain by Run 2.5, alerts by Run 2.6 |
-| **OWN-2:** two OVHcloud instances (`mykey-prod`, `mykey-staging`, 4 vCPU / 8 GB / ≥ 80 GB, Ubuntu 24.04, one region that offers KMS, the `mykey-ops` public key)                  | start of Run 2.5 (Day 2, midday)     |
-| **OWN-3:** OVHcloud KMS activated in the same region                                                                                                                              | Run 2.7 (Day 3)                      |
-| Optional: update the workstation's Node to 24.22.2                                                                                                                                | any time                             |
+| Action                                                                                                                                                           | Needed by                            |
+| ---------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------ |
+| **OWN-1:** confirm D-01 … D-11 (D-04 and D-05 need an explicit yes); the domain for production and staging and whether Cloudflare manages it; where alerts go    | domain by Run 2.5, alerts by Run 2.6 |
+| **OWN-2:** two OVHcloud instances (`mykey-prod`, `mykey-staging`, 4 vCPU / 8 GB / ≥ 80 GB, Ubuntu 24.04, one region that offers KMS, the `mykey-ops` public key) | start of Run 2.5 (Day 2, midday)     |
+| **OWN-3:** OVHcloud KMS activated in the same region                                                                                                             | Run 2.7 (Day 3)                      |
+| Optional: update the workstation's Node to 24.22.2                                                                                                               | any time                             |
