@@ -133,6 +133,8 @@ interface BaoRequest {
   body?: unknown;
   namespace?: string;
   token?: string;
+  /** Extra request headers; a `content-type` here replaces `application/json`. */
+  headers?: Record<string, string>;
 }
 
 function baoRequest(
@@ -149,6 +151,10 @@ function baoRequest(
   if (payload !== undefined) {
     headers["Content-Type"] = "application/json";
     headers["Content-Length"] = String(Buffer.byteLength(payload));
+  }
+  for (const [name, value] of Object.entries(init.headers ?? {})) {
+    if (name.toLowerCase() === "content-type") delete headers["Content-Type"];
+    headers[name] = value;
   }
   return new Promise((resolveRequest, reject) => {
     const request = https.request(
@@ -426,7 +432,11 @@ export async function readAuditLog(stack: Stack): Promise<AuditEntry[]> {
     512 * 1024 * 1024,
   );
   const entries: AuditEntry[] = [];
-  for (const raw of output.split("\n")) {
+  const lines = output.split("\n");
+  // Suites share one stack and run in parallel: OpenBao may be writing the last
+  // line right now. A final segment without its newline is not an entry yet.
+  lines.pop();
+  for (const raw of lines) {
     if (raw.trim() === "") continue;
     const line = JSON.parse(raw) as {
       type?: string;

@@ -142,7 +142,7 @@ export async function createOrgFixture(
       }
       const role = await admin.readTokenRole(namespace, environment.machineName);
       if (role === null) throw mismatch("machine token role");
-      // token_num_uses is applied but never returned by a read (see readTokenRole).
+      // token_num_uses (0) is applied but a read omits a 0 (see readTokenRole).
       const readable: Partial<MachineTokenRole> = machineTokenRole(environment.id);
       delete readable.token_num_uses;
       compareFields("machine token role", { ...role }, readable);

@@ -64,7 +64,7 @@ describe("OpenBao client against the real server", () => {
       expect(await admin.readPolicy(org.namespace, environment.machineName)).toBe(
         renderMachinePolicy(org.projectId, environment.id),
       );
-      // OpenBao 2.7.2 applies token_num_uses but leaves it out of a role read …
+      // OpenBao 2.7.2 applies token_num_uses but leaves a 0 out of a role read …
       const { token_num_uses: numUses, ...readable } = machineTokenRole(environment.id);
       expect(await admin.readTokenRole(org.namespace, environment.machineName)).toEqual(readable);
       // … so its effect is checked instead: a token minted from the role has that many uses.
@@ -252,6 +252,88 @@ describe("OpenBao client against the real server", () => {
     });
     // Control: the filter sees the entries of this dispatch (one request, one response).
     expect(entries.map((entry) => entry.type)).toEqual(["request", "response"]);
+  });
+
+  it("a token without the capability is denied, 403", async () => {
+    const name = org.environments[0]!.machineName;
+    const created = await baoFetch(stack, `/v1/auth/token/create/${name}`, {
+      method: "POST",
+      namespace: org.namespace,
+      body: { ttl: "120s", policies: [name], no_default_policy: true },
+    });
+    expect(created.status).toBe(200);
+    const { client_token: token } = ((await created.json()) as { auth: { client_token: string } })
+      .auth;
+    const machine = new OpenBaoClient(stack.bao, { namespace: org.namespace, token });
+    const path = freshPath();
+    const c = correlation();
+    expect(await machine.kvWrite(path, envelope("synthetic-9", c.operationId), 0, c)).toEqual({
+      ok: false,
+      kind: "denied",
+      status: 403,
+    });
+    // Control: the runtime token's same call succeeds.
+    const runtime = await runtimeClient();
+    expect(await runtime.kvWrite(path, envelope("synthetic-9", c.operationId), 0, c)).toEqual({
+      ok: true,
+      status: 200,
+      data: { version: 1 },
+    });
+  });
+
+  it("a token role's token_num_uses reaches the token it mints", async () => {
+    // A test-only role (not a machine-env role). A role read returns
+    // token_num_uses only when it is not 0 (the machine roles hold 0, so their
+    // read omits it); the minted token carries the value either way.
+    const role = `test-num-uses-${randomUUID().slice(0, 8)}`;
+    const policy = org.environments[0]!.machineName;
+    const written = await baoFetch(stack, `/v1/auth/token/roles/${role}`, {
+      method: "POST",
+      namespace: org.namespace,
+      body: {
+        allowed_policies: [policy],
+        orphan: true,
+        token_no_default_policy: true,
+        token_num_uses: 5,
+      },
+    });
+    expect(written.status).toBe(204);
+    try {
+      const read = await baoFetch(stack, `/v1/auth/token/roles/${role}`, {
+        namespace: org.namespace,
+      });
+      expect(read.status).toBe(200);
+      const { data } = (await read.json()) as { data: Record<string, unknown> };
+      expect(data.token_num_uses).toBe(5);
+      const created = await baoFetch(stack, `/v1/auth/token/create/${role}`, {
+        method: "POST",
+        namespace: org.namespace,
+        body: { ttl: "60s", policies: [policy], no_default_policy: true },
+      });
+      expect(created.status).toBe(200);
+      const { accessor } = ((await created.json()) as { auth: { accessor: string } }).auth;
+      const lookup = await baoFetch(stack, "/v1/auth/token/lookup-accessor", {
+        method: "POST",
+        namespace: org.namespace,
+        body: { accessor },
+      });
+      expect(((await lookup.json()) as { data: { num_uses: number } }).data.num_uses).toBe(5);
+      await baoFetch(stack, "/v1/auth/token/revoke-accessor", {
+        method: "POST",
+        namespace: org.namespace,
+        body: { accessor },
+      });
+    } finally {
+      const removed = await baoFetch(stack, `/v1/auth/token/roles/${role}`, {
+        method: "DELETE",
+        namespace: org.namespace,
+      });
+      expect(removed.status).toBe(204);
+    }
+    const gone = await baoFetch(stack, `/v1/auth/token/roles/${role}`, {
+      namespace: org.namespace,
+    });
+    expect(gone.status).toBe(404);
   });
 
   it("AppRole tokens carry only their policy", async () => {

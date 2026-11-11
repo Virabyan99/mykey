@@ -18,7 +18,7 @@ import {
 import { isOrganizationNamespace } from "./paths.ts";
 import type { AppRoleName, MachineTokenRole } from "./policies.ts";
 
-/** The fields of a machine token role that a read returns (all but `token_num_uses`). */
+/** The fields of a machine token role that a read returns (all but `token_num_uses`, omitted when 0). */
 export type ReadableTokenRole = Omit<MachineTokenRole, "token_num_uses">;
 
 const AUDITED_HEADERS = ["x-mykey-operation-id", "x-mykey-dispatch-id"] as const;
@@ -174,8 +174,8 @@ export class OpenBaoAdmin {
 
   /**
    * The stored values of the readable fields of MachineTokenRole, as OpenBao
-   * reports them. OpenBao 2.7.2 accepts and applies `token_num_uses` but does not
-   * return it when the role is read, so it cannot be read back (Run 2.1 note).
+   * reports them. OpenBao 2.7.2 leaves `token_num_uses` out of a role read when
+   * it is 0 (the machine roles' value), so it is not read back (Run 2.1 note).
    */
   async readTokenRole(namespace: string, name: string): Promise<ReadableTokenRole | null> {
     requireNamespace(namespace, false);
