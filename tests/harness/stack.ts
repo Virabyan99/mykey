@@ -10,6 +10,7 @@ import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node
 import https from "node:https";
 import { join, resolve } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
+import { OpenBaoAdmin } from "@mykey/openbao/admin";
 import pg from "pg";
 
 export interface Stack {
@@ -46,12 +47,17 @@ export function stackDirectory(project: string): string {
   return join(STACK_ROOT, project);
 }
 
-function run(file: string, args: string[], env?: NodeJS.ProcessEnv): Promise<string> {
+function run(
+  file: string,
+  args: string[],
+  env?: NodeJS.ProcessEnv,
+  maxBuffer = 16 * 1024 * 1024,
+): Promise<string> {
   return new Promise((resolveRun, reject) => {
     execFile(
       file,
       args,
-      { env: { ...process.env, ...env }, maxBuffer: 16 * 1024 * 1024, windowsHide: true },
+      { env: { ...process.env, ...env }, maxBuffer, windowsHide: true },
       (error, stdout, stderr) => {
         if (error === null) resolveRun(stdout);
         else reject(new Error(`${file} ${args.slice(0, 6).join(" ")} failed: ${stderr.trim()}`));
@@ -60,12 +66,18 @@ function run(file: string, args: string[], env?: NodeJS.ProcessEnv): Promise<str
   });
 }
 
-function compose(project: string, args: string[], env?: NodeJS.ProcessEnv): Promise<string> {
+function compose(
+  project: string,
+  args: string[],
+  env?: NodeJS.ProcessEnv,
+  maxBuffer?: number,
+): Promise<string> {
   return run(
     "docker",
     ["compose", "-p", project, "-f", COMPOSE_FILE, ...args],
     // The Compose file needs the state directory even for commands that do not start anything.
     { MYKEY_STACK_DIR: stackDirectory(project), ...env },
+    maxBuffer,
   );
 }
 
@@ -286,6 +298,9 @@ export async function startStack(opts?: {
     await waitForOpenBaoListener(state);
     await initialiseOpenBao(state);
     await waitForOpenBaoActive(state);
+    // The audit device is declared in openbao.hcl; the correlation headers can only
+    // be registered through the API. Idempotent, so it runs on every start.
+    await new OpenBaoAdmin(state.bao, state.bao.rootToken).registerAuditHeaders();
     writeState(state);
   } catch (error) {
     if (previous === undefined) await removeStack(project).catch(() => undefined);
@@ -383,6 +398,56 @@ export async function restartService(stack: Stack, service: "postgres" | "openba
     await waitForOpenBaoActive(stack);
   }
   writeState(state);
+}
+
+export interface AuditEntry {
+  type: "request" | "response";
+  /** e.g. "org-<uuid>/"; "" for the root namespace. */
+  namespacePath: string;
+  path: string;
+  operation: string;
+  /** Audited request headers (lower-case names), as OpenBao recorded them. */
+  headers: Record<string, string[]>;
+  /** The JSON line exactly as written. */
+  raw: string;
+}
+
+const AUDIT_FILE = "/openbao/audit/audit.log";
+
+/**
+ * Every request and response entry of the stack's file audit device, in order.
+ * The file holds HMACs of tokens, not tokens; it is still never printed.
+ */
+export async function readAuditLog(stack: Stack): Promise<AuditEntry[]> {
+  const output = await compose(
+    stack.project,
+    ["exec", "-T", "openbao", "cat", AUDIT_FILE],
+    undefined,
+    512 * 1024 * 1024,
+  );
+  const entries: AuditEntry[] = [];
+  for (const raw of output.split("\n")) {
+    if (raw.trim() === "") continue;
+    const line = JSON.parse(raw) as {
+      type?: string;
+      request?: {
+        path?: string;
+        operation?: string;
+        namespace?: { path?: string };
+        headers?: Record<string, string[]>;
+      };
+    };
+    if (line.type !== "request" && line.type !== "response") continue;
+    entries.push({
+      type: line.type,
+      namespacePath: line.request?.namespace?.path ?? "",
+      path: line.request?.path ?? "",
+      operation: line.request?.operation ?? "",
+      headers: line.request?.headers ?? {},
+      raw,
+    });
+  }
+  return entries;
 }
 
 export interface StackStatus {

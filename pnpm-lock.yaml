@@ -114,7 +114,11 @@ importers:
         specifier: 'catalog:'
         version: 0.31.11
 
-  packages/openbao: {}
+  packages/openbao:
+    dependencies:
+      '@mykey/contracts':
+        specifier: workspace:*
+        version: link:../contracts
 
   packages/operations: {}
 
@@ -129,6 +133,9 @@ importers:
       '@mykey/db':
         specifier: workspace:*
         version: link:../packages/db
+      '@mykey/openbao':
+        specifier: workspace:*
+        version: link:../packages/openbao
       '@next/env':
         specifier: 'catalog:'
         version: 16.4.6

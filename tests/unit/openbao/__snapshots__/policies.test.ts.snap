@@ -1,0 +1,48 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`policy templates > the backup policy equals its committed snapshot 1`] = `
+"# backup: root namespace only. Takes a Raft snapshot and nothing else.
+path "sys/storage/raft/snapshot" { capabilities = ["read"] }
+"
+`;
+
+exports[`policy templates > the issuer policy equals its committed snapshot 1`] = `
+"# issuer: mints, looks up and revokes machine tokens of org-<id> through the
+# machine-env-* token roles. It can read those roles and policies, never write them.
+path "auth/token/create/machine-env-*" { capabilities = ["update"] }
+path "auth/token/roles/machine-env-*"  { capabilities = ["read"] }
+path "sys/policies/acl/machine-env-*"  { capabilities = ["read"] }
+path "auth/token/lookup-accessor"      { capabilities = ["update"] }
+path "auth/token/revoke-accessor"      { capabilities = ["update"] }
+path "auth/token/revoke-self"          { capabilities = ["update"] }
+"
+`;
+
+exports[`policy templates > the machine policy equals its committed snapshot 1`] = `
+"# machine-env-2d3e4f5a-6b7c-4d8e-9fa0-b1c2d3e4f5a6: a machine token reads the current secrets of one environment.
+path "kv/data/p/1c2d3e4f-5a6b-4c7d-8e9f-a0b1c2d3e4f5/e/2d3e4f5a-6b7c-4d8e-9fa0-b1c2d3e4f5a6/*"    { capabilities = ["read"] }
+path "kv/metadata/p/1c2d3e4f-5a6b-4c7d-8e9f-a0b1c2d3e4f5/e/2d3e4f5a-6b7c-4d8e-9fa0-b1c2d3e4f5a6/" { capabilities = ["list"] }
+path "auth/token/lookup-self"           { capabilities = ["read"] }
+"
+`;
+
+exports[`policy templates > the provisioner policy equals its committed snapshot 1`] = `
+"# provisioner: writes the per-environment machine policy and token role of org-<id>.
+path "sys/policies/acl/machine-env-*"  { capabilities = ["create", "update", "read"] }
+path "auth/token/roles/machine-env-*"  { capabilities = ["create", "update", "read"] }
+path "auth/token/revoke-self"          { capabilities = ["update"] }
+"
+`;
+
+exports[`policy templates > the runtime policy equals its committed snapshot 1`] = `
+"# runtime: the API process inside org-<id>. Reads and writes the KV data of every
+# environment of the organization; a soft delete always names its version, so
+# no path grants the delete capability (P-23).
+path "kv/data/p/*"            { capabilities = ["create", "update", "read"] }
+path "kv/metadata/p/*"        { capabilities = ["read", "list"] }
+path "kv/delete/p/*"          { capabilities = ["update"] }
+path "kv/undelete/p/*"        { capabilities = ["update"] }
+path "auth/token/lookup-self" { capabilities = ["read"] }
+path "auth/token/revoke-self" { capabilities = ["update"] }
+"
+`;

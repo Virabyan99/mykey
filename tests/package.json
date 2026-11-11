@@ -7,6 +7,7 @@
     "@mykey/cli": "workspace:*",
     "@mykey/contracts": "workspace:*",
     "@mykey/db": "workspace:*",
+    "@mykey/openbao": "workspace:*",
     "@next/env": "catalog:",
     "@scalar/openapi-parser": "catalog:",
     "@types/pg": "catalog:",

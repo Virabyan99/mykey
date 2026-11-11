@@ -15,6 +15,12 @@ PKI=/pki
 : "${POSTGRES_KEY_OWNER:?POSTGRES_KEY_OWNER is required (uid:gid)}"
 : "${OPENBAO_KEY_OWNER:?OPENBAO_KEY_OWNER is required (uid:gid)}"
 
+# The audit volume, mounted at /openbao/audit in the openbao service. OpenBao
+# does not answer a request it cannot audit, so a wrong owner hangs the stack.
+# Checked on every start, not only on the first.
+chown "$OPENBAO_KEY_OWNER" /audit
+chmod 0700 /audit
+
 if [ -f "$PKI/ca.crt" ] && [ -f "$PKI/.complete" ]; then
   echo "pki-init: already initialised"
   exit 0
