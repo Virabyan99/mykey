@@ -436,7 +436,12 @@ export interface HostStatus {
   sealType: string | null;
   kmsReachable: boolean | null;
   pendingRevert: string[];
-  /** chrony's own measurement of the system clock offset; null while unsynchronised or not reported. */
+  /**
+   * chrony's own measurement of the system clock offset; null while
+   * unsynchronised or not reported. This is the number to assert on:
+   * `clockOffsetMs` compares against the workstation clock and includes about
+   * half of the SSH connection set-up time (2 to 3 s observed in Run 2.5).
+   */
   chronyOffsetMs: number | null;
   clockSynced: boolean | null;
   /** Whether table `inet mykey` is loaded and how many addresses each set holds; null when not reported. */

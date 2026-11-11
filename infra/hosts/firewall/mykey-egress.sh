@@ -82,6 +82,7 @@ refresh() {
 apply() {
 	install -d -m 0755 /etc/nftables.d
 	install -m 0644 "$RULES_SRC" "$RULES"
+	rm -f "$RULES.reverted"
 	# The firewall never closes the SSH path that is in use: while sshd still
 	# listens publicly (30-ssh.sh not applied), port 22 stays open here too.
 	if [ -f "$SSH_VPN_ONLY" ]; then temp public-ssh off; else temp public-ssh on; fi

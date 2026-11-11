@@ -131,6 +131,10 @@ table inet mykey {
 		oifname $PUBLIC_IF udp sport 68 udp dport 67 accept
 		oifname $PUBLIC_IF udp sport 51820 accept
 
+		# The OpenStack metadata service: cloud-init asks it at every boot who
+		# this instance is. Host only; no container network is allowed there.
+		oifname $PUBLIC_IF ip daddr 169.254.169.254 tcp dport 80 accept
+
 		ip daddr @dns meta l4proto { tcp, udp } th dport 53 accept
 		ip daddr @ntp udp dport 123 accept
 		ip daddr @apt tcp dport { 80, 443 } accept
