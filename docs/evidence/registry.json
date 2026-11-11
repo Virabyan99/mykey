@@ -2091,8 +2091,11 @@
       ],
       "oldSession": "D08-S41",
       "status": "OPEN",
-      "evidence": [],
-      "note": ""
+      "evidence": [
+        "docs/evidence/session-1/run-1.9.md",
+        "docs/evidence/session-1/retention-fixture.json"
+      ],
+      "note": "Started, nothing passed: a synthetic fixture was uploaded on 11 Nov 2026 and is locked until 15 Nov 2026. Clean-up after expiry and restore of the oldest eligible pair belong to Run 6.6."
     },
     {
       "id": "PO-10",
@@ -2326,8 +2329,11 @@
       ],
       "oldSession": "D08-S41",
       "status": "OPEN",
-      "evidence": [],
-      "note": ""
+      "evidence": [
+        "docs/evidence/session-1/run-1.9.md",
+        "docs/evidence/session-1/retention-fixture.json"
+      ],
+      "note": "Started, nothing passed: on the fixture bucket R2 refused overwrite, delete and bulk delete of locked objects and refused a lock-rule change by every object token; a ten-minute lock expired as configured. The 30-day production rule is read back but not aged."
     },
     {
       "id": "AGENT-B1",
@@ -2354,8 +2360,10 @@
       ],
       "oldSession": "D08-S41",
       "status": "OPEN",
-      "evidence": [],
-      "note": ""
+      "evidence": [
+        "docs/evidence/cost-sheet.md"
+      ],
+      "note": "Started, nothing passed: rates looked up on 11 Nov 2026 and operations counted on a synthetic fixture. The size of a real pair is not known."
     }
   ]
 }
