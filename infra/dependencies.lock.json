@@ -57,6 +57,13 @@
       "digest": "sha256:a34ab6d7f6f4813f4d0c5469d74685604b962fbdbf5793a7bc7b4998ecb867c8",
       "releaseUrl": "https://nodejs.org/en/blog/release/v24.22.2",
       "advisoriesChecked": "2026-11-11"
+    },
+    "nmap": {
+      "image": "instrumentisto/nmap",
+      "tag": "7.98",
+      "digest": "sha256:96f6ed194519b62421a1a1c57809e65a7f94d2aa1c8c25676f247e5e148c0827",
+      "releaseUrl": "https://nmap.org/changelog.html",
+      "advisoriesChecked": "2026-11-11"
     }
   },
   "npm": {

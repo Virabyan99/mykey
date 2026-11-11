@@ -77,3 +77,11 @@ About twenty minutes in the OVHcloud Control Panel, in two sittings: order two K
 - Both servers were reinstalled with Ubuntu 24.04 and the `mykey-ops` key; the owner changed the forced initial password on each. Key login and passwordless `sudo` verified by the agent, which then switched SSH password login off on both (`/etc/ssh/sshd_config.d/05-mykey-early.conf`).
 - Domain: `nomikey.com`, registered at NameSilo. The owner allowed the agent to use the session's Cloudflare connection; the agent created the zone (Free plan) and the DNS-only records `mykey.nomikey.com` → `40.160.47.48` and `mykey-staging.nomikey.com` → `40.160.47.50`; the owner set the Cloudflare nameservers at NameSilo. A registrar transfer to Cloudflare is the owner's own later step and is not needed by MyKey.
 - Still open: the Cloudflare token (item 3, zone permissions scoped to `nomikey.com`), the Telegram bot token (item 4), one Windows permission prompt for the tunnel, the KMS steps of Run 2.7.
+
+**2026-11-11, night**
+
+- The owner saved the Cloudflare session token and the Telegram bot token under `~/.mykey/secrets/`; both verified by status code only (Cloudflare: token active, zone `nomikey.com` visible; Telegram: the bot answers). The owner sent a message to the bot, so its chat id is recorded. Items 3 and 4 are closed.
+- The token keeps account-wide permissions: the owner chose not to narrow it ("I dont want to narrow it, lets leave it like that"). Agents still touch only `nomikey.com` and the `mykey-*` resources.
+- The tunnel was installed with one Windows permission prompt; item 5 is closed. Both servers are locked down (SSH on the VPN only, firewall loaded) and serve `/health` over Let's Encrypt certificates.
+- Method: on the owner's word the rest of Session 2 is executed inline, as in Session 1, with one fresh review at the gate (Run 2.10) instead of a reviewer after every unit. The executing model changed from Claude Fable 5.2 to Claude Opus 5.5 during Run 2.5.
+- Still open: the KMS steps of Run 2.7 (item 6, OWN-3).

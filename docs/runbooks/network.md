@@ -56,9 +56,9 @@ Measured on staging on 2026-11-11: a rule that blocked SSH on the VPN was applie
 
 File `infra/hosts/firewall/mykey.nft`, table `inet mykey`, three chains with `policy drop` that run before Docker's chains.
 
-- **In:** WireGuard (UDP 51820), SSH from the VPN interface, the DHCP answer for the public address, the ICMP needed for path MTU and neighbour discovery. Nothing new from a container network to the host. From Run 2.5 Task C on, TCP 443 reaches the `edge` container.
+- **In:** WireGuard (UDP 51820), SSH from the VPN interface, the DHCP answer for the public address, the ICMP needed for path MTU and neighbour discovery. Nothing new from a container network to the host. TCP 443 reaches the `edge` container.
 - **Out, from the host:** DNS to the resolver the server was given (`213.186.33.99`), NTP to two fixed addresses (`162.159.200.1`, `162.159.200.123`), the cloud metadata service, and TCP to the address sets below.
-- **Out, from containers:** only `edge` to the ACME set and `openbao` to the KMS set, plus DNS to the resolver. All container IPv6 is dropped.
+- **Out, from containers:** only `edge` to the ACME set and `openbao` to the KMS set. Containers on internal bridges reach nothing outside their bridge. All container IPv6 is dropped.
 
 Address sets are filled from names in `infra/hosts/firewall/egress-names.conf` every 5 minutes and once at boot before Docker starts; each address stays for one hour.
 
@@ -71,11 +71,65 @@ Address sets are filled from names in `infra/hosts/firewall/egress-names.conf` e
 | `apt`      | Ubuntu package mirrors                          | 80, 443 |
 | `registry` | Docker Hub — empty outside a maintenance window | 443     |
 
+### Container networks
+
+Docker Compose project `mykey` (`infra/compose/host.compose.yml`). Every bridge has a fixed name, so the firewall can name it; IPv6 is off on all of them.
+
+| Bridge    | Network      | Subnet         | Members (address)                                | Leads out                 |
+| --------- | ------------ | -------------- | ------------------------------------------------ | ------------------------- |
+| `mk-pub`  | `mykey_pub`  | `10.78.0.0/28` | `edge` (`.2`)                                    | yes: ACME set on 443, DNS |
+| `mk-edge` | `mykey_edge` | `10.78.1.0/28` | `edge` (`.2`), `api` (`.3`)                      | no (`internal`)           |
+| `mk-db`   | `mykey_db`   | `10.78.2.0/28` | `postgres` (`.2`), `api` (`.3`); operator tunnel | no (`internal`)           |
+| `mk-bao`  | from Run 2.7 | set in Run 2.7 | `openbao` (`.2`), `api`, `provisioner`           | no (`internal`)           |
+| `mk-kms`  | from Run 2.7 | set in Run 2.7 | `openbao`                                        | yes: KMS set on 5696      |
+
+The public port 443 of the host is published to `edge:8443` and is the only inbound port besides WireGuard. Containers resolve names through Docker's resolver (`127.0.0.11`). Observed with Docker 29.1.3: on `mk-pub` public names resolve (the forward chain lets `mk-pub` reach the resolver on port 53); on the internal bridges they do not, and a query straight to another resolver fails everywhere.
+
+### Maintenance window and blocks
+
+Docker Hub is reachable only during a maintenance window. While it is open the `registry` set follows the resolver every 2 seconds (Docker Hub's CDN changes addresses within a minute); it is emptied when the window closes, also when the command fails.
+
 ```sh
-node scripts/host.ts staging maint 20 -- docker compose pull   # opens `registry` for 20 minutes, runs the command, closes it
+# Git Bash rewrites /etc/... arguments: switch that off for host.ts.
+export MSYS_NO_PATHCONV=1
+node scripts/host.ts staging maint 10 -- docker compose --env-file /etc/mykey/host.env \
+  -f /opt/mykey/compose/host.compose.yml -p mykey pull --quiet postgres edge
 ```
 
-On the server, `mykey-egress.sh block <purpose> <seconds>` cuts one purpose off for a drill. The block ends by itself in the kernel.
+To cut one purpose off for a drill, on the server: `sudo /opt/mykey/hosts/firewall/mykey-egress.sh block <acme|kms|r2|probe|apt|registry> <seconds>`. The kernel ends the block by itself (the addresses carry a timeout); a timer refills the set two seconds later. To end a block early, run `sudo /opt/mykey/hosts/firewall/mykey-egress.sh apply` (reloads the table, which drops every block). `mykey-egress.sh counts` prints the number of addresses per set.
+
+## Deploying the services
+
+```sh
+docker build --platform linux/amd64 -f apps/api/Dockerfile -t mykey-api .
+docker save mykey-api -o C:/Users/<you>/mykey-tmp/mykey-api.tar      # outside OneDrive
+node scripts/host.ts staging image api C:/Users/<you>/mykey-tmp/mykey-api.tar
+node scripts/host.ts staging up          # creates missing host secrets, then compose up -d
+node scripts/host.ts staging db-init     # roles and migrations through an SSH tunnel
+```
+
+- **`image`** sends the archive in 2 MiB parts over eight SSH connections and loads it only when the checksum of the joined parts matches. The upload direction from the workstation loses packets on the way to the US hosts (6 to 23 % measured), which holds a single connection near 40 kB/s; eight connections moved 66 MB in 61 s.
+- **Upstream images** (`postgres`, `traefik`) are pulled on the host by digest inside a maintenance window (above), never copied with `docker save`.
+- **Secrets on a host:** only the PostgreSQL superuser password (`/etc/mykey/secrets/postgres/`, owner 999) and the `api_runtime` password (`/etc/mykey/secrets/api/`, owner 1000). The other four role passwords live on the workstation under `~/.mykey/secrets/hosts/<host>/<role>`.
+
+### Public certificate
+
+A new host starts on the Let's Encrypt **staging** directory. Switch only after the staging certificate was issued:
+
+```sh
+node scripts/host.ts staging acme production   # records the directory, removes edge, the finished pki-init and the ACME volume
+node scripts/host.ts staging up                # the edge asks the new directory once
+```
+
+Never loop on the production directory (rate limits). If issuance fails there, go back with `acme staging`, find the cause, then switch once more. Without the volume removal Traefik keeps serving the old certificate after a directory change.
+
+## Checking a host from outside
+
+```sh
+pnpm run test:staging   # boundary and transport, staging and production (about 20 minutes; reboots staging once)
+```
+
+The scan uses the pinned nmap image (`infra/dependencies.lock.json`, `images.nmap`) against the public address. The workstation's own network answers TCP 53 for every destination; the test detects such ports with the reserved address `192.0.2.1` and checks them on the host instead. Scan files: `docs/evidence/session-2/host-scan-<host>.txt`.
 
 ## After a reboot
 

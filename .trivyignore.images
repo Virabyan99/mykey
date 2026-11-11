@@ -90,3 +90,15 @@ CVE-2026-84304 exp:2026-11-20 # HIGH
 CVE-2026-84445 exp:2026-11-20 # HIGH
 GHSA-hrxh-6v49-42gf exp:2026-11-20 # HIGH
 # stdlib v1.26.4 (also covered above: CVE-2026-111943, CVE-2026-33818, CVE-2026-39821, CVE-2026-39822, CVE-2026-46600, CVE-2026-56853, CVE-2026-56858, CVE-2026-56859, CVE-2026-56860, CVE-2026-56862, CVE-2026-78667, CVE-2026-78669, CVE-2026-97031)
+
+# node 24.22.2-alpine — packages bundled inside npm (/usr/local/lib/node_modules/npm/node_modules).
+# Reviewed 2026-11-11 in Run 2.5. The API never runs npm, and its permission flags
+# let it read only /app and /run/mykey. The fix arrives with a new node image.
+# brace-expansion 5.0.9
+CVE-2026-102276 exp:2026-11-20 # HIGH
+CVE-2026-102278 exp:2026-11-20 # HIGH
+# undici 6.28.0
+CVE-2026-109383 exp:2026-11-20 # HIGH
+CVE-2026-109869 exp:2026-11-20 # HIGH
+CVE-2026-19534 exp:2026-11-20 # HIGH
+CVE-2026-87018 exp:2026-11-20 # HIGH

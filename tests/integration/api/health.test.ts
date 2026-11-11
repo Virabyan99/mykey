@@ -173,10 +173,10 @@ describe("API health stub", () => {
     }
   });
 
-  it("writes one log line per request with the peer address and the forwarded-for value", async () => {
+  it("writes one log line per request with the peer address and the forwarded values", async () => {
     const before = log.length;
     const answer = await request(stack, api.port, "/health", {
-      headers: { "X-Forwarded-For": "203.0.113.9" },
+      headers: { "X-Forwarded-For": "203.0.113.9", "X-Forwarded-Proto": "http" },
     });
     expect(answer.status).toBe(200);
     const lines = log.slice(before).filter((entry) => entry.event === "request");
@@ -188,8 +188,11 @@ describe("API health stub", () => {
       status: 200,
       peer: "127.0.0.1",
       forwardedFor: "203.0.113.9",
+      forwardedProto: "http",
     });
     expect(lines[0]?.requestId).toMatch(/^[0-9a-f-]{36}$/);
+    // The answer names its log line, so an outside test can find it (Run 2.5 Task D).
+    expect(answer.headers["x-request-id"]).toBe(lines[0]?.requestId);
     // Nothing of the database target may reach a log line.
     expect(JSON.stringify(log)).not.toContain(database.password);
   });

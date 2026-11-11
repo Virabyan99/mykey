@@ -19,6 +19,8 @@ export type RequestLogEntry =
       peer: string | null;
       /** The X-Forwarded-For value as received. Informational; nothing trusts it. */
       forwardedFor: string | null;
+      /** The X-Forwarded-Proto value as received. Informational; nothing trusts it. */
+      forwardedProto: string | null;
     }
   | {
       event: "health_down";
@@ -47,6 +49,8 @@ export function createApp(deps: AppDependencies): Hono<Environment> {
     const requestId = randomUUID();
     c.set("requestId", requestId);
     await next();
+    // Names the log line of this request, so it can be found from outside.
+    c.header("x-request-id", requestId);
     deps.log({
       event: "request",
       time: new Date().toISOString(),
@@ -57,6 +61,7 @@ export function createApp(deps: AppDependencies): Hono<Environment> {
       durationMs: Math.round(performance.now() - started),
       peer: c.env.incoming.socket.remoteAddress ?? null,
       forwardedFor: c.req.header("x-forwarded-for") ?? null,
+      forwardedProto: c.req.header("x-forwarded-proto") ?? null,
     });
   });
 

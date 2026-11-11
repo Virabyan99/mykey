@@ -36,6 +36,7 @@ export const REQUIRED_IMAGES = [
   "gitleaks",
   "trivy",
   "node",
+  "nmap",
 ];
 /**
  * Images built from this repository. A Compose file names one as the required

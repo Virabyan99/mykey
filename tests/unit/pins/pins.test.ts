@@ -156,6 +156,14 @@ describe("dependency pins", () => {
     expect(lock.images.node?.tag).toBe(lock.node.version);
   });
 
+  it("the nmap image of the outside scan is required in the lock by digest (Run 2.5)", () => {
+    expect(REQUIRED_IMAGES).toContain("nmap");
+    expect(lock.images.nmap?.image).toBe("instrumentisto/nmap");
+    expect(lock.images.nmap?.digest).toMatch(/^sha256:[0-9a-f]{64}$/);
+    // A tool run on the workstation against a host, like gitleaks and trivy: not deployed.
+    expect(SCANNED_IMAGES).not.toContain("nmap");
+  });
+
   it("every uses: in .github/workflows is a SHA present in the lock", () => {
     for (const file of listFiles(join(root, ".github/workflows"), /\.ya?ml$/)) {
       expect(workflowActionProblems(readFileSync(file, "utf8"), lock, file)).toEqual([]);
