@@ -9,6 +9,7 @@
 #   ca.crt / ca.key              the host's CA; the key stays root-only
 #   postgres.crt / postgres.key  server certificate of the postgres service
 #   api.crt / api.key            server certificate of the api service
+#   openbao.crt / openbao.key    server certificate of the openbao service (Run 2.7)
 #
 # A file that exists is never written again. No key is printed.
 set -eu
@@ -17,10 +18,18 @@ PKI=/pki
 : "${POSTGRES_KEY_OWNER:?POSTGRES_KEY_OWNER is required (uid:gid)}"
 : "${API_KEY_OWNER:?API_KEY_OWNER is required (uid:gid)}"
 : "${EDGE_OWNER:?EDGE_OWNER is required (uid:gid)}"
+: "${OPENBAO_KEY_OWNER:?OPENBAO_KEY_OWNER is required (uid:gid)}"
 
 # The ACME volume, mounted at /acme in the edge service, which is not root.
 chown "$EDGE_OWNER" /acme
 chmod 0700 /acme
+# OpenBao's storage and audit volumes (Run 2.7); OpenBao does not run as root.
+for volume in /baodata /baoaudit; do
+  if [ -d "$volume" ]; then
+    chown "$OPENBAO_KEY_OWNER" "$volume"
+    chmod 0700 "$volume"
+  fi
+done
 
 umask 077
 WORK="$(mktemp -d)"
@@ -59,6 +68,7 @@ EOF
 
 issue postgres "$POSTGRES_KEY_OWNER"
 issue api "$API_KEY_OWNER"
+issue openbao "$OPENBAO_KEY_OWNER"
 
 chown 0:0 "$PKI/ca.key" "$PKI/ca.crt"
 chmod 0400 "$PKI/ca.key"

@@ -34,6 +34,7 @@ import {
   loadHosts,
   mentionsSecretPath,
   openTunnel,
+  parseHostEnv,
   redact,
   registerSecret,
   shQuote,
@@ -626,6 +627,30 @@ async function hostSecret(
   return fresh;
 }
 
+/** `docker compose … up -d`; with OpenBao, under its profile (production has none in Session 2). */
+export function composeUpCommand(withOpenBao: boolean): string {
+  return `${COMPOSE}${withOpenBao ? " --profile openbao" : ""} up -d`;
+}
+
+/** D-20: the request-duration cap of OpenBao on a host. */
+const OPENBAO_MAX_REQUEST_DURATION = "15s";
+
+/** OpenBao's configuration values from host.env, or null where it does not run. */
+export function openBaoValuesFrom(
+  host: string,
+  env: Record<string, string>,
+): OpenBaoConfigValues | null {
+  if (env.MYKEY_OPENBAO !== "1") return null;
+  const kmsHost = env.MYKEY_KMS_HOST;
+  const sealKeyId = env.MYKEY_KMS_SEAL_KEY_ID;
+  if (kmsHost === undefined || kmsHost === "")
+    throw new Error("host.env: MYKEY_KMS_HOST is not set");
+  if (sealKeyId === undefined || sealKeyId === "") {
+    throw new Error("host.env: MYKEY_KMS_SEAL_KEY_ID is not set");
+  }
+  return { host, kmsHost, sealKeyId, maxRequestDuration: OPENBAO_MAX_REQUEST_DURATION };
+}
+
 async function runUp(host: HostEntry, address: Address, log: Logger): Promise<void> {
   for (const secret of Object.values(HOST_SECRETS)) await hostSecret(host, secret, address);
   const pki = dirname(REMOTE.caCert);
@@ -633,7 +658,23 @@ async function runUp(host: HostEntry, address: Address, log: Logger): Promise<vo
     await sshExec(host, `install -d -m 0755 -o root -g root ${pki}`, { sudo: true, address }),
     `creating ${pki}`,
   );
-  const result = await sshExec(host, `${COMPOSE} up -d`, {
+  const env = parseHostEnv(
+    expectSuccess(await sshExec(host, `cat ${REMOTE.hostEnv}`, { address }), "reading host.env")
+      .stdout,
+  );
+  const openbao = openBaoValuesFrom(host.name, env);
+  if (openbao !== null) {
+    expectSuccess(
+      await sshExec(
+        host,
+        "install -d -m 0755 -o root -g root /etc/mykey/openbao && install -m 0644 -o root -g root /dev/stdin /etc/mykey/openbao/openbao.hcl",
+        { sudo: true, address, stdin: renderOpenBaoConfig(openbao) },
+      ),
+      "installing openbao.hcl",
+    );
+    log.info(`${host.name}: openbao.hcl rendered`);
+  }
+  const result = await sshExec(host, composeUpCommand(openbao !== null), {
     sudo: true,
     address,
     timeoutMs: 600_000,

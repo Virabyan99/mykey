@@ -44,7 +44,8 @@ const API_IMAGE = `sha256:${"a".repeat(64)}`;
 function render(): Rendered {
   const output = execFileSync(
     "docker",
-    ["compose", "-f", composeFile, "config", "--format", "json"],
+    // Every profile: the file must hold its rules for OpenBao too (Run 2.7).
+    ["compose", "-f", composeFile, "--profile", "openbao", "config", "--format", "json"],
     {
       encoding: "utf8",
       env: {
@@ -66,7 +67,13 @@ describe("host compose file", () => {
 
   it("has exactly the services of the skeleton, under the project name host.ts uses", () => {
     expect(rendered.name).toBe("mykey");
-    expect(Object.keys(rendered.services).sort()).toEqual(["api", "edge", "pki-init", "postgres"]);
+    expect(Object.keys(rendered.services).sort()).toEqual([
+      "api",
+      "edge",
+      "openbao",
+      "pki-init",
+      "postgres",
+    ]);
     expect(rendered.services.api?.image).toBe(API_IMAGE);
   });
 
@@ -105,7 +112,7 @@ describe("host compose file", () => {
     ]);
   });
 
-  it("uses the fixed bridges and addresses of the firewall, with only mk-pub leading out", () => {
+  it("uses the fixed bridges and addresses of the firewall; only mk-pub and mk-kms lead out", () => {
     const networks = Object.values(rendered.networks).map((network) => ({
       bridge: network.driver_opts?.["com.docker.network.bridge.name"],
       subnet: network.ipam.config[0]?.subnet,
@@ -113,18 +120,28 @@ describe("host compose file", () => {
       ipv6: network.enable_ipv6 === true,
     }));
     expect(networks.sort((a, b) => String(a.bridge).localeCompare(String(b.bridge)))).toEqual([
+      { bridge: "mk-bao", subnet: "10.78.3.0/28", internal: true, ipv6: false },
       { bridge: "mk-db", subnet: "10.78.2.0/28", internal: true, ipv6: false },
       { bridge: "mk-edge", subnet: "10.78.1.0/28", internal: true, ipv6: false },
+      { bridge: "mk-kms", subnet: "10.78.4.0/28", internal: false, ipv6: false },
       { bridge: "mk-pub", subnet: "10.78.0.0/28", internal: false, ipv6: false },
     ]);
     const address = (service: string, network: string): string | undefined =>
       rendered.services[service]?.networks?.[network]?.ipv4_address;
     expect(Object.keys(rendered.services.edge?.networks ?? {}).sort()).toEqual(["edge", "pub"]);
-    expect(Object.keys(rendered.services.api?.networks ?? {}).sort()).toEqual(["db", "edge"]);
+    expect(Object.keys(rendered.services.api?.networks ?? {}).sort()).toEqual([
+      "bao",
+      "db",
+      "edge",
+    ]);
+    expect(Object.keys(rendered.services.openbao?.networks ?? {}).sort()).toEqual(["bao", "kms"]);
     expect(Object.keys(rendered.services.postgres?.networks ?? {})).toEqual(["db"]);
     // The addresses the operator tunnels and the proxy use.
     expect(address("postgres", "db")).toBe("10.78.2.2");
     expect(address("api", "edge")).toBe("10.78.1.3");
+    // The addresses REMOTE.openbao (tests/harness/staging.ts) and the firewall use.
+    expect(address("openbao", "bao")).toBe("10.78.3.2");
+    expect(address("openbao", "kms")).toBe("10.78.4.2");
   });
 
   it("mounts no Docker socket and writes only to named volumes and tmpfs", () => {
@@ -196,5 +213,50 @@ describe("host PostgreSQL configuration", () => {
       "hostssl all all 10.78.2.0/28 scram-sha-256",
       "host all all all reject",
     ]);
+  });
+});
+
+describe("OpenBao on a host (Run 2.7)", () => {
+  const rendered = JSON.parse(
+    execFileSync(
+      "docker",
+      ["compose", "-f", composeFile, "--profile", "openbao", "config", "--format", "json"],
+      {
+        encoding: "utf8",
+        env: {
+          ...process.env,
+          API_IMAGE,
+          MYKEY_HOSTNAME: "mykey-staging.example.test",
+          MYKEY_ACME_DIRECTORY: "https://acme-staging-v02.api.letsencrypt.org/directory",
+          MYKEY_BAO_URL: "https://openbao:8200",
+        },
+        stdio: ["ignore", "pipe", "pipe"],
+      },
+    ),
+  ) as Rendered & { services: Record<string, Service & { profiles?: string[] }> };
+
+  it("starts only with the openbao profile, which production does not use", () => {
+    expect(rendered.services.openbao?.profiles).toEqual(["openbao"]);
+    expect(rendered.services.openbao?.user).toBe("100:1000");
+  });
+
+  it("reads its configuration, server certificate and KMS certificate from read-only files", () => {
+    const mounts = Object.fromEntries(
+      (rendered.services.openbao?.volumes ?? []).map((volume) => [volume.target, volume]),
+    );
+    expect(mounts["/openbao/config/openbao.hcl"]?.source).toBe("/etc/mykey/openbao/openbao.hcl");
+    expect(mounts["/openbao/kms"]?.source).toBe("/etc/mykey/secrets/kms");
+    for (const target of [
+      "/openbao/config/openbao.hcl",
+      "/openbao/kms",
+      "/openbao/tls/server.key",
+    ]) {
+      expect(mounts[target]?.read_only, target).toBe(true);
+    }
+  });
+
+  it("gives the API OpenBao's address only from host.env", () => {
+    expect(rendered.services.api?.environment?.MYKEY_BAO_URL).toBe("https://openbao:8200");
+    expect(rendered.services.api?.environment?.MYKEY_BAO_CA_FILE).toBe("/run/mykey/tls/ca.crt");
   });
 });

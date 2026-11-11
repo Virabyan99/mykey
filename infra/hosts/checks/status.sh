@@ -1,6 +1,7 @@
 #!/bin/sh
 # Prints the host status as one JSON object (HostStatus in tests/harness/staging.ts).
-# Reads no secret. A value that was not measured is null, never a guess. The
+# Prints no secret (the KMS check hands the seal key to openssl in a container
+# and prints nothing of it). A value not measured is null, never a guess. The
 # caller adds clockOffsetMs (host clock against its own) from `time`.
 set -eu
 
@@ -48,11 +49,39 @@ fi
 
 ssh_listen=$(ss -Hltn 'sport = :22' 2>/dev/null | awk '{ print $4 }' | jq -R -s 'split("\n") | map(select(length > 0))')
 
+# OpenBao (Run 2.7): what OpenBao itself says about its seal, asked over its
+# bridge address with the host CA. null where it does not run or not answer.
+sealed=null
+seal_type=null
+if [ -r /etc/mykey/pki/ca.crt ] && seal=$(curl -s --fail --max-time 5 --cacert /etc/mykey/pki/ca.crt \
+	--resolve openbao:8200:10.78.3.2 https://openbao:8200/v1/sys/seal-status 2>/dev/null); then
+	sealed=$(echo "$seal" | jq 'if has("sealed") then .sealed else null end' 2>/dev/null || echo null)
+	seal_type=$(echo "$seal" | jq 'if has("type") then .type else null end' 2>/dev/null || echo null)
+fi
+
+# The KMS (Run 2.7): a TLS handshake with the seal certificate to the KMIP
+# endpoint, from the KMS bridge and independent of OpenBao (a KMS outage does
+# not seal a running OpenBao, FR-1.64). null without a certificate or KMS host.
+PKI_IMAGE=postgres@sha256:e3d24f6906d0760bf4da0dae872415391ededefad23fd471c47dc53b0ddf3c42
+kms_reachable=null
+if [ -n "${MYKEY_KMS_HOST:-}" ] && [ -e /etc/mykey/secrets/kms/seal.crt ] &&
+	docker network inspect mykey_kms >/dev/null 2>&1; then
+	if timeout 20 docker run --rm --network mykey_kms --read-only --cap-drop ALL \
+		--security-opt no-new-privileges -v /etc/mykey/secrets/kms:/kms:ro --entrypoint openssl "$PKI_IMAGE" \
+		s_client -connect "$MYKEY_KMS_HOST:5696" -servername "$MYKEY_KMS_HOST" -verify_return_error \
+		-cert /kms/seal.crt -key /kms/seal.key </dev/null >/dev/null 2>&1; then
+		kms_reachable=true
+	else
+		kms_reachable=false
+	fi
+fi
+
 jq -n \
 	--arg host "$host" --arg bootId "$boot_id" --arg time "$time" \
 	--argjson chronyOffsetMs "$chrony_offset_ms" --argjson clockSynced "$clock_synced" \
 	--argjson containers "$containers" --argjson pendingRevert "$pending" \
 	--argjson firewallLoaded "$firewall_loaded" --argjson sets "$sets" --argjson sshListen "$ssh_listen" \
+	--argjson sealed "$sealed" --argjson sealType "$seal_type" --argjson kmsReachable "$kms_reachable" \
 	'{ host: $host, bootId: $bootId, time: $time, chronyOffsetMs: $chronyOffsetMs, clockSynced: $clockSynced,
-	   containers: $containers, sealed: null, sealType: null, kmsReachable: null, pendingRevert: $pendingRevert,
+	   containers: $containers, sealed: $sealed, sealType: $sealType, kmsReachable: $kmsReachable, pendingRevert: $pendingRevert,
 	   firewall: { loaded: $firewallLoaded, sets: $sets }, sshListen: $sshListen }'

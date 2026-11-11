@@ -10,6 +10,8 @@ import {
   ROLE_PASSWORD_PLACE,
   acmeCommands,
   bootstrapCommands,
+  composeUpCommand,
+  openBaoValuesFrom,
   hostEnvDefaultCommand,
   imageLoadCommand,
   kmsCsrCommands,
@@ -204,5 +206,30 @@ describe("kms-csr", () => {
     expect(create).toContain("chmod 0400 /etc/mykey/secrets/kms/staging-seal-1.key");
     expect(read).toBe("cat /etc/mykey/kms-csr/staging-seal-1.csr");
     expect(read).not.toContain("secrets");
+  });
+});
+
+// Run 2.7: OpenBao starts only where host.env asks for it.
+describe("up", () => {
+  it("adds the openbao profile only when asked", () => {
+    expect(composeUpCommand(false)).toMatch(/ -p mykey up -d$/);
+    expect(composeUpCommand(false)).not.toContain("--profile");
+    expect(composeUpCommand(true)).toMatch(/ -p mykey --profile openbao up -d$/);
+  });
+
+  it("renders OpenBao's configuration from host.env, and refuses an incomplete one", () => {
+    const env = {
+      MYKEY_OPENBAO: "1",
+      MYKEY_KMS_HOST: "us-east-vin.okms.ovh.us",
+      MYKEY_KMS_SEAL_KEY_ID: "00000000-1111-4222-8333-444444444444",
+    };
+    expect(openBaoValuesFrom("staging", env)).toEqual({
+      host: "staging",
+      kmsHost: "us-east-vin.okms.ovh.us",
+      sealKeyId: "00000000-1111-4222-8333-444444444444",
+      maxRequestDuration: "15s",
+    });
+    expect(openBaoValuesFrom("prod", {})).toBeNull();
+    expect(() => openBaoValuesFrom("staging", { MYKEY_OPENBAO: "1" })).toThrow(/MYKEY_KMS_HOST/);
   });
 });
