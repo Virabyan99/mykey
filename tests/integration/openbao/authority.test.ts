@@ -12,6 +12,7 @@ import { LIMITS } from "@mykey/contracts";
 import {
   AUTHORITY_MATRIX,
   ROOT_CONTROLS,
+  SELF_OPERATIONS,
   cellColumn,
   cellKey,
   controlOf,
@@ -230,6 +231,17 @@ async function mintMachineToken(org: OrgFixture, index: number, ttl = "600s"): P
   return ((await minted.json()) as { auth: { client_token: string } }).auth.client_token;
 }
 
+/** A 120 s renewable token with the `default` policy (which grants renew-self), minted by root. */
+async function mintRenewableToken(place: Place): Promise<string> {
+  const minted = await rootCall(place, "POST", "auth/token/create", {
+    ttl: "120s",
+    policies: ["default"],
+    renewable: true,
+  });
+  if (minted.status !== 200) throw new Error(`renewable token mint returned HTTP ${minted.status}`);
+  return ((await minted.json()) as { auth: { client_token: string } }).auth.client_token;
+}
+
 async function newToken(identity: Identity): Promise<string> {
   switch (identity) {
     case "runtime":
@@ -437,6 +449,14 @@ describe("authority matrix with real tokens", () => {
         continue;
       }
       const prepared = await prepare(cell.request, cellColumn(cell));
+      if (control.control?.mintedToken === true) {
+        const token = await mintRenewableToken(placeOf(cellColumn(cell)));
+        controls.set(group, {
+          by: "renewable default-policy token",
+          status: await send(prepared, { token }),
+        });
+        continue;
+      }
       controls.set(group, {
         by: "root",
         status: await send(prepared, { token: stack.bao.rootToken }),
@@ -568,6 +588,20 @@ function seedPath(org: OrgFixture, index: number): string {
   return `kv/data/p/${org.projectId}/e/${org.environments[index]!.id}/${SEED}`;
 }
 
+/**
+ * A's issuer sending an accessor of B, or of the root namespace, to its own
+ * lookup-accessor / revoke-accessor under A's namespace (Doc 06 §17.4).
+ * Observed on 2.7.2: the token store refuses with HTTP 500 and the error
+ * "cannot lookup token in different namespace" (the root token in A gets the
+ * same answer), and the foreign token keeps working.
+ */
+const EXPECTED_FOREIGN_ACCESSOR_ANSWERS = {
+  "lookup-accessor B": "500 different namespace",
+  "revoke-accessor B": "500 different namespace",
+  "lookup-accessor root": "500 different namespace",
+  "revoke-accessor root": "500 different namespace",
+};
+
 function dataOf(body: unknown): Record<string, unknown> {
   return (body as { data: Record<string, unknown> }).data;
 }
@@ -698,33 +732,148 @@ describe("a hostile API process holding the runtime and issuer tokens of A", () 
     );
   });
 
-  it("hostile: a self operation sent to B or the root namespace acts on the caller's own token", async () => {
-    const runtime = await a.login("runtime");
-    const own = dataOf((await call(runtime, "GET", "auth/token/lookup-self")).body);
-    expect(own.namespace_path).toBe(`${a.namespace}/`);
-    for (const namespace of [b.namespace, ""]) {
-      const response = await baoFetch(stack, "/v1/auth/token/lookup-self", {
-        token: runtime,
-        ...(namespace === "" ? {} : { namespace }),
-      });
-      expect(response.status).toBe(200);
-      const seen = dataOf(await response.json());
-      expect(seen.accessor).toBe(own.accessor);
-      expect(seen.namespace_path).toBe(`${a.namespace}/`);
-      expect(seen.policies).toEqual(["runtime"]);
+  it("hostile: every self operation sent to B or the root namespace acts on the caller's own token", async () => {
+    expect(SELF_OPERATIONS).toHaveLength(15);
+    const environment = a.environments[0]!.machineName;
+    // A request each identity is allowed to make in A: it shows whether its token still lives.
+    const probe: Partial<Record<Identity, string>> = {
+      runtime: seedPath(a, 0),
+      issuer: `auth/token/roles/${environment}`,
+      provisioner: `sys/policies/acl/${environment}`,
+    };
+    for (const key of SELF_OPERATIONS) {
+      const cell = AUTHORITY_MATRIX.find((c) => cellKey(c) === key)!;
+      const column = cellColumn(cell);
+      const token = await newToken(cell.identity);
+      // The caller's own token, as the root token sees it in A.
+      const own = dataOf(
+        (await call(stack.bao.rootToken, "POST", "auth/token/lookup", { body: { token } })).body,
+      );
+      expect(own.namespace_path, key).toBe(`${a.namespace}/`);
+      const prepared = await prepare(cell.request, column);
+      const sendSelf = (): Promise<Response> =>
+        baoFetch(stack, `/v1/${prepared.path}`, {
+          method: prepared.method,
+          token,
+          ...(prepared.namespace === "" ? {} : { namespace: prepared.namespace }),
+        });
+
+      if (cell.action === "token.lookup_self") {
+        const response = await sendSelf();
+        expect(response.status, key).toBe(200);
+        const seen = dataOf(await response.json());
+        expect(seen.accessor, key).toBe(own.accessor);
+        expect(seen.namespace_path, key).toBe(`${a.namespace}/`);
+        expect(seen.policies, key).toEqual(own.policies);
+        continue;
+      }
+
+      // revoke-self: a token that lives where the request is sent must survive it.
+      const witness =
+        column === "root"
+          ? {
+              token: await mintRenewableToken(placeOf("root")),
+              namespace: "",
+              path: "auth/token/lookup-self",
+            }
+          : { token: await b.login("runtime"), namespace: b.namespace, path: seedPath(b, 0) };
+      const witnessStatus = async (): Promise<number> => {
+        const response = await baoFetch(stack, `/v1/${witness.path}`, {
+          token: witness.token,
+          ...(witness.namespace === "" ? {} : { namespace: witness.namespace }),
+        });
+        await response.arrayBuffer();
+        return response.status;
+      };
+      const probePath = probe[cell.identity]!;
+      expect((await call(token, "GET", probePath)).status, key).toBe(200);
+      expect(await witnessStatus(), key).toBe(200);
+      const revoked = await sendSelf();
+      await revoked.arrayBuffer();
+      expect(revoked.status, key).toBe(204);
+      expect((await call(token, "GET", probePath)).status, key).toBe(403);
+      expect(await witnessStatus(), key).toBe(200);
     }
-    // revoke-self sent to B revokes the caller's token, not one of B's.
-    const runtimeB = await b.login("runtime");
-    const revoked = await baoFetch(stack, "/v1/auth/token/revoke-self", {
+  });
+
+  it("hostile: the issuer of A cannot look up or revoke an accessor of B or of the root namespace", async () => {
+    const issuer = await a.login("issuer");
+    const tokenB = await mintMachineToken(b, 0);
+    const accessorB = dataOf(
+      (
+        await call(stack.bao.rootToken, "POST", "auth/token/lookup", {
+          namespace: b.namespace,
+          body: { token: tokenB },
+        })
+      ).body,
+    ).accessor as string;
+    const rootPlace = placeOf("root");
+    const tokenRoot = await mintRenewableToken(rootPlace);
+    const rootLookup = await baoFetch(stack, "/v1/auth/token/lookup", {
       method: "POST",
-      token: runtime,
-      namespace: b.namespace,
+      body: { token: tokenRoot },
     });
-    expect(revoked.status).toBe(204);
-    expect((await call(runtime, "GET", seedPath(a, 0))).status).toBe(403);
-    expect((await call(runtimeB, "GET", seedPath(b, 0), { namespace: b.namespace })).status).toBe(
+    const accessorRoot = dataOf(await rootLookup.json()).accessor as string;
+
+    // Sent under A's namespace with A's issuer token, as the issuer's policy allows.
+    const answers: Record<string, string> = {};
+    for (const [label, accessor] of [
+      ["B", accessorB],
+      ["root", accessorRoot],
+    ] as const) {
+      for (const action of ["lookup-accessor", "revoke-accessor"]) {
+        const answer = await call(issuer, "POST", `auth/token/${action}`, { body: { accessor } });
+        const errors = (answer.body as { errors?: string[] } | null)?.errors ?? [];
+        const refusal = errors.some((e) =>
+          e.includes("cannot lookup token in different namespace"),
+        );
+        answers[`${action} ${label}`] = `${answer.status}${refusal ? " different namespace" : ""}`;
+      }
+    }
+    expect(answers).toEqual(EXPECTED_FOREIGN_ACCESSOR_ANSWERS);
+    // The refusal is the namespace wall, not the issuer's policy: the root token in A gets it too.
+    const rootInA = await call(stack.bao.rootToken, "POST", "auth/token/lookup-accessor", {
+      body: { accessor: accessorB },
+    });
+    expect(rootInA.status).toBe(500);
+
+    // Control: both tokens still work …
+    expect((await call(tokenB, "GET", seedPath(b, 0), { namespace: b.namespace })).status).toBe(
       200,
     );
+    const rootSelf = await baoFetch(stack, "/v1/auth/token/lookup-self", { token: tokenRoot });
+    await rootSelf.arrayBuffer();
+    expect(rootSelf.status).toBe(200);
+    // … the same issuer request on an accessor of A succeeds …
+    const accessorA = dataOf(
+      (
+        await call(stack.bao.rootToken, "POST", "auth/token/lookup", {
+          body: { token: await mintMachineToken(a, 0) },
+        })
+      ).body,
+    ).accessor as string;
+    expect(
+      (await call(issuer, "POST", "auth/token/lookup-accessor", { body: { accessor: accessorA } }))
+        .status,
+    ).toBe(200);
+    // … and the root token, where each accessor lives, can revoke it.
+    expect(
+      (
+        await call(stack.bao.rootToken, "POST", "auth/token/revoke-accessor", {
+          namespace: b.namespace,
+          body: { accessor: accessorB },
+        })
+      ).status,
+    ).toBe(204);
+    expect((await call(tokenB, "GET", seedPath(b, 0), { namespace: b.namespace })).status).toBe(
+      403,
+    );
+    const rootRevoke = await baoFetch(stack, "/v1/auth/token/revoke-accessor", {
+      method: "POST",
+      body: { accessor: accessorRoot },
+    });
+    await rootRevoke.arrayBuffer();
+    expect(rootRevoke.status).toBe(204);
   });
 
   it("hostile: the provisioner writes any policy under machine-env-*, and with the issuer holds every right in A", async () => {

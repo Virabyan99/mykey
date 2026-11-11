@@ -64,8 +64,11 @@ export interface AuthorityCell {
 }
 
 /**
- * The root token's answer to a request that no identity may make, when it is
- * not 200 or 204. `privateStack`: the control is sent to a stack of its own.
+ * The control of a request that no identity may make, when it is not simply
+ * the root token answering 200 or 204. `privateStack`: the root token sends it
+ * to a stack of its own. `mintedToken`: the root token mints a short-lived,
+ * renewable token with the `default` policy in the column's namespace, and that
+ * token sends the request.
  */
 export interface RootControl {
   action: string;
@@ -73,6 +76,7 @@ export interface RootControl {
   status: number;
   reason: string;
   privateStack?: true;
+  mintedToken?: true;
 }
 
 const NS_PREFIX = "{ns}/";
@@ -457,9 +461,10 @@ export const ROOT_CONTROLS: readonly RootControl[] = [
     (column): RootControl => ({
       action: "token.renew_self",
       column,
-      status: 400,
+      status: 200,
       reason:
-        "the root token has no lease, so OpenBao reaches the renewal handler and answers 400 'invalid lease ID'",
+        "the root token has no lease to renew, so the control is a 120 s renewable token with the default policy, minted by the root token in that namespace, renewing itself",
+      mintedToken: true,
     }),
   ),
 ];
@@ -471,7 +476,7 @@ const SELF_REASON =
  * The token's own self operations, observed allowed wherever the request is
  * sent (Run 2.1, D-17): the same template rows, not new rights.
  */
-const SELF_OPERATIONS: readonly string[] = (
+export const SELF_OPERATIONS: readonly string[] = (
   ["other_organization", "other_organization_path", "root"] as const
 ).flatMap((column) => [
   `runtime token.lookup_self ${column}`,

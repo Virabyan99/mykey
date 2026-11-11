@@ -1678,20 +1678,20 @@
       "status": 200
     },
     "token.renew_self other_organization": {
-      "by": "root",
-      "status": 400
+      "by": "renewable default-policy token",
+      "status": 200
     },
     "token.renew_self other_organization_path": {
-      "by": "root",
-      "status": 400
+      "by": "renewable default-policy token",
+      "status": 200
     },
     "token.renew_self own": {
-      "by": "root",
-      "status": 400
+      "by": "renewable default-policy token",
+      "status": 200
     },
     "token.renew_self root": {
-      "by": "root",
-      "status": 400
+      "by": "renewable default-policy token",
+      "status": 200
     },
     "token.revoke_accessor other_organization": {
       "by": "root",

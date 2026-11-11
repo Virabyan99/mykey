@@ -7,6 +7,7 @@ export {
   COLUMNS,
   IDENTITIES,
   ROOT_CONTROLS,
+  SELF_OPERATIONS,
   cellColumn,
   cellKey,
   controlOf,

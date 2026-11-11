@@ -18,7 +18,8 @@ PO-4 and FR-1.13 stay `OPEN`; this run note is contributing evidence for both (s
 
 - `1c7a2fc` feat(openbao): narrow client, policy templates, audit device and organization fixture
 - `4779155` test(openbao): audit correlation headers, no value and no token in the audit file
-- this commit: feat(openbao): authority matrix verified with real tokens (PO-3)
+- `78f89c0` feat(openbao): authority matrix verified with real tokens (PO-3)
+- this commit: test(openbao): renew-self controls, all self operations and foreign accessors proven (review round 1)
 
 ## Commands and results
 
@@ -29,15 +30,17 @@ PO-4 and FR-1.13 stay `OPEN`; this run note is contributing evidence for both (s
 | same, with the machine template widened to `kv/metadata/p/{{pid}}/*` (mutation, reverted)        | 1    | `machine kv.list_project own: expected 403, observed 200` and 3 more                                                             |
 | same, with the client sending a fixed operation id (mutation, reverted)                          | 1    | audit.test.ts: 3 of 3 failed                                                                                                     |
 | `pnpm run check`                                                                                 | 0    | `authority matrix: 860 cells current and proven.` · `evidence: registry ok (191 items).`                                         |
-| `pnpm test`                                                                                      | 0    | `Test Files 20 passed (20)` · `Tests 425 passed (425)`                                                                           |
-| `pnpm run test:integration`                                                                      | 0    | `Test Files 13 passed (13)` · `Tests 296 passed (296)` · 82.8 s                                                                  |
+| `pnpm test`                                                                                      | 0    | `Test Files 20 passed (20)` · `Tests 426 passed (426)` (after review round 1)                                                    |
+| `pnpm run test:integration`                                                                      | 0    | `Test Files 13 passed (13)` · `Tests 297 passed (297)` · 78.9 s (after review round 1)                                           |
 
 The matrix cells themselves take about 4 s (eight requests at a time); the private stack for the seal control about 20 s.
 
 ## Deviations and decisions
 
 - **Runtime authentication is inline AppRole** (PO-3, D-17), not the stored 15-minute login of P-22. `OpenBaoClient` still takes a token; the run that wires `apps/api` to OpenBao adds the inline credential mode.
-- **Self operations.** A namespace token's `lookup-self` and `revoke-self` succeed when the request names another organization or the root namespace; they act on the caller's own token. Wrong expectation, fixed as 15 `allow` cells with that reason (D-17), and proven not to touch B by a test.
+- **Self operations.** A namespace token's `lookup-self` and `revoke-self` succeed when the request names another organization (header or path) or the root namespace; they act on the caller's own token. Wrong expectation, fixed as 15 `allow` cells with that reason (D-17). Each of the 15 is proven one by one (review round 1): every lookup returns the caller's own accessor and `namespace_path`; after every revoke the caller is refused and a token living where the request was sent still works.
+- **renew-self controls (review round 1).** The root token cannot renew itself (no lease, 400), which proved nothing. The control is now, in each of the four columns, a 120 s renewable token with the `default` policy minted by the root token in that namespace: it renews itself with 200.
+- **Foreign accessors (review round 1).** A's issuer sending an accessor of B, or of the root namespace, to `lookup-accessor` / `revoke-accessor` in A is refused with HTTP 500 "cannot lookup token in different namespace" (the root token in A gets the same); the foreign tokens keep working, and the root token where they live revokes them with 204. Not an exposure.
 - **Columns.** `other_organization` is two columns (`X-Vault-Namespace: org-<B>`, and the root namespace with the path prefixed `org-<B>/`); the prefixed form is told apart by the `{ns}/` placeholder at the start of the path, so `AuthorityCell` needed no field for it. KV and environment actions are not sent to the root namespace (there is no `kv` mount there).
 - **Rendering.** The Markdown has one table per identity with actions as rows and targets as columns, not one table with 45 action columns.
 - **Controls.** Where no identity is allowed, the root token sends the same request. Destructive requests act on objects made for that request (`{victim}`, `{fresh}`, `{accessor}`); writes of policies and roles send the canonical text, so a root control changes nothing. Root controls run one at a time.
@@ -48,6 +51,7 @@ The matrix cells themselves take about 4 s (eight requests at a time); the priva
 ## Open issues
 
 - Concurrent writes of the same object answer 500 "transaction commit failed" to one writer (30 of 30 pairs reproduced on `kv/config`). The client maps it to `invalid`, status 500. Run 2.4 decides whether this is a "not applied, may retry" outcome.
+- The namespace refusal of a foreign accessor arrives as HTTP 500, not 4xx; the client maps it to `invalid`, status 500. Run 2.2 (issuer) should treat it as "not this namespace's token".
 - Inline authentication cost per request is not measured; Session 4/5 measure it under load (D-17 "What would change this decision").
 - A machine token minted with `ttl: 60s` from a role with `token_explicit_max_ttl` reports `explicit_max_ttl: 0` (Task A observation); whether the role still caps the TTL is Run 2.2's question. In this run a 30-day request returned a token with a TTL just under 30 days.
 - The provisioner together with the issuer holds every right inside its namespace (D-17). It must stay out of the API process.

@@ -269,180 +269,180 @@ The 172 runtime cells were sent again with inline AppRole authentication (`X-Vau
 
 ## Controls
 
-| Request                | Column           | Control          | Observed |
-| ---------------------- | ---------------- | ---------------- | -------- |
-| approle.secret_id      | other org        | root             | 200      |
-| approle.secret_id      | other org (path) | root             | 200      |
-| approle.secret_id      | own              | root             | 200      |
-| approle.write_issuer   | other org        | root             | 204      |
-| approle.write_issuer   | other org (path) | root             | 204      |
-| approle.write_issuer   | own              | root             | 204      |
-| audit.headers          | other org        | root             | 400 [2]  |
-| audit.headers          | other org (path) | root             | 400 [2]  |
-| audit.headers          | own              | root             | 400 [2]  |
-| audit.headers          | root             | root             | 200      |
-| audit.read             | other org        | root             | 400 [2]  |
-| audit.read             | other org (path) | root             | 400 [2]  |
-| audit.read             | own              | root             | 400 [2]  |
-| audit.read             | root             | root             | 200      |
-| auth.enable            | other org        | root             | 204      |
-| auth.enable            | other org (path) | root             | 204      |
-| auth.enable            | own              | root             | 204      |
-| auth.enable            | root             | root             | 204      |
-| auth.read              | other org        | root             | 200      |
-| auth.read              | other org (path) | root             | 200      |
-| auth.read              | own              | root             | 200      |
-| auth.read              | root             | root             | 200      |
-| kv.delete_data         | other env        | root             | 204      |
-| kv.delete_data         | other org        | root             | 204      |
-| kv.delete_data         | other org (path) | root             | 204      |
-| kv.delete_data         | own              | root             | 204      |
-| kv.delete_metadata     | other env        | root             | 204      |
-| kv.delete_metadata     | other org        | root             | 204      |
-| kv.delete_metadata     | other org (path) | root             | 204      |
-| kv.delete_metadata     | own              | root             | 204      |
-| kv.destroy             | other env        | root             | 204      |
-| kv.destroy             | other org        | root             | 204      |
-| kv.destroy             | other org (path) | root             | 204      |
-| kv.destroy             | own              | root             | 204      |
-| kv.list_environment    | other env        | runtime          | 200      |
-| kv.list_environment    | other org        | root             | 200      |
-| kv.list_environment    | other org (path) | root             | 200      |
-| kv.list_environment    | own              | runtime          | 200      |
-| kv.list_mount          | other org        | root             | 200      |
-| kv.list_mount          | other org (path) | root             | 200      |
-| kv.list_mount          | own              | root             | 200      |
-| kv.list_project        | other org        | root             | 200      |
-| kv.list_project        | other org (path) | root             | 200      |
-| kv.list_project        | own              | runtime          | 200      |
-| kv.list_projects       | other org        | root             | 200      |
-| kv.list_projects       | other org (path) | root             | 200      |
-| kv.list_projects       | own              | runtime          | 200      |
-| kv.patch               | other env        | root             | 200      |
-| kv.patch               | other org        | root             | 200      |
-| kv.patch               | other org (path) | root             | 200      |
-| kv.patch               | own              | root             | 200      |
-| kv.read                | other env        | runtime          | 200      |
-| kv.read                | other org        | root             | 200      |
-| kv.read                | other org (path) | root             | 200      |
-| kv.read                | own              | runtime          | 200      |
-| kv.read_metadata       | other env        | runtime          | 200      |
-| kv.read_metadata       | other org        | root             | 200      |
-| kv.read_metadata       | other org (path) | root             | 200      |
-| kv.read_metadata       | own              | runtime          | 200      |
-| kv.read_subkeys        | other env        | root             | 200      |
-| kv.read_subkeys        | other org        | root             | 200      |
-| kv.read_subkeys        | other org (path) | root             | 200      |
-| kv.read_subkeys        | own              | root             | 200      |
-| kv.read_version_1      | other env        | runtime          | 200      |
-| kv.read_version_1      | other org        | root             | 200      |
-| kv.read_version_1      | other org (path) | root             | 200      |
-| kv.read_version_1      | own              | runtime          | 200      |
-| kv.soft_delete         | other env        | runtime          | 204      |
-| kv.soft_delete         | other org        | root             | 204      |
-| kv.soft_delete         | other org (path) | root             | 204      |
-| kv.soft_delete         | own              | runtime          | 204      |
-| kv.undelete            | other env        | runtime          | 204      |
-| kv.undelete            | other org        | root             | 204      |
-| kv.undelete            | other org (path) | root             | 204      |
-| kv.undelete            | own              | runtime          | 204      |
-| kv.write               | other env        | runtime          | 200      |
-| kv.write               | other org        | root             | 200      |
-| kv.write               | other org (path) | root             | 200      |
-| kv.write               | own              | runtime          | 200      |
-| kv.write_config        | other org        | root             | 204      |
-| kv.write_config        | other org (path) | root             | 204      |
-| kv.write_config        | own              | root             | 204      |
-| mount.read             | other org        | root             | 200      |
-| mount.read             | other org (path) | root             | 200      |
-| mount.read             | own              | root             | 200      |
-| mount.tune             | other org        | root             | 204      |
-| mount.tune             | other org (path) | root             | 204      |
-| mount.tune             | own              | root             | 204      |
-| namespace.create       | other org        | root             | 200      |
-| namespace.create       | other org (path) | root             | 200      |
-| namespace.create       | own              | root             | 200      |
-| namespace.create       | root             | root             | 200      |
-| namespace.list         | other org        | root             | 200      |
-| namespace.list         | other org (path) | root             | 200      |
-| namespace.list         | own              | root             | 200      |
-| namespace.list         | root             | root             | 200      |
-| policy.list            | other org        | root             | 200      |
-| policy.list            | other org (path) | root             | 200      |
-| policy.list            | own              | root             | 200      |
-| policy.list            | root             | root             | 200      |
-| policy.read_machine    | other env        | issuer           | 200      |
-| policy.read_machine    | other org        | root             | 200      |
-| policy.read_machine    | other org (path) | root             | 200      |
-| policy.read_machine    | own              | issuer           | 200      |
-| policy.write_machine   | other env        | provisioner      | 204      |
-| policy.write_machine   | other org        | root             | 204      |
-| policy.write_machine   | other org (path) | root             | 204      |
-| policy.write_machine   | own              | provisioner      | 204      |
-| policy.write_runtime   | other org        | root             | 204      |
-| policy.write_runtime   | other org (path) | root             | 204      |
-| policy.write_runtime   | own              | root             | 204      |
-| policy.write_runtime   | root             | root             | 204      |
-| raft.snapshot          | other org        | root             | 400 [2]  |
-| raft.snapshot          | other org (path) | root             | 400 [2]  |
-| raft.snapshot          | own              | root             | 400 [2]  |
-| raft.snapshot          | root             | backup           | 200      |
-| raw.read               | other org        | root             | 400 [2]  |
-| raw.read               | other org (path) | root             | 400 [2]  |
-| raw.read               | own              | root             | 400 [2]  |
-| raw.read               | root             | root             | 404 [3]  |
-| seal                   | other org        | root             | 400 [2]  |
-| seal                   | other org (path) | root             | 400 [2]  |
-| seal                   | own              | root             | 400 [2]  |
-| seal                   | root             | root (own stack) | 204 [4]  |
-| token_role.read        | other env        | issuer           | 200      |
-| token_role.read        | other org        | root             | 200      |
-| token_role.read        | other org (path) | root             | 200      |
-| token_role.read        | own              | issuer           | 200      |
-| token_role.write       | other env        | provisioner      | 204      |
-| token_role.write       | other org        | root             | 204      |
-| token_role.write       | other org (path) | root             | 204      |
-| token_role.write       | own              | provisioner      | 204      |
-| token_role.write_other | other org        | root             | 204      |
-| token_role.write_other | other org (path) | root             | 204      |
-| token_role.write_other | own              | root             | 204      |
-| token_role.write_other | root             | root             | 204      |
-| token.create           | other org        | root             | 200      |
-| token.create           | other org (path) | root             | 200      |
-| token.create           | own              | root             | 200      |
-| token.create           | root             | root             | 200      |
-| token.create_from_role | other env        | issuer           | 200      |
-| token.create_from_role | other org        | root             | 200      |
-| token.create_from_role | other org (path) | root             | 200      |
-| token.create_from_role | own              | issuer           | 200      |
-| token.create_orphan    | other org        | root             | 200      |
-| token.create_orphan    | other org (path) | root             | 200      |
-| token.create_orphan    | own              | root             | 200      |
-| token.create_orphan    | root             | root             | 200      |
-| token.list_accessors   | other org        | root             | 200      |
-| token.list_accessors   | other org (path) | root             | 200      |
-| token.list_accessors   | own              | root             | 200      |
-| token.list_accessors   | root             | root             | 200      |
-| token.lookup_accessor  | other org        | root             | 200      |
-| token.lookup_accessor  | other org (path) | root             | 200      |
-| token.lookup_accessor  | own              | issuer           | 200      |
-| token.lookup_accessor  | root             | root             | 200      |
-| token.lookup_self      | other org        | runtime          | 200      |
-| token.lookup_self      | other org (path) | runtime          | 200      |
-| token.lookup_self      | own              | runtime          | 200      |
-| token.lookup_self      | root             | runtime          | 200      |
-| token.renew_self       | other org        | root             | 400 [5]  |
-| token.renew_self       | other org (path) | root             | 400 [5]  |
-| token.renew_self       | own              | root             | 400 [5]  |
-| token.renew_self       | root             | root             | 400 [5]  |
-| token.revoke_accessor  | other org        | root             | 204      |
-| token.revoke_accessor  | other org (path) | root             | 204      |
-| token.revoke_accessor  | own              | issuer           | 204      |
-| token.revoke_accessor  | root             | root             | 204      |
-| token.revoke_self      | other org        | runtime          | 204      |
-| token.revoke_self      | other org (path) | runtime          | 204      |
-| token.revoke_self      | own              | runtime          | 204      |
-| token.revoke_self      | root             | runtime          | 204      |
+| Request                | Column           | Control                        | Observed |
+| ---------------------- | ---------------- | ------------------------------ | -------- |
+| approle.secret_id      | other org        | root                           | 200      |
+| approle.secret_id      | other org (path) | root                           | 200      |
+| approle.secret_id      | own              | root                           | 200      |
+| approle.write_issuer   | other org        | root                           | 204      |
+| approle.write_issuer   | other org (path) | root                           | 204      |
+| approle.write_issuer   | own              | root                           | 204      |
+| audit.headers          | other org        | root                           | 400 [2]  |
+| audit.headers          | other org (path) | root                           | 400 [2]  |
+| audit.headers          | own              | root                           | 400 [2]  |
+| audit.headers          | root             | root                           | 200      |
+| audit.read             | other org        | root                           | 400 [2]  |
+| audit.read             | other org (path) | root                           | 400 [2]  |
+| audit.read             | own              | root                           | 400 [2]  |
+| audit.read             | root             | root                           | 200      |
+| auth.enable            | other org        | root                           | 204      |
+| auth.enable            | other org (path) | root                           | 204      |
+| auth.enable            | own              | root                           | 204      |
+| auth.enable            | root             | root                           | 204      |
+| auth.read              | other org        | root                           | 200      |
+| auth.read              | other org (path) | root                           | 200      |
+| auth.read              | own              | root                           | 200      |
+| auth.read              | root             | root                           | 200      |
+| kv.delete_data         | other env        | root                           | 204      |
+| kv.delete_data         | other org        | root                           | 204      |
+| kv.delete_data         | other org (path) | root                           | 204      |
+| kv.delete_data         | own              | root                           | 204      |
+| kv.delete_metadata     | other env        | root                           | 204      |
+| kv.delete_metadata     | other org        | root                           | 204      |
+| kv.delete_metadata     | other org (path) | root                           | 204      |
+| kv.delete_metadata     | own              | root                           | 204      |
+| kv.destroy             | other env        | root                           | 204      |
+| kv.destroy             | other org        | root                           | 204      |
+| kv.destroy             | other org (path) | root                           | 204      |
+| kv.destroy             | own              | root                           | 204      |
+| kv.list_environment    | other env        | runtime                        | 200      |
+| kv.list_environment    | other org        | root                           | 200      |
+| kv.list_environment    | other org (path) | root                           | 200      |
+| kv.list_environment    | own              | runtime                        | 200      |
+| kv.list_mount          | other org        | root                           | 200      |
+| kv.list_mount          | other org (path) | root                           | 200      |
+| kv.list_mount          | own              | root                           | 200      |
+| kv.list_project        | other org        | root                           | 200      |
+| kv.list_project        | other org (path) | root                           | 200      |
+| kv.list_project        | own              | runtime                        | 200      |
+| kv.list_projects       | other org        | root                           | 200      |
+| kv.list_projects       | other org (path) | root                           | 200      |
+| kv.list_projects       | own              | runtime                        | 200      |
+| kv.patch               | other env        | root                           | 200      |
+| kv.patch               | other org        | root                           | 200      |
+| kv.patch               | other org (path) | root                           | 200      |
+| kv.patch               | own              | root                           | 200      |
+| kv.read                | other env        | runtime                        | 200      |
+| kv.read                | other org        | root                           | 200      |
+| kv.read                | other org (path) | root                           | 200      |
+| kv.read                | own              | runtime                        | 200      |
+| kv.read_metadata       | other env        | runtime                        | 200      |
+| kv.read_metadata       | other org        | root                           | 200      |
+| kv.read_metadata       | other org (path) | root                           | 200      |
+| kv.read_metadata       | own              | runtime                        | 200      |
+| kv.read_subkeys        | other env        | root                           | 200      |
+| kv.read_subkeys        | other org        | root                           | 200      |
+| kv.read_subkeys        | other org (path) | root                           | 200      |
+| kv.read_subkeys        | own              | root                           | 200      |
+| kv.read_version_1      | other env        | runtime                        | 200      |
+| kv.read_version_1      | other org        | root                           | 200      |
+| kv.read_version_1      | other org (path) | root                           | 200      |
+| kv.read_version_1      | own              | runtime                        | 200      |
+| kv.soft_delete         | other env        | runtime                        | 204      |
+| kv.soft_delete         | other org        | root                           | 204      |
+| kv.soft_delete         | other org (path) | root                           | 204      |
+| kv.soft_delete         | own              | runtime                        | 204      |
+| kv.undelete            | other env        | runtime                        | 204      |
+| kv.undelete            | other org        | root                           | 204      |
+| kv.undelete            | other org (path) | root                           | 204      |
+| kv.undelete            | own              | runtime                        | 204      |
+| kv.write               | other env        | runtime                        | 200      |
+| kv.write               | other org        | root                           | 200      |
+| kv.write               | other org (path) | root                           | 200      |
+| kv.write               | own              | runtime                        | 200      |
+| kv.write_config        | other org        | root                           | 204      |
+| kv.write_config        | other org (path) | root                           | 204      |
+| kv.write_config        | own              | root                           | 204      |
+| mount.read             | other org        | root                           | 200      |
+| mount.read             | other org (path) | root                           | 200      |
+| mount.read             | own              | root                           | 200      |
+| mount.tune             | other org        | root                           | 204      |
+| mount.tune             | other org (path) | root                           | 204      |
+| mount.tune             | own              | root                           | 204      |
+| namespace.create       | other org        | root                           | 200      |
+| namespace.create       | other org (path) | root                           | 200      |
+| namespace.create       | own              | root                           | 200      |
+| namespace.create       | root             | root                           | 200      |
+| namespace.list         | other org        | root                           | 200      |
+| namespace.list         | other org (path) | root                           | 200      |
+| namespace.list         | own              | root                           | 200      |
+| namespace.list         | root             | root                           | 200      |
+| policy.list            | other org        | root                           | 200      |
+| policy.list            | other org (path) | root                           | 200      |
+| policy.list            | own              | root                           | 200      |
+| policy.list            | root             | root                           | 200      |
+| policy.read_machine    | other env        | issuer                         | 200      |
+| policy.read_machine    | other org        | root                           | 200      |
+| policy.read_machine    | other org (path) | root                           | 200      |
+| policy.read_machine    | own              | issuer                         | 200      |
+| policy.write_machine   | other env        | provisioner                    | 204      |
+| policy.write_machine   | other org        | root                           | 204      |
+| policy.write_machine   | other org (path) | root                           | 204      |
+| policy.write_machine   | own              | provisioner                    | 204      |
+| policy.write_runtime   | other org        | root                           | 204      |
+| policy.write_runtime   | other org (path) | root                           | 204      |
+| policy.write_runtime   | own              | root                           | 204      |
+| policy.write_runtime   | root             | root                           | 204      |
+| raft.snapshot          | other org        | root                           | 400 [2]  |
+| raft.snapshot          | other org (path) | root                           | 400 [2]  |
+| raft.snapshot          | own              | root                           | 400 [2]  |
+| raft.snapshot          | root             | backup                         | 200      |
+| raw.read               | other org        | root                           | 400 [2]  |
+| raw.read               | other org (path) | root                           | 400 [2]  |
+| raw.read               | own              | root                           | 400 [2]  |
+| raw.read               | root             | root                           | 404 [3]  |
+| seal                   | other org        | root                           | 400 [2]  |
+| seal                   | other org (path) | root                           | 400 [2]  |
+| seal                   | own              | root                           | 400 [2]  |
+| seal                   | root             | root (own stack)               | 204 [4]  |
+| token_role.read        | other env        | issuer                         | 200      |
+| token_role.read        | other org        | root                           | 200      |
+| token_role.read        | other org (path) | root                           | 200      |
+| token_role.read        | own              | issuer                         | 200      |
+| token_role.write       | other env        | provisioner                    | 204      |
+| token_role.write       | other org        | root                           | 204      |
+| token_role.write       | other org (path) | root                           | 204      |
+| token_role.write       | own              | provisioner                    | 204      |
+| token_role.write_other | other org        | root                           | 204      |
+| token_role.write_other | other org (path) | root                           | 204      |
+| token_role.write_other | own              | root                           | 204      |
+| token_role.write_other | root             | root                           | 204      |
+| token.create           | other org        | root                           | 200      |
+| token.create           | other org (path) | root                           | 200      |
+| token.create           | own              | root                           | 200      |
+| token.create           | root             | root                           | 200      |
+| token.create_from_role | other env        | issuer                         | 200      |
+| token.create_from_role | other org        | root                           | 200      |
+| token.create_from_role | other org (path) | root                           | 200      |
+| token.create_from_role | own              | issuer                         | 200      |
+| token.create_orphan    | other org        | root                           | 200      |
+| token.create_orphan    | other org (path) | root                           | 200      |
+| token.create_orphan    | own              | root                           | 200      |
+| token.create_orphan    | root             | root                           | 200      |
+| token.list_accessors   | other org        | root                           | 200      |
+| token.list_accessors   | other org (path) | root                           | 200      |
+| token.list_accessors   | own              | root                           | 200      |
+| token.list_accessors   | root             | root                           | 200      |
+| token.lookup_accessor  | other org        | root                           | 200      |
+| token.lookup_accessor  | other org (path) | root                           | 200      |
+| token.lookup_accessor  | own              | issuer                         | 200      |
+| token.lookup_accessor  | root             | root                           | 200      |
+| token.lookup_self      | other org        | runtime                        | 200      |
+| token.lookup_self      | other org (path) | runtime                        | 200      |
+| token.lookup_self      | own              | runtime                        | 200      |
+| token.lookup_self      | root             | runtime                        | 200      |
+| token.renew_self       | other org        | renewable default-policy token | 200 [5]  |
+| token.renew_self       | other org (path) | renewable default-policy token | 200 [5]  |
+| token.renew_self       | own              | renewable default-policy token | 200 [5]  |
+| token.renew_self       | root             | renewable default-policy token | 200 [5]  |
+| token.revoke_accessor  | other org        | root                           | 204      |
+| token.revoke_accessor  | other org (path) | root                           | 204      |
+| token.revoke_accessor  | own              | issuer                         | 204      |
+| token.revoke_accessor  | root             | root                           | 204      |
+| token.revoke_self      | other org        | runtime                        | 204      |
+| token.revoke_self      | other org (path) | runtime                        | 204      |
+| token.revoke_self      | own              | runtime                        | 204      |
+| token.revoke_self      | root             | runtime                        | 204      |
 
 ## Notes
 
@@ -450,4 +450,4 @@ The 172 runtime cells were sent again with inline AppRole authentication (`X-Vau
 2. OpenBao answers 400 before any policy: root-namespace-only endpoint called in a namespace
 3. the raw storage endpoint is not enabled in the server configuration, so nobody can use it; the identities' 403 is the policy answer given before routing
 4. sealing the shared stack would stop every other suite, so the root token seals a stack of its own
-5. the root token has no lease, so OpenBao reaches the renewal handler and answers 400 'invalid lease ID'
+5. the root token has no lease to renew, so the control is a 120 s renewable token with the default policy, minted by the root token in that namespace, renewing itself

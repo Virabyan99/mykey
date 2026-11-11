@@ -148,6 +148,28 @@ describe("authority matrix structure", () => {
     }
   });
 
+  it("a control that does not succeed is only one that OpenBao answers before policy", () => {
+    for (const cell of AUTHORITY_MATRIX.filter((c) => c.expect === "deny")) {
+      const control = controlOf(cell);
+      if (control.by !== "root" || control.control === undefined) continue;
+      const { status, mintedToken, action } = control.control;
+      if (status === 200 || status === 204) continue;
+      // A non-2xx control is accepted only where every caller gets the same pre-policy answer,
+      // or where the endpoint is disabled for everyone (raw).
+      expect(
+        cell.expectStatus === status || action === "raw.read",
+        `${cellKey(cell)} control ${status}`,
+      ).toBe(true);
+      expect(mintedToken, cellKey(cell)).toBeUndefined();
+    }
+    // renew-self has a control that succeeds: a renewable token renewing itself.
+    const renew = ROOT_CONTROLS.filter((control) => control.action === "token.renew_self");
+    expect(renew).toHaveLength(4);
+    for (const control of renew) {
+      expect(control).toMatchObject({ status: 200, mintedToken: true });
+    }
+  });
+
   it("requests use only the documented placeholders", () => {
     for (const cell of AUTHORITY_MATRIX) {
       for (const text of [cell.request.path, ...strings(cell.request.body)]) {
