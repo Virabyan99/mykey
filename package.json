@@ -7,7 +7,7 @@
     "node": ">=24.18.0 <25"
   },
   "scripts": {
-    "check": "pnpm run format:check && pnpm run lint && pnpm run typecheck && pnpm run pins:verify && pnpm run contracts:check && pnpm run db:check && pnpm run evidence:verify",
+    "check": "pnpm run format:check && pnpm run lint && pnpm run typecheck && pnpm run pins:verify && pnpm run contracts:check && pnpm run db:check && pnpm run authority:check && pnpm run evidence:verify",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "lint": "eslint .",
@@ -21,6 +21,8 @@
     "stack:status": "node scripts/stack.ts status",
     "contracts:openapi": "node scripts/contracts-openapi.ts",
     "contracts:check": "node scripts/contracts-openapi.ts --check",
+    "authority:matrix": "node scripts/authority-matrix.ts",
+    "authority:check": "node scripts/authority-matrix.ts --check",
     "db:generate": "pnpm --dir packages/db exec drizzle-kit generate",
     "db:migrate": "node scripts/db-migrate.ts",
     "db:check": "node scripts/db-check.ts",
@@ -34,6 +36,7 @@
     "@eslint/js": "10.0.1",
     "@mykey/contracts": "workspace:*",
     "@mykey/db": "workspace:*",
+    "@mykey/openbao": "workspace:*",
     "@types/node": "24.19.2",
     "@types/pg": "catalog:",
     "eslint": "10.14.0",

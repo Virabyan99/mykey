@@ -2,6 +2,22 @@
 // templates. Operator authority is a separate entry point, `@mykey/openbao/admin`,
 // and is deliberately not re-exported here.
 export {
+  AUTHORITY_ACTIONS,
+  AUTHORITY_MATRIX,
+  COLUMNS,
+  IDENTITIES,
+  ROOT_CONTROLS,
+  cellColumn,
+  cellKey,
+  controlOf,
+  type AuthorityCell,
+  type AuthorityRequest,
+  type Column,
+  type Identity,
+  type RootControl,
+  type Target,
+} from "./authority.ts";
+export {
   OpenBaoClient,
   appRoleLogin,
   type BaoFailureKind,

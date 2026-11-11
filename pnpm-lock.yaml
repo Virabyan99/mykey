@@ -47,6 +47,9 @@ importers:
       '@mykey/db':
         specifier: workspace:*
         version: link:packages/db
+      '@mykey/openbao':
+        specifier: workspace:*
+        version: link:packages/openbao
       '@types/node':
         specifier: 24.19.2
         version: 24.19.2
