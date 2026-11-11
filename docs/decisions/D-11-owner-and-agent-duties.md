@@ -2,7 +2,7 @@
 
 **Date:** 2026-11-10
 
-**Status:** ASSUMED — awaiting owner
+**Status:** CONFIRMED by the owner on 2026-11-11
 
 ## Decision
 
@@ -11,6 +11,17 @@ The owner buys OVHcloud resources when an agent asks (§5). Agents create and ma
 ## What it changes
 
 Assigns responsibilities.
+
+## Owner inputs recorded here
+
+| Input                                          | Value                                                                           | Recorded   |
+| ---------------------------------------------- | ------------------------------------------------------------------------------- | ---------- |
+| Alert channel (first needed in Run 2.6)        | Telegram                                                                        | 2026-11-11 |
+| Operator VPN client (Run 2.5, P-28)            | WireGuard for Windows; installed on the workstation by the agent, version 1.1.1 | 2026-11-11 |
+| Domain (Run 2.5)                               | not yet named                                                                   | —          |
+| OVHcloud region and server addresses (Run 2.5) | not yet bought                                                                  | —          |
+
+The owner asked on 2026-11-11 to be involved only where their permission is needed. Agents therefore do every step they can do themselves and bring the owner only purchases, provider-console steps (D-11), credentials only the owner can create, and Windows permission prompts.
 
 ## Amends
 

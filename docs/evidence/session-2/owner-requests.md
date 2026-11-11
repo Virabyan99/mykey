@@ -57,4 +57,10 @@ About twenty minutes in the OVHcloud Control Panel, in two sittings: order two K
 
 ## Replies
 
-_None yet._
+**2026-11-11**
+
+- D-01 … D-11 confirmed, with an explicit yes for D-04 and D-05.
+- Alerts go to Telegram. The bot token file is still to come.
+- The owner wants the least possible involvement: agents do everything they can, the owner does only what needs their permission. WireGuard for Windows was therefore installed by the agent (the owner approved the Windows permission prompt); item 5 shrinks to one more permission prompt when the tunnel file exists.
+- Correction to item 3: the token also needs **Zone → Workers Routes: Edit** for the chosen zone, so that the probe can be served at `mykey-probe.<domain>`.
+- Still open: the domain, the two servers (item 2), the Cloudflare token (item 3), the Telegram bot token (item 4).
