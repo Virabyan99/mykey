@@ -38,6 +38,27 @@ describe("infra/hosts/firewall/egress-names.conf", () => {
     expect(r2).toHaveLength(1);
     expect(r2[0]).toMatch(/^[0-9a-f]{32}\.r2\.cloudflarestorage\.com$/);
   });
+
+  it("names every host a Docker Hub pull was seen to use (run-2.5.md)", () => {
+    const registry = entries
+      .filter((entry) => entry.purpose === "registry")
+      .map((entry) => entry.name);
+    // Blobs were served from CloudFront on 11 Nov 2026, not from the Cloudflare name.
+    expect(registry.sort()).toEqual([
+      "auth.docker.io",
+      "production.cloudflare.docker.com",
+      "production.cloudfront.docker.com",
+      "registry-1.docker.io",
+    ]);
+  });
+
+  it("keeps the registry set current for the whole maintenance window", () => {
+    const script = readFileSync(resolve(FILE, "../mykey-egress.sh"), "utf8");
+    // A CDN changes its addresses within a minute; one resolution at the start is not enough.
+    expect(script).toMatch(/--unit=mykey-maint-refresh/);
+    expect(script).toMatch(/systemctl stop mykey-maint-refresh\.service/);
+    expect(script).toMatch(/^maint-loop\) maint_loop ;;$/m);
+  });
 });
 
 describe("parseEgressNames", () => {

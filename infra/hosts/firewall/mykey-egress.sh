@@ -149,6 +149,7 @@ maint() {
 	'' | *[!0-9]*) echo "mykey-egress: minutes must be a number" >&2 && return 1 ;;
 	esac
 	mkdir -p "$STATE"
+	systemctl stop mykey-maint-refresh.service 2>/dev/null || true
 	if [ "$minutes" -eq 0 ]; then
 		rm -f "$STATE/maint-until"
 		nft flush set inet mykey registry
@@ -156,8 +157,18 @@ maint() {
 	else
 		echo "$(($(now) + minutes * 60))" >"$STATE/maint-until"
 		refresh
+		# A CDN hands out other addresses within a minute, so the set follows
+		# the resolver for as long as the window is open.
+		systemd-run --quiet --collect --unit=mykey-maint-refresh "$0" maint-loop
 		echo "maintenance window open for ${minutes} min"
 	fi
+}
+
+maint_loop() {
+	while [ "$(until_of maint-until)" -gt "$(now)" ]; do
+		refresh >/dev/null 2>&1 || true
+		sleep 2
+	done
 }
 
 temp() {
@@ -191,6 +202,7 @@ refresh) refresh ;;
 block) block "${2:-}" "${3:-}" ;;
 maint) maint "${2:-}" ;;
 maint-end) maint 0 ;;
+maint-loop) maint_loop ;;
 temp) temp "${2:-}" "${3:-}" ;;
 counts) counts ;;
 *)

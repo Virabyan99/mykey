@@ -41,13 +41,20 @@ import {
   type HostEntry,
   type Hosts,
 } from "../tests/harness/staging.ts";
+import type { RoleName } from "@mykey/db";
 
 const REPOSITORY = resolve(import.meta.dirname, "..");
 const FIREWALL = `${REMOTE.hostsDir}/firewall`;
 const BOOTSTRAP = `${REMOTE.hostsDir}/bootstrap`;
 const REVERT_SECONDS = 300;
 const WG_PORT = 51820;
-const ACME_DIRECTORY = "https://acme-v02.api.letsencrypt.org/directory";
+/** A host starts on the staging directory; `acme production` is a deliberate step (Run 2.5). */
+export const ACME_DIRECTORIES = {
+  staging: "https://acme-staging-v02.api.letsencrypt.org/directory",
+  production: "https://acme-v02.api.letsencrypt.org/directory",
+} as const;
+export type AcmeDirectory = keyof typeof ACME_DIRECTORIES;
+const COMPOSE = `docker compose --env-file ${REMOTE.hostEnv} -f ${REMOTE.composeDir}/host.compose.yml -p mykey`;
 const BASE64_KEY = /^[A-Za-z0-9+/]{43}=$/;
 
 type Address = "vpn" | "public";
@@ -86,7 +93,8 @@ export const USAGE = `usage: node scripts/host.ts <staging|prod> <command> [--pu
   confirm                        cancel the pending revert, from a new connection
   image <name> <tar>             docker load; records <NAME>_IMAGE in host.env
   maint <minutes> -- <command>   open registry egress, run the command, close it
-  up                             docker compose up -d
+  acme <staging|production>      choose the Let's Encrypt directory; drops the edge's certificates
+  up                             create missing host secrets, then docker compose up -d
   db-init                        roles and migrations through an SSH tunnel
   status                         print the host status as JSON
 --public uses the public address instead of the VPN (bootstrap always does).`;
@@ -95,6 +103,7 @@ export type HostCommand = { host: HostName; via: Address } & (
   | { command: "bootstrap" | "push" | "confirm" | "up" | "db-init" | "status" }
   | { command: "apply"; target: "firewall" | "ssh" }
   | { command: "image"; name: string; tar: string }
+  | { command: "acme"; directory: AcmeDirectory }
   | { command: "maint"; minutes: number; argv: string[] }
 );
 
@@ -143,6 +152,13 @@ export function parseHostArgs(argv: string[]): HostCommand {
         throw new Error("image name must be lower-case letters, digits and hyphens");
       }
       return { ...base, command, name, tar };
+    }
+    case "acme": {
+      const directory = positional[0];
+      if (positional.length !== 1 || (directory !== "staging" && directory !== "production")) {
+        throw new Error("acme needs one directory: staging|production");
+      }
+      return { ...base, command, directory };
     }
     case "maint": {
       const minutes = Number(positional[0]);
@@ -436,19 +452,234 @@ export function hostEnvSetCommand(key: string, value: string): string {
   ].join(" && ");
 }
 
+/** Writes KEY=value only when the key is absent, so a later choice is never reset. */
+export function hostEnvDefaultCommand(key: string, value: string): string {
+  if (!/^[A-Z][A-Z0-9_]*$/.test(key)) throw new Error("host.env: invalid key");
+  if (!/^[A-Za-z0-9._:/@-]*$/.test(value)) throw new Error(`host.env: invalid value for ${key}`);
+  const file = REMOTE.hostEnv;
+  return [
+    `install -d -m 0755 ${dirname(file)}`,
+    `touch ${file}`,
+    `chmod 0644 ${file}`,
+    `if ! grep -q '^${key}=' ${file}; then printf '%s\\n' '${key}=${value}' >> ${file}; fi`,
+  ].join(" && ");
+}
+
+/**
+ * Switches the ACME directory. The edge and its certificate store go with it:
+ * a certificate of the other directory must not be served or renewed. `up`
+ * afterwards starts the edge, which asks the new directory once.
+ */
+export function acmeCommands(directory: AcmeDirectory): string[] {
+  return [
+    hostEnvSetCommand("MYKEY_ACME_DIRECTORY", ACME_DIRECTORIES[directory]),
+    "docker rm --force mykey-edge-1 mykey-pki-init-1",
+    "docker volume rm --force mykey_acme",
+  ];
+}
+
+// ------------------------------------------------------------------- secrets
+
+/** The secrets a service on the host reads, each in a directory only that service's user can open. */
+export const HOST_SECRETS = {
+  postgresSuperuser: { path: REMOTE.pgSuperuserPassword, owner: "999:999" },
+  apiRuntime: { path: `${REMOTE.secretsDir}/api/db-password`, owner: "1000:1000" },
+} as const;
+
+/**
+ * Where the password of each database role is kept. Only a role that a
+ * service on the host logs in with is on the host; the others stay on the
+ * operator's workstation under ~/.mykey/secrets/hosts/<host>/.
+ */
+export const ROLE_PASSWORD_PLACE: Record<RoleName, "host" | "workstation"> = {
+  migration_owner: "workstation",
+  api_runtime: "host",
+  provisioner_runtime: "workstation",
+  backup_reader: "workstation",
+  maintenance: "workstation",
+};
+
+/** Installs stdin as a secret file under /etc/mykey/secrets/<service>/, owned by the service's user. */
+export function secretInstallCommand(path: string, owner: string): string {
+  const match = /^\/etc\/mykey\/secrets\/([a-z0-9-]+)\/[a-z0-9_-]+$/.exec(path);
+  if (match === null || !path.startsWith(`${REMOTE.secretsDir}/`)) {
+    throw new Error(`a host secret lives in ${REMOTE.secretsDir}/<service>/<name>`);
+  }
+  const ids = /^(\d+):(\d+)$/.exec(owner);
+  if (ids === null) throw new Error("owner must be uid:gid");
+  const own = `-o ${ids[1]} -g ${ids[2]}`;
+  return [
+    `install -d -m 0755 -o root -g root ${REMOTE.secretsDir}`,
+    `install -d -m 0700 ${own} ${dirname(path)}`,
+    `install -m 0400 ${own} /dev/stdin ${path}`,
+  ].join(" && ");
+}
+
+const newSecret = (): string => {
+  const fresh = randomBytes(24).toString("base64url");
+  registerSecret(fresh);
+  return fresh;
+};
+
+/** A secret kept on the workstation: created once (0600), the same value afterwards. */
+export function localSecret(file: string): string {
+  if (existsSync(file)) {
+    const existing = readFileSync(file, "utf8").trim();
+    if (existing !== "") {
+      registerSecret(existing);
+      return existing;
+    }
+  }
+  const fresh = newSecret();
+  mkdirSync(dirname(file), { recursive: true, mode: 0o700 });
+  writeFileSync(file, fresh, { mode: 0o600 });
+  chmodSync(file, 0o600);
+  return fresh;
+}
+
+export function workstationRoleSecretFile(
+  host: HostName,
+  role: RoleName,
+  home: string = homedir(),
+): string {
+  return join(home, ".mykey", "secrets", "hosts", host, role);
+}
+
+/** Reads a host secret, creating it first when it is absent. The value travels on stdin only. */
+async function hostSecret(
+  host: HostEntry,
+  secret: { path: string; owner: string },
+  address: Address,
+): Promise<string> {
+  const remote = { sudo: true, address, secretOutput: true } as const;
+  const read = await sshExec(
+    host,
+    `if test -s ${secret.path}; then cat ${secret.path}; fi`,
+    remote,
+  );
+  const existing = expectSuccess(read, `reading ${secret.path}`).stdout.trim();
+  if (existing !== "") return existing;
+  const fresh = newSecret();
+  expectSuccess(
+    await sshExec(host, secretInstallCommand(secret.path, secret.owner), {
+      ...remote,
+      stdin: fresh,
+    }),
+    `storing ${secret.path}`,
+  );
+  return fresh;
+}
+
+async function runUp(host: HostEntry, address: Address, log: Logger): Promise<void> {
+  for (const secret of Object.values(HOST_SECRETS)) await hostSecret(host, secret, address);
+  const pki = dirname(REMOTE.caCert);
+  expectSuccess(
+    await sshExec(host, `install -d -m 0755 -o root -g root ${pki}`, { sudo: true, address }),
+    `creating ${pki}`,
+  );
+  const result = await sshExec(host, `${COMPOSE} up -d`, {
+    sudo: true,
+    address,
+    timeoutMs: 600_000,
+  });
+  expectSuccess(result, "docker compose up");
+  log.info(`${host.name}: compose up done`);
+}
+
+// The route from the workstation to the hosts loses packets in the upload
+// direction, which holds one TCP stream near 40 kB/s. Several streams add up,
+// so an archive is sent as parts and put together on the host (run-2.5.md).
+const IMAGE_UPLOAD_PREFIX = "/var/tmp/mykey-image.";
+const IMAGE_PART_BYTES = 2 * 1024 * 1024;
+const IMAGE_UPLOAD_STREAMS = 8; // below sshd's MaxStartups of 10
+
+export interface ImagePart {
+  name: string;
+  start: number;
+  end: number;
+}
+
+export function imageParts(size: number, partBytes: number): ImagePart[] {
+  if (size <= 0) throw new Error("the image archive is empty");
+  const count = Math.ceil(size / partBytes);
+  if (count > 10_000) throw new Error("the image archive needs more than 10000 parts");
+  return Array.from({ length: count }, (_, index) => ({
+    name: `part-${String(index).padStart(4, "0")}`,
+    start: index * partBytes,
+    end: Math.min(size, (index + 1) * partBytes),
+  }));
+}
+
+/** Loads the uploaded parts, but only when together they have the checksum of the archive. */
+export function imageLoadCommand(directory: string, sha256: string): string {
+  if (!/^\/var\/tmp\/mykey-image\.[0-9a-f]{8}$/.test(directory)) {
+    throw new Error("image upload: unexpected directory");
+  }
+  if (!/^[0-9a-f]{64}$/.test(sha256)) throw new Error("image upload: sha256 expected");
+  const parts = `cat ${directory}/part-*`;
+  return `test "$(${parts} | sha256sum | cut -d ' ' -f 1)" = ${sha256} && ${parts} | docker load`;
+}
+
+/** Runs `work` for every item, at most `limit` at a time. After a failure nothing new starts. */
+export async function inParallel<T>(
+  items: readonly T[],
+  limit: number,
+  work: (item: T) => Promise<void>,
+): Promise<void> {
+  const queue = [...items];
+  let failed = false;
+  const worker = async (): Promise<void> => {
+    for (let item = queue.shift(); item !== undefined && !failed; item = queue.shift()) {
+      try {
+        await work(item);
+      } catch (error) {
+        failed = true;
+        throw error;
+      }
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(limit, queue.length) }, worker));
+}
+
 async function runImage(
   host: HostEntry,
   name: string,
   tar: string,
   opts: { address: Address; log: Logger },
 ): Promise<void> {
-  const loaded = await sshExec(host, "docker load", {
-    sudo: true,
-    stdin: readFileSync(tar),
-    address: opts.address,
-    timeoutMs: 900_000,
-  });
-  const output = expectSuccess(loaded, "docker load").stdout;
+  const archive = readFileSync(tar);
+  const sha = createHash("sha256").update(archive).digest("hex");
+  const directory = `${IMAGE_UPLOAD_PREFIX}${randomBytes(4).toString("hex")}`;
+  const remote = { sudo: true, address: opts.address } as const;
+  const parts = imageParts(archive.length, IMAGE_PART_BYTES);
+  expectSuccess(
+    await sshExec(host, `install -d -m 0700 -o root -g root ${directory}`, remote),
+    "creating the upload directory",
+  );
+  let output: string;
+  try {
+    let sent = 0;
+    await inParallel(parts, IMAGE_UPLOAD_STREAMS, async (part) => {
+      const upload = await sshExec(host, `cat > ${directory}/${part.name}`, {
+        ...remote,
+        stdin: archive.subarray(part.start, part.end),
+        timeoutMs: 900_000,
+      });
+      expectSuccess(upload, `uploading ${part.name}`);
+      sent += 1;
+      opts.log.info(`${host.name}: ${part.name} sent (${sent}/${parts.length})`);
+    });
+    const loaded = await sshExec(host, imageLoadCommand(directory, sha), {
+      ...remote,
+      timeoutMs: 900_000,
+    });
+    output = expectSuccess(loaded, "checksum and docker load").stdout;
+  } finally {
+    expectSuccess(
+      await sshExec(host, `rm -rf ${directory}`, remote),
+      "removing the upload directory",
+    );
+  }
   let id = imageIdFromLoadOutput(output);
   if (id === undefined) {
     const ref = /Loaded image: (\S+)/.exec(output)?.[1];
@@ -637,7 +868,7 @@ export function bootstrapCommands(
     hostEnvSetCommand("MYKEY_HOST", name),
     hostEnvSetCommand("MYKEY_HOSTNAME", host.hostname),
     hostEnvSetCommand("MYKEY_REGION", hosts.region),
-    hostEnvSetCommand("MYKEY_ACME_DIRECTORY", ACME_DIRECTORY),
+    hostEnvDefaultCommand("MYKEY_ACME_DIRECTORY", ACME_DIRECTORIES.staging),
     `${BOOTSTRAP}/10-packages.sh`,
     `env ${wireguardEnv} ${BOOTSTRAP}/20-wireguard.sh`,
     `${BOOTSTRAP}/40-sysctl.sh`,
@@ -672,37 +903,16 @@ async function runBootstrap(name: HostName, hosts: Hosts, log: Logger): Promise<
 
 // ------------------------------------------------------------------- db-init
 
-const ROLE_SECRET_DIR = `${REMOTE.secretsDir}/db-roles`;
-
-/** Reads a role password from the host, or creates it there (it travels on stdin only). */
-async function rolePassword(host: HostEntry, role: string, address: Address): Promise<string> {
-  const file = `${ROLE_SECRET_DIR}/${role}`;
-  const remote = { sudo: true, address, secretOutput: true } as const;
-  const read = await sshExec(host, `if test -f ${file}; then cat ${file}; fi`, remote);
-  const existing = expectSuccess(read, `reading the ${role} password`).stdout.trim();
-  if (existing !== "") return existing;
-  const fresh = randomBytes(24).toString("base64url");
-  registerSecret(fresh);
-  const install = `install -d -m 0700 -o root -g root ${ROLE_SECRET_DIR} && install -m 0400 -o root -g root /dev/stdin ${file}`;
-  expectSuccess(
-    await sshExec(host, install, { ...remote, stdin: fresh }),
-    `storing the ${role} password`,
-  );
-  return fresh;
-}
-
 async function runDbInit(host: HostEntry, address: Address, log: Logger): Promise<void> {
   const { ROLE_NAMES, applyRoles, migrate } = await import("@mykey/db");
-  const passwords = {} as Record<(typeof ROLE_NAMES)[number], string>;
-  for (const role of ROLE_NAMES) passwords[role] = await rolePassword(host, role, address);
-  const superuserPassword = expectSuccess(
-    await sshExec(host, `cat ${REMOTE.pgSuperuserPassword}`, {
-      sudo: true,
-      address,
-      secretOutput: true,
-    }),
-    "reading the PostgreSQL superuser password",
-  ).stdout.trim();
+  const passwords = {} as Record<RoleName, string>;
+  for (const role of ROLE_NAMES) {
+    passwords[role] =
+      ROLE_PASSWORD_PLACE[role] === "host"
+        ? await hostSecret(host, HOST_SECRETS.apiRuntime, address)
+        : localSecret(workstationRoleSecretFile(host.name, role));
+  }
+  const superuserPassword = await hostSecret(host, HOST_SECRETS.postgresSuperuser, address);
   const dir = mkdtempSync(join(tmpdir(), "mykey-db-init-"));
   const tunnel = await openTunnel(host, REMOTE.postgres);
   try {
@@ -771,13 +981,17 @@ async function main(argv: string[], log: Logger): Promise<number> {
       return 0;
     case "maint":
       return runMaint(host, command.minutes, command.argv, { address, log });
-    case "up": {
-      const up = `docker compose --env-file ${REMOTE.hostEnv} -f ${REMOTE.composeDir}/host.compose.yml -p mykey up -d`;
-      const result = await sshExec(host, up, { sudo: true, address, timeoutMs: 600_000 });
-      expectSuccess(result, "docker compose up");
-      log.info(`${host.name}: compose up done`);
+    case "acme": {
+      for (const step of acmeCommands(command.directory)) {
+        expectSuccess(await sshExec(host, step, { sudo: true, address }), "acme");
+      }
+      log.info(`${host.name}: ACME directory is ${ACME_DIRECTORIES[command.directory]}`);
+      log.info(`next: node scripts/host.ts ${host.name} up`);
       return 0;
     }
+    case "up":
+      await runUp(host, address, log);
+      return 0;
     case "db-init":
       await runDbInit(host, address, log);
       return 0;
