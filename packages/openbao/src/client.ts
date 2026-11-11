@@ -41,8 +41,12 @@ export type BaoFailureKind = "denied" | "not_found" | "cas_mismatch" | "sealed" 
 export type BaoResult<T> =
   | { ok: true; status: number; data: T }
   | { ok: false; kind: BaoFailureKind; status: number }
-  /** The request may have been applied. */
-  | { ok: false; kind: "unknown"; cause: "timeout" | "connection_lost" };
+  /**
+   * The request may have been applied: the deadline passed, the connection
+   * broke after the handshake, or a change got an answer that does not say
+   * (a 5xx other than 503, or a 2xx whose body cannot be read; ruling R8).
+   */
+  | { ok: false; kind: "unknown"; cause: "timeout" | "connection_lost" | "unclear_answer" };
 
 export interface TokenInfo {
   accessor: string;
@@ -199,17 +203,29 @@ function failureOf(status: number, body: unknown): Failure {
   return { ok: false, kind: "invalid", status };
 }
 
-/** Maps an outcome to a result; `read` turns a successful body into data, or null when malformed. */
+const UNCLEAR = { ok: false, kind: "unknown", cause: "unclear_answer" } as const;
+
+/**
+ * Maps an outcome to a result; `read` turns a successful body into data, or
+ * null when malformed. For a call that changes something (`change`), an answer
+ * that does not say whether it happened is `unknown/unclear_answer`, never
+ * `invalid` (Doc 10 §4.1 rule 3, ruling R8).
+ */
 function resultOf<T>(
   outcome: BaoOutcome,
   read: (body: unknown, status: number) => T | null,
+  kind: "read" | "change" = "read",
 ): BaoResult<T> {
   if (outcome.kind === "invalid") return { ok: false, kind: "invalid", status: 0 };
   if (outcome.kind === "unknown") return { ok: false, kind: "unknown", cause: outcome.cause };
   const { status, body } = outcome;
-  if (status !== 200 && status !== 204) return failureOf(status, body);
+  if (status !== 200 && status !== 204) {
+    if (kind === "change" && status >= 500 && status !== 503) return UNCLEAR;
+    return failureOf(status, body);
+  }
   const data = read(body, status);
-  return data === null ? { ok: false, kind: "invalid", status } : { ok: true, status, data };
+  if (data === null) return kind === "change" ? UNCLEAR : { ok: false, kind: "invalid", status };
+  return { ok: true, status, data };
 }
 
 const noContent = (): "none" => "none";
@@ -338,10 +354,14 @@ export class OpenBaoClient {
       body: { options: { cas }, data },
       correlation: c,
     });
-    return resultOf(outcome, (body) => {
-      const version = record(record(body).data).version;
-      return isNumber(version) ? { version } : null;
-    });
+    return resultOf(
+      outcome,
+      (body) => {
+        const version = record(record(body).data).version;
+        return isNumber(version) ? { version } : null;
+      },
+      "change",
+    );
   }
 
   async kvRead(
@@ -415,7 +435,7 @@ export class OpenBaoClient {
       body: { versions: [version] },
       correlation: c,
     });
-    return toNull(resultOf(outcome, noContent));
+    return toNull(resultOf(outcome, noContent, "change"));
   }
 
   async tokenCreateFromRole(
@@ -429,7 +449,7 @@ export class OpenBaoClient {
       body: { ttl: `${ttlSeconds}s`, policies: [role], no_default_policy: true },
       correlation: c,
     });
-    return resultOf(outcome, readIssuedToken);
+    return resultOf(outcome, readIssuedToken, "change");
   }
 
   async tokenLookupSelf(): Promise<BaoResult<TokenInfo>> {
@@ -446,7 +466,7 @@ export class OpenBaoClient {
       body: { accessor },
       correlation: c,
     });
-    return toNull(resultOf(outcome, noContent));
+    return toNull(resultOf(outcome, noContent, "change"));
   }
 
   async tokenRevokeSelf(): Promise<BaoResult<null>> {
