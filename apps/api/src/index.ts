@@ -8,6 +8,11 @@ export {
   type HealthReading,
 } from "./health.ts";
 export { createLogger, redactEntry, type LogEntry } from "./log.ts";
+export {
+  DISPATCH_INTERVAL_MS,
+  startOutboxDispatcher,
+  type OutboxDispatcher,
+} from "./outbox-dispatcher.ts";
 export { parseStrictJson } from "./pipeline/body.ts";
 export {
   GATE_MAX_BYTES,

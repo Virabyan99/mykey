@@ -9,6 +9,7 @@ import type { Hono } from "hono";
 import { createApp } from "./app.ts";
 import { createHealthCheck, type OpenBaoHealthTarget } from "./health.ts";
 import { createLogger, type LogEntry } from "./log.ts";
+import { startOutboxDispatcher } from "./outbox-dispatcher.ts";
 import type { ApiConfig, ApiEnv } from "./pipeline/context.ts";
 
 export interface ListenOptions {
@@ -80,9 +81,11 @@ export async function startServer(config: ServerConfig): Promise<ApiServer> {
     log: config.log,
   });
   const server = await listen(app, config);
+  const dispatcher = startOutboxDispatcher(pool, config.log);
   return {
     port: server.port,
     async close() {
+      await dispatcher.stop();
       await server.close();
       await health.close();
       await pool.end();

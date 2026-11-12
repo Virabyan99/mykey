@@ -9,12 +9,14 @@
 import { randomUUID } from "node:crypto";
 import { mkdtempSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import https from "node:https";
+import net from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   createApp,
   createHealthCheck,
   listen,
+  startOutboxDispatcher,
   type ApiConfig,
   type ApiServer,
   type Handler,
@@ -25,6 +27,7 @@ import { createPool } from "@mykey/db";
 import { ensureQueues } from "@mykey/operations";
 import type pg from "pg";
 import { prepareDatabase, type TestDatabase } from "../integration/database/setup.ts";
+import { getSharedStack, type Stack } from "./stack.ts";
 
 export type GateState = "open" | "closed" | "missing" | { raw: string };
 
@@ -39,6 +42,41 @@ export interface StartTestApiOptions {
   routes?: readonly TestRoute[];
   /** Overrides of the API configuration. */
   config?: Partial<ApiConfig>;
+  /** A stack the suite owns (default: the shared one). */
+  stack?: Stack;
+  /**
+   * Every connection to PostgreSQL goes through a local relay on a fixed port,
+   * which follows the container to its new published port after a restart.
+   */
+  relayDatabase?: boolean;
+  /** Start the outbox dispatcher, as the API process does (default true). */
+  dispatcher?: boolean;
+}
+
+/** A TCP relay to the stack's PostgreSQL, reading its current port for every connection. */
+async function startRelay(stack: Stack): Promise<{ port: number; close(): Promise<void> }> {
+  const sockets = new Set<net.Socket>();
+  const relay = net.createServer((client) => {
+    const upstream = net.connect({ host: stack.pg.host, port: stack.pg.port });
+    sockets.add(client);
+    sockets.add(upstream);
+    upstream.on("error", () => client.destroy());
+    client.on("error", () => upstream.destroy());
+    client.on("close", () => sockets.delete(client));
+    upstream.on("close", () => sockets.delete(upstream));
+    client.pipe(upstream).pipe(client);
+  });
+  await new Promise<void>((resolve) => relay.listen(0, "127.0.0.1", resolve));
+  return {
+    port: (relay.address() as net.AddressInfo).port,
+    close: () =>
+      new Promise<void>((resolve) => {
+        for (const socket of sockets) socket.destroy();
+        relay.close(() => {
+          resolve();
+        });
+      }),
+  };
 }
 
 export interface RequestInit {
@@ -69,11 +107,21 @@ export interface TestApi {
 export const TEST_ORIGIN = "https://mykey.test";
 
 export async function startTestApi(opts: StartTestApiOptions = {}): Promise<TestApi> {
-  const database = await prepareDatabase();
-  const cleanup: (() => Promise<void> | void)[] = [() => database.drop()];
+  const cleanup: (() => Promise<void> | void)[] = [];
   const release = async () => {
     for (const step of cleanup.reverse()) await step();
   };
+  let stack = opts.stack ?? (await getSharedStack());
+  if (opts.relayDatabase === true) {
+    const relay = await startRelay(stack);
+    cleanup.push(() => relay.close());
+    stack = { ...stack, pg: { ...stack.pg, host: "127.0.0.1", port: relay.port } };
+  }
+  const database = await prepareDatabase({ stack }).catch(async (error: unknown) => {
+    await release();
+    throw error;
+  });
+  cleanup.push(() => database.drop());
   try {
     await ensureQueues(database.pool("migration_owner"));
     const gateDirectory = mkdtempSync(join(tmpdir(), "mykey-gate-"));
@@ -130,6 +178,10 @@ export async function startTestApi(opts: StartTestApiOptions = {}): Promise<Test
       tls: { certPath: database.stack.api.certPath, keyPath: database.stack.api.keyPath },
     });
     cleanup.push(() => server.close());
+    if (opts.dispatcher !== false) {
+      const dispatcher = startOutboxDispatcher(pool, (entry) => logs.push(entry));
+      cleanup.push(() => dispatcher.stop());
+    }
     const ca = readFileSync(database.stack.api.certAuthorityPath);
 
     const request = (method: string, path: string, init: RequestInit = {}): Promise<Response> =>
