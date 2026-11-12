@@ -59,6 +59,126 @@
       "status": "OPEN",
       "evidence": ["docs/evidence/cost-sheet.md"],
       "note": "Started, nothing passed: rates looked up on 11 Nov 2026 and operations counted on a synthetic fixture. The size of a real pair is not known."
+    },
+    {
+      "id": "PO-3",
+      "status": "SPIKE_PASS",
+      "evidence": ["docs/evidence/session-2/run-2.1.md"],
+      "note": "G-BAO: 860-cell authority matrix with real tokens on the local stack; every deny has a matching allow. PASS needs the integrated product."
+    },
+    {
+      "id": "PO-2",
+      "status": "SPIKE_PASS",
+      "evidence": ["docs/evidence/session-2/run-2.2.md"],
+      "note": "G-BAO: fixed-role orphan issuance by a 60 s issuer on the local stack; overrides refused. PASS needs the product's issuer."
+    },
+    {
+      "id": "PO-5",
+      "status": "SPIKE_PASS",
+      "evidence": ["docs/evidence/session-2/run-2.3.md"],
+      "note": "G-AUTH: bootstrap-only auth on Better Auth 1.7.19 (local stack); sign-up refused; operator path creates the account."
+    },
+    {
+      "id": "PO-15",
+      "status": "SPIKE_PASS",
+      "evidence": ["docs/evidence/session-2/run-2.3.md"],
+      "note": "G-AUTH: protected session and factor storage proven on the local stack."
+    },
+    {
+      "id": "PO-16",
+      "status": "SPIKE_PASS",
+      "evidence": ["docs/evidence/session-2/run-2.4.md"],
+      "note": "G-EFFECT: delayed effects, replay and exclusion with real process death and sockets (spike executor, not the protocol)."
+    },
+    {
+      "id": "FR-1.70",
+      "status": "SPIKE_PASS",
+      "evidence": ["docs/evidence/session-2/run-2.5.md"],
+      "note": "Staging is a separate host built by the same tool and files as production."
+    },
+    {
+      "id": "FR-1.71",
+      "status": "SPIKE_PASS",
+      "evidence": ["docs/evidence/session-2/run-2.5.md"],
+      "note": "Every hop that exists in Session 2 is verified TLS; OpenBao added in Run 2.7."
+    },
+    {
+      "id": "FR-1.72",
+      "status": "SPIKE_PASS",
+      "evidence": ["docs/evidence/session-2/run-2.5.md"],
+      "note": "Host boundary on both hosts: default-deny firewall, VPN-only SSH, restricted containers."
+    },
+    {
+      "id": "AC-1.30",
+      "status": "SPIKE_PASS",
+      "evidence": ["docs/evidence/session-2/run-2.5.md"],
+      "note": "Public HTTPS with a valid chain, HSTS, TLS 1.2+ only."
+    },
+    {
+      "id": "AC-1.31",
+      "status": "SPIKE_PASS",
+      "evidence": ["docs/evidence/session-2/run-2.5.md"],
+      "note": "External exposure is 443/tcp plus the WireGuard port, scanned from outside."
+    },
+    {
+      "id": "PO-11",
+      "status": "SPIKE_PASS",
+      "evidence": ["docs/evidence/session-2/run-2.5.md"],
+      "note": "The API runs under Node's permission model, read-only, no capabilities."
+    },
+    {
+      "id": "PO-14",
+      "status": "SPIKE_PASS",
+      "evidence": ["docs/evidence/session-2/run-2.6.md"],
+      "note": "Off-host alert path on staging with the real Telegram channel; the Worker's own disappearance is Run 6.4."
+    },
+    {
+      "id": "FR-1.64",
+      "status": "SPIKE_PASS",
+      "evidence": ["docs/evidence/session-2/run-2.7.md"],
+      "note": "Unattended unseal from OVHcloud KMS on staging after restart, cold start and reboot; KMS outages behave as documented. Production at its first OpenBao start."
+    },
+    {
+      "id": "FR-1.65",
+      "status": "SPIKE_PASS",
+      "evidence": ["docs/evidence/session-2/run-2.7.md"],
+      "note": "KMS certificate replaced without the old one on staging."
+    },
+    {
+      "id": "AC-1.26",
+      "status": "SPIKE_PASS",
+      "evidence": ["docs/evidence/session-2/run-2.7.md"],
+      "note": "Revoked half proven on staging; the expired half is checkpoint kms-cert-expiry (from 12 Dec 2026 09:57 UTC)."
+    },
+    {
+      "id": "PO-1",
+      "status": "SPIKE_PASS",
+      "evidence": ["docs/evidence/session-2/run-2.7.md"],
+      "note": "Seal key never leaves the KMS; certificate key never leaves the host; no unseal key exists."
+    },
+    {
+      "id": "KMS-L1",
+      "status": "SPIKE_PASS",
+      "evidence": ["docs/evidence/session-2/run-2.7.md"],
+      "note": "Seal key lost: unrecoverable, proven on disposable instances in the losstest domain."
+    },
+    {
+      "id": "PO-13",
+      "status": "SPIKE_PASS",
+      "evidence": ["docs/evidence/session-2/run-2.9.md"],
+      "note": "One paired backup of staging captured at a boundary and restored into new stores (spike; owner runs in Session 6)."
+    },
+    {
+      "id": "PO-21",
+      "status": "SPIKE_PASS",
+      "evidence": ["docs/evidence/session-2/run-2.9.md"],
+      "note": "The bucket holds ciphertext only; a swapped manifest is refused (spike)."
+    },
+    {
+      "id": "DB-G1",
+      "status": "SPIKE_PASS",
+      "evidence": ["docs/evidence/session-2/run-2.9.md"],
+      "note": "Database globals re-created from roles.sql plus applyDatabaseAccess; matrix passes on the restored database (spike)."
     }
   ]
 }

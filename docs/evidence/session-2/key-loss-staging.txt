@@ -8,3 +8,11 @@
 2026-11-12T10:45:18.550Z restore on L-C: snapshot HTTP 400, snapshot-force HTTP 204, afterwards sealed=true, secret readable=false
 2026-11-12T10:45:18.551Z KMS-L1 SPIKE_PASS — seal key lost: UNRECOVERABLE, as Doc 04 says; a backup pair is only as recoverable as its seal key
 2026-11-12T10:45:49.698Z expiry: instance on L-B 64d8c056-de88-4404-bc78-7a70bbb3b4d6 with losstest-1day initialised, secret written, stopped; checkpoint not before 2026-12-12T09:57:34.000Z
+2026-11-12T12:53:13.336Z keys created and activated: L-A 436f2b46-8a77-45bb-816b-6fba1a36ba62, L-C c2c3e9cc-a0c1-4713-bfee-834f8d924a9f
+2026-11-12T12:53:34.080Z losstest: initialised on L-A, secret written, snapshot 19993 bytes
+2026-11-12T12:53:43.973Z L-A 436f2b46-8a77-45bb-816b-6fba1a36ba62 revoked and destroyed
+2026-11-12T12:54:48.547Z losstest restarted with L-A destroyed: never unsealed in 60 s
+2026-11-12T12:55:56.729Z losstest reconfigured to L-C: never unsealed in 60 s
+2026-11-12T12:55:56.964Z recovery key on sys/unseal: HTTP 400, not unsealed
+2026-11-12T12:57:21.278Z restore on L-C: snapshot HTTP 400, snapshot-force HTTP 204, afterwards sealed=true, secret readable=false
+2026-11-12T12:57:21.279Z KMS-L1 SPIKE_PASS — seal key lost: UNRECOVERABLE, as Doc 04 says; a backup pair is only as recoverable as its seal key

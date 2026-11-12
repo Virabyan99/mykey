@@ -4,3 +4,8 @@
 2026-11-11T20:07:44.401Z dead endpoint: health_failing delivered 232 s after edge stopped
 2026-11-11T20:09:31.899Z dead endpoint: resolved 356 s after edge stopped (restart at 300 s)
 2026-11-11T20:31:13.966Z sink failure: 24 attempts, none delivered, lastAlertAt null
+2026-11-12T13:11:47.247Z sink failure: 6 attempts, none delivered, lastAlertAt null
+2026-11-12T13:15:44.248Z blackout: heartbeat_missing delivered 211 s, health_failing delivered 211 s after the host went dark
+2026-11-12T13:20:35.975Z blackout: both resolved 521 s after the host went dark (restore at 480 s)
+2026-11-12T13:24:48.248Z dead endpoint: health_failing delivered 227 s after edge stopped
+2026-11-12T13:26:35.760Z dead endpoint: resolved 356 s after edge stopped (restart at 300 s)

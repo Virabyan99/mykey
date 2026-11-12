@@ -1,23 +1,23 @@
 # Outside scan of prod (mykey.nomikey.com, 40.160.47.48)
-# 2026-11-11T17:16:15.052Z, from the operator workstation over the internet (not the tunnel)
+# 2026-11-12T13:42:26.757Z, from the operator workstation over the internet (not the tunnel)
 # image: instrumentisto/nmap@sha256:96f6ed194519b62421a1a1c57809e65a7f94d2aa1c8c25676f247e5e148c0827
 # as deployed
 
 ## TCP, all ports
-Starting Nmap 7.98 ( https://nmap.org ) at 2026-11-11 17:13 +0000
+Starting Nmap 7.98 ( https://nmap.org ) at 2026-11-12 13:39 +0000
 Nmap scan report for 40.160.47.48
-Host is up (0.17s latency).
+Host is up (0.11s latency).
 Not shown: 65533 filtered tcp ports (no-response)
 PORT    STATE SERVICE
 53/tcp  open  domain
 443/tcp open  https
 
-Nmap done: 1 IP address (1 host up) scanned in 134.36 seconds
+Nmap done: 1 IP address (1 host up) scanned in 132.38 seconds
 
 ## UDP 51820,53,123,500
-Starting Nmap 7.98 ( https://nmap.org ) at 2026-11-11 17:16 +0000
+Starting Nmap 7.98 ( https://nmap.org ) at 2026-11-12 13:42 +0000
 Nmap scan report for 40.160.47.48
-Host is up (0.071s latency).
+Host is up (0.079s latency).
 
 PORT      STATE         SERVICE
 53/udp    open          domain
@@ -25,10 +25,10 @@ PORT      STATE         SERVICE
 500/udp   open|filtered isakmp
 51820/udp open|filtered unknown
 
-Nmap done: 1 IP address (1 host up) scanned in 2.36 seconds
+Nmap done: 1 IP address (1 host up) scanned in 2.55 seconds
 
 ## Control: 192.0.2.1 (TEST-NET-1, nothing listens there)
-Starting Nmap 7.98 ( https://nmap.org ) at 2026-11-11 17:16 +0000
+Starting Nmap 7.98 ( https://nmap.org ) at 2026-11-12 13:42 +0000
 Nmap scan report for 192.0.2.1
 Host is up.
 
@@ -36,10 +36,10 @@ PORT    STATE    SERVICE
 53/tcp  filtered domain
 443/tcp filtered https
 
-Nmap done: 1 IP address (1 host up) scanned in 3.60 seconds
-Starting Nmap 7.98 ( https://nmap.org ) at 2026-11-11 17:16 +0000
+Nmap done: 1 IP address (1 host up) scanned in 3.62 seconds
+Starting Nmap 7.98 ( https://nmap.org ) at 2026-11-12 13:42 +0000
 Nmap scan report for 192.0.2.1
-Host is up (0.066s latency).
+Host is up (0.079s latency).
 
 PORT      STATE         SERVICE
 53/udp    open          domain
@@ -47,14 +47,14 @@ PORT      STATE         SERVICE
 500/udp   open|filtered isakmp
 51820/udp open|filtered unknown
 
-Nmap done: 1 IP address (1 host up) scanned in 2.30 seconds
+Nmap done: 1 IP address (1 host up) scanned in 2.51 seconds
 
 ## Control, asked again
-Starting Nmap 7.98 ( https://nmap.org ) at 2026-11-11 17:16 +0000
+Starting Nmap 7.98 ( https://nmap.org ) at 2026-11-12 13:42 +0000
 Nmap scan report for 192.0.2.1
-Host is up (0.070s latency).
+Host is up (0.080s latency).
 
 PORT   STATE SERVICE
 53/tcp open  domain
 
-Nmap done: 1 IP address (1 host up) scanned in 0.64 seconds
+Nmap done: 1 IP address (1 host up) scanned in 0.70 seconds
