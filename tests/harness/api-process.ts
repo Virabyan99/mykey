@@ -29,6 +29,13 @@ const app = createApp({
   health: () => health.check(),
   log: () => undefined,
   auth: { auth, keys, throttle: createThrottle({ pool, ring: keys.rateLimit }) },
+  // TOTP codes are checked at the time a test sends (Run 3.4), as in tests/harness/api.ts.
+  test: {
+    clock: (headers: Headers) => {
+      const value = headers.get("x-test-now");
+      return value === null ? undefined : new Date(value);
+    },
+  },
 });
 const server = await listen(app, { hostname: "127.0.0.1", port: 0, tls: settings.tls });
 process.stdout.write(`${JSON.stringify({ port: server.port })}\n`);
