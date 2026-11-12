@@ -198,6 +198,17 @@
       "note": "test-only loader for the dotenv compatibility evidence"
     }
   },
+  "binaries": {
+    "okms-cli": {
+      "version": "0.6.0",
+      "asset": "okms-cli-linux-x86_64.tar.gz",
+      "sha256": "e31456da425b179917accf57739bee1c9c5b4f3355c262979adb743014b95bda",
+      "releaseUrl": "https://github.com/ovh/okms-cli/releases/tag/v0.6.0",
+      "licence": "Apache-2.0",
+      "advisoriesChecked": "2026-11-12",
+      "note": "operator tool for OVHcloud KMS (Run 2.7); ghcr.io/ovh/okms-cli refuses anonymous pulls, so the release archive is pinned and run in the pinned restic image"
+    }
+  },
   "python": {
     "python-dotenv": {
       "version": "1.2.4",

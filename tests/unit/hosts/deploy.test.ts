@@ -9,12 +9,18 @@ import {
   HOST_SECRETS,
   ROLE_PASSWORD_PLACE,
   acmeCommands,
+  baoInitCommand,
+  custodyCopyPath,
   bootstrapCommands,
   composeUpCommand,
   openBaoValuesFrom,
   hostEnvDefaultCommand,
   imageLoadCommand,
+  kmsCertCommand,
   kmsCsrCommands,
+  kmsUseCommand,
+  okmsCommand,
+  okmsInstallCommand,
   imageParts,
   inParallel,
   localSecret,
@@ -204,8 +210,101 @@ describe("kms-csr", () => {
     expect(create).toContain("-subj /CN=staging-seal-1");
     expect(create).toContain("-out /etc/mykey/kms-csr/staging-seal-1.csr");
     expect(create).toContain("chmod 0400 /etc/mykey/secrets/kms/staging-seal-1.key");
+    // OpenBao (uid 100) reads the directory through its bind mount; nobody else.
+    expect(create).toContain("install -d -m 0700 -o 100 -g 1000 /etc/mykey/secrets/kms");
+    expect(create).toContain("chown 100:1000 /etc/mykey/secrets/kms/staging-seal-1.key");
     expect(read).toBe("cat /etc/mykey/kms-csr/staging-seal-1.csr");
     expect(read).not.toContain("secrets");
+  });
+});
+
+// Run 2.7 Step 2: certificates, the okms tool and the KMS settings, staging only.
+describe("kms", () => {
+  it("parses kms-install, kms-cert, kms-use, kms and env, and refuses them for production", () => {
+    const base = { host: "staging", via: "vpn" };
+    expect(parseHostArgs(["staging", "kms-install", "C:/t/okms.tar.gz"])).toEqual({
+      ...base,
+      command: "kms-install",
+      tar: "C:/t/okms.tar.gz",
+    });
+    expect(parseHostArgs(["staging", "kms-cert", "staging-seal-1", "C:/k/s.crt"])).toEqual({
+      ...base,
+      command: "kms-cert",
+      name: "staging-seal-1",
+      crt: "C:/k/s.crt",
+    });
+    expect(parseHostArgs(["staging", "kms-use", "staging-seal-2"])).toEqual({
+      ...base,
+      command: "kms-use",
+      name: "staging-seal-2",
+    });
+    expect(
+      parseHostArgs(["staging", "kms", "staging-seal-1", "--", "kmip", "locate", "--details"]),
+    ).toEqual({
+      ...base,
+      command: "kms",
+      name: "staging-seal-1",
+      argv: ["kmip", "locate", "--details"],
+    });
+    expect(parseHostArgs(["staging", "env", "MYKEY_KMS_HOST", "us-east-vin.okms.ovh.us"])).toEqual({
+      ...base,
+      command: "env",
+      key: "MYKEY_KMS_HOST",
+      value: "us-east-vin.okms.ovh.us",
+    });
+    expect(() => parseHostArgs(["staging", "env", "API_IMAGE", "x"])).toThrow(/env/);
+    expect(() => parseHostArgs(["staging", "kms", "staging-seal-1"])).toThrow(/--/);
+    for (const argv of [
+      ["prod", "kms-cert", "a", "b"],
+      ["prod", "kms-use", "a"],
+      ["prod", "kms", "a", "--", "kmip", "locate"],
+      ["prod", "kms-install", "t"],
+      ["prod", "env", "MYKEY_OPENBAO", "1"],
+    ]) {
+      expect(() => parseHostArgs(argv), argv.join(" ")).toThrow(/production/);
+    }
+  });
+
+  it("installs okms only from an archive with the pinned checksum", () => {
+    const lock = JSON.parse(readFileSync("infra/dependencies.lock.json", "utf8")) as {
+      binaries: { "okms-cli": { sha256: string } };
+    };
+    const command = okmsInstallCommand("/var/tmp/mykey-okms.0123abcd.tar.gz");
+    expect(command).toContain(
+      `echo '${lock.binaries["okms-cli"].sha256}  /var/tmp/mykey-okms.0123abcd.tar.gz' | sha256sum -c`,
+    );
+    expect(command).toContain("install -m 0755 -o root -g root");
+    expect(command).toMatch(/\/opt\/mykey\/bin\/okms$/);
+    expect(() => okmsInstallCommand("/tmp/x;rm")).toThrow();
+  });
+
+  it("installs a certificate next to its key only when the two match, for OpenBao's uid", () => {
+    const command = kmsCertCommand("staging-seal-1");
+    const dir = "/etc/mykey/secrets/kms";
+    expect(command).toContain(`test -e ${dir}/staging-seal-1.key`);
+    expect(command).toContain(`install -d -m 0700 -o 100 -g 1000 ${dir}`);
+    expect(command).toContain(
+      `install -m 0444 -o 100 -g 1000 /dev/stdin ${dir}/staging-seal-1.crt.new`,
+    );
+    expect(command).toContain(`openssl x509 -in ${dir}/staging-seal-1.crt.new -noout -pubkey`);
+    expect(command).toContain(`openssl pkey -in ${dir}/staging-seal-1.key -pubout`);
+    expect(command).toContain(`mv ${dir}/staging-seal-1.crt.new ${dir}/staging-seal-1.crt`);
+    expect(command).toContain(`chown 100:1000 ${dir}/staging-seal-1.key`);
+  });
+
+  it("points seal.crt and seal.key at one certificate with relative links", () => {
+    const command = kmsUseCommand("staging-seal-2");
+    expect(command).toContain("test -e /etc/mykey/secrets/kms/staging-seal-2.crt");
+    expect(command).toContain("ln -sfn staging-seal-2.crt /etc/mykey/secrets/kms/seal.crt");
+    expect(command).toContain("ln -sfn staging-seal-2.key /etc/mykey/secrets/kms/seal.key");
+  });
+
+  it("runs okms through the host script, so the command never names the secrets directory", () => {
+    expect(okmsCommand("staging-seal-1", ["kmip", "locate", "--details"])).toBe(
+      "/opt/mykey/hosts/kms/okms.sh staging-seal-1 kmip locate --details",
+    );
+    expect(okmsCommand("staging-seal-1", ["kmip", "locate"])).not.toContain("secrets");
+    expect(() => okmsCommand("staging-seal-1", ["kmip", "$(id)"])).toThrow(/argument/);
   });
 });
 
@@ -231,5 +330,36 @@ describe("up", () => {
     });
     expect(openBaoValuesFrom("prod", {})).toBeNull();
     expect(() => openBaoValuesFrom("staging", { MYKEY_OPENBAO: "1" })).toThrow(/MYKEY_KMS_HOST/);
+  });
+});
+
+// Run 2.7 Step 4: initialisation on the host; its answer never crosses the terminal.
+describe("bao-init", () => {
+  it("parses for staging only", () => {
+    expect(parseHostArgs(["staging", "bao-init"])).toEqual({
+      host: "staging",
+      via: "vpn",
+      command: "bao-init",
+    });
+    expect(() => parseHostArgs(["prod", "bao-init"])).toThrow(/production/);
+  });
+
+  it("initialises once, with one recovery share, into root's custody file, and prints only a count", () => {
+    const command = baoInitCommand();
+    expect(command).toContain("install -d -m 0700 -o root -g root /root/mykey-custody");
+    expect(command).toContain("test ! -e /root/mykey-custody/openbao-init.json");
+    expect(command).toContain('{"recovery_shares":1,"recovery_threshold":1}');
+    expect(command).toContain("--cacert /etc/mykey/pki/ca.crt --resolve openbao:8200:10.78.3.2");
+    expect(command).toContain("https://openbao:8200/v1/sys/init");
+    expect(command).toContain("chmod 0400 /root/mykey-custody/openbao-init.json");
+    expect(command).toMatch(
+      /jq -r '\.recovery_keys_b64 \| length' \/root\/mykey-custody\/openbao-init\.json$/,
+    );
+  });
+
+  it("keeps the workstation copy beside the other custody files, never overwritten", () => {
+    expect(custodyCopyPath("staging", "/home/u")).toBe(
+      join("/home/u", ".mykey", "custody", "staging", "openbao-init.json"),
+    );
   });
 });

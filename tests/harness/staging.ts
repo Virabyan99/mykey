@@ -575,6 +575,21 @@ export async function connectStaging(opts: { openbao?: boolean } = {}): Promise<
     "reading the PostgreSQL superuser password",
   ).stdout.trim();
 
+  // Run 2.7: the root token comes from the workstation's custody copy of the
+  // init answer (host.ts staging bao-init); registered so it is never printed.
+  let rootToken = "";
+  if (opts.openbao === true) {
+    const custody = join(homedir(), ".mykey", "custody", "staging", "openbao-init.json");
+    if (!existsSync(custody)) {
+      throw new Error(`no ${custody}: run node scripts/host.ts staging bao-init first`);
+    }
+    const token = (JSON.parse(readFileSync(custody, "utf8")) as { root_token?: unknown })
+      .root_token;
+    if (typeof token !== "string" || token === "") throw new Error(`${custody}: no root token`);
+    registerSecret(token);
+    rootToken = token;
+  }
+
   let tunnels: Tunnel[] = [];
   const stack = {
     project: "staging",
@@ -586,8 +601,7 @@ export async function connectStaging(opts: { openbao?: boolean } = {}): Promise<
       superuser: { user: "postgres", password },
       caCertPath,
     },
-    // The token is supplied from Run 2.7 on, when staging gets OpenBao.
-    bao: { url: "", caCertPath, rootToken: "" },
+    bao: { url: "", caCertPath, rootToken },
   };
   const openTunnels = async (): Promise<void> => {
     const pg = await openTunnel(host, REMOTE.postgres);

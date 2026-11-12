@@ -96,19 +96,43 @@ export const USAGE = `usage: node scripts/host.ts <staging|prod> <command> [--pu
   maint <minutes> -- <command>   open registry egress, run the command, close it
   acme <staging|production>      choose the Let's Encrypt directory; drops the edge's certificates
   kms-csr <name>                 new EC key on the host (kept there) and its CSR, printed
+  kms-install <tar>              okms from the pinned release archive (staging only)
+  kms-cert <name> <crt>          install a KMS certificate next to its key (staging only)
+  kms-use <name>                 point seal.crt/seal.key at that certificate (staging only)
+  kms <name> -- <okms args>      run okms with that certificate (staging only)
+  env <key> <value>              set an OpenBao/KMS setting in host.env (staging only)
   up                             create missing host secrets, then docker compose up -d
   db-init                        roles and migrations through an SSH tunnel
+  bao-init                       initialise OpenBao once; custody copy; root-namespace setup (staging only)
   status                         print the host status as JSON
 --public uses the public address instead of the VPN (bootstrap always does).`;
 
 export type HostCommand = { host: HostName; via: Address } & (
-  | { command: "bootstrap" | "push" | "confirm" | "up" | "db-init" | "status" }
+  | { command: "bootstrap" | "push" | "confirm" | "up" | "db-init" | "status" | "bao-init" }
   | { command: "apply"; target: "firewall" | "ssh" }
   | { command: "image"; name: string; tar: string }
   | { command: "acme"; directory: AcmeDirectory }
   | { command: "kms-csr"; name: string }
+  | { command: "kms-install"; tar: string }
+  | { command: "kms-cert"; name: string; crt: string }
+  | { command: "kms-use"; name: string }
+  | { command: "kms"; name: string; argv: string[] }
+  | { command: "env"; key: OpenBaoEnvKey; value: string }
   | { command: "maint"; minutes: number; argv: string[] }
 );
+
+/** The host.env settings `env` may write: OpenBao and its KMS (Run 2.7). */
+export const OPENBAO_ENV_KEYS = [
+  "MYKEY_OPENBAO",
+  "MYKEY_KMS_HOST",
+  "MYKEY_KMS_SEAL_KEY_ID",
+  "MYKEY_BAO_URL",
+] as const;
+export type OpenBaoEnvKey = (typeof OPENBAO_ENV_KEYS)[number];
+
+/** Production holds no OpenBao and no KMS material in Session 2. */
+const STAGING_ONLY = new Set(["kms-install", "kms-cert", "kms-use", "kms", "env", "bao-init"]);
+const CERT_NAME = /^[a-z][a-z0-9-]{0,39}$/;
 
 export function parseHostArgs(argv: string[]): HostCommand {
   const [host, command, ...rest] = argv;
@@ -116,11 +140,14 @@ export function parseHostArgs(argv: string[]): HostCommand {
   if (host !== "staging" && host !== "prod") {
     throw new Error(`unknown host "${host}": use staging or prod`);
   }
+  if (host === "prod" && STAGING_ONLY.has(command)) {
+    throw new Error(`${command}: production holds no OpenBao or KMS material in Session 2`);
+  }
   let words = rest;
   let tail: string[] = [];
-  if (command === "maint") {
+  if (command === "maint" || command === "kms") {
     const separator = rest.indexOf("--");
-    if (separator < 0) throw new Error("maint needs -- before the command");
+    if (separator < 0) throw new Error(`${command} needs -- before the command`);
     words = rest.slice(0, separator);
     tail = rest.slice(separator + 1);
   }
@@ -138,6 +165,7 @@ export function parseHostArgs(argv: string[]): HostCommand {
     case "up":
     case "db-init":
     case "status":
+    case "bao-init":
       if (positional.length !== 0) throw new Error(USAGE);
       return { ...base, command };
     case "apply": {
@@ -169,6 +197,49 @@ export function parseHostArgs(argv: string[]): HostCommand {
         throw new Error("kms-csr needs one certificate name: lower-case letters, digits, hyphens");
       }
       return { ...base, command, name };
+    }
+    case "kms-install": {
+      const tar = positional[0];
+      if (positional.length !== 1 || tar === undefined) throw new Error("kms-install needs <tar>");
+      return { ...base, command, tar };
+    }
+    case "kms-cert": {
+      const [name, crt] = positional;
+      if (
+        positional.length !== 2 ||
+        name === undefined ||
+        crt === undefined ||
+        !CERT_NAME.test(name)
+      ) {
+        throw new Error("kms-cert needs <name> <certificate file>");
+      }
+      return { ...base, command, name, crt };
+    }
+    case "kms-use": {
+      const name = positional[0];
+      if (positional.length !== 1 || name === undefined || !CERT_NAME.test(name)) {
+        throw new Error("kms-use needs one certificate name");
+      }
+      return { ...base, command, name };
+    }
+    case "kms": {
+      const name = positional[0];
+      if (positional.length !== 1 || name === undefined || !CERT_NAME.test(name)) {
+        throw new Error("kms needs one certificate name before --");
+      }
+      if (tail.length === 0) throw new Error("kms needs okms arguments after --");
+      return { ...base, command, name, argv: tail };
+    }
+    case "env": {
+      const [key, value] = positional;
+      if (
+        positional.length !== 2 ||
+        value === undefined ||
+        !(OPENBAO_ENV_KEYS as readonly string[]).includes(key ?? "")
+      ) {
+        throw new Error(`env needs <key> <value>; keys: ${OPENBAO_ENV_KEYS.join(", ")}`);
+      }
+      return { ...base, command, key: key as OpenBaoEnvKey, value };
     }
     case "maint": {
       const minutes = Number(positional[0]);
@@ -510,21 +581,111 @@ export function renderOpenBaoConfig(values: OpenBaoConfigValues): string {
     .replaceAll("{{max_request_duration}}", values.maxRequestDuration);
 }
 
+/** OpenBao's uid:gid in the pinned image; it reads the KMS directory through a bind mount. */
+const OPENBAO_OWNER = "100:1000";
+const KMS_DIR = `${REMOTE.secretsDir}/kms`;
+const OKMS_BINARY = "/opt/mykey/bin/okms";
+
 export function kmsCsrCommands(name: string): { create: string; read: string } {
-  if (!/^[a-z][a-z0-9-]{0,39}$/.test(name)) throw new Error("invalid certificate name");
-  const key = `${REMOTE.secretsDir}/kms/${name}.key`;
+  if (!CERT_NAME.test(name)) throw new Error("invalid certificate name");
+  const key = `${KMS_DIR}/${name}.key`;
   const csr = `/etc/mykey/kms-csr/${name}.csr`;
+  const [uid, gid] = OPENBAO_OWNER.split(":");
   return {
     create: [
-      `install -d -m 0700 -o root -g root ${REMOTE.secretsDir}/kms`,
+      `install -d -m 0700 -o ${uid} -g ${gid} ${KMS_DIR}`,
       "install -d -m 0755 -o root -g root /etc/mykey/kms-csr",
       `test ! -e ${key}`,
       `(umask 077 && openssl req -new -newkey ec -pkeyopt ec_paramgen_curve:prime256v1 -nodes -keyout ${key} -out ${csr} -subj /CN=${name} 2>/dev/null)`,
+      `chown ${OPENBAO_OWNER} ${key}`,
       `chmod 0400 ${key}`,
       `chmod 0644 ${csr}`,
     ].join(" && "),
     read: `cat ${csr}`,
   };
+}
+
+/** Unpacks okms from the uploaded release archive, only when it has the pinned checksum. */
+export function okmsInstallCommand(archive: string): string {
+  if (!/^\/var\/tmp\/mykey-okms\.[0-9a-f]{8}\.tar\.gz$/.test(archive)) {
+    throw new Error("kms-install: unexpected archive path");
+  }
+  const lock = JSON.parse(
+    readFileSync(join(REPOSITORY, "infra/dependencies.lock.json"), "utf8"),
+  ) as { binaries?: { "okms-cli"?: { sha256: string } } };
+  const sha256 = lock.binaries?.["okms-cli"]?.sha256;
+  if (sha256 === undefined || !/^[0-9a-f]{64}$/.test(sha256)) {
+    throw new Error("dependencies.lock.json has no binaries.okms-cli.sha256");
+  }
+  const work = archive.replace(/\.tar\.gz$/, "");
+  return [
+    `echo '${sha256}  ${archive}' | sha256sum -c --quiet`,
+    `install -d -m 0700 ${work}`,
+    `tar -xzf ${archive} -C ${work} okms`,
+    "install -d -m 0755 -o root -g root /opt/mykey/bin",
+    `install -m 0755 -o root -g root ${work}/okms ${OKMS_BINARY}`,
+  ].join(" && ");
+}
+
+/** Installs <name>.crt (from stdin) next to its key, only when the two belong together. */
+export function kmsCertCommand(name: string): string {
+  if (!CERT_NAME.test(name)) throw new Error("invalid certificate name");
+  const [uid, gid] = OPENBAO_OWNER.split(":");
+  const key = `${KMS_DIR}/${name}.key`;
+  const crt = `${KMS_DIR}/${name}.crt`;
+  return [
+    `test -e ${key}`,
+    `install -d -m 0700 -o ${uid} -g ${gid} ${KMS_DIR}`,
+    `install -m 0444 -o ${uid} -g ${gid} /dev/stdin ${crt}.new`,
+    `{ [ "$(openssl x509 -in ${crt}.new -noout -pubkey | sha256sum)" = "$(openssl pkey -in ${key} -pubout | sha256sum)" ] || { rm -f ${crt}.new; echo 'certificate does not match the key' >&2; exit 1; }; }`,
+    `mv ${crt}.new ${crt}`,
+    `chown ${OPENBAO_OWNER} ${key}`,
+    `chmod 0400 ${key}`,
+  ].join(" && ");
+}
+
+/** seal.crt / seal.key, which OpenBao's configuration names, point at one certificate. */
+export function kmsUseCommand(name: string): string {
+  if (!CERT_NAME.test(name)) throw new Error("invalid certificate name");
+  return [
+    `test -e ${KMS_DIR}/${name}.crt`,
+    `test -e ${KMS_DIR}/${name}.key`,
+    `ln -sfn ${name}.crt ${KMS_DIR}/seal.crt`,
+    `ln -sfn ${name}.key ${KMS_DIR}/seal.key`,
+  ].join(" && ");
+}
+
+const BAO_INIT_FILE = `${REMOTE.custodyDir}/openbao-init.json`;
+
+/**
+ * P-35: `sys/init` on the host with one recovery share. The answer (root token
+ * and recovery key) goes straight into root's custody file; the command prints
+ * only the number of recovery keys. Refuses to run twice.
+ */
+export function baoInitCommand(): string {
+  const { address, port } = REMOTE.openbao;
+  return [
+    `install -d -m 0700 -o root -g root ${REMOTE.custodyDir}`,
+    `test ! -e ${BAO_INIT_FILE}`,
+    `(umask 077 && curl --fail --silent --show-error --max-time 60 --cacert ${REMOTE.caCert} --resolve openbao:${port}:${address} -X PUT --data '{"recovery_shares":1,"recovery_threshold":1}' https://openbao:${port}/v1/sys/init > ${BAO_INIT_FILE}.new)`,
+    `mv ${BAO_INIT_FILE}.new ${BAO_INIT_FILE}`,
+    `chmod 0400 ${BAO_INIT_FILE}`,
+    `jq -r '.recovery_keys_b64 | length' ${BAO_INIT_FILE}`,
+  ].join(" && ");
+}
+
+/** The workstation's copy of a host's init answer (P-35). */
+export function custodyCopyPath(host: HostName, home: string = homedir()): string {
+  return join(home, ".mykey", "custody", host, "openbao-init.json");
+}
+
+/** okms with one certificate, through infra/hosts/kms/okms.sh (prints identifiers, not secrets). */
+export function okmsCommand(name: string, argv: string[]): string {
+  if (!CERT_NAME.test(name)) throw new Error("invalid certificate name");
+  for (const arg of argv) {
+    if (!/^[A-Za-z0-9_.,:=@/-]+$/.test(arg)) throw new Error(`kms: unexpected argument ${arg}`);
+  }
+  return [`${REMOTE.hostsDir}/kms/okms.sh`, name, ...argv].join(" ");
 }
 
 export function acmeCommands(directory: AcmeDirectory): string[] {
@@ -1036,6 +1197,78 @@ async function runDbInit(host: HostEntry, address: Address, log: Logger): Promis
   }
 }
 
+/** Waits until OpenBao answers sys/health with 200 (initialised, unsealed, active). */
+async function waitForOpenBao(host: HostEntry, address: Address, seconds: number): Promise<void> {
+  const { address: ip, port } = REMOTE.openbao;
+  const probe = `curl -s -o /dev/null -w '%{http_code}' --max-time 5 --cacert ${REMOTE.caCert} --resolve openbao:${port}:${ip} https://openbao:${port}/v1/sys/health`;
+  const deadline = Date.now() + seconds * 1000;
+  for (;;) {
+    const result = await sshExec(host, probe, { sudo: true, address });
+    if (result.stdout.trim() === "200") return;
+    if (Date.now() > deadline) {
+      throw new Error(`OpenBao sys/health: ${result.stdout.trim()} after ${seconds} s`);
+    }
+    await new Promise((resolveWait) => setTimeout(resolveWait, 2_000));
+  }
+}
+
+/**
+ * P-35: init once on the host, copy the answer unseen to the workstation's
+ * custody directory, then the root-namespace setup (audit headers, the backup
+ * policy) with the root token through a tunnel. Safe to run again.
+ */
+async function runBaoInit(host: HostEntry, address: Address, log: Logger): Promise<void> {
+  const remote = { sudo: true, address, secretOutput: true } as const;
+  if ((await sshExec(host, `test -e ${BAO_INIT_FILE}`, remote)).code === 0) {
+    log.info(`${host.name}: already initialised; checking custody and the root-namespace setup`);
+  } else {
+    const count = expectSuccess(
+      await sshExec(host, baoInitCommand(), { ...remote, timeoutMs: 120_000 }),
+      "bao-init",
+    ).stdout.trim();
+    log.info(`${host.name}: initialized: true, recovery keys: ${count}`);
+  }
+  const answer = expectSuccess(
+    await sshExec(host, `cat ${BAO_INIT_FILE}`, remote),
+    "reading the init answer",
+  ).stdout;
+  const rootToken = (JSON.parse(answer) as { root_token?: unknown }).root_token;
+  if (typeof rootToken !== "string" || rootToken === "") {
+    throw new Error("the init answer has no root token");
+  }
+  const copy = custodyCopyPath(host.name);
+  mkdirSync(dirname(copy), { recursive: true, mode: 0o700 });
+  if (!existsSync(copy)) writeFileSync(copy, answer, { mode: 0o600, flag: "wx" });
+  else if (readFileSync(copy, "utf8") !== answer) {
+    throw new Error(`${copy} differs from the host's init answer; it is never overwritten`);
+  }
+  log.info(`${host.name}: custody copy at ${copy}`);
+
+  await waitForOpenBao(host, address, 120);
+  const { OpenBaoAdmin } = await import("@mykey/openbao/admin");
+  const { renderPolicy } = await import("@mykey/openbao");
+  const dir = mkdtempSync(join(tmpdir(), "mykey-bao-init-"));
+  const tunnel = await openTunnel(host, REMOTE.openbao);
+  try {
+    const caCertPath = join(dir, "ca.crt");
+    writeFileSync(
+      caCertPath,
+      expectSuccess(await sshExec(host, `cat ${REMOTE.caCert}`, { address }), "reading the host CA")
+        .stdout,
+    );
+    const admin = new OpenBaoAdmin(
+      { url: `https://127.0.0.1:${tunnel.localPort}`, caCertPath },
+      rootToken,
+    );
+    await admin.registerAuditHeaders();
+    await admin.putPolicy("", "backup", renderPolicy("backup"));
+    log.info(`${host.name}: audit headers registered; root-namespace policy backup written`);
+  } finally {
+    await tunnel.close();
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
 // ---------------------------------------------------------------------- main
 
 async function main(argv: string[], log: Logger): Promise<number> {
@@ -1098,11 +1331,76 @@ async function main(argv: string[], log: Logger): Promise<number> {
       );
       return 0;
     }
+    case "kms-install": {
+      const archive = `/var/tmp/mykey-okms.${randomBytes(4).toString("hex")}.tar.gz`;
+      const remote = { sudo: true, address, timeoutMs: 300_000 } as const;
+      try {
+        expectSuccess(
+          await sshExec(host, `(umask 077 && cat > ${archive})`, {
+            ...remote,
+            stdin: readFileSync(command.tar),
+          }),
+          "uploading the okms archive",
+        );
+        expectSuccess(
+          await sshExec(host, okmsInstallCommand(archive), remote),
+          "checksum and install",
+        );
+      } finally {
+        await sshExec(host, `rm -rf ${archive} ${archive.replace(/\.tar\.gz$/, "")}`, remote);
+      }
+      log.info(`${host.name}: okms installed (checksum of the pinned release)`);
+      return 0;
+    }
+    case "kms-cert":
+      // Names the secrets directory; prints nothing. The certificate is public.
+      expectSuccess(
+        await sshExec(host, kmsCertCommand(command.name), {
+          sudo: true,
+          address,
+          secretOutput: true,
+          stdin: readFileSync(command.crt, "utf8"),
+        }),
+        `kms-cert ${command.name}`,
+      );
+      log.info(`${host.name}: certificate ${command.name} installed next to its key`);
+      return 0;
+    case "kms-use":
+      expectSuccess(
+        await sshExec(host, kmsUseCommand(command.name), {
+          sudo: true,
+          address,
+          secretOutput: true,
+        }),
+        `kms-use ${command.name}`,
+      );
+      log.info(`${host.name}: seal.crt and seal.key now point at ${command.name}`);
+      return 0;
+    case "kms": {
+      const result = await sshExec(host, okmsCommand(command.name, command.argv), {
+        sudo: true,
+        address,
+        timeoutMs: 120_000,
+      });
+      if (result.stdout !== "") log.info(redact(result.stdout).trimEnd());
+      if (result.stderr !== "") log.error(redact(result.stderr).trimEnd());
+      return result.code;
+    }
+    case "env":
+      expectSuccess(
+        await sshExec(host, hostEnvSetCommand(command.key, command.value), { sudo: true, address }),
+        `env ${command.key}`,
+      );
+      log.info(`${host.name}: ${command.key}=${command.value}`);
+      return 0;
     case "up":
       await runUp(host, address, log);
       return 0;
     case "db-init":
       await runDbInit(host, address, log);
+      return 0;
+    case "bao-init":
+      await runBaoInit(host, address, log);
       return 0;
     case "status":
       log.info(JSON.stringify(await hostStatus(host, address), null, 2));

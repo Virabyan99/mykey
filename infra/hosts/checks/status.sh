@@ -66,9 +66,12 @@ PKI_IMAGE=postgres@sha256:e3d24f6906d0760bf4da0dae872415391ededefad23fd471c47dc5
 kms_reachable=null
 if [ -n "${MYKEY_KMS_HOST:-}" ] && [ -e /etc/mykey/secrets/kms/seal.crt ] &&
 	docker network inspect mykey_kms >/dev/null 2>&1; then
-	if timeout 20 docker run --rm --network mykey_kms --read-only --cap-drop ALL \
-		--security-opt no-new-privileges -v /etc/mykey/secrets/kms:/kms:ro --entrypoint openssl "$PKI_IMAGE" \
-		s_client -connect "$MYKEY_KMS_HOST:5696" -servername "$MYKEY_KMS_HOST" -verify_return_error \
+	# As OpenBao's uid, which owns the KMS directory (Run 2.7). The image has no
+	# CA bundle; the host's is mounted, and verification stays on.
+	if timeout 20 docker run --rm --network mykey_kms --user 100:1000 --read-only --cap-drop ALL \
+		--security-opt no-new-privileges -v /etc/mykey/secrets/kms:/kms:ro \
+		-v /etc/ssl/certs/ca-certificates.crt:/roots.pem:ro --entrypoint openssl "$PKI_IMAGE" \
+		s_client -connect "$MYKEY_KMS_HOST:5696" -servername "$MYKEY_KMS_HOST" -verify_return_error -CAfile /roots.pem \
 		-cert /kms/seal.crt -key /kms/seal.key </dev/null >/dev/null 2>&1; then
 		kms_reachable=true
 	else

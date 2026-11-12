@@ -1,0 +1,4 @@
+# Run 2.7 unseal drills on staging (appended)
+2026-11-12T09:56:42.410Z seal-status type=kmip version=2.7.2
+2026-11-12T09:56:54.586Z container restart: unsealed and readable after 1179 ms
+2026-11-12T09:57:10.961Z cold start (container removed, volume kept): unsealed and readable after 1116 ms
