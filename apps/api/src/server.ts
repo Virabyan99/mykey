@@ -156,7 +156,7 @@ export function configFromEnvironment(env: NodeJS.ProcessEnv): Omit<ServerConfig
     ...(env.MYKEY_BAO_URL === undefined || env.MYKEY_BAO_URL === ""
       ? {}
       : { openbao: { url: env.MYKEY_BAO_URL, caCertPath: required(env, "MYKEY_BAO_CA_FILE") } }),
-    keysDirectory: env.MYKEY_KEYS_DIR ?? "/run/mykey/keys",
+    keysDirectory: env.MYKEY_AUTH_RINGS_DIR ?? "/run/mykey/keys",
     api: {
       baseUrl,
       build,
