@@ -10,6 +10,7 @@ import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { drizzle, type NodePgDatabase } from "drizzle-orm/node-postgres";
 import pg from "pg";
 import { ephemeralKeys, type AuthKeys } from "./keys.ts";
+import { PASSWORD_MAX_CHARACTERS, PASSWORD_MIN_CHARACTERS } from "./password-rule.ts";
 import { protectedAdapter } from "./protected-adapter.ts";
 
 export interface AuthDeps {
@@ -46,7 +47,13 @@ export function authOptions(deps: AuthDeps) {
     basePath: AUTH_BASE_PATH,
     secret: deps.keys.cookieSecret,
     database: protectedAdapter(observed, deps.keys.sessionLookup),
-    emailAndPassword: { enabled: true, disableSignUp: true },
+    // P-46: Better Auth's default maximum (128) would refuse passwords the product allows.
+    emailAndPassword: {
+      enabled: true,
+      disableSignUp: true,
+      minPasswordLength: PASSWORD_MIN_CHARACTERS,
+      maxPasswordLength: PASSWORD_MAX_CHARACTERS,
+    },
     session: {
       expiresIn: LIMITS.session.absoluteSeconds,
       disableSessionRefresh: true,

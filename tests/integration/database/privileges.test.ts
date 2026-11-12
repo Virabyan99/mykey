@@ -200,6 +200,12 @@ const CASES: Case[] = [
   ],
   ["maintenance", "cannot remove a user", "DELETE FROM auth.user", DENIED],
   ["maintenance", "inserts an audit event", auditInsert, "ok"],
+  [
+    "api_runtime",
+    "cannot create a user (Run 3.2)",
+    "INSERT INTO auth.user (id, name, email) VALUES (gen_random_uuid(), 'n', 'api-case@example.invalid')",
+    DENIED,
+  ],
   ["api_runtime", "cannot create a table in jobs", "CREATE TABLE jobs.x ()", DENIED],
   ["provisioner_runtime", "cannot create a table in jobs", "CREATE TABLE jobs.x ()", DENIED],
   ["api_runtime", "cannot remove a queue", "DELETE FROM jobs.queue", DENIED],

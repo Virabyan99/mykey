@@ -101,8 +101,9 @@ export const TABLES: Record<string, Expected> = {
   // UPDATE by column as in app; never id, user_id, created_at, a stored verifier
   // or a session's authenticated_at.
   // maintenance (Run 3.1, P-45): the owner bootstrap and the operator reset.
+  // Run 3.2 (migration 0005): only maintenance creates users and credential accounts.
   "auth.user": {
-    api: [S, I, D],
+    api: [S, D],
     provisioner: [],
     apiColumns: ["name", "email", "email_verified", "image", "updated_at"],
     maintenance: [S, I],
@@ -124,7 +125,7 @@ export const TABLES: Record<string, Expected> = {
     ],
   },
   "auth.account": {
-    api: [S, I, D],
+    api: [S, D],
     provisioner: [],
     apiColumns: ["password", "updated_at"],
     maintenance: [S, I],

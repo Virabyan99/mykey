@@ -184,6 +184,9 @@ importers:
 
   packages/auth:
     dependencies:
+      '@mykey/audit':
+        specifier: workspace:*
+        version: link:../audit
       '@mykey/contracts':
         specifier: workspace:*
         version: link:../contracts

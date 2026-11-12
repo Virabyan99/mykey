@@ -142,17 +142,19 @@ export async function authFixture(): Promise<AuthFixture> {
         password: randomBytes(18).toString("base64url"),
       };
       const hash = await (await auth.$context).password.hash(user.password);
+      // As the operator identity: the API's role cannot create accounts (Run 3.2).
+      const operator = db.pool("maintenance");
       await run(
-        pool,
+        operator,
         'INSERT INTO auth."user" (id, name, email, email_verified) VALUES ($1, $2, $3, true)',
         [user.id, "Synthetic Owner", user.email],
       );
       await run(
-        pool,
+        operator,
         "INSERT INTO auth.account (id, account_id, provider_id, user_id, password) VALUES ($1, $2, 'credential', $3, $4)",
         [randomUUID(), user.id, user.id, hash],
       );
-      await run(pool, "INSERT INTO auth.account_state (user_id, state) VALUES ($1, $2)", [
+      await run(operator, "INSERT INTO auth.account_state (user_id, state) VALUES ($1, $2)", [
         user.id,
         state,
       ]);

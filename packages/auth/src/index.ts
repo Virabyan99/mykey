@@ -53,3 +53,9 @@ export {
   type RegenerateResult,
 } from "./factors/elevate.ts";
 export { codeAt, matchStep, otpauthUri, stepAt } from "./factors/totp.ts";
+export {
+  PASSWORD_MAX_CHARACTERS,
+  PASSWORD_MIN_CHARACTERS,
+  checkPassword,
+  type PasswordCheck,
+} from "./password-rule.ts";
