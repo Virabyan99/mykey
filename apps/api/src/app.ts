@@ -5,6 +5,7 @@ import { ROUTES } from "@mykey/contracts";
 import { Hono } from "hono";
 import { now } from "./log.ts";
 import type { ApiEnv, AppDeps, Handler } from "./pipeline/context.ts";
+import { readGate } from "./pipeline/gate.ts";
 import { errorResponse } from "./pipeline/respond.ts";
 import { mountRoute, mountRouteDef } from "./pipeline/route.ts";
 import { healthHandler } from "./routes/health.ts";
@@ -28,7 +29,16 @@ export function createApp(deps: AppDeps): Hono<ApiEnv> {
     c.set("requestId", requestId);
     c.set("routePattern", null);
     c.set("bodyBytesRead", 0);
-    await next();
+    // The gate is the first step of every request, matched or not (P-43).
+    // GET /health is the one exception: it reports the gate instead of refusing.
+    const isHealth = c.req.method === "GET" && c.req.path === "/health";
+    const gate = isHealth ? null : readGate(deps.config.gatePath, deps.config.hostInstanceId);
+    if (gate !== null && !gate.open) {
+      deps.log({ event: "gate_closed", time: now(), requestId, cause: gate.cause });
+      c.res = errorResponse("quarantined", requestId);
+    } else {
+      await next();
+    }
     c.res.headers.set("x-request-id", requestId);
     c.res.headers.set("cache-control", "no-store");
     deps.log({

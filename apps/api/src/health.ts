@@ -16,7 +16,9 @@ export type HealthCause =
   | "login_refused"
   | "error"
   | "openbao_sealed"
-  | "openbao_down";
+  | "openbao_down"
+  /** The service gate is closed (Run 3.1); `code` names the gate's cause. */
+  | "gate";
 
 export interface OpenBaoHealthTarget {
   url: string;

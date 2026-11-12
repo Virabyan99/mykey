@@ -81,12 +81,20 @@ if [ -n "${MYKEY_KMS_HOST:-}" ] && [ -e /etc/mykey/secrets/kms/seal.crt ] &&
 	fi
 fi
 
+# The service gate (Run 3.1, P-43): what the record says, not whether it is valid
+# for this host (the API decides that per request).
+gate=absent
+if [ -e /etc/mykey/gate/gate.json ]; then
+	gate=$(jq -r 'if (.state == "open" or .state == "closed") and .version == 1 then .state else "invalid" end' \
+		/etc/mykey/gate/gate.json 2>/dev/null || echo invalid)
+fi
+
 jq -n \
-	--arg host "$host" --arg bootId "$boot_id" --arg time "$time" \
+	--arg host "$host" --arg bootId "$boot_id" --arg time "$time" --arg gate "$gate" \
 	--argjson chronyOffsetMs "$chrony_offset_ms" --argjson clockSynced "$clock_synced" \
 	--argjson containers "$containers" --argjson pendingRevert "$pending" \
 	--argjson firewallLoaded "$firewall_loaded" --argjson sets "$sets" --argjson sshListen "$ssh_listen" \
 	--argjson sealed "$sealed" --argjson sealType "$seal_type" --argjson kmsReachable "$kms_reachable" \
 	'{ host: $host, bootId: $bootId, time: $time, chronyOffsetMs: $chronyOffsetMs, clockSynced: $clockSynced,
 	   containers: $containers, sealed: $sealed, sealType: $sealType, kmsReachable: $kmsReachable, pendingRevert: $pendingRevert,
-	   firewall: { loaded: $firewallLoaded, sets: $sets }, sshListen: $sshListen }'
+	   firewall: { loaded: $firewallLoaded, sets: $sets }, sshListen: $sshListen, gate: $gate }'

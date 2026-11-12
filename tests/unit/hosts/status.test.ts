@@ -86,4 +86,12 @@ describe("status.sh", () => {
       expect(line).toContain(" --init ");
     }
   });
+
+  it("reports the service gate as the host reads it (Run 3.1)", () => {
+    for (const gate of ["open", "closed", "absent", "invalid"]) {
+      expect(parseHostStatus(JSON.stringify({ ...base, gate }), at, at).gate).toBe(gate);
+    }
+    expect(parseHostStatus(JSON.stringify(base), at, at).gate).toBeNull();
+    expect(parseHostStatus(JSON.stringify({ ...base, gate: "ajar" }), at, at).gate).toBeNull();
+  });
 });

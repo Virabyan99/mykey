@@ -448,6 +448,8 @@ export interface HostStatus {
   firewall: { loaded: boolean; sets: Record<string, number> } | null;
   /** Local addresses with a listener on TCP 22; null when not reported. */
   sshListen: string[] | null;
+  /** The service gate record as the host reads it (Run 3.1); null when not reported. */
+  gate: "open" | "closed" | "absent" | "invalid" | null;
 }
 
 /** The remote check; prints one JSON object (everything but `clockOffsetMs`). */
@@ -509,6 +511,13 @@ export function parseHostStatus(text: string, sentAt: number, receivedAt: number
     clockSynced: nullableBoolean(raw.clockSynced),
     firewall,
     sshListen: Array.isArray(raw.sshListen) ? raw.sshListen.map(String) : null,
+    gate:
+      raw.gate === "open" ||
+      raw.gate === "closed" ||
+      raw.gate === "absent" ||
+      raw.gate === "invalid"
+        ? raw.gate
+        : null,
   };
 }
 

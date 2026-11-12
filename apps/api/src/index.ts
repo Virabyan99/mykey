@@ -10,6 +10,14 @@ export {
 export { createLogger, redactEntry, type LogEntry } from "./log.ts";
 export { parseStrictJson } from "./pipeline/body.ts";
 export {
+  GATE_MAX_BYTES,
+  readGate,
+  type GateCause,
+  type GateIo,
+  type GateReading,
+  type GateRecord,
+} from "./pipeline/gate.ts";
+export {
   ApiError,
   type ApiConfig,
   type ApiContext,

@@ -12,6 +12,7 @@ import {
   createPublicKey,
   generateKeyPairSync,
   randomBytes,
+  randomUUID,
 } from "node:crypto";
 import {
   chmodSync,
@@ -107,6 +108,7 @@ export const USAGE = `usage: node scripts/host.ts <staging|prod> <command> [--pu
   db-init                        roles and migrations through an SSH tunnel
   bao-init                       initialise OpenBao once; custody copy; root-namespace setup (staging only)
   status                         print the host status as JSON
+  gate <open|close|status>       the service gate record (P-43); every deploy starts closed
 --public uses the public address instead of the VPN (bootstrap always does).`;
 
 export type HostCommand = { host: HostName; via: Address } & (
@@ -123,7 +125,10 @@ export type HostCommand = { host: HostName; via: Address } & (
   | { command: "kms"; name: string; argv: string[] }
   | { command: "env"; key: OpenBaoEnvKey; value: string }
   | { command: "maint"; minutes: number; argv: string[] }
+  | { command: "gate"; action: GateAction }
 );
+
+export type GateAction = "open" | "close" | "status";
 
 /** The host.env settings `env` may write: OpenBao and its KMS (Run 2.7). */
 export const OPENBAO_ENV_KEYS = [
@@ -279,6 +284,16 @@ export function parseHostArgs(argv: string[]): HostCommand {
         throw new Error(`env needs <key> <value>; keys: ${OPENBAO_ENV_KEYS.join(", ")}`);
       }
       return { ...base, command, key: key as OpenBaoEnvKey, value };
+    }
+    case "gate": {
+      const [action] = positional;
+      if (
+        positional.length !== 1 ||
+        (action !== "open" && action !== "close" && action !== "status")
+      ) {
+        throw new Error("gate needs open, close or status");
+      }
+      return { ...base, command, action };
     }
     case "maint": {
       const minutes = Number(positional[0]);
@@ -597,6 +612,50 @@ export function hostEnvDefaultCommand(key: string, value: string): string {
   ].join(" && ");
 }
 
+// ------------------------------------------------------------------- gate
+
+/** The gate record on the host (P-43); its directory is mounted read-only into the API. */
+export const GATE_DIRECTORY = "/etc/mykey/gate";
+export const GATE_FILE = `${GATE_DIRECTORY}/gate.json`;
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+
+/** The next gate record: version 1, the epoch one above the previous record's (or 1). */
+export function gateRecordText(
+  state: "open" | "closed",
+  previous: string | null,
+  hostInstanceId: string,
+  writtenAt: string,
+): string {
+  if (!UUID.test(hostInstanceId)) throw new Error("gate: the host instance id is not a uuid");
+  let epoch = 0;
+  if (previous !== null) {
+    try {
+      const value = (JSON.parse(previous) as { gateEpoch?: unknown }).gateEpoch;
+      if (typeof value === "number" && Number.isSafeInteger(value) && value >= 0) epoch = value;
+    } catch {
+      // An unreadable previous record: start above 0 again; the API reads it as closed anyway.
+    }
+  }
+  return JSON.stringify({ version: 1, state, gateEpoch: epoch + 1, hostInstanceId, writtenAt });
+}
+
+/**
+ * Installs the record from stdin atomically: a temporary file beside it,
+ * fsync, rename, fsync of the directory. Root-owned, readable by the API's uid.
+ */
+export function gateWriteCommand(): string {
+  const tmp = `${GATE_FILE}.tmp`;
+  return [
+    `install -d -m 0755 -o root -g root ${GATE_DIRECTORY}`,
+    `cat > ${tmp}`,
+    `chown root:root ${tmp}`,
+    `chmod 0644 ${tmp}`,
+    `sync ${tmp}`,
+    `mv -f ${tmp} ${GATE_FILE}`,
+    `sync ${GATE_DIRECTORY}`,
+  ].join(" && ");
+}
+
 /**
  * Switches the ACME directory. The edge and its certificate store go with it:
  * a certificate of the other directory must not be served or renewed. `up`
@@ -892,6 +951,15 @@ export function openBaoValuesFrom(
 
 async function runUp(host: HostEntry, address: Address, log: Logger): Promise<void> {
   for (const secret of Object.values(HOST_SECRETS)) await hostSecret(host, secret, address);
+  // Run 3.1: the API's settings. The host instance id is generated once and kept;
+  // the gate directory exists but no record is written: a deploy starts closed.
+  for (const step of [
+    hostEnvDefaultCommand("MYKEY_HOST_INSTANCE_ID", randomUUID()),
+    hostEnvSetCommand("MYKEY_BASE_URL", `https://${host.hostname}`),
+    `install -d -m 0755 -o root -g root ${GATE_DIRECTORY}`,
+  ]) {
+    expectSuccess(await sshExec(host, step, { sudo: true, address }), "API settings");
+  }
   const pki = dirname(REMOTE.caCert);
   expectSuccess(
     await sshExec(host, `install -d -m 0755 -o root -g root ${pki}`, { sudo: true, address }),
@@ -1515,7 +1583,42 @@ async function main(argv: string[], log: Logger): Promise<number> {
     case "status":
       log.info(JSON.stringify(await hostStatus(host, address), null, 2));
       return 0;
+    case "gate":
+      return runGate(host, command.action, address, log);
   }
+}
+
+async function runGate(
+  host: HostEntry,
+  action: GateAction,
+  address: Address,
+  log: Logger,
+): Promise<number> {
+  const current = await sshExec(host, `cat ${GATE_FILE}`, { sudo: true, address });
+  const previous = current.code === 0 ? current.stdout : null;
+  if (action === "status") {
+    log.info(previous === null ? `${host.name}: no gate record (closed)` : previous.trim());
+    return 0;
+  }
+  const env = parseHostEnv(
+    expectSuccess(await sshExec(host, `cat ${REMOTE.hostEnv}`, { address }), "reading host.env")
+      .stdout,
+  );
+  const hostInstanceId = env.MYKEY_HOST_INSTANCE_ID;
+  if (hostInstanceId === undefined)
+    throw new Error("host.env has no MYKEY_HOST_INSTANCE_ID: run up first");
+  const record = gateRecordText(
+    action === "open" ? "open" : "closed",
+    previous,
+    hostInstanceId,
+    new Date().toISOString(),
+  );
+  expectSuccess(
+    await sshExec(host, gateWriteCommand(), { sudo: true, address, stdin: record }),
+    `gate ${action}`,
+  );
+  log.info(`${host.name}: ${record}`);
+  return 0;
 }
 
 if (import.meta.main) {
