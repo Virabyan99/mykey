@@ -350,6 +350,15 @@ describe("bao-init", () => {
     const command = baoInitCommand();
     expect(command).toContain("install -d -m 0700 -o root -g root /root/mykey-custody");
     expect(command).toContain("test ! -e /root/mykey-custody/openbao-init.json");
+    // Review finding I3: a retry after an uncertain first attempt must never truncate
+    // the only copy of the answer, nor init an OpenBao that already is.
+    expect(command).toContain("test ! -e /root/mykey-custody/openbao-init.json.new");
+    expect(command).toMatch(
+      /curl [^&]*https:\/\/openbao:8200\/v1\/sys\/init \| jq -e '\.initialized == false'/,
+    );
+    expect(command.indexOf("jq -e '.initialized == false'")).toBeLessThan(
+      command.indexOf("-X PUT"),
+    );
     expect(command).toContain('{"recovery_shares":1,"recovery_threshold":1}');
     expect(command).toContain("--cacert /etc/mykey/pki/ca.crt --resolve openbao:8200:10.78.3.2");
     expect(command).toContain("https://openbao:8200/v1/sys/init");

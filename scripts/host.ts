@@ -737,9 +737,14 @@ const BAO_INIT_FILE = `${REMOTE.custodyDir}/openbao-init.json`;
  */
 export function baoInitCommand(): string {
   const { address, port } = REMOTE.openbao;
+  const tls = `--cacert ${REMOTE.caCert} --resolve openbao:${port}:${address}`;
   return [
     `install -d -m 0700 -o root -g root ${REMOTE.custodyDir}`,
     `test ! -e ${BAO_INIT_FILE}`,
+    // A first attempt whose outcome is unknown may have left the only copy here.
+    `test ! -e ${BAO_INIT_FILE}.new`,
+    // Never PUT sys/init to an OpenBao that already is initialised.
+    `curl --fail --silent --show-error --max-time 30 ${tls} https://openbao:${port}/v1/sys/init | jq -e '.initialized == false' >/dev/null`,
     `(umask 077 && curl --fail --silent --show-error --max-time 60 --cacert ${REMOTE.caCert} --resolve openbao:${port}:${address} -X PUT --data '{"recovery_shares":1,"recovery_threshold":1}' https://openbao:${port}/v1/sys/init > ${BAO_INIT_FILE}.new)`,
     `mv ${BAO_INIT_FILE}.new ${BAO_INIT_FILE}`,
     `chmod 0400 ${BAO_INIT_FILE}`,
@@ -1296,7 +1301,7 @@ async function runBaoInit(host: HostEntry, address: Address, log: Logger): Promi
   } else {
     const count = expectSuccess(
       await sshExec(host, baoInitCommand(), { ...remote, timeoutMs: 120_000 }),
-      "bao-init",
+      "bao-init (refused when OpenBao is already initialised or a first attempt left openbao-init.json.new in the custody directory: recover that file by hand)",
     ).stdout.trim();
     log.info(`${host.name}: initialized: true, recovery keys: ${count}`);
   }
