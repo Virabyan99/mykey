@@ -177,7 +177,30 @@ const ROUTES: RouteContract[] = [
     body: "empty",
     success:
       "200, `{ recoveryCodes }`: every unused code is invalid before the ten new ones are returned",
-    errors: [...COMMON_ERRORS, "401 `unauthenticated`", "409 `state_conflict`"],
+    errors: [
+      ...COMMON_ERRORS,
+      "401 `unauthenticated`",
+      "403 `fresh_verification_required` (no TOTP verification of this session in the last 600 s, on database time; a session completed with a recovery code has none — step up first)",
+      "409 `state_conflict`",
+    ],
+    cookies: "none",
+    accountStates: "`active`",
+    phases: "`mfa_complete`",
+  },
+  {
+    method: "POST",
+    path: "/totp/step-up",
+    kind: "factor",
+    body: "code",
+    success:
+      "200, `{ fresh: true }`: the session's TOTP verification is now (database time); the step is used once; the token does not change (Run 3.4)",
+    errors: [
+      ...COMMON_ERRORS,
+      "401 `unauthenticated` (a wrong, replayed or expired code, alike; the session goes on)",
+      "409 `state_conflict` (not an `mfa_complete` session of an `active` account)",
+      "429 `rate_limited` with `Retry-After` (the `factor` phase of P-48)",
+      "503 `dependency_unavailable` (the rate counter could not be written)",
+    ],
     cookies: "none",
     accountStates: "`active`",
     phases: "`mfa_complete`",

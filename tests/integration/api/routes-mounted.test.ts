@@ -5,7 +5,7 @@ import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { servedAuthRoutes } from "@mykey/auth";
 import { ROUTES, type RouteDef } from "@mykey/contracts";
-import { errorOf, startTestApi, type TestApi } from "../../harness/api.ts";
+import { enrollOwner, errorOf, seedOwner, startTestApi, type TestApi } from "../../harness/api.ts";
 
 /** Routes with a real handler at this point of the session. */
 const HANDLED = new Set(["health.get", "version.get"]);
@@ -45,9 +45,12 @@ function concretePath(route: RouteDef): string {
 }
 
 let api: TestApi;
+/** An mfa_complete session: human routes answer only that (Run 3.4). */
+let cookie: string;
 
 beforeAll(async () => {
   api = await startTestApi();
+  cookie = (await enrollOwner(api, await seedOwner(api))).cookie;
 });
 
 afterAll(async () => {
@@ -76,7 +79,7 @@ describe("mounted routes", () => {
   });
 
   it.each(ROUTES.filter((route) => !HANDLED.has(route.id)).map((route) => [route.id, route]))(
-    "%s without a handler ends in 404 not_found",
+    "%s without a handler ends in 404 not_found, for an authorised caller",
     async (_id, route) => {
       const body = BODIES[route.id];
       const init =
@@ -87,7 +90,11 @@ describe("mounted routes", () => {
             : body === undefined
               ? {}
               : { body };
-      const response = await api.request(route.method, concretePath(route), init);
+      const human = route.auth === "human" || route.auth === "human_fresh_totp";
+      const response = await api.request(route.method, concretePath(route), {
+        ...init,
+        ...(human ? { cookie } : {}),
+      });
       expect(response.status).toBe(404);
       expect((await errorOf(response)).code).toBe("not_found");
     },

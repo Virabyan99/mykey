@@ -11,6 +11,7 @@ import { AuditUnavailable } from "@mykey/audit";
 import { LIMITS, ROUTES, type RouteDef } from "@mykey/contracts";
 import type { Context, Hono } from "hono";
 import { now } from "../log.ts";
+import { authenticateHuman } from "./authn.ts";
 import { headerBytes, readBody } from "./body.ts";
 import {
   ApiError,
@@ -112,8 +113,18 @@ async function run(
     const raw = await readBody(c.req.raw, route, (bytes) => {
       c.set("bodyBytesRead", c.get("bodyBytesRead") + bytes);
     });
+    // Authentication before strict validation: an anonymous caller learns nothing from a 422.
+    const principal =
+      route.auth === "human" || route.auth === "human_fresh_totp"
+        ? await authenticateHuman(deps, c.req.raw.headers)
+        : null;
     const query = validateQuery(route, new URL(c.req.url).searchParams);
     const body = validateBody(route, raw);
+    if (handler === terminal && deps.test?.stubs !== undefined) {
+      // The harness's stub: every check of the pipeline has passed.
+      deps.test.stubs(route.id);
+      return new Response(null, { status: 204 });
+    }
     const result = await handler(
       {
         requestId,
@@ -122,7 +133,7 @@ async function run(
         body,
         query,
         params: c.req.param(),
-        principal: null,
+        principal,
       },
       deps,
     );

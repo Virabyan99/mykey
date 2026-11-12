@@ -13,6 +13,7 @@ export {
   startOutboxDispatcher,
   type OutboxDispatcher,
 } from "./outbox-dispatcher.ts";
+export { authenticateHuman, type Principal } from "./pipeline/authn.ts";
 export { parseStrictJson, readAuthBody } from "./pipeline/body.ts";
 export {
   GATE_MAX_BYTES,

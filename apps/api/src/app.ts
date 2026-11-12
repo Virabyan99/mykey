@@ -49,6 +49,9 @@ function mountAuth(app: Hono<ApiEnv>, deps: AppDeps, module: NonNullable<AppDeps
       await appendAudit(deps.pool, event);
     },
     throttle: module.throttle,
+    ...(deps.test?.clock === undefined
+      ? {}
+      : { now: (c: Context) => deps.test?.clock?.(c.req.raw.headers) }),
   });
 }
 

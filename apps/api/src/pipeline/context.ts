@@ -5,6 +5,7 @@ import type { ErrorCode, RouteDef } from "@mykey/contracts";
 import type pg from "pg";
 import type { HealthReading } from "../health.ts";
 import type { LogEntry } from "../log.ts";
+import type { Principal } from "./authn.ts";
 
 export interface ApiConfig {
   /** The public origin, e.g. https://mykey-staging.nomikey.com. */
@@ -37,7 +38,13 @@ export interface AppDeps {
     throttle: Throttle;
   };
   /** Set by the integration harness only; the production entry never sets it. */
-  test?: { routes?: readonly TestRouteEntry[] };
+  test?: {
+    routes?: readonly TestRouteEntry[];
+    /** Replaces the terminal 404 of a route without a handler: records the id, answers 204. */
+    stubs?: (routeId: string) => void;
+    /** The time TOTP codes are checked at, from a request header. */
+    clock?: (headers: Headers) => Date | undefined;
+  };
 }
 
 export interface ApiContext {
@@ -47,7 +54,7 @@ export interface ApiContext {
   body: unknown;
   query: unknown;
   params: Record<string, string>;
-  principal: null;
+  principal: Principal | null;
 }
 
 export interface HandlerResult {

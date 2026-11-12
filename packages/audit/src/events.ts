@@ -10,6 +10,8 @@ const routeId = z
   .max(48)
   .regex(/^[a-z]+(?:\.[a-z]+)+$/);
 
+const factorReason = z.enum(["invalid", "replayed", "expired", "wrong_state", "not_fresh"]);
+
 export const AUDIT_DETAILS = {
   /** Run 3.2: the owner bootstrap. Ids are in actor and target. */
   "operator.bootstrap": z.strictObject({}),
@@ -17,6 +19,15 @@ export const AUDIT_DETAILS = {
   "auth.sign_in": z.strictObject({
     reason: z.enum(["credentials", "account", "epoch"]).optional(),
   }),
+  /** Run 3.4: the factor steps; on failure the reason, never the code. */
+  "auth.totp_enroll": z.strictObject({ reason: factorReason.optional() }),
+  "auth.totp_activate": z.strictObject({ reason: factorReason.optional() }),
+  "auth.mfa_complete": z.strictObject({
+    method: z.enum(["totp", "recovery"]),
+    reason: factorReason.optional(),
+  }),
+  "auth.step_up": z.strictObject({ reason: factorReason.optional() }),
+  "auth.recovery_regenerate": z.strictObject({ reason: factorReason.optional() }),
   /** Run 3.3: an attempt refused by throttling before any credential was checked. */
   "auth.throttled": z.strictObject({
     phase: z.enum(["password", "factor", "reset"]),

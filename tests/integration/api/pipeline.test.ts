@@ -133,7 +133,8 @@ describe("every response", () => {
       seen.add(id);
       if (response.status >= 400) expect((await errorOf(response)).requestId, label).toBe(id);
     }
-    expect([...statuses].sort()).toEqual([200, 400, 404, 503]);
+    // 401: a product route without a session (Run 3.4).
+    expect([...statuses].sort()).toEqual([200, 400, 401, 404, 503]);
   });
 });
 

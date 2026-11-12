@@ -16,6 +16,8 @@ import {
   elevateWithTotp,
   enrollTotp,
   regenerateRecoveryCodes,
+  stepUpWithTotp,
+  type FactorAudit,
   type FactorDeps,
   type FailureReason,
 } from "./factors/elevate.ts";
@@ -110,6 +112,11 @@ export interface AuthRouteEnv {
   audit?: (event: AuditEvent) => Promise<void>;
   /** Throttling of password and factor attempts (Run 3.3); required. */
   throttle: Throttle;
+  /**
+   * The time a TOTP code is checked at (the API's clock, ±1 step). Only the
+   * integration harness gives one; otherwise it is the current time.
+   */
+  now?: (c: Context) => Date | undefined;
 }
 
 /** Better Auth's error status → the contract's code. */
@@ -239,7 +246,11 @@ export async function requireMfaComplete(
 
 /** A failed factor step: the same answer for a wrong, a replayed and an expired code. */
 const factorFailureCode = (reason: FailureReason): ErrorCode =>
-  reason === "wrong_state" ? "state_conflict" : "unauthenticated";
+  reason === "wrong_state"
+    ? "state_conflict"
+    : reason === "not_fresh"
+      ? "fresh_verification_required"
+      : "unauthenticated";
 
 const codeBody = z.strictObject({ code: z.string().min(1).max(64) });
 
@@ -313,6 +324,7 @@ const FACTOR_PATHS = [
   "/totp/enroll",
   "/totp/activate",
   "/totp/verify",
+  "/totp/step-up",
   "/recovery/verify",
   "/recovery/regenerate",
 ] as const;
@@ -440,6 +452,11 @@ function mountFactorRoutes(
    * A factor step under the `factor` throttle of the session's user: admitted
    * first, a failure counted (TOTP, activation and recovery codes share it).
    */
+  /** What every factor function is given besides its own input: the clock and the audit. */
+  const context = (c: Context): { now?: Date; audit: FactorAudit } => {
+    const now = env.now?.(c);
+    return { ...(now === undefined ? {} : { now }), audit: { requestId: env.requestId(c) } };
+  };
   const factorStep = async <T>(
     c: Context,
     schema: z.ZodType<T>,
@@ -449,30 +466,52 @@ function mountFactorRoutes(
     }) => Promise<
       { ok: true; body: unknown; setCookie?: string } | { ok: false; reason: FailureReason }
     >,
+    opts: { throttled: boolean } = { throttled: true },
   ): Promise<Response> => {
     const ready = await prepare(c, schema);
     if (ready instanceof Response) return ready;
-    const refusal = await throttled(env, c, "factor", ready.userId);
-    if (refusal !== null) return refusal;
-    const result = await step(ready);
+    if (opts.throttled) {
+      const refusal = await throttled(env, c, "factor", ready.userId);
+      if (refusal !== null) return refusal;
+    }
+    let result: Awaited<ReturnType<typeof step>>;
+    try {
+      result = await step(ready);
+    } catch (error) {
+      if (error instanceof AuditUnavailable) return refuse(c, "audit_unavailable");
+      throw error;
+    }
     if (result.ok) return json(result.body, result.setCookie);
-    if (result.reason === "wrong_state") return refuse(c, "state_conflict");
+    // A refused state or a stale session is not a wrong credential: not counted.
+    if (!opts.throttled || result.reason === "wrong_state" || result.reason === "not_fresh") {
+      return refuse(c, factorFailureCode(result.reason));
+    }
     return failed(env, c, "factor", ready.userId, factorFailureCode(result.reason));
   };
 
-  app.post(`${base}/totp/enroll`, async (c) => {
-    const ready = await prepare(c, emptyBody);
-    if (ready instanceof Response) return ready;
-    const result = await enrollTotp(deps, { sessionToken: ready.token });
-    if (!result.ok) return refuse(c, factorFailureCode(result.reason));
-    return json({ enrollmentId: result.enrollmentId, secret: result.secret, uri: result.uri });
-  });
+  app.post(`${base}/totp/enroll`, (c) =>
+    factorStep(
+      c,
+      emptyBody,
+      async (ready) => {
+        const result = await enrollTotp(deps, { sessionToken: ready.token, ...context(c) });
+        return result.ok
+          ? {
+              ok: true,
+              body: { enrollmentId: result.enrollmentId, secret: result.secret, uri: result.uri },
+            }
+          : result;
+      },
+      { throttled: false },
+    ),
+  );
 
   app.post(`${base}/totp/activate`, (c) =>
     factorStep(c, codeBody, async (ready) => {
       const result = await activateTotp(deps, {
         sessionToken: ready.token,
         code: ready.body.code,
+        ...context(c),
       });
       return result.ok
         ? { ok: true, body: { recoveryCodes: result.recoveryCodes }, setCookie: result.setCookie }
@@ -485,6 +524,7 @@ function mountFactorRoutes(
       const result = await elevateWithTotp(deps, {
         sessionToken: ready.token,
         code: ready.body.code,
+        ...context(c),
       });
       return result.ok
         ? { ok: true, body: { phase: "mfa_complete" }, setCookie: result.setCookie }
@@ -497,6 +537,7 @@ function mountFactorRoutes(
       const result = await elevateWithRecoveryCode(deps, {
         sessionToken: ready.token,
         code: ready.body.code,
+        ...context(c),
       });
       return result.ok
         ? { ok: true, body: { phase: "mfa_complete" }, setCookie: result.setCookie }
@@ -504,13 +545,32 @@ function mountFactorRoutes(
     }),
   );
 
-  app.post(`${base}/recovery/regenerate`, async (c) => {
-    const ready = await prepare(c, emptyBody);
-    if (ready instanceof Response) return ready;
-    const result = await regenerateRecoveryCodes(deps, { sessionToken: ready.token });
-    if (!result.ok) return refuse(c, factorFailureCode(result.reason));
-    return json({ recoveryCodes: result.recoveryCodes });
-  });
+  // Run 3.4: a fresh TOTP verification for an mfa_complete session; no new token.
+  app.post(`${base}/totp/step-up`, (c) =>
+    factorStep(c, codeBody, async (ready) => {
+      const result = await stepUpWithTotp(deps, {
+        sessionToken: ready.token,
+        code: ready.body.code,
+        ...context(c),
+      });
+      return result.ok ? { ok: true, body: { fresh: true } } : result;
+    }),
+  );
+
+  app.post(`${base}/recovery/regenerate`, (c) =>
+    factorStep(
+      c,
+      emptyBody,
+      async (ready) => {
+        const result = await regenerateRecoveryCodes(deps, {
+          sessionToken: ready.token,
+          ...context(c),
+        });
+        return result.ok ? { ok: true, body: { recoveryCodes: result.recoveryCodes } } : result;
+      },
+      { throttled: false },
+    ),
+  );
 }
 
 /** The strict request bodies, for the route contract (scripts/auth-route-contract.ts). */

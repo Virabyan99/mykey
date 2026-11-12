@@ -10,10 +10,12 @@
 //
 // A recovery code does the same with an UPDATE … WHERE consumed_at IS NULL.
 import { randomBytes, randomUUID } from "node:crypto";
+import { appendAudit, type AuditAction } from "@mykey/audit";
 import { LIMITS } from "@mykey/contracts";
 import { makeSignature } from "better-auth/crypto";
 import pg from "pg";
 import type { Auth } from "../auth.ts";
+import { hasFreshTotp } from "../fresh.ts";
 import type { AuthKeys } from "../keys.ts";
 import { sessionVerifier, sessionVerifierCandidates } from "../session-verifier.ts";
 import {
@@ -32,7 +34,16 @@ export interface FactorDeps {
   auth: Auth;
 }
 
-export type FailureReason = "invalid" | "replayed" | "expired" | "wrong_state";
+export type FailureReason = "invalid" | "replayed" | "expired" | "wrong_state" | "not_fresh";
+
+/**
+ * The audit row of a factor step (Run 3.4): written inside the step's
+ * transaction when it succeeds, beside it when it fails, with the reason —
+ * never the code.
+ */
+export interface FactorAudit {
+  requestId: string | null;
+}
 export type ElevateResult = { ok: true; setCookie: string } | { ok: false; reason: FailureReason };
 
 interface SessionRow {
@@ -41,6 +52,10 @@ interface SessionRow {
   phase: string;
   auth_epoch: string;
   expires_at: Date;
+  /** Database time: the session is past its expiry. */
+  expired: boolean;
+  /** Database time: older than LIMITS.session.incompleteChallengeSeconds since the password. */
+  challenge_expired: boolean;
   authenticated_at: Date;
   ip_address: string | null;
   user_agent: string | null;
@@ -57,10 +72,19 @@ const UNIQUE_VIOLATION = "23505";
 
 class Refused extends Error {
   readonly reason: FailureReason;
-  constructor(reason: FailureReason) {
+  /** The session is removed after the rollback (an expired challenge). */
+  readonly discard: string | null;
+  constructor(reason: FailureReason, discard: string | null = null) {
     super(reason);
     this.reason = reason;
+    this.discard = discard;
   }
+}
+
+interface AuditSpec {
+  action: AuditAction;
+  details?: Record<string, string>;
+  audit: FactorAudit | undefined;
 }
 
 /**
@@ -71,11 +95,26 @@ class Refused extends Error {
 async function withLockedSession<T>(
   deps: FactorDeps,
   sessionToken: string,
-  now: Date,
   work: (locked: Locked) => Promise<T>,
+  spec?: AuditSpec,
 ): Promise<T | { ok: false; reason: FailureReason }> {
   const candidates = sessionVerifierCandidates(deps.keys.sessionLookup, sessionToken);
   const client = await deps.pool.connect();
+  let userOfSession: string | null = null;
+  const event = (outcome: "success" | "failure", reason?: FailureReason) => ({
+    action: spec?.action ?? "auth.mfa_complete",
+    actor:
+      userOfSession === null
+        ? { kind: "anonymous" as const, id: null }
+        : { kind: "user" as const, id: userOfSession },
+    source: "api" as const,
+    organizationId: null,
+    target: userOfSession === null ? null : { kind: "user", id: userOfSession },
+    outcome,
+    requestId: spec?.audit?.requestId ?? null,
+    operationId: null,
+    details: { ...spec?.details, ...(reason === undefined ? {} : { reason }) },
+  });
   try {
     await client.query("BEGIN");
     try {
@@ -85,6 +124,7 @@ async function withLockedSession<T>(
       );
       const userId = owner.rows[0]?.user_id;
       if (userId === undefined) throw new Refused("expired");
+      userOfSession = userId;
       const account = await client.query<{ state: string; auth_epoch: string }>(
         "SELECT state, auth_epoch FROM auth.account_state WHERE user_id = $1 FOR UPDATE",
         [userId],
@@ -93,40 +133,47 @@ async function withLockedSession<T>(
       if (state === undefined) throw new Refused("wrong_state");
       const found = await client.query<SessionRow>(
         `SELECT id, user_id, phase, auth_epoch, expires_at, authenticated_at, ip_address,
-                user_agent, enrollment_id
+                user_agent, enrollment_id,
+                expires_at <= now() AS expired,
+                authenticated_at <= now() - make_interval(secs => $2) AS challenge_expired
            FROM auth.session WHERE token = ANY ($1::text[]) FOR UPDATE`,
-        [candidates],
+        [candidates, LIMITS.session.incompleteChallengeSeconds],
       );
       const session = found.rows[0];
       // Gone since the first read: another request rotated it.
       if (session === undefined) throw new Refused("expired");
-      if (session.expires_at.getTime() <= now.getTime()) throw new Refused("expired");
+      if (session.expired) throw new Refused("expired");
       if (session.auth_epoch !== state.auth_epoch) throw new Refused("expired");
       const result = await work({ client, session, state: state.state });
+      if (spec?.audit !== undefined) await appendAudit(client, event("success"));
       await client.query("COMMIT");
       return result;
     } catch (error) {
       await client.query("ROLLBACK");
-      if (error instanceof Refused) return { ok: false, reason: error.reason };
-      throw error;
+      if (!(error instanceof Refused)) throw error;
+      if (error.discard !== null) {
+        await deps.pool.query("DELETE FROM auth.session WHERE id = $1", [error.discard]);
+      }
+      if (spec?.audit !== undefined) await appendAudit(deps.pool, event("failure", error.reason));
+      return { ok: false, reason: error.reason };
     }
   } finally {
     client.release();
   }
 }
 
-/** A session that has only passed the password must finish its challenge in time. */
-function requireChallengeOpen(session: SessionRow, now: Date): void {
-  const deadline =
-    session.authenticated_at.getTime() + LIMITS.session.incompleteChallengeSeconds * 1000;
-  if (deadline <= now.getTime()) throw new Refused("expired");
+/**
+ * A session that has only passed the password must finish its challenge in
+ * time (database time); an expired one is removed.
+ */
+function requireChallengeOpen(session: SessionRow): void {
+  if (session.challenge_expired) throw new Refused("expired", session.id);
 }
 
 /** Replaces the session row by an mfa_complete one with a new token; returns the raw token. */
 async function rotateToComplete(
   deps: FactorDeps,
   locked: Locked,
-  now: Date,
   factor: { enrollmentId: string; totp: boolean },
 ): Promise<{ token: string; sessionId: string; expiresAt: Date }> {
   const token = randomBytes(24).toString("base64url");
@@ -136,7 +183,8 @@ async function rotateToComplete(
     `INSERT INTO auth.session (id, token, user_id, expires_at, ip_address, user_agent, phase,
                                auth_epoch, authenticated_at, last_user_activity_at,
                                totp_verified_at, enrollment_id, created_at, updated_at)
-     VALUES ($1, $2, $3, $4, $5, $6, 'mfa_complete', $7, $8, $9, $10, $11, $9, $9)`,
+     VALUES ($1, $2, $3, $4, $5, $6, 'mfa_complete', $7, $8, now(),
+             CASE WHEN $9 THEN now() END, $10, now(), now())`,
     [
       sessionId,
       sessionVerifier(deps.keys.sessionLookup, token),
@@ -146,8 +194,7 @@ async function rotateToComplete(
       old.user_agent,
       old.auth_epoch,
       old.authenticated_at,
-      now,
-      factor.totp ? now : null,
+      factor.totp,
       factor.enrollmentId,
     ],
   );
@@ -238,54 +285,64 @@ async function storeRecoveryCodes(
 
 export async function elevateWithTotp(
   deps: FactorDeps,
-  input: { sessionToken: string; code: string; now?: Date },
+  input: { sessionToken: string; code: string; now?: Date; audit?: FactorAudit },
 ): Promise<ElevateResult> {
   const now = input.now ?? new Date();
-  const result = await withLockedSession(deps, input.sessionToken, now, async (locked) => {
-    if (locked.state !== "active" || locked.session.phase !== "password_verified") {
-      throw new Refused("wrong_state");
-    }
-    requireChallengeOpen(locked.session, now);
-    const enrollment = await activeEnrollment(deps, locked);
-    const step = matchStep(enrollment.seed, input.code, now);
-    if (step === null) throw new Refused("invalid");
-    await useStep(locked, enrollment.id, step);
-    return rotateToComplete(deps, locked, now, { enrollmentId: enrollment.id, totp: true });
-  });
+  const result = await withLockedSession(
+    deps,
+    input.sessionToken,
+    async (locked) => {
+      if (locked.state !== "active" || locked.session.phase !== "password_verified") {
+        throw new Refused("wrong_state");
+      }
+      requireChallengeOpen(locked.session);
+      const enrollment = await activeEnrollment(deps, locked);
+      const step = matchStep(enrollment.seed, input.code, now);
+      if (step === null) throw new Refused("invalid");
+      await useStep(locked, enrollment.id, step);
+      return rotateToComplete(deps, locked, { enrollmentId: enrollment.id, totp: true });
+    },
+    { action: "auth.mfa_complete", details: { method: "totp" }, audit: input.audit },
+  );
   if ("ok" in result) return result;
   return { ok: true, setCookie: await sessionCookie(deps.auth, result.token, result.expiresAt) };
 }
 
 export async function elevateWithRecoveryCode(
   deps: FactorDeps,
-  input: { sessionToken: string; code: string; now?: Date },
+  input: { sessionToken: string; code: string; now?: Date; audit?: FactorAudit },
 ): Promise<ElevateResult> {
   const now = input.now ?? new Date();
   const code = normalizeRecoveryCode(input.code);
-  if (code === null) return { ok: false, reason: "invalid" };
-  const result = await withLockedSession(deps, input.sessionToken, now, async (locked) => {
-    if (locked.state !== "active" || locked.session.phase !== "password_verified") {
-      throw new Refused("wrong_state");
-    }
-    requireChallengeOpen(locked.session, now);
-    const enrollment = await activeEnrollment(deps, locked);
-    const ring = deps.keys.recoveryVerifier;
-    const verifiers = Object.keys(ring.keys).map((keyId) =>
-      recoveryVerifier(ring, enrollment.id, code, keyId),
-    );
-    const rotated = await rotateToComplete(deps, locked, now, {
-      enrollmentId: enrollment.id,
-      totp: false,
-    });
-    const consumed = await locked.client.query(
-      `UPDATE auth.recovery_code SET consumed_at = $3, consumed_by_session = $4
+  const result = await withLockedSession(
+    deps,
+    input.sessionToken,
+    async (locked) => {
+      if (locked.state !== "active" || locked.session.phase !== "password_verified") {
+        throw new Refused("wrong_state");
+      }
+      requireChallengeOpen(locked.session);
+      if (code === null) throw new Refused("invalid");
+      const enrollment = await activeEnrollment(deps, locked);
+      const ring = deps.keys.recoveryVerifier;
+      const verifiers = Object.keys(ring.keys).map((keyId) =>
+        recoveryVerifier(ring, enrollment.id, code, keyId),
+      );
+      const rotated = await rotateToComplete(deps, locked, {
+        enrollmentId: enrollment.id,
+        totp: false,
+      });
+      const consumed = await locked.client.query(
+        `UPDATE auth.recovery_code SET consumed_at = $3, consumed_by_session = $4
         WHERE enrollment_id = $1 AND verifier = ANY ($2::bytea[]) AND consumed_at IS NULL
         RETURNING id`,
-      [enrollment.id, verifiers, now, rotated.sessionId],
-    );
-    if (consumed.rowCount !== 1) throw new Refused("invalid");
-    return rotated;
-  });
+        [enrollment.id, verifiers, now, rotated.sessionId],
+      );
+      if (consumed.rowCount !== 1) throw new Refused("invalid");
+      return rotated;
+    },
+    { action: "auth.mfa_complete", details: { method: "recovery" }, audit: input.audit },
+  );
   if ("ok" in result) return result;
   return { ok: true, setCookie: await sessionCookie(deps.auth, result.token, result.expiresAt) };
 }
@@ -299,45 +356,54 @@ export type EnrollResult =
 /** Starts an enrollment for an account waiting for one; the seed is shown once. */
 export async function enrollTotp(
   deps: FactorDeps,
-  input: { sessionToken: string; now?: Date },
+  input: { sessionToken: string; now?: Date; audit?: FactorAudit },
 ): Promise<EnrollResult> {
   const now = input.now ?? new Date();
-  return withLockedSession(deps, input.sessionToken, now, async (locked) => {
-    if (
-      locked.state !== "enrollment_pending" ||
-      !["password_verified", "enrollment"].includes(locked.session.phase)
-    ) {
-      throw new Refused("wrong_state");
-    }
-    requireChallengeOpen(locked.session, now);
-    const userId = locked.session.user_id;
-    await locked.client.query(
-      "DELETE FROM auth.totp_enrollment WHERE user_id = $1 AND state = 'pending'",
-      [userId],
-    );
-    const enrollmentId = randomUUID();
-    const seed = new Uint8Array(randomBytes(SEED_BYTES));
-    await locked.client.query(
-      `INSERT INTO auth.totp_enrollment (id, user_id, seed_jwe, key_id, state, created_at)
+  return withLockedSession(
+    deps,
+    input.sessionToken,
+    async (locked) => {
+      if (
+        locked.state !== "enrollment_pending" ||
+        !["password_verified", "enrollment"].includes(locked.session.phase)
+      ) {
+        throw new Refused("wrong_state");
+      }
+      requireChallengeOpen(locked.session);
+      const userId = locked.session.user_id;
+      await locked.client.query(
+        "DELETE FROM auth.totp_enrollment WHERE user_id = $1 AND state = 'pending'",
+        [userId],
+      );
+      const enrollmentId = randomUUID();
+      const seed = new Uint8Array(randomBytes(SEED_BYTES));
+      await locked.client.query(
+        `INSERT INTO auth.totp_enrollment (id, user_id, seed_jwe, key_id, state, created_at)
        VALUES ($1, $2, $3, $4, 'pending', $5)`,
-      [
+        [
+          enrollmentId,
+          userId,
+          await encryptSeed(deps.keys.seedEncryption, seed, { userId, enrollmentId }),
+          deps.keys.seedEncryption.current,
+          now,
+        ],
+      );
+      await locked.client.query(
+        "UPDATE auth.session SET phase = 'enrollment', enrollment_id = $2, updated_at = $3 WHERE id = $1",
+        [locked.session.id, enrollmentId, now],
+      );
+      const email = await locked.client.query<{ email: string }>(
+        'SELECT email FROM auth."user" WHERE id = $1',
+        [userId],
+      );
+      return {
+        ok: true as const,
         enrollmentId,
-        userId,
-        await encryptSeed(deps.keys.seedEncryption, seed, { userId, enrollmentId }),
-        deps.keys.seedEncryption.current,
-        now,
-      ],
-    );
-    await locked.client.query(
-      "UPDATE auth.session SET phase = 'enrollment', enrollment_id = $2, updated_at = $3 WHERE id = $1",
-      [locked.session.id, enrollmentId, now],
-    );
-    const email = await locked.client.query<{ email: string }>(
-      'SELECT email FROM auth."user" WHERE id = $1',
-      [userId],
-    );
-    return { ok: true as const, enrollmentId, ...otpauthUri(seed, email.rows[0]?.email ?? userId) };
-  });
+        ...otpauthUri(seed, email.rows[0]?.email ?? userId),
+      };
+    },
+    { action: "auth.totp_enroll", audit: input.audit },
+  );
 }
 
 export type ActivateResult =
@@ -346,45 +412,50 @@ export type ActivateResult =
 /** Proves the authenticator with one code, activates it, elevates the session and returns the recovery codes once. */
 export async function activateTotp(
   deps: FactorDeps,
-  input: { sessionToken: string; code: string; now?: Date },
+  input: { sessionToken: string; code: string; now?: Date; audit?: FactorAudit },
 ): Promise<ActivateResult> {
   const now = input.now ?? new Date();
-  const result = await withLockedSession(deps, input.sessionToken, now, async (locked) => {
-    const enrollmentId = locked.session.enrollment_id;
-    if (
-      locked.state !== "enrollment_pending" ||
-      locked.session.phase !== "enrollment" ||
-      enrollmentId === null
-    ) {
-      throw new Refused("wrong_state");
-    }
-    requireChallengeOpen(locked.session, now);
-    const userId = locked.session.user_id;
-    const pending = await locked.client.query<{ seed_jwe: string }>(
-      "SELECT seed_jwe FROM auth.totp_enrollment WHERE id = $1 AND user_id = $2 AND state = 'pending' FOR UPDATE",
-      [enrollmentId, userId],
-    );
-    const row = pending.rows[0];
-    if (row === undefined) throw new Refused("wrong_state");
-    const seed = await decryptSeed(deps.keys.seedEncryption, row.seed_jwe, {
-      userId,
-      enrollmentId,
-    });
-    const step = matchStep(seed, input.code, now);
-    if (step === null) throw new Refused("invalid");
-    await useStep(locked, enrollmentId, step);
-    await locked.client.query(
-      "UPDATE auth.totp_enrollment SET state = 'active', activated_at = $2 WHERE id = $1",
-      [enrollmentId, now],
-    );
-    await locked.client.query(
-      "UPDATE auth.account_state SET state = 'active', updated_at = $2 WHERE user_id = $1",
-      [userId, now],
-    );
-    const recoveryCodes = await storeRecoveryCodes(deps, locked, enrollmentId);
-    const rotated = await rotateToComplete(deps, locked, now, { enrollmentId, totp: true });
-    return { ...rotated, recoveryCodes };
-  });
+  const result = await withLockedSession(
+    deps,
+    input.sessionToken,
+    async (locked) => {
+      const enrollmentId = locked.session.enrollment_id;
+      if (
+        locked.state !== "enrollment_pending" ||
+        locked.session.phase !== "enrollment" ||
+        enrollmentId === null
+      ) {
+        throw new Refused("wrong_state");
+      }
+      requireChallengeOpen(locked.session);
+      const userId = locked.session.user_id;
+      const pending = await locked.client.query<{ seed_jwe: string }>(
+        "SELECT seed_jwe FROM auth.totp_enrollment WHERE id = $1 AND user_id = $2 AND state = 'pending' FOR UPDATE",
+        [enrollmentId, userId],
+      );
+      const row = pending.rows[0];
+      if (row === undefined) throw new Refused("wrong_state");
+      const seed = await decryptSeed(deps.keys.seedEncryption, row.seed_jwe, {
+        userId,
+        enrollmentId,
+      });
+      const step = matchStep(seed, input.code, now);
+      if (step === null) throw new Refused("invalid");
+      await useStep(locked, enrollmentId, step);
+      await locked.client.query(
+        "UPDATE auth.totp_enrollment SET state = 'active', activated_at = $2 WHERE id = $1",
+        [enrollmentId, now],
+      );
+      await locked.client.query(
+        "UPDATE auth.account_state SET state = 'active', updated_at = $2 WHERE user_id = $1",
+        [userId, now],
+      );
+      const recoveryCodes = await storeRecoveryCodes(deps, locked, enrollmentId);
+      const rotated = await rotateToComplete(deps, locked, { enrollmentId, totp: true });
+      return { ...rotated, recoveryCodes };
+    },
+    { action: "auth.totp_activate", audit: input.audit },
+  );
   if ("ok" in result) return result;
   return {
     ok: true,
@@ -399,22 +470,63 @@ export type RegenerateResult =
 /** Invalidates every unused code, then returns ten new ones; both in one transaction. */
 export async function regenerateRecoveryCodes(
   deps: FactorDeps,
-  input: { sessionToken: string; now?: Date },
+  input: { sessionToken: string; now?: Date; audit?: FactorAudit },
 ): Promise<RegenerateResult> {
   const now = input.now ?? new Date();
-  return withLockedSession(deps, input.sessionToken, now, async (locked) => {
-    if (locked.state !== "active" || locked.session.phase !== "mfa_complete") {
-      throw new Refused("wrong_state");
-    }
-    const enrollment = await activeEnrollment(deps, locked);
-    await locked.client.query(
-      `UPDATE auth.recovery_code SET consumed_at = $2, consumed_by_session = $3
+  return withLockedSession(
+    deps,
+    input.sessionToken,
+    async (locked) => {
+      if (locked.state !== "active" || locked.session.phase !== "mfa_complete") {
+        throw new Refused("wrong_state");
+      }
+      // A fresh TOTP verification of this session (FR-1.77): a recovery-code session has none.
+      if (!(await hasFreshTotp(locked.client, locked.session.id))) throw new Refused("not_fresh");
+      const enrollment = await activeEnrollment(deps, locked);
+      await locked.client.query(
+        `UPDATE auth.recovery_code SET consumed_at = $2, consumed_by_session = $3
         WHERE enrollment_id = $1 AND consumed_at IS NULL`,
-      [enrollment.id, now, locked.session.id],
-    );
-    return {
-      ok: true as const,
-      recoveryCodes: await storeRecoveryCodes(deps, locked, enrollment.id),
-    };
-  });
+        [enrollment.id, now, locked.session.id],
+      );
+      return {
+        ok: true as const,
+        recoveryCodes: await storeRecoveryCodes(deps, locked, enrollment.id),
+      };
+    },
+    { action: "auth.recovery_regenerate", audit: input.audit },
+  );
+}
+
+export type StepUpResult = { ok: true } | { ok: false; reason: FailureReason };
+
+/**
+ * Step-up (Run 3.4): a TOTP code for an `mfa_complete` session makes it fresh
+ * (`totp_verified_at = now()`), uses its step once and keeps the token.
+ */
+export async function stepUpWithTotp(
+  deps: FactorDeps,
+  input: { sessionToken: string; code: string; now?: Date; audit?: FactorAudit },
+): Promise<StepUpResult> {
+  const now = input.now ?? new Date();
+  return withLockedSession(
+    deps,
+    input.sessionToken,
+    async (locked) => {
+      if (locked.state !== "active" || locked.session.phase !== "mfa_complete") {
+        throw new Refused("wrong_state");
+      }
+      const enrollment = await activeEnrollment(deps, locked);
+      const step = matchStep(enrollment.seed, input.code, now);
+      if (step === null) throw new Refused("invalid");
+      await useStep(locked, enrollment.id, step);
+      await locked.client.query(
+        `UPDATE auth.session
+            SET totp_verified_at = now(), last_user_activity_at = now(), enrollment_id = $2
+          WHERE id = $1`,
+        [locked.session.id, enrollment.id],
+      );
+      return { ok: true as const };
+    },
+    { action: "auth.step_up", audit: input.audit },
+  );
 }

@@ -59,7 +59,8 @@ beforeAll(async () => {
     body: { code: codeAt(seed, stepAt(new Date()) + 1) },
   });
   expect(verified.status).toBe(200);
-  keep("session token", tokenOf(cookieOf(verified) ?? ""));
+  const verifiedCookie = cookieOf(verified) ?? "";
+  keep("session token", tokenOf(verifiedCookie));
 
   const third = await fixture.signIn(user);
   keep("session token", tokenOf(third));
@@ -71,8 +72,9 @@ beforeAll(async () => {
   const recoveredCookie = cookieOf(recovered) ?? "";
   keep("session token", tokenOf(recoveredCookie));
 
+  // Regeneration needs a fresh TOTP verification (Run 3.4): the TOTP session, not the recovery one.
   const regenerated = await fixture.request("POST", "/v1/auth/recovery/regenerate", {
-    cookie: recoveredCookie,
+    cookie: verifiedCookie,
     body: {},
   });
   expect(regenerated.status).toBe(200);

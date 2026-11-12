@@ -63,6 +63,11 @@ export interface StartTestApiOptions {
   relayDatabase?: boolean;
   /** Start the outbox dispatcher, as the API process does (default true). */
   dispatcher?: boolean;
+  /**
+   * Routes without a handler answer 204 after every pipeline check and record
+   * their id in `reached` (Run 3.4), instead of the terminal 404.
+   */
+  stubs?: boolean;
 }
 
 /** A TCP relay to the stack's PostgreSQL, reading its current port for every connection. */
@@ -112,6 +117,13 @@ export interface TestApi {
   logs: LogEntry[];
   /** Method and path of every route of the Hono app. */
   routes: { method: string; path: string }[];
+  /** Route ids whose stub ran (with `stubs: true`). */
+  reached: string[];
+  /**
+   * A new app and listener on the same database, keys and gate: what survives
+   * is what the database holds. Answers this object, now on its new port.
+   */
+  restart(): Promise<TestApi>;
   setGate(state: GateState): void;
   request(method: string, path: string, init?: RequestInit): Promise<Response>;
   /** Closes everything; fails when a log entry `unlisted_error` was not consumed by its test. */
@@ -173,7 +185,7 @@ export async function startTestApi(opts: StartTestApiOptions = {}): Promise<Test
     cleanup.push(() => health.close());
     const logs: LogEntry[] = [];
     const keys = ephemeralKeys();
-    const auth = createAuth({ db: drizzle(pool), keys, baseURL: TEST_ORIGIN });
+    const reached: string[] = [];
     const config: ApiConfig = {
       baseUrl: TEST_ORIGIN,
       build: "0000000",
@@ -182,19 +194,29 @@ export async function startTestApi(opts: StartTestApiOptions = {}): Promise<Test
       trustedProxy: null,
       ...opts.config,
     };
-    const app = createApp({
-      pool,
-      config,
-      health: () => health.check(),
-      log: (entry) => logs.push(entry),
-      auth: { auth, keys, throttle: createThrottle({ pool, ring: keys.rateLimit }) },
-      ...(opts.routes === undefined ? {} : { test: { routes: opts.routes } }),
-    });
-    const server: ApiServer = await listen(app, {
-      hostname: "127.0.0.1",
-      port: 0,
-      tls: { certPath: database.stack.api.certPath, keyPath: database.stack.api.keyPath },
-    });
+    const build = () => {
+      const auth = createAuth({ db: drizzle(pool), keys, baseURL: TEST_ORIGIN });
+      const app = createApp({
+        pool,
+        config,
+        health: () => health.check(),
+        log: (entry) => logs.push(entry),
+        auth: { auth, keys, throttle: createThrottle({ pool, ring: keys.rateLimit }) },
+        test: {
+          ...(opts.routes === undefined ? {} : { routes: opts.routes }),
+          ...(opts.stubs === true ? { stubs: (routeId: string) => reached.push(routeId) } : {}),
+          // TOTP codes are checked at the time a test sends (Run 3.4).
+          clock: (headers: Headers) => {
+            const value = headers.get("x-test-now");
+            return value === null ? undefined : new Date(value);
+          },
+        },
+      });
+      return { auth, app };
+    };
+    let built = build();
+    const tls = { certPath: database.stack.api.certPath, keyPath: database.stack.api.keyPath };
+    let server: ApiServer = await listen(built.app, { hostname: "127.0.0.1", port: 0, tls });
     cleanup.push(() => server.close());
     if (opts.dispatcher !== false) {
       const dispatcher = startOutboxDispatcher(pool, (entry) => logs.push(entry));
@@ -252,19 +274,34 @@ export async function startTestApi(opts: StartTestApiOptions = {}): Promise<Test
         outgoing.end(payload);
       });
 
-    return {
-      auth,
+    const api: TestApi = {
+      get auth() {
+        return built.auth;
+      },
       keys,
-      baseUrl: `https://127.0.0.1:${String(server.port)}`,
+      get baseUrl() {
+        return `https://127.0.0.1:${String(server.port)}`;
+      },
       origin: TEST_ORIGIN,
-      port: server.port,
+      get port() {
+        return server.port;
+      },
+      reached,
+      async restart() {
+        await server.close();
+        built = build();
+        server = await listen(built.app, { hostname: "127.0.0.1", port: 0, tls });
+        return api;
+      },
       database,
       pool,
       superuser: database.pool("superuser"),
       logs,
-      routes: app.routes
-        .filter((route) => route.method !== "ALL")
-        .map((route) => ({ method: route.method, path: route.path })),
+      get routes() {
+        return built.app.routes
+          .filter((route) => route.method !== "ALL")
+          .map((route) => ({ method: route.method, path: route.path }));
+      },
       setGate,
       request,
       async close() {
@@ -277,6 +314,7 @@ export async function startTestApi(opts: StartTestApiOptions = {}): Promise<Test
         }
       },
     };
+    return api;
   } catch (error) {
     await release();
     throw error;

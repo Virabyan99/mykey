@@ -85,7 +85,10 @@ describe("elevation with TOTP", () => {
     );
     expect(after[0]?.phase).toBe("mfa_complete");
     expect(after[0]?.authenticated_at).toEqual(before[0]?.authenticated_at);
-    expect(after[0]?.totp_verified_at).toEqual(now);
+    // Database time (Run 3.4), not the clock the code was checked at.
+    const verifiedAt = after[0]?.totp_verified_at?.getTime() ?? 0;
+    expect(Math.abs(verifiedAt - Date.now())).toBeLessThan(10_000);
+    expect(Math.abs(verifiedAt - now.getTime())).toBeGreaterThan(60_000);
   });
 
   // Run 2.10 review finding I4 (Doc 10 §4.1 rule 5: checked on every request, from current

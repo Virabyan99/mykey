@@ -49,6 +49,7 @@ export {
   type ThrottlePhase,
 } from "./throttle.ts";
 export { normalizeEmail } from "./email.ts";
+export { hasFreshTotp } from "./fresh.ts";
 export { sessionVerifier, sessionVerifierCandidates } from "./session-verifier.ts";
 export {
   RECOVERY_ALPHABET,
@@ -65,7 +66,10 @@ export {
   enrollTotp,
   regenerateRecoveryCodes,
   sessionCookie,
+  stepUpWithTotp,
   type ActivateResult,
+  type FactorAudit,
+  type StepUpResult,
   type ElevateResult,
   type EnrollResult,
   type FactorDeps,
