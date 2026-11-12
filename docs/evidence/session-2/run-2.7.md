@@ -1,6 +1,6 @@
 # Run 2.7 — Real KMS auto-unseal
 
-**Result: DONE on 12 Nov 2026**, apart from the owner's custody confirmation (OWN-4, requested). Staging OpenBao unseals itself from OVHcloud KMS after a restart, a cold start and a host reboot; it stays sealed (and says so) without the KMS and recovers alone; a deleted certificate cannot unseal and a reissued one can; a destroyed seal key loses everything. Decision record: D-23. Runbooks: `kms-and-unseal.md`, `custody-map.md`, `credential-custody.md` (new rows).
+**Result: DONE on 12 Nov 2026**; the owner confirmed custody (OWN-4: "custody confirmed"). Staging OpenBao unseals itself from OVHcloud KMS after a restart, a cold start and a host reboot; it stays sealed (and says so) without the KMS and recovers alone; a deleted certificate cannot unseal and a reissued one can; a destroyed seal key loses everything. Decision record: D-23. Runbooks: `kms-and-unseal.md`, `custody-map.md`, `credential-custody.md` (new rows).
 
 FR-1.64 SPIKE_PASS — unattended unseal after restart, cold start and reboot; KMS outage at start keeps OpenBao sealed with `/health` 503 and no manual-key fallback; outage while running keeps it serving and raises `kms_unreachable` (`unseal.staging.test.ts`, `unseal-staging.txt`).
 FR-1.65 SPIKE_PASS — certificate replaced without the old one: `staging-seal-1` deleted in the console cannot unseal, `staging-seal-2` (key made on the host) unseals, the old key shredded.
@@ -57,7 +57,7 @@ KMS-L1 SPIKE_PASS — seal key lost: UNRECOVERABLE, as Doc 04 says; a backup pai
 
 ## Open issues
 
-- **OWN-4** — the owner copies `~/.mykey/custody/staging/openbao-init.json` and the SSH key into the password manager and replies "custody confirmed".
+- OWN-4 closed: the owner confirmed that the init answer and the SSH key are in the password manager.
 - All certificates expire on 12 Dec 2026 (seal: 10:50 UTC); replace `staging-seal-2` before then; `losstest-ops-2` is needed for the checkpoint.
 - The expiry alert (Run 6.4); production's own KMS layout at its first OpenBao start.
 

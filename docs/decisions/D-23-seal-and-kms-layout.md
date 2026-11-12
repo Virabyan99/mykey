@@ -2,7 +2,7 @@
 
 **Date:** 2026-11-12
 
-**Status:** DECIDED by the executing agent in Run 2.7, with the owner's console sittings (OWN-3). Custody confirmation (OWN-4): **requested, not yet received**. Evidence: `tests/staging/{unseal,key-loss}.staging.test.ts`, `docs/evidence/session-2/{unseal-staging,key-loss-staging}.txt`, `kms-checkpoints.json`, `run-2.7.md`. Runbooks: `kms-and-unseal.md`, `custody-map.md`.
+**Status:** DECIDED by the executing agent in Run 2.7, with the owner's console sittings (OWN-3). Custody confirmation (OWN-4): **received** — the owner replied "custody confirmed" on 12 Nov 2026 (init answer and SSH key in the password manager). Evidence: `tests/staging/{unseal,key-loss}.staging.test.ts`, `docs/evidence/session-2/{unseal-staging,key-loss-staging}.txt`, `kms-checkpoints.json`, `run-2.7.md`. Runbooks: `kms-and-unseal.md`, `custody-map.md`.
 
 ## Decision
 
@@ -43,7 +43,6 @@
 
 ## Open
 
-- OWN-4: the owner's confirmation that the init answer and the SSH key are in the password manager.
 - Checkpoint `kms-cert-expiry` from 12 Dec 2026 09:57 UTC (needs a new losstest certificate `losstest-ops-2` by then).
 - Seal-key rotation is described, not exercised.
 - `PASS` for FR-1.64, FR-1.65, AC-1.26, PO-1 waits for the first production start.
