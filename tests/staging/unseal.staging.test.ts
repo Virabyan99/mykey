@@ -2,19 +2,61 @@
 // by itself. Every unseal assertion first proves that a new process started
 // (pid and StartedAt differ from before the action). Timings are appended to
 // docs/evidence/session-2/unseal-staging.txt.
-import { appendFileSync, existsSync, writeFileSync } from "node:fs";
-import { resolve } from "node:path";
+import { appendFileSync, existsSync, readFileSync, writeFileSync } from "node:fs";
+import { homedir } from "node:os";
+import { join, resolve } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createOrgFixture, type OrgFixture } from "../harness/org-fixture.ts";
 import { baoFetch, type Stack } from "../harness/stack.ts";
-import { connectStaging, expectSuccess, sshExec, type StagingStack } from "../harness/staging.ts";
+import {
+  connectStaging,
+  expectSuccess,
+  registerSecret,
+  sshExec,
+  type StagingStack,
+} from "../harness/staging.ts";
 
 const EVIDENCE = resolve(import.meta.dirname, "../../docs/evidence/session-2/unseal-staging.txt");
 const CONTAINER = "mykey-openbao-1";
 const COMPOSE =
   "docker compose --env-file /etc/mykey/host.env -f /opt/mykey/compose/host.compose.yml -p mykey --profile openbao";
 const PUBLIC_HEALTH = "https://mykey-staging.nomikey.com/health";
+const EGRESS = "/opt/mykey/hosts/firewall/mykey-egress.sh";
+const PROBE = "https://mykey-probe.nomikey.com";
+
+interface ProbeView {
+  state: { open: Record<string, { openedAt: number; lastAlertAt: number | null }> };
+}
+
+async function probeView(): Promise<ProbeView> {
+  const token = readFileSync(join(homedir(), ".mykey", "secrets", "probe", "read-token"), "utf8");
+  const response = await fetch(`${PROBE}/v1/state/staging`, {
+    headers: { authorization: `Bearer ${token.trim()}` },
+    signal: AbortSignal.timeout(20_000),
+  });
+  if (response.status !== 200) throw new Error(`probe state: HTTP ${response.status}`);
+  return (await response.json()) as ProbeView;
+}
+
+async function publicHealth(): Promise<number> {
+  try {
+    return (await fetch(PUBLIC_HEALTH, { signal: AbortSignal.timeout(10_000) })).status;
+  } catch {
+    return 0;
+  }
+}
+
+/** The recovery key from the custody copy, registered so it is never printed. */
+function custodyRecoveryKey(): string {
+  const answer = JSON.parse(
+    readFileSync(join(homedir(), ".mykey", "custody", "staging", "openbao-init.json"), "utf8"),
+  ) as { recovery_keys_base64?: string[] };
+  const key = answer.recovery_keys_base64?.[0];
+  if (key === undefined) throw new Error("custody copy has no recovery key");
+  registerSecret(key);
+  return key;
+}
 
 let staging: StagingStack;
 let org: OrgFixture;
@@ -145,4 +187,128 @@ describe("staging OpenBao on the OVHcloud KMS seal", () => {
     const response = await fetch(PUBLIC_HEALTH);
     expect(response.status).toBe(200);
   });
+
+  it("host reboot unseals alone", async () => {
+    // Never reboot with a firewall or SSH revert pending.
+    expect((await staging.status()).pendingRevert).toEqual([]);
+    const before = await openbaoProcess();
+    const started = Date.now();
+    const { secondsUntilSsh } = await staging.reboot();
+    // No command on the host: only the public endpoint is asked.
+    while ((await publicHealth()) !== 200) {
+      if (Date.now() - started > 300_000)
+        throw new Error("/health not 200 within 300 s of the reboot");
+      await sleep(2_000);
+    }
+    const seconds = Math.round((Date.now() - started) / 1000);
+    record(
+      `host reboot: ssh back after ${secondsUntilSsh} s, public /health 200 after ${seconds} s`,
+    );
+    expect(seconds).toBeLessThanOrEqual(300);
+    await expectNewProcess(before);
+    expect(await readSecret()).toBe(secret.value);
+  }, 900_000);
+
+  it("KMS away at start: stays sealed, says 503, recovers alone", async () => {
+    const before = await openbaoProcess();
+    expectSuccess(await sshExec(staging.host, `${EGRESS} block kms 240`, { sudo: true }), "block");
+    const blockedAt = Date.now();
+    expectSuccess(
+      await sshExec(staging.host, `docker restart ${CONTAINER}`, {
+        sudo: true,
+        timeoutMs: 120_000,
+      }),
+      "docker restart",
+    );
+    const window = {
+      unsealed: false,
+      saw503: false,
+      recoveryUnsealed: false,
+      statusFlagged: false,
+    };
+    const recoveryKey = custodyRecoveryKey();
+    while (Date.now() - blockedAt < 90_000) {
+      const status = await sealStatus();
+      if (status?.sealed === false) window.unsealed = true;
+      if ((await publicHealth()) === 503) window.saw503 = true;
+      // FR-1.64, no silent manual-key fallback: the recovery key cannot unseal.
+      const unseal = await baoFetch(asStack(), "/v1/sys/unseal", {
+        method: "POST",
+        token: "",
+        body: { key: recoveryKey },
+      }).catch(() => undefined);
+      if (unseal?.status === 200) {
+        const body = (await unseal.json()) as { sealed?: boolean };
+        if (body.sealed === false) window.recoveryUnsealed = true;
+      }
+      await sleep(5_000);
+    }
+    const host = await staging.status();
+    window.statusFlagged = host.sealed !== false || host.kmsReachable === false;
+    const during = await openbaoProcess();
+    record(
+      `KMS away at start: restarts ${before.restarts} -> ${during.restarts}, sealed throughout ${!window.unsealed}, public 503 seen ${window.saw503}, status sealed=${String(host.sealed)} kmsReachable=${String(host.kmsReachable)}`,
+    );
+    expect(window).toEqual({
+      unsealed: false,
+      saw503: true,
+      recoveryUnsealed: false,
+      statusFlagged: true,
+    });
+
+    // The kernel lifts the block after 240 s; nothing is typed.
+    const remaining = 240_000 - (Date.now() - blockedAt);
+    if (remaining > 0) await sleep(remaining);
+    const ms = await waitUnsealedAndReadable(240);
+    record(
+      `KMS away at start: unsealed and readable ${ms} ms after the block ended, with no command`,
+    );
+  }, 900_000);
+
+  it("KMS away while running: still serving, separately visible", async () => {
+    await waitUnsealedAndReadable(60);
+    expectSuccess(await sshExec(staging.host, `${EGRESS} block kms 300`, { sudo: true }), "block");
+    const blockedAt = Date.now();
+    await sleep(15_000);
+    // Reads and writes go on: the seal key is not needed while unsealed.
+    const value = `synthetic-${Date.now()}`;
+    const write = await baoFetch(asStack(), `/v1/kv/data/${secret.path}`, {
+      method: "POST",
+      namespace: org.namespace,
+      body: { options: { cas: 1 }, data: { value } },
+    });
+    expect(write.status).toBe(200);
+    secret.value = value;
+    expect(await readSecret()).toBe(value);
+    const host = await staging.status();
+    expect({ sealed: host.sealed, kmsReachable: host.kmsReachable }).toEqual({
+      sealed: false,
+      kmsReachable: false,
+    });
+    expect(await publicHealth()).toBe(200);
+
+    // The probe tells the two apart: kms_unreachable, not openbao_sealed.
+    let opened: ProbeView | undefined;
+    while (Date.now() - blockedAt < 290_000 && opened === undefined) {
+      const current = await probeView().catch(() => undefined);
+      if (current?.state.open.kms_unreachable !== undefined) opened = current;
+      else await sleep(15_000);
+    }
+    expect(opened?.state.open.kms_unreachable).toBeDefined();
+    expect(opened?.state.open.openbao_sealed).toBeUndefined();
+    record(
+      `KMS away while running: writes and reads OK, status kmsReachable=false sealed=false, probe opened kms_unreachable after ${Math.round(((opened?.state.open.kms_unreachable?.openedAt ?? 0) - blockedAt) / 1000)} s`,
+    );
+
+    let resolved = false;
+    while (Date.now() - blockedAt < 900_000 && !resolved) {
+      const current = await probeView().catch(() => undefined);
+      resolved = current !== undefined && current.state.open.kms_unreachable === undefined;
+      if (!resolved) await sleep(15_000);
+    }
+    expect(resolved).toBe(true);
+    record(
+      `KMS away while running: kms_unreachable resolved ${Math.round((Date.now() - blockedAt) / 1000)} s after the block began (block 300 s)`,
+    );
+  }, 1_200_000);
 });

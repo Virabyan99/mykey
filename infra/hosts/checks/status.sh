@@ -67,8 +67,10 @@ kms_reachable=null
 if [ -n "${MYKEY_KMS_HOST:-}" ] && [ -e /etc/mykey/secrets/kms/seal.crt ] &&
 	docker network inspect mykey_kms >/dev/null 2>&1; then
 	# As OpenBao's uid, which owns the KMS directory (Run 2.7). The image has no
-	# CA bundle; the host's is mounted, and verification stays on.
-	if timeout 20 docker run --rm --network mykey_kms --user 100:1000 --read-only --cap-drop ALL \
+	# CA bundle; the host's is mounted, and verification stays on. A KMS outage
+	# drops the handshake: --init passes timeout's signal on to openssl (as PID 1
+	# it would ignore it), and -k kills what is left, so status never hangs.
+	if timeout -k 5 15 docker run --init --rm --network mykey_kms --user 100:1000 --read-only --cap-drop ALL \
 		--security-opt no-new-privileges -v /etc/mykey/secrets/kms:/kms:ro \
 		-v /etc/ssl/certs/ca-certificates.crt:/roots.pem:ro --entrypoint openssl "$PKI_IMAGE" \
 		s_client -connect "$MYKEY_KMS_HOST:5696" -servername "$MYKEY_KMS_HOST" -verify_return_error -CAfile /roots.pem \

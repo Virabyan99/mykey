@@ -99,6 +99,8 @@ export const USAGE = `usage: node scripts/host.ts <staging|prod> <command> [--pu
   kms-install <tar>              okms from the pinned release archive (staging only)
   kms-cert <name> <crt>          install a KMS certificate next to its key (staging only)
   kms-use <name>                 point seal.crt/seal.key at that certificate (staging only)
+  kms-import <name> <crt> <key>  a workstation key and its certificate, for a test (staging only)
+  kms-remove <name>              shred a certificate's key, unless the seal uses it (staging only)
   kms <name> -- <okms args>      run okms with that certificate (staging only)
   env <key> <value>              set an OpenBao/KMS setting in host.env (staging only)
   up                             create missing host secrets, then docker compose up -d
@@ -116,6 +118,8 @@ export type HostCommand = { host: HostName; via: Address } & (
   | { command: "kms-install"; tar: string }
   | { command: "kms-cert"; name: string; crt: string }
   | { command: "kms-use"; name: string }
+  | { command: "kms-import"; name: string; crt: string; key: string }
+  | { command: "kms-remove"; name: string }
   | { command: "kms"; name: string; argv: string[] }
   | { command: "env"; key: OpenBaoEnvKey; value: string }
   | { command: "maint"; minutes: number; argv: string[] }
@@ -131,7 +135,16 @@ export const OPENBAO_ENV_KEYS = [
 export type OpenBaoEnvKey = (typeof OPENBAO_ENV_KEYS)[number];
 
 /** Production holds no OpenBao and no KMS material in Session 2. */
-const STAGING_ONLY = new Set(["kms-install", "kms-cert", "kms-use", "kms", "env", "bao-init"]);
+const STAGING_ONLY = new Set([
+  "kms-install",
+  "kms-cert",
+  "kms-use",
+  "kms-import",
+  "kms-remove",
+  "kms",
+  "env",
+  "bao-init",
+]);
 const CERT_NAME = /^[a-z][a-z0-9-]{0,39}$/;
 
 export function parseHostArgs(argv: string[]): HostCommand {
@@ -219,6 +232,32 @@ export function parseHostArgs(argv: string[]): HostCommand {
       const name = positional[0];
       if (positional.length !== 1 || name === undefined || !CERT_NAME.test(name)) {
         throw new Error("kms-use needs one certificate name");
+      }
+      return { ...base, command, name };
+    }
+    case "kms-import": {
+      const [name, crt, key] = positional;
+      if (
+        positional.length !== 3 ||
+        name === undefined ||
+        crt === undefined ||
+        key === undefined ||
+        !CERT_NAME.test(name) ||
+        name === "seal"
+      ) {
+        throw new Error("kms-import needs <name> <certificate file> <key file>; not seal");
+      }
+      return { ...base, command, name, crt, key };
+    }
+    case "kms-remove": {
+      const name = positional[0];
+      if (
+        positional.length !== 1 ||
+        name === undefined ||
+        !CERT_NAME.test(name) ||
+        name === "seal"
+      ) {
+        throw new Error("kms-remove needs one certificate name; not seal");
       }
       return { ...base, command, name };
     }
@@ -520,6 +559,18 @@ export function imageIdFromLoadOutput(text: string): string | undefined {
   return /Loaded image ID: (sha256:[0-9a-f]{64})/.exec(text)?.[1];
 }
 
+/** The one image `docker load` reported (an id or a reference); refuses none or several. */
+export function loadedImageReference(text: string): string {
+  const loaded = [...text.matchAll(/^Loaded image(?: ID)?: (\S+)$/gm)].map((match) => match[1]);
+  if (loaded.length === 0) throw new Error("docker load reported no image");
+  if (loaded.length > 1) {
+    throw new Error(
+      `the archive holds ${loaded.length} images; save exactly one (docker save <name>:<tag>)`,
+    );
+  }
+  return loaded[0] ?? "";
+}
+
 /** Sets KEY=value in /etc/mykey/host.env (non-secret settings only), replacing an old value. */
 export function hostEnvSetCommand(key: string, value: string): string {
   if (!/^[A-Z][A-Z0-9_]*$/.test(key)) throw new Error("host.env: invalid key");
@@ -644,6 +695,28 @@ export function kmsCertCommand(name: string): string {
   ].join(" && ");
 }
 
+/** A key made on the workstation (the losstest certificates), for the test only; never replaces one. */
+export function kmsImportKeyCommand(name: string): string {
+  if (!CERT_NAME.test(name) || name === "seal") throw new Error("invalid certificate name");
+  const [uid, gid] = OPENBAO_OWNER.split(":");
+  const key = `${KMS_DIR}/${name}.key`;
+  return [
+    `install -d -m 0700 -o ${uid} -g ${gid} ${KMS_DIR}`,
+    `test ! -e ${key}`,
+    `install -m 0400 -o ${uid} -g ${gid} /dev/stdin ${key}`,
+  ].join(" && ");
+}
+
+/** Removes a certificate and its key, unless the seal links point at them. */
+export function kmsRemoveCommand(name: string): string {
+  if (!CERT_NAME.test(name) || name === "seal") throw new Error("invalid certificate name");
+  return [
+    `[ "$(readlink ${KMS_DIR}/seal.key)" != ${name}.key ]`,
+    `shred -u ${KMS_DIR}/${name}.key`,
+    `rm -f ${KMS_DIR}/${name}.crt`,
+  ].join(" && ");
+}
+
 /** seal.crt / seal.key, which OpenBao's configuration names, point at one certificate. */
 export function kmsUseCommand(name: string): string {
   if (!CERT_NAME.test(name)) throw new Error("invalid certificate name");
@@ -670,7 +743,7 @@ export function baoInitCommand(): string {
     `(umask 077 && curl --fail --silent --show-error --max-time 60 --cacert ${REMOTE.caCert} --resolve openbao:${port}:${address} -X PUT --data '{"recovery_shares":1,"recovery_threshold":1}' https://openbao:${port}/v1/sys/init > ${BAO_INIT_FILE}.new)`,
     `mv ${BAO_INIT_FILE}.new ${BAO_INIT_FILE}`,
     `chmod 0400 ${BAO_INIT_FILE}`,
-    `jq -r '.recovery_keys_b64 | length' ${BAO_INIT_FILE}`,
+    `jq -er '.recovery_keys_base64 | length' ${BAO_INIT_FILE}`,
   ].join(" && ");
 }
 
@@ -938,12 +1011,11 @@ async function runImage(
       "removing the upload directory",
     );
   }
-  let id = imageIdFromLoadOutput(output);
+  const loaded = loadedImageReference(output);
+  let id = /^sha256:[0-9a-f]{64}$/.test(loaded) ? loaded : undefined;
   if (id === undefined) {
-    const ref = /Loaded image: (\S+)/.exec(output)?.[1];
-    if (ref === undefined || !/^[a-z0-9][a-z0-9._/:@-]*$/.test(ref)) {
-      throw new Error("docker load reported no image");
-    }
+    const ref = loaded;
+    if (!/^[a-z0-9][a-z0-9._/:@-]*$/.test(ref)) throw new Error("docker load: unusable image name");
     const inspect = await sshExec(host, `docker image inspect --format '{{.Id}}' ${shQuote(ref)}`, {
       sudo: true,
       address: opts.address,
@@ -1364,6 +1436,39 @@ async function main(argv: string[], log: Logger): Promise<number> {
         `kms-cert ${command.name}`,
       );
       log.info(`${host.name}: certificate ${command.name} installed next to its key`);
+      return 0;
+    case "kms-import":
+      // The key crosses only as stdin of a command that prints nothing.
+      expectSuccess(
+        await sshExec(host, kmsImportKeyCommand(command.name), {
+          sudo: true,
+          address,
+          secretOutput: true,
+          stdin: readFileSync(command.key, "utf8"),
+        }),
+        `kms-import ${command.name} (an existing key is never replaced)`,
+      );
+      expectSuccess(
+        await sshExec(host, kmsCertCommand(command.name), {
+          sudo: true,
+          address,
+          secretOutput: true,
+          stdin: readFileSync(command.crt, "utf8"),
+        }),
+        `kms-import ${command.name}: certificate`,
+      );
+      log.info(`${host.name}: ${command.name} imported (key and matching certificate)`);
+      return 0;
+    case "kms-remove":
+      expectSuccess(
+        await sshExec(host, kmsRemoveCommand(command.name), {
+          sudo: true,
+          address,
+          secretOutput: true,
+        }),
+        `kms-remove ${command.name} (refused while the seal uses it)`,
+      );
+      log.info(`${host.name}: ${command.name} removed`);
       return 0;
     case "kms-use":
       expectSuccess(

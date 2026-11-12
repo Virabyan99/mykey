@@ -18,6 +18,8 @@ import {
   imageLoadCommand,
   kmsCertCommand,
   kmsCsrCommands,
+  kmsImportKeyCommand,
+  kmsRemoveCommand,
   kmsUseCommand,
   okmsCommand,
   okmsInstallCommand,
@@ -353,7 +355,8 @@ describe("bao-init", () => {
     expect(command).toContain("https://openbao:8200/v1/sys/init");
     expect(command).toContain("chmod 0400 /root/mykey-custody/openbao-init.json");
     expect(command).toMatch(
-      /jq -r '\.recovery_keys_b64 \| length' \/root\/mykey-custody\/openbao-init\.json$/,
+      // OpenBao's field is recovery_keys_base64; jq would count a missing one as 0.
+      /jq -er '\.recovery_keys_base64 \| length' \/root\/mykey-custody\/openbao-init\.json$/,
     );
   });
 
@@ -361,5 +364,42 @@ describe("bao-init", () => {
     expect(custodyCopyPath("staging", "/home/u")).toBe(
       join("/home/u", ".mykey", "custody", "staging", "openbao-init.json"),
     );
+  });
+});
+
+// Run 2.7 Step 7: the losstest certificate and key go to staging for the test only.
+describe("kms-import and kms-remove", () => {
+  it("parse for staging only", () => {
+    expect(parseHostArgs(["staging", "kms-import", "losstest-ops", "a.crt", "a.key"])).toEqual({
+      host: "staging",
+      via: "vpn",
+      command: "kms-import",
+      name: "losstest-ops",
+      crt: "a.crt",
+      key: "a.key",
+    });
+    expect(parseHostArgs(["staging", "kms-remove", "losstest-ops"])).toMatchObject({
+      command: "kms-remove",
+      name: "losstest-ops",
+    });
+    expect(() => parseHostArgs(["prod", "kms-import", "a", "b", "c"])).toThrow(/production/);
+    expect(() => parseHostArgs(["staging", "kms-remove", "seal"])).toThrow(/seal/);
+  });
+
+  it("imports a key only where none exists, then installs its certificate the checked way", () => {
+    const command = kmsImportKeyCommand("losstest-ops");
+    expect(command).toContain("test ! -e /etc/mykey/secrets/kms/losstest-ops.key");
+    expect(command).toContain(
+      "install -m 0400 -o 100 -g 1000 /dev/stdin /etc/mykey/secrets/kms/losstest-ops.key",
+    );
+  });
+
+  it("removes a certificate and key that seal.* does not point at", () => {
+    const command = kmsRemoveCommand("losstest-ops");
+    expect(command).toContain(
+      '[ "$(readlink /etc/mykey/secrets/kms/seal.key)" != losstest-ops.key ]',
+    );
+    expect(command).toContain("shred -u /etc/mykey/secrets/kms/losstest-ops.key");
+    expect(command).toContain("rm -f /etc/mykey/secrets/kms/losstest-ops.crt");
   });
 });

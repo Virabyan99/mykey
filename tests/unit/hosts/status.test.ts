@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import { parseHostStatus } from "../../harness/staging.ts";
 
@@ -64,5 +66,24 @@ describe("parseHostStatus", () => {
         at,
       ),
     ).toThrow(/firewall/);
+  });
+});
+
+// Run 2.7 finding: during a KMS outage the dropped handshake kept the check's
+// container alive (openssl as PID 1 ignores SIGTERM), so status.sh and the
+// heartbeat that runs it hung, and the probe would have seen a missing
+// heartbeat instead of kms_unreachable.
+describe("status.sh", () => {
+  it("cannot hang on a container: every docker run has an init and a killing timeout", () => {
+    const script = readFileSync(
+      resolve(import.meta.dirname, "../../../infra/hosts/checks/status.sh"),
+      "utf8",
+    );
+    const runs = script.split("\n").filter((line) => line.includes("docker run"));
+    expect(runs.length).toBeGreaterThan(0);
+    for (const line of runs) {
+      expect(line).toMatch(/timeout -k \d+ \d+ docker run /);
+      expect(line).toContain(" --init ");
+    }
   });
 });

@@ -2,3 +2,12 @@
 2026-11-12T09:56:42.410Z seal-status type=kmip version=2.7.2
 2026-11-12T09:56:54.586Z container restart: unsealed and readable after 1179 ms
 2026-11-12T09:57:10.961Z cold start (container removed, volume kept): unsealed and readable after 1116 ms
+2026-11-12T10:03:06.505Z seal-status type=kmip version=2.7.2
+2026-11-12T10:03:17.751Z container restart: unsealed and readable after 1018 ms
+2026-11-12T10:03:32.451Z cold start (container removed, volume kept): unsealed and readable after 1028 ms
+2026-11-12T10:04:15.831Z host reboot: ssh back after 27 s, public /health 200 after 36 s
+2026-11-12T10:13:01.186Z KMS away at start: restarts 2 -> 0, sealed throughout true, public 503 seen false, status sealed=null kmsReachable=false
+2026-11-12T10:27:28.462Z KMS away at start: restarts 0 -> 0, sealed throughout true, public 503 seen true, status sealed=null kmsReachable=false
+2026-11-12T10:30:08.109Z KMS away at start: unsealed and readable 35167 ms after the block ended, with no command
+2026-11-12T10:34:40.432Z KMS away while running: writes and reads OK, status kmsReachable=false sealed=false, probe opened kms_unreachable after 255 s
+2026-11-12T10:35:43.042Z KMS away while running: kms_unreachable resolved 331 s after the block began (block 300 s)

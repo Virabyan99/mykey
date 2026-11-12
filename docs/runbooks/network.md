@@ -102,7 +102,7 @@ To cut one purpose off for a drill, on the server: `sudo /opt/mykey/hosts/firewa
 
 ```sh
 docker build --platform linux/amd64 -f apps/api/Dockerfile -t mykey-api .
-docker save mykey-api -o C:/Users/<you>/mykey-tmp/mykey-api.tar      # outside OneDrive
+docker save mykey-api:latest -o C:/Users/<you>/mykey-tmp/mykey-api.tar   # one tag; outside OneDrive
 node scripts/host.ts staging image api C:/Users/<you>/mykey-tmp/mykey-api.tar
 node scripts/host.ts staging up          # creates missing host secrets, then compose up -d
 node scripts/host.ts staging db-init     # roles and migrations through an SSH tunnel

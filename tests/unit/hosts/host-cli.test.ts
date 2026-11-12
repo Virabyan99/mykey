@@ -10,6 +10,7 @@ import {
   hostEnvSetCommand,
   imageEnvKey,
   imageIdFromLoadOutput,
+  loadedImageReference,
   maintCommands,
   parseConfirmProbe,
   parseHostArgs,
@@ -126,6 +127,18 @@ describe("remote command construction", () => {
     const id = `sha256:${"a1".repeat(32)}`;
     expect(imageIdFromLoadOutput(`Loaded image ID: ${id}\n`)).toBe(id);
     expect(imageIdFromLoadOutput("Loaded image: mykey/api:dev\n")).toBeUndefined();
+  });
+
+  // Run 2.7 finding: `docker save mykey-api` (no tag) saved two tags; the
+  // first one loaded was an older image, and that one was recorded.
+  it("takes the one image an archive loads, and refuses an archive with more than one", () => {
+    expect(loadedImageReference("Loaded image: mykey-api:latest\n")).toBe("mykey-api:latest");
+    const id = `sha256:${"c3".repeat(32)}`;
+    expect(loadedImageReference(`Loaded image ID: ${id}\n`)).toBe(id);
+    expect(() =>
+      loadedImageReference("Loaded image: mykey-api:dev\nLoaded image: mykey-api:latest\n"),
+    ).toThrow(/2 images/);
+    expect(() => loadedImageReference("nothing\n")).toThrow(/no image/);
   });
 
   it("sets one key of host.env in place", () => {
