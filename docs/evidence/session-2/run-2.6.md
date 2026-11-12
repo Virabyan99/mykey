@@ -1,6 +1,6 @@
 # Run 2.6 — Off-host probe and alert path
 
-**Result: DONE on 12 Nov 2026**, apart from the owner's visual confirmation of the Telegram messages (Step 5, requested). The Cloudflare Worker `mykey-probe` takes a heartbeat from both hosts every minute and probes their public `/health`; cutting the staging host off from the network completely produced delivered alerts within the grace period, and they resolved by themselves when the host came back. Decision record: D-22. Runbook: `docs/runbooks/probe.md`.
+**Result: DONE on 12 Nov 2026.** Step 5: the owner confirmed on 12 Nov 2026 that the alert messages arrive in the Telegram chat ("receiving telegram messages since yesterday"). The Cloudflare Worker `mykey-probe` takes a heartbeat from both hosts every minute and probes their public `/health`; cutting the staging host off from the network completely produced delivered alerts within the grace period, and they resolved by themselves when the host came back. Decision record: D-22. Runbook: `docs/runbooks/probe.md`.
 
 PO-14 SPIKE_PASS — an off-host alert path proven on staging: a 480-second blackout produced `heartbeat_missing` (170 s) and `health_failing` (290 s) messages accepted by Telegram's API (`delivered = 1`), both resolved after the automatic restore; a dead endpoint on a live host raised only `health_failing`; a failing sink never counted as sent (`tests/staging/probe.staging.test.ts`, `probe-drill-staging.txt`). Run 6.4 closes it (and the Worker's own disappearance).
 
@@ -45,7 +45,7 @@ PO-14 SPIKE_PASS — an off-host alert path proven on staging: a 480-second blac
 
 ## Open issues
 
-- **Step 5 — the owner confirms** that six messages arrived in the Telegram chat (blackout: two opened, two resolved; dead endpoint: one opened, one resolved) on 11 Nov 2026 between 19:57 and 20:09 UTC. Requested in the session's final message.
+- Step 5 closed: the owner confirmed that the messages arrive in the Telegram chat (12 Nov 2026); the per-message count of the 11 Nov drills was not checked one by one.
 - Nobody notices when the Worker itself stops (Run 6.4).
 - A `resolved` whose delivery fails is not retried.
 
