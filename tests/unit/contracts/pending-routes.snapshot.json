@@ -1,5 +1,4 @@
 [
-  "version.get",
   "organizations.list",
   "projects.list",
   "environments.list",

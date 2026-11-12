@@ -72,7 +72,21 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "x-mykey-pending": true
+                  "properties": {
+                    "apiMajor": {
+                      "type": "number",
+                      "const": 1
+                    },
+                    "build": {
+                      "type": "string",
+                      "pattern": "^[0-9a-f]{7,40}$"
+                    }
+                  },
+                  "required": [
+                    "apiMajor",
+                    "build"
+                  ],
+                  "additionalProperties": false
                 }
               }
             }
@@ -5669,8 +5683,8 @@
       "sessionCookie": {
         "type": "apiKey",
         "in": "cookie",
-        "name": "__Host-session",
-        "description": "Human session cookie. The final cookie name is fixed when the session library is configured."
+        "name": "__Secure-better-auth.session_token",
+        "description": "Human session cookie: Secure, HttpOnly, SameSite=Strict, Path=/, host-only (no Domain attribute). D-27."
       },
       "machineBearer": {
         "type": "http",

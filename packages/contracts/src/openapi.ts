@@ -168,9 +168,9 @@ export function buildOpenApiDocument(routes: readonly RouteDef[]): Json {
         sessionCookie: {
           type: "apiKey",
           in: "cookie",
-          name: "__Host-session",
+          name: "__Secure-better-auth.session_token",
           description:
-            "Human session cookie. The final cookie name is fixed when the session library is configured.",
+            "Human session cookie: Secure, HttpOnly, SameSite=Strict, Path=/, host-only (no Domain attribute). D-27.",
         },
         machineBearer: {
           type: "http",

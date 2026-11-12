@@ -83,6 +83,12 @@ const deleteBody = z.strictObject({ ...expected, confirmed });
 
 const healthBody = z.strictObject({ status: z.enum(["up", "down"]) });
 
+const versionBody = z.strictObject({
+  apiMajor: z.literal(1),
+  /** The commit the image was built from. */
+  build: z.string().regex(/^[0-9a-f]{7,40}$/),
+});
+
 const resolveBody = z.strictObject({
   apiMajor: z.int().positive(),
   environmentId: environmentIdSchema,
@@ -208,7 +214,9 @@ const operation = { 200: operationResponseSchema };
 
 export const ROUTES: readonly RouteDef[] = Object.freeze([
   define("health.get", "GET", "/health", "public", false, "2.5", { responses: health }),
-  define("version.get", "GET", "/v1/version", "public", false, "3.1"),
+  define("version.get", "GET", "/v1/version", "public", false, "3.1", {
+    responses: { 200: versionBody },
+  }),
   define("organizations.list", "GET", "/v1/organizations", "human", false, "3.7"),
 
   define("projects.list", "GET", `${O}/projects`, "human", false, "3.9"),
