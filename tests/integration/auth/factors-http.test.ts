@@ -6,6 +6,8 @@ import { randomBytes, randomUUID } from "node:crypto";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { codeAt, hasFreshTotp, stepAt } from "@mykey/auth";
 import { ROUTES, type RouteDef } from "@mykey/contracts";
+import { activeTarget } from "../../harness/tenants.ts";
+import type { PathIds } from "../authz/requests.ts";
 import {
   enrollOwner,
   seedOwner,
@@ -58,10 +60,16 @@ const BODIES: Record<string, unknown> = {
   "credentials.revoke": { confirmed: true },
 };
 
+/** Ids of an active organization of the enrolled owner (Run 3.7: random ids are 404). */
+let target: PathIds | undefined;
+
 function concretePath(route: RouteDef): string {
   return route.path.replace(/:([A-Za-z]+)/g, (_match, name: string) => {
     if (name === "name") return "A";
     if (name === "envName") return "dev";
+    if (target !== undefined && (name === "org" || name === "project" || name === "env")) {
+      return target[name];
+    }
     return randomUUID();
   });
 }
@@ -103,6 +111,7 @@ describe("product routes are closed to incomplete sessions (Task A)", () => {
 
   beforeAll(async () => {
     enrolled = await enrollOwner(api, await seedOwner(api), { source: "198.51.100.251" });
+    target = await activeTarget(api, enrolled.organizationId);
   });
 
   it("a password-only session reaches no product route", async () => {
@@ -118,13 +127,17 @@ describe("product routes are closed to incomplete sessions (Task A)", () => {
 
   it("control: an mfa_complete session reaches every product route's stub", async () => {
     api.reached.length = 0;
-    for (const route of HUMAN) {
+    for (const route of HUMAN.filter((r) => r.scope !== "operation")) {
       const response = await call(route, enrolled.cookie);
-      // Authorization arrives in Run 3.7; until then the stub is reached.
-      expect([200, 204, 403, 404], route.id).toContain(response.status);
+      expect([200, 204], route.id).toContain(response.status);
     }
-    // Every route without a real handler (session.activity has one since Run 3.5).
-    const stubbed = HUMAN.filter((route) => route.id !== "session.activity");
+    // Every route without a real handler (session.activity since Run 3.5,
+    // organizations.list since Run 3.7); operations.get is 404 until Run 4.1.
+    const stubbed = HUMAN.filter(
+      (route) =>
+        !["session.activity", "organizations.list"].includes(route.id) &&
+        route.scope !== "operation",
+    );
     expect(new Set(api.reached)).toEqual(new Set(stubbed.map((route) => route.id)));
   });
 

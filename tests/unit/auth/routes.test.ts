@@ -61,6 +61,7 @@ describe("auth routes on the pipeline (Run 3.2)", () => {
     pool: {} as never,
     keys: ephemeralKeys(),
     baseUrl: "https://mykey.example",
+    originAllowed: () => false,
     respondError: () => new Response(null, { status: 500 }),
     requestId: () => "6f1c4c4e-2a52-4c4b-9a39-2c1f3a1d4e5f",
     source: () => "127.0.0.1",

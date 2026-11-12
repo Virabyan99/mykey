@@ -6,9 +6,17 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { servedAuthRoutes } from "@mykey/auth";
 import { ROUTES, type RouteDef } from "@mykey/contracts";
 import { enrollOwner, errorOf, seedOwner, startTestApi, type TestApi } from "../../harness/api.ts";
+import { activeTarget } from "../../harness/tenants.ts";
+import type { PathIds } from "../authz/requests.ts";
 
 /** Routes with a real handler at this point of the session. */
-const HANDLED = new Set(["health.get", "version.get", "session.activity", "auth.reset.complete"]);
+const HANDLED = new Set([
+  "health.get",
+  "version.get",
+  "organizations.list",
+  "session.activity",
+  "auth.reset.complete",
+]);
 
 /** A valid body for every contract route that takes one. */
 const BODIES: Record<string, unknown> = {
@@ -37,8 +45,12 @@ const BODIES: Record<string, unknown> = {
   "auth.reset.complete": { token: "A".repeat(43), newPassword: "a-long-new-password" },
 };
 
+/** An active organization of the owner (Run 3.7: an id the caller cannot see is 404 earlier). */
+let target: PathIds;
+
 function concretePath(route: RouteDef): string {
   return route.path.replace(/:([A-Za-z]+)/g, (_match, name: string) => {
+    if (name === "org" || name === "project" || name === "env") return target[name];
     if (name === "name") return "A";
     if (name === "envName") return "dev";
     return randomUUID();
@@ -51,7 +63,9 @@ let cookie: string;
 
 beforeAll(async () => {
   api = await startTestApi();
-  cookie = (await enrollOwner(api, await seedOwner(api))).cookie;
+  const owner = await enrollOwner(api, await seedOwner(api));
+  cookie = owner.cookie;
+  target = await activeTarget(api, owner.organizationId);
 });
 
 afterAll(async () => {
@@ -98,6 +112,14 @@ describe("mounted routes", () => {
       });
       expect(response.status).toBe(404);
       expect((await errorOf(response)).code).toBe("not_found");
+      // The terminal 404, not a refusal of the authorization steps (operations.get excepted until Run 4.1).
+      if (route.scope !== "operation") {
+        const denied = await api.superuser.query(
+          "SELECT 1 FROM audit.event WHERE action = 'access.denied' AND request_id = $1",
+          [response.headers.get("x-request-id")],
+        );
+        expect(denied.rowCount, route.id).toBe(0);
+      }
     },
   );
 

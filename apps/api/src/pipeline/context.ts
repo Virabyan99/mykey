@@ -1,11 +1,12 @@
 // Types shared by every step of the request pipeline (Run 3.1).
 import type { HttpBindings } from "@hono/node-server";
 import type { Auth, AuthKeys, Throttle } from "@mykey/auth";
-import type { ErrorCode, RouteDef } from "@mykey/contracts";
+import type { Authority, ErrorCode, RouteDef } from "@mykey/contracts";
 import type pg from "pg";
 import type { HealthReading } from "../health.ts";
 import type { LogEntry } from "../log.ts";
 import type { Principal } from "./authn.ts";
+import type { Scope } from "./authz.ts";
 
 export interface ApiConfig {
   /** The public origin, e.g. https://mykey-staging.nomikey.com. */
@@ -55,6 +56,10 @@ export interface ApiContext {
   query: unknown;
   params: Record<string, string>;
   principal: Principal | null;
+  /** The resolved organization, project and environment of a scoped human route (Run 3.7). */
+  scope: Scope | null;
+  /** The caller's authority in that organization, read on this request. */
+  authority: Authority | null;
   /** The harness's clock for TOTP codes (AppDeps.test.clock); undefined in production. */
   now?: Date;
 }

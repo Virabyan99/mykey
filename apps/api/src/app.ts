@@ -10,10 +10,12 @@ import { now } from "./log.ts";
 import { headerBytes, readAuthBody } from "./pipeline/body.ts";
 import type { ApiEnv, AppDeps, Handler } from "./pipeline/context.ts";
 import { readGate } from "./pipeline/gate.ts";
+import { checkOrigin } from "./pipeline/origin.ts";
 import { errorResponse } from "./pipeline/respond.ts";
 import { requestSource } from "./pipeline/source.ts";
 import { mountRoute, mountRouteDef } from "./pipeline/route.ts";
 import { healthHandler } from "./routes/health.ts";
+import { organizationsListHandler } from "./routes/organizations.ts";
 import { resetCompleteHandler } from "./routes/reset.ts";
 import { sessionActivityHandler } from "./routes/session.ts";
 import { versionHandler } from "./routes/version.ts";
@@ -24,6 +26,7 @@ function mountAuth(app: Hono<ApiEnv>, deps: AppDeps, module: NonNullable<AppDeps
     pool: deps.pool,
     keys: module.keys,
     baseUrl: deps.config.baseUrl,
+    originAllowed: (headers) => checkOrigin(headers, deps.config.baseUrl),
     respondError: errorResponse,
     requestId: (c) => (c as Context<ApiEnv>).get("requestId"),
     source: (c) =>
@@ -62,6 +65,7 @@ function handlers(): Partial<Record<string, Handler>> {
   return {
     "health.get": healthHandler,
     "version.get": versionHandler,
+    "organizations.list": organizationsListHandler,
     "session.activity": sessionActivityHandler,
     "auth.reset.complete": resetCompleteHandler,
   };

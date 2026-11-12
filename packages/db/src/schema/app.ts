@@ -41,6 +41,20 @@ function oneOf(column: AnyPgColumn, values: readonly string[]): SQL {
 }
 
 const RESOURCE_STATES = ["pending", "active", "revoking", "archived", "needs_review"] as const;
+
+/**
+ * Why a row is `needs_review` (Run 3.7, P-53): a short code set by the
+ * provisioner, shown to the owner. Present only in that state.
+ */
+function reviewReasonChecks(table: string, state: AnyPgColumn, reason: AnyPgColumn) {
+  return [
+    check(
+      `${table}_review_reason_state_check`,
+      sql`${reason} is null or ${state} = 'needs_review'`,
+    ),
+    check(`${table}_review_reason_check`, sql`${reason} ~ '^[a-z][a-z_]{0,63}$'`),
+  ];
+}
 const PRINCIPAL_KINDS = ["user", "machine", "operator", "system"] as const;
 
 export const organization = appSchema.table(
@@ -52,12 +66,14 @@ export const organization = appSchema.table(
     configDigest: text("config_digest"),
     provisioningOperationId: uuid("provisioning_operation_id"),
     createdAt: timestamptz("created_at").notNull().defaultNow(),
+    reviewReason: text("review_reason"),
   },
   (t) => [
     check(
       "organization_state_check",
       oneOf(t.state, ["provisioning", "active", "failed", "needs_review"]),
     ),
+    ...reviewReasonChecks("organization", t.state, t.reviewReason),
   ],
 );
 
@@ -92,8 +108,10 @@ export const project = appSchema.table(
     name: text("name").notNull(),
     state: text("state").notNull(),
     archiveOperationId: uuid("archive_operation_id"),
+    reviewReason: text("review_reason"),
   },
   (t) => [
+    ...reviewReasonChecks("project", t.state, t.reviewReason),
     unique("project_organization_name_key").on(t.organizationId, t.name),
     unique("project_organization_id_key").on(t.organizationId, t.id),
     check(
@@ -127,8 +145,10 @@ export const environment = appSchema.table(
       .default(sql`nextval('app.environment_lock_key_seq')`),
     archiveOrigin: text("archive_origin"),
     archiveOperationId: uuid("archive_operation_id"),
+    reviewReason: text("review_reason"),
   },
   (t) => [
+    ...reviewReasonChecks("environment", t.state, t.reviewReason),
     foreignKey({
       name: "environment_organization_project_fk",
       columns: [t.organizationId, t.projectId],

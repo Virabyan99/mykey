@@ -15,7 +15,7 @@ import {
   type AuthKeys,
   type KeyRing,
 } from "@mykey/auth";
-import { errorResponse, readAuthBody } from "@mykey/api";
+import { checkOrigin, errorResponse, readAuthBody } from "@mykey/api";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { Hono } from "hono";
 import * as OTPAuth from "otpauth";
@@ -110,6 +110,7 @@ export async function authFixture(): Promise<AuthFixture> {
       pool,
       keys,
       baseUrl: BASE_URL,
+      originAllowed: (headers) => checkOrigin(headers, BASE_URL),
       respondError: errorResponse,
       requestId: () => randomUUID(),
       // A fresh source per request: these suites test the factors, not the

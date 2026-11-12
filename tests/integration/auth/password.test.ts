@@ -38,7 +38,7 @@ beforeEach(async () => {
 
 const complete = () => signInComplete(api, owner, { source: "198.51.100.252" });
 const product = (cookie: string) =>
-  api.request("GET", "/v1/organizations", { cookie, headers: from() });
+  api.request("GET", "/v1/reference", { cookie, headers: from() });
 const change = (cookie: string, currentPassword: string, newPassword: string) =>
   api.request("POST", "/v1/auth/change-password", {
     body: { currentPassword, newPassword },

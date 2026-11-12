@@ -3,6 +3,8 @@
 // expired sessions (API) and of spent factor rows (operator).
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { activeTarget } from "../../harness/tenants.ts";
+import { pathIn, type PathIds } from "../authz/requests.ts";
 import { cleanUpSessions, codeAt, stepAt } from "@mykey/auth";
 import { cleanUpFactors } from "@mykey/auth/operator";
 import { ROUTES } from "@mykey/contracts";
@@ -18,6 +20,7 @@ import {
 
 let api: TestApi;
 let owner: EnrolledOwner;
+let target: PathIds;
 let sources = 0;
 const from = (): Record<string, string> => {
   sources += 1;
@@ -27,6 +30,7 @@ const from = (): Record<string, string> => {
 beforeAll(async () => {
   api = await startTestApi({ stubs: true, config: { trustedProxy: "127.0.0.1" } });
   owner = await enrollOwner(api, await seedOwner(api), { source: "198.51.100.251" });
+  target = await activeTarget(api, owner.organizationId);
 });
 
 afterAll(async () => {
@@ -45,7 +49,7 @@ const BODIES: Record<string, unknown> = {
 
 function start(routeId: string, cookie: string): Promise<Response> {
   const route = FRESH.find((candidate) => candidate.id === routeId)!;
-  const path = route.path.replace(/:([A-Za-z]+)/g, () => randomUUID());
+  const path = pathIn(route, target);
   return api.request(route.method, path, {
     body: BODIES[route.id],
     cookie,

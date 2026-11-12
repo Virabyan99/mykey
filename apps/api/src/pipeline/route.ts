@@ -3,15 +3,19 @@
 // error list all come from the contract. A route with no handler yet passes
 // every check of the pipeline and then answers 404 not_found.
 //
-// Order inside a request (this run's outer frame; Run 3.7 completes it):
-// request id → gate → route match → body limits and parsing → strict
-// validation → handler → output validation; no-store and x-request-id on every
-// response (app.ts).
+// Order inside a request (Doc 06 §4.4, final since Run 3.7): request id →
+// gate → route match → body limits and parsing → mixed-credential check →
+// Origin check → authentication → strict validation of body and query →
+// ancestry and membership → visibility → action → state → freshness →
+// handler → output validation; no-store and x-request-id on every response
+// (app.ts).
 import { AuditUnavailable } from "@mykey/audit";
 import { LIMITS, ROUTES, type RouteDef } from "@mykey/contracts";
 import type { Context, Hono } from "hono";
 import { now } from "../log.ts";
 import { authenticateHuman } from "./authn.ts";
+import { authorize, deny } from "./authz.ts";
+import { checkOrigin, hasMixedCredentials, needsOriginCheck } from "./origin.ts";
 import { headerBytes, readBody } from "./body.ts";
 import { requestSource } from "./source.ts";
 import {
@@ -114,17 +118,37 @@ async function run(
     const raw = await readBody(c.req.raw, route, (bytes) => {
       c.set("bodyBytesRead", c.get("bodyBytesRead") + bytes);
     });
+    const headers = c.req.raw.headers;
+    const human = route.auth === "human" || route.auth === "human_fresh_totp";
+    // One kind of credential per request, refused before any database read.
+    if ((human || route.auth === "machine") && hasMixedCredentials(headers)) {
+      throw new ApiError("mixed_authentication");
+    }
+    // FR-1.76: before the session is read.
+    if (needsOriginCheck(route) && !checkOrigin(headers, deps.config.baseUrl)) {
+      throw new ApiError("origin_rejected");
+    }
     // Authentication before strict validation: an anonymous caller learns nothing from a 422.
-    const principal =
-      route.auth === "human" || route.auth === "human_fresh_totp"
-        ? await authenticateHuman(deps, c.req.raw.headers)
-        : null;
-    const clock = deps.test?.clock?.(c.req.raw.headers);
+    const principal = human ? await authenticateHuman(deps, headers) : null;
+    const clock = deps.test?.clock?.(headers);
     const query = validateQuery(route, new URL(c.req.url).searchParams);
     const body = validateBody(route, raw);
-    // Freshness (FR-1.77): last before the handler (Run 3.7 puts authorization and state before it).
-    if (route.auth === "human_fresh_totp" && principal?.fresh !== true) {
-      throw new ApiError("fresh_verification_required");
+    const params = c.req.param();
+    const access =
+      principal === null
+        ? { scope: null, authority: null }
+        : await authorize(deps, route, params, principal, requestId);
+    // Freshness (FR-1.77): last before the handler, after visibility, action and state.
+    if (route.auth === "human_fresh_totp" && principal !== null && !principal.fresh) {
+      await deny(deps, {
+        route,
+        principal,
+        requestId,
+        reason: "fresh",
+        code: "fresh_verification_required",
+        organizationId: access.scope?.organizationId ?? null,
+        targetId: params.env ?? params.project ?? params.org ?? null,
+      });
     }
     if (handler === terminal && deps.test?.stubs !== undefined) {
       // The harness's stub: every check of the pipeline has passed.
@@ -142,8 +166,10 @@ async function run(
         route,
         body,
         query,
-        params: c.req.param(),
+        params,
         principal,
+        scope: access.scope,
+        authority: access.authority,
         ...(clock === undefined ? {} : { now: clock }),
       },
       deps,

@@ -130,6 +130,11 @@ export interface TestApi {
   close(): Promise<void>;
 }
 
+/** An empty header value means: send the request without that header (no Origin, Run 3.7). */
+function withoutEmpty(headers: Record<string, string>): Record<string, string> {
+  return Object.fromEntries(Object.entries(headers).filter(([, value]) => value !== ""));
+}
+
 /** The public origin the test API believes it serves. */
 export const TEST_ORIGIN = "https://mykey.test";
 
@@ -243,7 +248,15 @@ export async function startTestApi(opts: StartTestApiOptions = {}): Promise<Test
           headers[name.toLowerCase()] = value;
         }
         const outgoing = https.request(
-          { host: "127.0.0.1", port: server.port, path, method, headers, ca, agent: false },
+          {
+            host: "127.0.0.1",
+            port: server.port,
+            path,
+            method,
+            headers: withoutEmpty(headers),
+            ca,
+            agent: false,
+          },
           (response) => {
             answered = true;
             const chunks: Buffer[] = [];
@@ -425,10 +438,19 @@ export function requestTo(
       headers["content-length"] = String(payload.length);
     }
     if (init.cookie !== undefined) headers.cookie = init.cookie;
-    for (const [name, value] of Object.entries(init.headers ?? {}))
+    for (const [name, value] of Object.entries(init.headers ?? {})) {
       headers[name.toLowerCase()] = value;
+    }
     const outgoing = https.request(
-      { host: "127.0.0.1", port: target.port, path, method, headers, ca: target.ca, agent: false },
+      {
+        host: "127.0.0.1",
+        port: target.port,
+        path,
+        method,
+        headers: withoutEmpty(headers),
+        ca: target.ca,
+        agent: false,
+      },
       (response) => {
         const chunks: Buffer[] = [];
         response.on("data", (chunk: Buffer) => chunks.push(chunk));

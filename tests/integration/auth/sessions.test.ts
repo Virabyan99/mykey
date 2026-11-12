@@ -36,9 +36,9 @@ beforeEach(async () => {
 
 const complete = () => signInComplete(api, owner, { source: "198.51.100.252" });
 
-/** GET organizations.list: a human route whose stub answers 204 once every check passed. */
+/** GET reference.get: a human route without scope whose stub answers 204 once every check passed. */
 const product = (cookie: string) =>
-  api.request("GET", "/v1/organizations", { cookie, headers: from() });
+  api.request("GET", "/v1/reference", { cookie, headers: from() });
 const getSession = async (cookie: string): Promise<unknown> =>
   (await api.request("GET", "/v1/auth/get-session", { cookie, headers: from() })).json();
 const signal = (cookie: string) =>

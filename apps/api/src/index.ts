@@ -15,6 +15,8 @@ export {
 } from "./outbox-dispatcher.ts";
 export { authenticateHuman, type Principal } from "./pipeline/authn.ts";
 export { parseStrictJson, readAuthBody } from "./pipeline/body.ts";
+export { checkOrigin, hasMixedCredentials, needsOriginCheck } from "./pipeline/origin.ts";
+export { checkStates } from "./pipeline/states.ts";
 export {
   GATE_MAX_BYTES,
   readGate,

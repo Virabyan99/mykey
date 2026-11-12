@@ -121,6 +121,11 @@ export interface AuthRouteEnv {
   keys: AuthKeys;
   /** The public origin. */
   baseUrl: string;
+  /**
+   * The API's Origin check (FR-1.76, Run 3.7): every POST under /v1/auth,
+   * sign-in included, is refused with 403 origin_rejected unless it holds.
+   */
+  originAllowed(headers: Headers): boolean;
   /** The API's one envelope builder. */
   respondError(code: ErrorCode, requestId: string, headers?: Record<string, string>): Response;
   /** The pipeline's request id of `c`. */
@@ -356,6 +361,15 @@ export function mountAuthRoutes(app: AnyHono, auth: Auth, env: AuthRouteEnv): vo
   const refuse = (c: Context, code: ErrorCode): Response =>
     env.respondError(code, env.requestId(c));
   const sessions: SessionDeps = { auth, pool: env.pool, keys: env.keys };
+
+  // Before the body, the session and the throttle: a foreign page changes nothing.
+  app.use(`${base}/*`, async (c: Context, next) => {
+    if (c.req.method === "POST" && !env.originAllowed(c.req.raw.headers)) {
+      return refuse(c, "origin_rejected");
+    }
+    await next();
+    return undefined;
+  });
 
   app.post(`${base}/sign-in/email`, async (c) => {
     const body = await strictBody(c, signInBody, env);

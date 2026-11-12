@@ -28,3 +28,10 @@ export {
   sumCounters,
   sweepCounters,
 } from "./repos/rate-limits.ts";
+export {
+  listOrganizations,
+  resolveAccess,
+  type OrganizationEntry,
+  type Resolved,
+  type ResourceState,
+} from "./repos/memberships.ts";

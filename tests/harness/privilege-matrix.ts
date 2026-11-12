@@ -72,14 +72,14 @@ export const TABLES: Record<string, Expected> = {
   "app.organization": {
     api: [S, I],
     provisioner: [S],
-    provisionerColumns: ["state", "config_digest", "provisioning_operation_id"],
+    provisionerColumns: ["state", "config_digest", "provisioning_operation_id", "review_reason"],
   },
   "app.membership": { api: [S, I], provisioner: [] },
-  "app.project": { api: [S, I], provisioner: [S] },
+  "app.project": { api: [S, I], provisioner: [S], provisionerColumns: ["state", "review_reason"] },
   "app.environment": {
     api: [S, I],
     provisioner: [S],
-    provisionerColumns: ["state", "kv_ready", "policy_digest"],
+    provisionerColumns: ["state", "kv_ready", "policy_digest", "review_reason"],
   },
   "app.access_grant": { api: [S, I], provisioner: [] },
   "app.secret_index": { api: [S, I], provisioner: [] },
