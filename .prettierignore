@@ -8,3 +8,6 @@ tests/fixtures/
 .trivyignore.images
 docs/evidence/registry.json
 .claude/
+
+# Written by tests/integration/authz/matrix.test.ts (Run 3.7).
+docs/evidence/session-3/authorization-matrix.md
