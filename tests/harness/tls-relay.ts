@@ -7,8 +7,8 @@
 // Modes:
 //   - "pass": the request and the answer pass, each after the delay set with
 //     delayRequests / delayResponses (taken when a record or chunk arrives);
-//   - "drop": the first request record passes, nothing comes back, and both
-//     connections are closed 300 ms later (the server has the request);
+//   - "drop": the request passes, nothing comes back, and both connections are
+//     closed 300 ms after its first record (the server has the request);
 //   - "hold": the first request record passes and nothing ever comes back.
 //
 // A delayed request whose server connection has closed in the meantime is lost,
@@ -88,10 +88,15 @@ export async function startTlsRelay(
           continue;
         }
         if (mode !== "pass") {
-          if (requestSeen) continue;
+          // "drop" passes every request record until the cut, so the server has the
+          // whole request even when the client wrote headers and body as separate
+          // records (that made the "it was applied" check flaky, Run 2.10); "hold"
+          // passes only the first, and the late-write tests rely on that.
+          if (requestSeen && mode === "hold") continue;
+          const first = !requestSeen;
           requestSeen = true;
           forward(record, 0);
-          if (mode === "drop") {
+          if (mode === "drop" && first) {
             setTimeout(() => {
               client.destroy();
               upstream.destroy();
