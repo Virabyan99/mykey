@@ -36,6 +36,19 @@ MSYS_NO_PATHCONV=1 node scripts/host.ts <host> ops bootstrap-owner --email <addr
 
 The staging owner is `owner@mykey-staging.invalid` (synthetic), password in `~/.mykey/secrets/hosts/staging/owner-password`; ids in `docs/evidence/session-3/run-3.2.md`.
 
+## Reset of a lost password or second factor (Run 3.6, D-30)
+
+```sh
+MSYS_NO_PATHCONV=1 node scripts/host.ts <host> ops reset-account --email <address> --kind password
+MSYS_NO_PATHCONV=1 node scripts/host.ts <host> ops reset-account --email <address> --kind mfa
+```
+
+- Use `password` when the owner still has the authenticator app or a recovery code, `mfa` when the second factor is lost.
+- The command blocks the account at once (`recovery_pending`; every session ends; no password signs in), supersedes any earlier link, and clears the account's throttle locks. Output: `issued for user <id>; link in <path>; expires <time>` (exit 0), or `refused: no_such_account | disabled` (exit 2). The link is in the file only; give it to the owner by a channel only they read, then shred the file.
+- The link lives **15 minutes**. An expired link leaves the account blocked: run the command again; the new link supersedes the old one.
+- **What the owner sees.** The link opens the reset page (Session 7). With `password`: a new password and a current TOTP code or one recovery code; afterwards the owner signs in with the new password and their existing authenticator. With `mfa`: a new password, then enrollment of a new authenticator right away (the reset session can do nothing else, and ends with the link); activation shows ten new recovery codes once, and the owner signs in afresh. The old authenticator and every old recovery code stop working when the `mfa` reset is completed.
+- Every failure of the page (an unknown, expired, superseded or used link, a wrong code) is the same answer; the audit log has the reason (`auth.reset_failed`).
+
 ## Shredding output files
 
 Files under `~/.mykey/out/` hold secrets for one use. After use: overwrite and remove the file (`shred -u <file>` in Git Bash), or delete it and empty the recycle bin. Nothing there is kept as custody; a lost file is replaced by running the command again (for a reset, a new link supersedes the old one).
