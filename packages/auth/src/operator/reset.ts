@@ -103,12 +103,9 @@ export async function initiateReset(
       details: { kind: input.kind },
     });
     crash("audit");
-    return {
-      outcome: "issued",
-      userId: account.id,
-      token,
-      expiresAt: issued.rows[0]!.expires_at,
-    };
+    const expiresAt = issued.rows[0]?.expires_at;
+    if (expiresAt === undefined) throw new Error("the reset token was not stored");
+    return { outcome: "issued", userId: account.id, token, expiresAt };
   });
   if (result.outcome === "issued") {
     await deps.throttle.clearAccount([email, result.userId]);
