@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import { SCANNED_IMAGES } from "../../../scripts/ci-scan.ts";
 import {
   OWN_IMAGES,
+  REQUIRED_BINARIES,
   REQUIRED_IMAGES,
   REQUIRED_NPM,
   collectPinnedVersions,
@@ -46,6 +47,24 @@ describe("dependency pins", () => {
       "npm.better-auth",
       "actions.actions/checkout",
     ]);
+  });
+
+  // Run 2.10: a release archive run on a host (okms-cli, Run 2.7) is pinned like an image.
+  it("requires every binary, each with an exact version and a SHA-256", () => {
+    expect(REQUIRED_BINARIES).toEqual(["okms-cli"]);
+    expect(digestProblems(lock)).toEqual([]);
+    const missing = clone();
+    delete (missing as { binaries?: unknown }).binaries;
+    expect(missingRequiredKeys(missing)).toEqual(["binaries.okms-cli"]);
+    const bad = clone();
+    bad.binaries!["okms-cli"]!.sha256 = "abc";
+    bad.binaries!["okms-cli"]!.version = "0.6.0-rc.1";
+    expect(digestProblems(bad)).toEqual(
+      expect.arrayContaining([expect.stringMatching(/binaries\.okms-cli.*sha256/)]),
+    );
+    expect(unpinnedVersions(collectPinnedVersions(root, bad))).toEqual(
+      expect.arrayContaining([expect.stringContaining("okms-cli")]),
+    );
   });
 
   it("no pre-release version is pinned", () => {

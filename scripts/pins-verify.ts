@@ -26,7 +26,12 @@ export interface DependenciesLock {
   npm: Record<string, NpmPin>;
   python: Record<string, { version: string; sha256: string }>;
   actions: Record<string, { sha: string; tag: string }>;
+  /** Release archives run on a host (Run 2.7): exact version, SHA-256 of the archive. */
+  binaries?: Record<string, { version: string; asset: string; sha256: string }>;
 }
+
+/** Binaries every checkout must pin (Run 2.10). */
+export const REQUIRED_BINARIES = ["okms-cli"];
 
 export const REQUIRED_IMAGES = [
   "postgres",
@@ -112,6 +117,9 @@ export function missingRequiredKeys(lock: DependenciesLock): string[] {
     ...REQUIRED_IMAGES.filter((key) => !(key in lock.images)).map((key) => `images.${key}`),
     ...REQUIRED_NPM.filter((key) => !(key in lock.npm)).map((key) => `npm.${key}`),
     ...REQUIRED_ACTIONS.filter((key) => !(key in lock.actions)).map((key) => `actions.${key}`),
+    ...REQUIRED_BINARIES.filter((key) => !(key in (lock.binaries ?? {}))).map(
+      (key) => `binaries.${key}`,
+    ),
   ];
 }
 
@@ -199,6 +207,9 @@ export function collectPinnedVersions(root: string, lock: DependenciesLock): Pin
   for (const [key, pin] of Object.entries(lock.actions)) {
     entries.push({ where: `lock actions.${key}`, kind: "action", version: pin.tag });
   }
+  for (const [key, pin] of Object.entries(lock.binaries ?? {})) {
+    entries.push({ where: `lock binaries.${key}`, kind: "npm", version: pin.version });
+  }
   for (const [name, version] of Object.entries(readCatalog(root))) {
     entries.push({ where: `catalog ${name}`, kind: "npm", version });
   }
@@ -255,6 +266,9 @@ export function digestProblems(lock: DependenciesLock): string[] {
   }
   for (const [key, pin] of Object.entries(lock.python)) {
     if (!HEX_64.test(pin.sha256)) problems.push(`python.${key}.sha256 is not 64 hex characters`);
+  }
+  for (const [key, pin] of Object.entries(lock.binaries ?? {})) {
+    if (!HEX_64.test(pin.sha256)) problems.push(`binaries.${key}.sha256 is not 64 hex characters`);
   }
   return problems;
 }

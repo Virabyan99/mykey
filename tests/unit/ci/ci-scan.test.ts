@@ -6,6 +6,8 @@ import {
   dependencyScanArgs,
   dependencyScanCoverageProblem,
   imageScanArgs,
+  OWN_SCANNED_IMAGES,
+  ownImageScanArgs,
   secretHistoryScanArgs,
   secretScanCoverageProblem,
   selftestSecretArgs,
@@ -42,6 +44,20 @@ describe("scanner commands", () => {
     expect(args).toContain("image --scanners vuln --severity HIGH,CRITICAL --ignore-unfixed");
     expect(args).toContain(`${lock.images.postgres!.image}@${lock.images.postgres!.digest}`);
     expect(() => imageScanArgs(lock, "no-such-image")).toThrow(/not in the lock/);
+  });
+
+  // Run 2.10: the API image built from this repository is scanned too, from its archive,
+  // with the repository's own .trivyignore (never the upstream-image exceptions).
+  it("scans our own API image from its saved archive", () => {
+    const args = ownImageScanArgs(lock, "/tmp/scan", "/work/repo").join(" ");
+    expect(args).toContain("-v /tmp/scan:/archive:ro");
+    expect(args).toContain("image --scanners vuln --severity HIGH,CRITICAL --ignore-unfixed");
+    expect(args).toContain("--input /archive/api.tar");
+    // The base image's OS packages are the pinned node image's (scanned on their own).
+    expect(args).toContain("--pkg-types library");
+    expect(args).toContain("--ignorefile /repo/.trivyignore");
+    expect(args).not.toContain(".trivyignore.images");
+    expect(OWN_SCANNED_IMAGES).toEqual(["api"]);
   });
 
   it("self-test commands point at the seeded fixtures and do not skip them", () => {
