@@ -7,6 +7,7 @@ import { homedir } from "node:os";
 import { join, resolve } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { kmsRemoveCommand, kmsUseCommand, okmsCommand } from "../../scripts/host.ts";
 import { createOrgFixture, type OrgFixture } from "../harness/org-fixture.ts";
 import { baoFetch, type Stack } from "../harness/stack.ts";
 import {
@@ -311,4 +312,128 @@ describe("staging OpenBao on the OVHcloud KMS seal", () => {
       `KMS away while running: kms_unreachable resolved ${Math.round((Date.now() - blockedAt) / 1000)} s after the block began (block 300 s)`,
     );
   }, 1_200_000);
+});
+
+// FR-1.65 / AC-1.26 (after sitting 2): the policy lost create and activate,
+// certificate staging-seal-2 was issued from a key made on the host.
+describe("certificate replacement", () => {
+  const KMS_DIR = "/etc/mykey/secrets/kms";
+
+  it("rights are what was granted", async () => {
+    const create = await sshExec(
+      staging.host,
+      okmsCommand("staging-seal-2", [
+        "kmip",
+        "create",
+        "symmetric",
+        "--alg",
+        "AES",
+        "--size",
+        "256",
+        "--name",
+        `mykey-rights-probe-${Date.now()}`,
+      ]),
+      { sudo: true, timeoutMs: 120_000 },
+    );
+    expect(create.code).not.toBe(0);
+    const locate = await sshExec(staging.host, okmsCommand("staging-seal-2", ["kmip", "locate"]), {
+      sudo: true,
+      timeoutMs: 120_000,
+    });
+    expect(locate.code).toBe(0);
+    record(
+      `rights: kmip create with the seal certificate refused (${(create.stdout + create.stderr).replace(/\s+/g, " ").slice(-160)}); kmip locate works`,
+    );
+  }, 300_000);
+
+  it("a deleted certificate cannot unseal; a reissued one can", async () => {
+    const onSecond =
+      expectSuccess(
+        await sshExec(
+          staging.host,
+          `if [ "$(readlink ${KMS_DIR}/seal.key)" = staging-seal-2.key ]; then echo yes; else echo no; fi`,
+          { sudo: true, secretOutput: true },
+        ),
+        "reading the seal link",
+      ).stdout.trim() === "yes";
+    if (onSecond) {
+      // Replaced by an earlier run: the old key is gone and the current certificate unseals.
+      expectSuccess(
+        await sshExec(staging.host, `test ! -e ${KMS_DIR}/staging-seal-1.key`, {
+          sudo: true,
+          secretOutput: true,
+        }),
+        "the old key is gone",
+      );
+      const before = await openbaoProcess();
+      expectSuccess(
+        await sshExec(staging.host, `docker restart ${CONTAINER}`, {
+          sudo: true,
+          timeoutMs: 120_000,
+        }),
+        "docker restart",
+      );
+      await expectNewProcess(before);
+      await waitUnsealedAndReadable(120);
+      return;
+    }
+
+    // The owner deleted staging-seal-1 in the console: the KMS refuses it.
+    const old = await sshExec(staging.host, okmsCommand("staging-seal-1", ["kmip", "locate"]), {
+      sudo: true,
+      timeoutMs: 120_000,
+    });
+    expect(old.code, "staging-seal-1 must be deleted in the console first").not.toBe(0);
+
+    // Restarted on the deleted certificate: stays sealed, says 503.
+    const before = await openbaoProcess();
+    expectSuccess(
+      await sshExec(staging.host, `docker restart ${CONTAINER}`, {
+        sudo: true,
+        timeoutMs: 120_000,
+      }),
+      "docker restart",
+    );
+    await expectNewProcess(before);
+    let unsealed = false;
+    let saw503 = false;
+    const started = Date.now();
+    while (Date.now() - started < 60_000) {
+      if ((await sealStatus())?.sealed === false) unsealed = true;
+      if ((await publicHealth()) === 503) saw503 = true;
+      await sleep(5_000);
+    }
+    const restarts = (await openbaoProcess()).restarts;
+    record(
+      `deleted certificate staging-seal-1: sealed throughout ${!unsealed}, public 503 seen ${saw503}, restart count ${restarts}`,
+    );
+    expect({ unsealed, saw503 }).toEqual({ unsealed: false, saw503: true });
+
+    // Switch to the reissued certificate: nothing of the old one is needed.
+    expectSuccess(
+      await sshExec(staging.host, kmsUseCommand("staging-seal-2"), {
+        sudo: true,
+        secretOutput: true,
+      }),
+      "kms-use staging-seal-2",
+    );
+    expectSuccess(
+      await sshExec(staging.host, `docker restart ${CONTAINER}`, {
+        sudo: true,
+        timeoutMs: 120_000,
+      }),
+      "docker restart",
+    );
+    const ms = await waitUnsealedAndReadable(180);
+    expectSuccess(
+      await sshExec(staging.host, kmsRemoveCommand("staging-seal-1"), {
+        sudo: true,
+        secretOutput: true,
+      }),
+      "shredding the old key",
+    );
+    record(
+      `reissued certificate staging-seal-2: unsealed and readable ${ms} ms after the restart; staging-seal-1 key shredded`,
+    );
+  }, 900_000);
 });

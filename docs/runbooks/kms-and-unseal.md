@@ -25,15 +25,15 @@ At start without the KMS, OpenBao waits on the KMIP connection (about 130 s when
 
 ```sh
 node scripts/host.ts staging status                         # sealed, sealType, kmsReachable
-node scripts/host.ts staging kms staging-seal-1 -- kmip locate --details
-node scripts/host.ts staging kms staging-seal-1 -- kmip attributes get <key id>
+node scripts/host.ts staging kms staging-seal-2 -- kmip locate --details
+node scripts/host.ts staging kms staging-seal-2 -- kmip attributes get <key id>
 ```
 
 `okms` (OVHcloud's CLI, release 0.6.0, pinned by SHA-256 in `infra/dependencies.lock.json`) runs on the host through `infra/hosts/kms/okms.sh`, as uid 100, with one named certificate; it prints identifiers and states only.
 
 ## Replace a certificate (the certificate is lost, leaked or about to expire)
 
-Certificates from the console are valid for **30 days** (the only choice offered on 12 Nov 2026). **`staging-seal-1` expires on 12 Dec 2026, 09:16 UTC**; OpenBao keeps running after that but cannot unseal again. Replace it at least a week before.
+Certificates from the console are valid for **30 days** (the only choice offered on 12 Nov 2026). **`staging-seal-2`, the current one, expires on 12 Dec 2026, 10:50 UTC** (`staging-seal-1` was replaced and deleted on 12 Nov 2026); OpenBao keeps running after that but cannot unseal again. Replace it at least a week before.
 
 1. `node scripts/host.ts staging kms-csr staging-seal-<n>` — a new key on the host; prints the CSR only.
 2. Owner, console: `mykey-staging-kms` → Access certificates → Generate, **provide the CSR**, identity `mykey-staging-seal` only (never root), download; save as `~/.mykey/kms/staging-seal-<n>.crt`.

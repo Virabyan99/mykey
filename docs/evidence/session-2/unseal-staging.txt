@@ -11,3 +11,6 @@
 2026-11-12T10:30:08.109Z KMS away at start: unsealed and readable 35167 ms after the block ended, with no command
 2026-11-12T10:34:40.432Z KMS away while running: writes and reads OK, status kmsReachable=false sealed=false, probe opened kms_unreachable after 255 s
 2026-11-12T10:35:43.042Z KMS away while running: kms_unreachable resolved 331 s after the block began (block 300 s)
+2026-11-12T10:54:18.383Z rights: kmip create with the seal certificate refused ( empty config file at /tmp/.ovh-kms/okms.yaml Error: Operation "Create" failed (status="OperationFailed", reason="GeneralFailure") Operation is not authorized. ); kmip locate works
+2026-11-12T11:02:37.748Z deleted certificate staging-seal-1: sealed throughout true, public 503 seen true, restart count 10
+2026-11-12T11:02:47.236Z reissued certificate staging-seal-2: unsealed and readable 2087 ms after the restart; staging-seal-1 key shredded
