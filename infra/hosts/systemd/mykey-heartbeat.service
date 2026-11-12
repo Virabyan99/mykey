@@ -1,0 +1,8 @@
+[Unit]
+Description=MyKey heartbeat to the off-host probe (Run 2.6)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/opt/mykey/hosts/checks/heartbeat.sh

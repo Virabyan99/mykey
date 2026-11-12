@@ -2,12 +2,14 @@
 // infra/dependencies.lock.json. The same commands run locally and in CI.
 // Run: node scripts/ci-scan.ts <secrets|dependencies|images|selftest>
 import { spawnSync } from "node:child_process";
-import { resolve } from "node:path";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join, resolve } from "node:path";
 import { loadLock, type DependenciesLock } from "./pins-verify.ts";
 
 /** Exit code the scanners use for "finding reported", so a crash (1) is never mistaken for one. */
 export const FOUND_EXIT_CODE = 3;
-export const SCANNED_IMAGES = ["postgres", "openbao", "traefik", "restic"];
+export const SCANNED_IMAGES = ["postgres", "openbao", "traefik", "restic", "node"];
 
 const TRIVY_CACHE_VOLUME = "mykey-trivy-cache:/root/.cache/trivy";
 const TRIVY_FLAGS = [
@@ -122,6 +124,55 @@ export function imageScanArgs(lock: DependenciesLock, key: string, repository?: 
   return trivy(lock, mounts, ["image", ...TRIVY_FLAGS, ...ignore, imageReference(lock, key)]);
 }
 
+/** Images built from this repository (Run 2.10): built, saved and scanned from the archive. */
+export const OWN_SCANNED_IMAGES = ["api"];
+
+/**
+ * Trivy over our own image's archive (`<archiveDir>/<name>.tar`). Only the
+ * language packages — our dependencies — under the repository's .trivyignore:
+ * the base image's OS packages are the pinned node image, scanned above with
+ * its own reviewed exceptions, which must never cover our dependencies.
+ */
+export function ownImageScanArgs(
+  lock: DependenciesLock,
+  archiveDir: string,
+  repository: string,
+  name = "api",
+): string[] {
+  return trivy(
+    lock,
+    [`${archiveDir}:/archive:ro`, `${repository}:/repo:ro`],
+    [
+      "image",
+      ...TRIVY_FLAGS,
+      "--pkg-types",
+      "library",
+      // npm and corepack bundled by the base image belong to the node image's scan.
+      "--skip-dirs",
+      "/usr/local/lib/node_modules",
+      "--ignorefile",
+      "/repo/.trivyignore",
+      "--input",
+      `/archive/${name}.tar`,
+    ],
+  );
+}
+
+/** Builds our own image from the repository and saves it as `<archiveDir>/<name>.tar`. */
+function buildOwnImage(repository: string, archiveDir: string, name: string): boolean {
+  const tag = `mykey-${name}:scan`;
+  const build = spawnSync(
+    "docker",
+    ["build", "--platform", "linux/amd64", "-q", "-f", `apps/${name}/Dockerfile`, "-t", tag, "."],
+    { cwd: repository, stdio: ["ignore", "inherit", "inherit"] },
+  );
+  if (build.status !== 0) return false;
+  const save = spawnSync("docker", ["save", tag, "-o", resolve(archiveDir, `${name}.tar`)], {
+    stdio: ["ignore", "inherit", "inherit"],
+  });
+  return save.status === 0;
+}
+
 export function selftestSecretArgs(lock: DependenciesLock, repository: string): string[] {
   return gitleaks(lock, repository, [
     "dir",
@@ -232,11 +283,23 @@ if (import.meta.main) {
       ok = status === 0 && problem === undefined;
       break;
     }
-    case "images":
-      ok = SCANNED_IMAGES.map((key) =>
+    case "images": {
+      const upstream = SCANNED_IMAGES.map((key) =>
         scan(`image ${key}`, imageScanArgs(lock, key, repository)),
       ).every(Boolean);
+      const archiveDir = mkdtempSync(join(tmpdir(), "mykey-own-images-"));
+      try {
+        const own = OWN_SCANNED_IMAGES.map(
+          (name) =>
+            buildOwnImage(repository, archiveDir, name) &&
+            scan(`own image ${name}`, ownImageScanArgs(lock, archiveDir, repository, name)),
+        ).every(Boolean);
+        ok = upstream && own;
+      } finally {
+        rmSync(archiveDir, { recursive: true, force: true });
+      }
       break;
+    }
     case "selftest":
       ok = selftest(lock, repository);
       break;

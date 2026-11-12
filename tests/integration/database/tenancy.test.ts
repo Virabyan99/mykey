@@ -24,6 +24,12 @@ async function tenant(label: string): Promise<Tenant> {
     member: randomUUID(),
   };
   const pool = db.pool("maintenance");
+  // A membership names a user of schema auth (Run 2.3); maintenance only reads that schema.
+  await run(db.pool("superuser"), "INSERT INTO auth.user (id, name, email) VALUES ($1, $2, $3)", [
+    ids.member,
+    `member ${label}`,
+    `member-${label}@example.test`,
+  ]);
   await run(pool, "INSERT INTO app.organization (id, namespace, state) VALUES ($1, $2, 'active')", [
     ids.organization,
     `org-${label}`,

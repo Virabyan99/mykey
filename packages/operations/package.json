@@ -4,6 +4,16 @@
   "private": true,
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./spike": "./src/spike/index.ts"
+  },
+  "dependencies": {
+    "@mykey/contracts": "workspace:*",
+    "@mykey/db": "workspace:*",
+    "@mykey/openbao": "workspace:*",
+    "pg": "catalog:"
+  },
+  "devDependencies": {
+    "@types/pg": "catalog:"
   }
 }

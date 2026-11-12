@@ -1,0 +1,1729 @@
+{
+  "openbao": "2.7.2",
+  "cells": {
+    "runtime kv.write own": 200,
+    "issuer kv.write own": 403,
+    "provisioner kv.write own": 403,
+    "machine kv.write own": 403,
+    "backup kv.write own": 403,
+    "runtime kv.write other_environment": 200,
+    "issuer kv.write other_environment": 403,
+    "provisioner kv.write other_environment": 403,
+    "machine kv.write other_environment": 403,
+    "backup kv.write other_environment": 403,
+    "runtime kv.write other_organization": 403,
+    "issuer kv.write other_organization": 403,
+    "provisioner kv.write other_organization": 403,
+    "machine kv.write other_organization": 403,
+    "backup kv.write other_organization": 403,
+    "runtime kv.write other_organization_path": 403,
+    "issuer kv.write other_organization_path": 403,
+    "provisioner kv.write other_organization_path": 403,
+    "machine kv.write other_organization_path": 403,
+    "backup kv.write other_organization_path": 403,
+    "runtime kv.read own": 200,
+    "issuer kv.read own": 403,
+    "provisioner kv.read own": 403,
+    "machine kv.read own": 200,
+    "backup kv.read own": 403,
+    "runtime kv.read other_environment": 200,
+    "issuer kv.read other_environment": 403,
+    "provisioner kv.read other_environment": 403,
+    "machine kv.read other_environment": 403,
+    "backup kv.read other_environment": 403,
+    "runtime kv.read other_organization": 403,
+    "issuer kv.read other_organization": 403,
+    "provisioner kv.read other_organization": 403,
+    "machine kv.read other_organization": 403,
+    "backup kv.read other_organization": 403,
+    "runtime kv.read other_organization_path": 403,
+    "issuer kv.read other_organization_path": 403,
+    "provisioner kv.read other_organization_path": 403,
+    "machine kv.read other_organization_path": 403,
+    "backup kv.read other_organization_path": 403,
+    "runtime kv.read_version_1 own": 200,
+    "issuer kv.read_version_1 own": 403,
+    "provisioner kv.read_version_1 own": 403,
+    "machine kv.read_version_1 own": 200,
+    "backup kv.read_version_1 own": 403,
+    "runtime kv.read_version_1 other_environment": 200,
+    "issuer kv.read_version_1 other_environment": 403,
+    "provisioner kv.read_version_1 other_environment": 403,
+    "machine kv.read_version_1 other_environment": 403,
+    "backup kv.read_version_1 other_environment": 403,
+    "runtime kv.read_version_1 other_organization": 403,
+    "issuer kv.read_version_1 other_organization": 403,
+    "provisioner kv.read_version_1 other_organization": 403,
+    "machine kv.read_version_1 other_organization": 403,
+    "backup kv.read_version_1 other_organization": 403,
+    "runtime kv.read_version_1 other_organization_path": 403,
+    "issuer kv.read_version_1 other_organization_path": 403,
+    "provisioner kv.read_version_1 other_organization_path": 403,
+    "machine kv.read_version_1 other_organization_path": 403,
+    "backup kv.read_version_1 other_organization_path": 403,
+    "runtime kv.list_environment own": 200,
+    "issuer kv.list_environment own": 403,
+    "provisioner kv.list_environment own": 403,
+    "machine kv.list_environment own": 200,
+    "backup kv.list_environment own": 403,
+    "runtime kv.list_environment other_environment": 200,
+    "issuer kv.list_environment other_environment": 403,
+    "provisioner kv.list_environment other_environment": 403,
+    "machine kv.list_environment other_environment": 403,
+    "backup kv.list_environment other_environment": 403,
+    "runtime kv.list_environment other_organization": 403,
+    "issuer kv.list_environment other_organization": 403,
+    "provisioner kv.list_environment other_organization": 403,
+    "machine kv.list_environment other_organization": 403,
+    "backup kv.list_environment other_organization": 403,
+    "runtime kv.list_environment other_organization_path": 403,
+    "issuer kv.list_environment other_organization_path": 403,
+    "provisioner kv.list_environment other_organization_path": 403,
+    "machine kv.list_environment other_organization_path": 403,
+    "backup kv.list_environment other_organization_path": 403,
+    "runtime kv.list_project own": 200,
+    "issuer kv.list_project own": 403,
+    "provisioner kv.list_project own": 403,
+    "machine kv.list_project own": 403,
+    "backup kv.list_project own": 403,
+    "runtime kv.list_project other_organization": 403,
+    "issuer kv.list_project other_organization": 403,
+    "provisioner kv.list_project other_organization": 403,
+    "machine kv.list_project other_organization": 403,
+    "backup kv.list_project other_organization": 403,
+    "runtime kv.list_project other_organization_path": 403,
+    "issuer kv.list_project other_organization_path": 403,
+    "provisioner kv.list_project other_organization_path": 403,
+    "machine kv.list_project other_organization_path": 403,
+    "backup kv.list_project other_organization_path": 403,
+    "runtime kv.list_projects own": 200,
+    "issuer kv.list_projects own": 403,
+    "provisioner kv.list_projects own": 403,
+    "machine kv.list_projects own": 403,
+    "backup kv.list_projects own": 403,
+    "runtime kv.list_projects other_organization": 403,
+    "issuer kv.list_projects other_organization": 403,
+    "provisioner kv.list_projects other_organization": 403,
+    "machine kv.list_projects other_organization": 403,
+    "backup kv.list_projects other_organization": 403,
+    "runtime kv.list_projects other_organization_path": 403,
+    "issuer kv.list_projects other_organization_path": 403,
+    "provisioner kv.list_projects other_organization_path": 403,
+    "machine kv.list_projects other_organization_path": 403,
+    "backup kv.list_projects other_organization_path": 403,
+    "runtime kv.list_mount own": 403,
+    "issuer kv.list_mount own": 403,
+    "provisioner kv.list_mount own": 403,
+    "machine kv.list_mount own": 403,
+    "backup kv.list_mount own": 403,
+    "runtime kv.list_mount other_organization": 403,
+    "issuer kv.list_mount other_organization": 403,
+    "provisioner kv.list_mount other_organization": 403,
+    "machine kv.list_mount other_organization": 403,
+    "backup kv.list_mount other_organization": 403,
+    "runtime kv.list_mount other_organization_path": 403,
+    "issuer kv.list_mount other_organization_path": 403,
+    "provisioner kv.list_mount other_organization_path": 403,
+    "machine kv.list_mount other_organization_path": 403,
+    "backup kv.list_mount other_organization_path": 403,
+    "runtime kv.soft_delete own": 204,
+    "issuer kv.soft_delete own": 403,
+    "provisioner kv.soft_delete own": 403,
+    "machine kv.soft_delete own": 403,
+    "backup kv.soft_delete own": 403,
+    "runtime kv.soft_delete other_environment": 204,
+    "issuer kv.soft_delete other_environment": 403,
+    "provisioner kv.soft_delete other_environment": 403,
+    "machine kv.soft_delete other_environment": 403,
+    "backup kv.soft_delete other_environment": 403,
+    "runtime kv.soft_delete other_organization": 403,
+    "issuer kv.soft_delete other_organization": 403,
+    "provisioner kv.soft_delete other_organization": 403,
+    "machine kv.soft_delete other_organization": 403,
+    "backup kv.soft_delete other_organization": 403,
+    "runtime kv.soft_delete other_organization_path": 403,
+    "issuer kv.soft_delete other_organization_path": 403,
+    "provisioner kv.soft_delete other_organization_path": 403,
+    "machine kv.soft_delete other_organization_path": 403,
+    "backup kv.soft_delete other_organization_path": 403,
+    "runtime kv.delete_data own": 403,
+    "issuer kv.delete_data own": 403,
+    "provisioner kv.delete_data own": 403,
+    "machine kv.delete_data own": 403,
+    "backup kv.delete_data own": 403,
+    "runtime kv.delete_data other_environment": 403,
+    "issuer kv.delete_data other_environment": 403,
+    "provisioner kv.delete_data other_environment": 403,
+    "machine kv.delete_data other_environment": 403,
+    "backup kv.delete_data other_environment": 403,
+    "runtime kv.delete_data other_organization": 403,
+    "issuer kv.delete_data other_organization": 403,
+    "provisioner kv.delete_data other_organization": 403,
+    "machine kv.delete_data other_organization": 403,
+    "backup kv.delete_data other_organization": 403,
+    "runtime kv.delete_data other_organization_path": 403,
+    "issuer kv.delete_data other_organization_path": 403,
+    "provisioner kv.delete_data other_organization_path": 403,
+    "machine kv.delete_data other_organization_path": 403,
+    "backup kv.delete_data other_organization_path": 403,
+    "runtime kv.undelete own": 204,
+    "issuer kv.undelete own": 403,
+    "provisioner kv.undelete own": 403,
+    "machine kv.undelete own": 403,
+    "backup kv.undelete own": 403,
+    "runtime kv.undelete other_environment": 204,
+    "issuer kv.undelete other_environment": 403,
+    "provisioner kv.undelete other_environment": 403,
+    "machine kv.undelete other_environment": 403,
+    "backup kv.undelete other_environment": 403,
+    "runtime kv.undelete other_organization": 403,
+    "issuer kv.undelete other_organization": 403,
+    "provisioner kv.undelete other_organization": 403,
+    "machine kv.undelete other_organization": 403,
+    "backup kv.undelete other_organization": 403,
+    "runtime kv.undelete other_organization_path": 403,
+    "issuer kv.undelete other_organization_path": 403,
+    "provisioner kv.undelete other_organization_path": 403,
+    "machine kv.undelete other_organization_path": 403,
+    "backup kv.undelete other_organization_path": 403,
+    "runtime kv.destroy own": 403,
+    "issuer kv.destroy own": 403,
+    "provisioner kv.destroy own": 403,
+    "machine kv.destroy own": 403,
+    "backup kv.destroy own": 403,
+    "runtime kv.destroy other_environment": 403,
+    "issuer kv.destroy other_environment": 403,
+    "provisioner kv.destroy other_environment": 403,
+    "machine kv.destroy other_environment": 403,
+    "backup kv.destroy other_environment": 403,
+    "runtime kv.destroy other_organization": 403,
+    "issuer kv.destroy other_organization": 403,
+    "provisioner kv.destroy other_organization": 403,
+    "machine kv.destroy other_organization": 403,
+    "backup kv.destroy other_organization": 403,
+    "runtime kv.destroy other_organization_path": 403,
+    "issuer kv.destroy other_organization_path": 403,
+    "provisioner kv.destroy other_organization_path": 403,
+    "machine kv.destroy other_organization_path": 403,
+    "backup kv.destroy other_organization_path": 403,
+    "runtime kv.delete_metadata own": 403,
+    "issuer kv.delete_metadata own": 403,
+    "provisioner kv.delete_metadata own": 403,
+    "machine kv.delete_metadata own": 403,
+    "backup kv.delete_metadata own": 403,
+    "runtime kv.delete_metadata other_environment": 403,
+    "issuer kv.delete_metadata other_environment": 403,
+    "provisioner kv.delete_metadata other_environment": 403,
+    "machine kv.delete_metadata other_environment": 403,
+    "backup kv.delete_metadata other_environment": 403,
+    "runtime kv.delete_metadata other_organization": 403,
+    "issuer kv.delete_metadata other_organization": 403,
+    "provisioner kv.delete_metadata other_organization": 403,
+    "machine kv.delete_metadata other_organization": 403,
+    "backup kv.delete_metadata other_organization": 403,
+    "runtime kv.delete_metadata other_organization_path": 403,
+    "issuer kv.delete_metadata other_organization_path": 403,
+    "provisioner kv.delete_metadata other_organization_path": 403,
+    "machine kv.delete_metadata other_organization_path": 403,
+    "backup kv.delete_metadata other_organization_path": 403,
+    "runtime kv.read_metadata own": 200,
+    "issuer kv.read_metadata own": 403,
+    "provisioner kv.read_metadata own": 403,
+    "machine kv.read_metadata own": 403,
+    "backup kv.read_metadata own": 403,
+    "runtime kv.read_metadata other_environment": 200,
+    "issuer kv.read_metadata other_environment": 403,
+    "provisioner kv.read_metadata other_environment": 403,
+    "machine kv.read_metadata other_environment": 403,
+    "backup kv.read_metadata other_environment": 403,
+    "runtime kv.read_metadata other_organization": 403,
+    "issuer kv.read_metadata other_organization": 403,
+    "provisioner kv.read_metadata other_organization": 403,
+    "machine kv.read_metadata other_organization": 403,
+    "backup kv.read_metadata other_organization": 403,
+    "runtime kv.read_metadata other_organization_path": 403,
+    "issuer kv.read_metadata other_organization_path": 403,
+    "provisioner kv.read_metadata other_organization_path": 403,
+    "machine kv.read_metadata other_organization_path": 403,
+    "backup kv.read_metadata other_organization_path": 403,
+    "runtime kv.patch own": 403,
+    "issuer kv.patch own": 403,
+    "provisioner kv.patch own": 403,
+    "machine kv.patch own": 403,
+    "backup kv.patch own": 403,
+    "runtime kv.patch other_environment": 403,
+    "issuer kv.patch other_environment": 403,
+    "provisioner kv.patch other_environment": 403,
+    "machine kv.patch other_environment": 403,
+    "backup kv.patch other_environment": 403,
+    "runtime kv.patch other_organization": 403,
+    "issuer kv.patch other_organization": 403,
+    "provisioner kv.patch other_organization": 403,
+    "machine kv.patch other_organization": 403,
+    "backup kv.patch other_organization": 403,
+    "runtime kv.patch other_organization_path": 403,
+    "issuer kv.patch other_organization_path": 403,
+    "provisioner kv.patch other_organization_path": 403,
+    "machine kv.patch other_organization_path": 403,
+    "backup kv.patch other_organization_path": 403,
+    "runtime kv.read_subkeys own": 403,
+    "issuer kv.read_subkeys own": 403,
+    "provisioner kv.read_subkeys own": 403,
+    "machine kv.read_subkeys own": 403,
+    "backup kv.read_subkeys own": 403,
+    "runtime kv.read_subkeys other_environment": 403,
+    "issuer kv.read_subkeys other_environment": 403,
+    "provisioner kv.read_subkeys other_environment": 403,
+    "machine kv.read_subkeys other_environment": 403,
+    "backup kv.read_subkeys other_environment": 403,
+    "runtime kv.read_subkeys other_organization": 403,
+    "issuer kv.read_subkeys other_organization": 403,
+    "provisioner kv.read_subkeys other_organization": 403,
+    "machine kv.read_subkeys other_organization": 403,
+    "backup kv.read_subkeys other_organization": 403,
+    "runtime kv.read_subkeys other_organization_path": 403,
+    "issuer kv.read_subkeys other_organization_path": 403,
+    "provisioner kv.read_subkeys other_organization_path": 403,
+    "machine kv.read_subkeys other_organization_path": 403,
+    "backup kv.read_subkeys other_organization_path": 403,
+    "runtime kv.write_config own": 403,
+    "issuer kv.write_config own": 403,
+    "provisioner kv.write_config own": 403,
+    "machine kv.write_config own": 403,
+    "backup kv.write_config own": 403,
+    "runtime kv.write_config other_organization": 403,
+    "issuer kv.write_config other_organization": 403,
+    "provisioner kv.write_config other_organization": 403,
+    "machine kv.write_config other_organization": 403,
+    "backup kv.write_config other_organization": 403,
+    "runtime kv.write_config other_organization_path": 403,
+    "issuer kv.write_config other_organization_path": 403,
+    "provisioner kv.write_config other_organization_path": 403,
+    "machine kv.write_config other_organization_path": 403,
+    "backup kv.write_config other_organization_path": 403,
+    "runtime mount.read own": 403,
+    "issuer mount.read own": 403,
+    "provisioner mount.read own": 403,
+    "machine mount.read own": 403,
+    "backup mount.read own": 403,
+    "runtime mount.read other_organization": 403,
+    "issuer mount.read other_organization": 403,
+    "provisioner mount.read other_organization": 403,
+    "machine mount.read other_organization": 403,
+    "backup mount.read other_organization": 403,
+    "runtime mount.read other_organization_path": 403,
+    "issuer mount.read other_organization_path": 403,
+    "provisioner mount.read other_organization_path": 403,
+    "machine mount.read other_organization_path": 403,
+    "backup mount.read other_organization_path": 403,
+    "runtime mount.tune own": 403,
+    "issuer mount.tune own": 403,
+    "provisioner mount.tune own": 403,
+    "machine mount.tune own": 403,
+    "backup mount.tune own": 403,
+    "runtime mount.tune other_organization": 403,
+    "issuer mount.tune other_organization": 403,
+    "provisioner mount.tune other_organization": 403,
+    "machine mount.tune other_organization": 403,
+    "backup mount.tune other_organization": 403,
+    "runtime mount.tune other_organization_path": 403,
+    "issuer mount.tune other_organization_path": 403,
+    "provisioner mount.tune other_organization_path": 403,
+    "machine mount.tune other_organization_path": 403,
+    "backup mount.tune other_organization_path": 403,
+    "runtime token.create own": 403,
+    "issuer token.create own": 403,
+    "provisioner token.create own": 403,
+    "machine token.create own": 403,
+    "backup token.create own": 403,
+    "runtime token.create other_organization": 403,
+    "issuer token.create other_organization": 403,
+    "provisioner token.create other_organization": 403,
+    "machine token.create other_organization": 403,
+    "backup token.create other_organization": 403,
+    "runtime token.create other_organization_path": 403,
+    "issuer token.create other_organization_path": 403,
+    "provisioner token.create other_organization_path": 403,
+    "machine token.create other_organization_path": 403,
+    "backup token.create other_organization_path": 403,
+    "runtime token.create root": 403,
+    "issuer token.create root": 403,
+    "provisioner token.create root": 403,
+    "machine token.create root": 403,
+    "backup token.create root": 403,
+    "runtime token.create_orphan own": 403,
+    "issuer token.create_orphan own": 403,
+    "provisioner token.create_orphan own": 403,
+    "machine token.create_orphan own": 403,
+    "backup token.create_orphan own": 403,
+    "runtime token.create_orphan other_organization": 403,
+    "issuer token.create_orphan other_organization": 403,
+    "provisioner token.create_orphan other_organization": 403,
+    "machine token.create_orphan other_organization": 403,
+    "backup token.create_orphan other_organization": 403,
+    "runtime token.create_orphan other_organization_path": 403,
+    "issuer token.create_orphan other_organization_path": 403,
+    "provisioner token.create_orphan other_organization_path": 403,
+    "machine token.create_orphan other_organization_path": 403,
+    "backup token.create_orphan other_organization_path": 403,
+    "runtime token.create_orphan root": 403,
+    "issuer token.create_orphan root": 403,
+    "provisioner token.create_orphan root": 403,
+    "machine token.create_orphan root": 403,
+    "backup token.create_orphan root": 403,
+    "runtime token.create_from_role own": 403,
+    "issuer token.create_from_role own": 200,
+    "provisioner token.create_from_role own": 403,
+    "machine token.create_from_role own": 403,
+    "backup token.create_from_role own": 403,
+    "runtime token.create_from_role other_environment": 403,
+    "issuer token.create_from_role other_environment": 200,
+    "provisioner token.create_from_role other_environment": 403,
+    "machine token.create_from_role other_environment": 403,
+    "backup token.create_from_role other_environment": 403,
+    "runtime token.create_from_role other_organization": 403,
+    "issuer token.create_from_role other_organization": 403,
+    "provisioner token.create_from_role other_organization": 403,
+    "machine token.create_from_role other_organization": 403,
+    "backup token.create_from_role other_organization": 403,
+    "runtime token.create_from_role other_organization_path": 403,
+    "issuer token.create_from_role other_organization_path": 403,
+    "provisioner token.create_from_role other_organization_path": 403,
+    "machine token.create_from_role other_organization_path": 403,
+    "backup token.create_from_role other_organization_path": 403,
+    "runtime token.renew_self own": 403,
+    "issuer token.renew_self own": 403,
+    "provisioner token.renew_self own": 403,
+    "machine token.renew_self own": 403,
+    "backup token.renew_self own": 403,
+    "runtime token.renew_self other_organization": 403,
+    "issuer token.renew_self other_organization": 403,
+    "provisioner token.renew_self other_organization": 403,
+    "machine token.renew_self other_organization": 403,
+    "backup token.renew_self other_organization": 403,
+    "runtime token.renew_self other_organization_path": 403,
+    "issuer token.renew_self other_organization_path": 403,
+    "provisioner token.renew_self other_organization_path": 403,
+    "machine token.renew_self other_organization_path": 403,
+    "backup token.renew_self other_organization_path": 403,
+    "runtime token.renew_self root": 403,
+    "issuer token.renew_self root": 403,
+    "provisioner token.renew_self root": 403,
+    "machine token.renew_self root": 403,
+    "backup token.renew_self root": 403,
+    "runtime token.lookup_self own": 200,
+    "issuer token.lookup_self own": 403,
+    "provisioner token.lookup_self own": 403,
+    "machine token.lookup_self own": 200,
+    "backup token.lookup_self own": 403,
+    "runtime token.lookup_self other_organization": 200,
+    "issuer token.lookup_self other_organization": 403,
+    "provisioner token.lookup_self other_organization": 403,
+    "machine token.lookup_self other_organization": 200,
+    "backup token.lookup_self other_organization": 403,
+    "runtime token.lookup_self other_organization_path": 200,
+    "issuer token.lookup_self other_organization_path": 403,
+    "provisioner token.lookup_self other_organization_path": 403,
+    "machine token.lookup_self other_organization_path": 200,
+    "backup token.lookup_self other_organization_path": 403,
+    "runtime token.lookup_self root": 200,
+    "issuer token.lookup_self root": 403,
+    "provisioner token.lookup_self root": 403,
+    "machine token.lookup_self root": 200,
+    "backup token.lookup_self root": 403,
+    "runtime token.revoke_self own": 204,
+    "issuer token.revoke_self own": 204,
+    "provisioner token.revoke_self own": 204,
+    "machine token.revoke_self own": 403,
+    "backup token.revoke_self own": 403,
+    "runtime token.revoke_self other_organization": 204,
+    "issuer token.revoke_self other_organization": 204,
+    "provisioner token.revoke_self other_organization": 204,
+    "machine token.revoke_self other_organization": 403,
+    "backup token.revoke_self other_organization": 403,
+    "runtime token.revoke_self other_organization_path": 204,
+    "issuer token.revoke_self other_organization_path": 204,
+    "provisioner token.revoke_self other_organization_path": 204,
+    "machine token.revoke_self other_organization_path": 403,
+    "backup token.revoke_self other_organization_path": 403,
+    "runtime token.revoke_self root": 204,
+    "issuer token.revoke_self root": 204,
+    "provisioner token.revoke_self root": 204,
+    "machine token.revoke_self root": 403,
+    "backup token.revoke_self root": 403,
+    "runtime token.lookup_accessor own": 403,
+    "issuer token.lookup_accessor own": 200,
+    "provisioner token.lookup_accessor own": 403,
+    "machine token.lookup_accessor own": 403,
+    "backup token.lookup_accessor own": 403,
+    "runtime token.lookup_accessor other_organization": 403,
+    "issuer token.lookup_accessor other_organization": 403,
+    "provisioner token.lookup_accessor other_organization": 403,
+    "machine token.lookup_accessor other_organization": 403,
+    "backup token.lookup_accessor other_organization": 403,
+    "runtime token.lookup_accessor other_organization_path": 403,
+    "issuer token.lookup_accessor other_organization_path": 403,
+    "provisioner token.lookup_accessor other_organization_path": 403,
+    "machine token.lookup_accessor other_organization_path": 403,
+    "backup token.lookup_accessor other_organization_path": 403,
+    "runtime token.lookup_accessor root": 403,
+    "issuer token.lookup_accessor root": 403,
+    "provisioner token.lookup_accessor root": 403,
+    "machine token.lookup_accessor root": 403,
+    "backup token.lookup_accessor root": 403,
+    "runtime token.revoke_accessor own": 403,
+    "issuer token.revoke_accessor own": 204,
+    "provisioner token.revoke_accessor own": 403,
+    "machine token.revoke_accessor own": 403,
+    "backup token.revoke_accessor own": 403,
+    "runtime token.revoke_accessor other_organization": 403,
+    "issuer token.revoke_accessor other_organization": 403,
+    "provisioner token.revoke_accessor other_organization": 403,
+    "machine token.revoke_accessor other_organization": 403,
+    "backup token.revoke_accessor other_organization": 403,
+    "runtime token.revoke_accessor other_organization_path": 403,
+    "issuer token.revoke_accessor other_organization_path": 403,
+    "provisioner token.revoke_accessor other_organization_path": 403,
+    "machine token.revoke_accessor other_organization_path": 403,
+    "backup token.revoke_accessor other_organization_path": 403,
+    "runtime token.revoke_accessor root": 403,
+    "issuer token.revoke_accessor root": 403,
+    "provisioner token.revoke_accessor root": 403,
+    "machine token.revoke_accessor root": 403,
+    "backup token.revoke_accessor root": 403,
+    "runtime token.list_accessors own": 403,
+    "issuer token.list_accessors own": 403,
+    "provisioner token.list_accessors own": 403,
+    "machine token.list_accessors own": 403,
+    "backup token.list_accessors own": 403,
+    "runtime token.list_accessors other_organization": 403,
+    "issuer token.list_accessors other_organization": 403,
+    "provisioner token.list_accessors other_organization": 403,
+    "machine token.list_accessors other_organization": 403,
+    "backup token.list_accessors other_organization": 403,
+    "runtime token.list_accessors other_organization_path": 403,
+    "issuer token.list_accessors other_organization_path": 403,
+    "provisioner token.list_accessors other_organization_path": 403,
+    "machine token.list_accessors other_organization_path": 403,
+    "backup token.list_accessors other_organization_path": 403,
+    "runtime token.list_accessors root": 403,
+    "issuer token.list_accessors root": 403,
+    "provisioner token.list_accessors root": 403,
+    "machine token.list_accessors root": 403,
+    "backup token.list_accessors root": 403,
+    "runtime token_role.read own": 403,
+    "issuer token_role.read own": 200,
+    "provisioner token_role.read own": 200,
+    "machine token_role.read own": 403,
+    "backup token_role.read own": 403,
+    "runtime token_role.read other_environment": 403,
+    "issuer token_role.read other_environment": 200,
+    "provisioner token_role.read other_environment": 200,
+    "machine token_role.read other_environment": 403,
+    "backup token_role.read other_environment": 403,
+    "runtime token_role.read other_organization": 403,
+    "issuer token_role.read other_organization": 403,
+    "provisioner token_role.read other_organization": 403,
+    "machine token_role.read other_organization": 403,
+    "backup token_role.read other_organization": 403,
+    "runtime token_role.read other_organization_path": 403,
+    "issuer token_role.read other_organization_path": 403,
+    "provisioner token_role.read other_organization_path": 403,
+    "machine token_role.read other_organization_path": 403,
+    "backup token_role.read other_organization_path": 403,
+    "runtime token_role.write own": 403,
+    "issuer token_role.write own": 403,
+    "provisioner token_role.write own": 204,
+    "machine token_role.write own": 403,
+    "backup token_role.write own": 403,
+    "runtime token_role.write other_environment": 403,
+    "issuer token_role.write other_environment": 403,
+    "provisioner token_role.write other_environment": 204,
+    "machine token_role.write other_environment": 403,
+    "backup token_role.write other_environment": 403,
+    "runtime token_role.write other_organization": 403,
+    "issuer token_role.write other_organization": 403,
+    "provisioner token_role.write other_organization": 403,
+    "machine token_role.write other_organization": 403,
+    "backup token_role.write other_organization": 403,
+    "runtime token_role.write other_organization_path": 403,
+    "issuer token_role.write other_organization_path": 403,
+    "provisioner token_role.write other_organization_path": 403,
+    "machine token_role.write other_organization_path": 403,
+    "backup token_role.write other_organization_path": 403,
+    "runtime token_role.write_other own": 403,
+    "issuer token_role.write_other own": 403,
+    "provisioner token_role.write_other own": 403,
+    "machine token_role.write_other own": 403,
+    "backup token_role.write_other own": 403,
+    "runtime token_role.write_other other_organization": 403,
+    "issuer token_role.write_other other_organization": 403,
+    "provisioner token_role.write_other other_organization": 403,
+    "machine token_role.write_other other_organization": 403,
+    "backup token_role.write_other other_organization": 403,
+    "runtime token_role.write_other other_organization_path": 403,
+    "issuer token_role.write_other other_organization_path": 403,
+    "provisioner token_role.write_other other_organization_path": 403,
+    "machine token_role.write_other other_organization_path": 403,
+    "backup token_role.write_other other_organization_path": 403,
+    "runtime token_role.write_other root": 403,
+    "issuer token_role.write_other root": 403,
+    "provisioner token_role.write_other root": 403,
+    "machine token_role.write_other root": 403,
+    "backup token_role.write_other root": 403,
+    "runtime policy.read_machine own": 403,
+    "issuer policy.read_machine own": 200,
+    "provisioner policy.read_machine own": 200,
+    "machine policy.read_machine own": 403,
+    "backup policy.read_machine own": 403,
+    "runtime policy.read_machine other_environment": 403,
+    "issuer policy.read_machine other_environment": 200,
+    "provisioner policy.read_machine other_environment": 200,
+    "machine policy.read_machine other_environment": 403,
+    "backup policy.read_machine other_environment": 403,
+    "runtime policy.read_machine other_organization": 403,
+    "issuer policy.read_machine other_organization": 403,
+    "provisioner policy.read_machine other_organization": 403,
+    "machine policy.read_machine other_organization": 403,
+    "backup policy.read_machine other_organization": 403,
+    "runtime policy.read_machine other_organization_path": 403,
+    "issuer policy.read_machine other_organization_path": 403,
+    "provisioner policy.read_machine other_organization_path": 403,
+    "machine policy.read_machine other_organization_path": 403,
+    "backup policy.read_machine other_organization_path": 403,
+    "runtime policy.write_machine own": 403,
+    "issuer policy.write_machine own": 403,
+    "provisioner policy.write_machine own": 204,
+    "machine policy.write_machine own": 403,
+    "backup policy.write_machine own": 403,
+    "runtime policy.write_machine other_environment": 403,
+    "issuer policy.write_machine other_environment": 403,
+    "provisioner policy.write_machine other_environment": 204,
+    "machine policy.write_machine other_environment": 403,
+    "backup policy.write_machine other_environment": 403,
+    "runtime policy.write_machine other_organization": 403,
+    "issuer policy.write_machine other_organization": 403,
+    "provisioner policy.write_machine other_organization": 403,
+    "machine policy.write_machine other_organization": 403,
+    "backup policy.write_machine other_organization": 403,
+    "runtime policy.write_machine other_organization_path": 403,
+    "issuer policy.write_machine other_organization_path": 403,
+    "provisioner policy.write_machine other_organization_path": 403,
+    "machine policy.write_machine other_organization_path": 403,
+    "backup policy.write_machine other_organization_path": 403,
+    "runtime policy.write_runtime own": 403,
+    "issuer policy.write_runtime own": 403,
+    "provisioner policy.write_runtime own": 403,
+    "machine policy.write_runtime own": 403,
+    "backup policy.write_runtime own": 403,
+    "runtime policy.write_runtime other_organization": 403,
+    "issuer policy.write_runtime other_organization": 403,
+    "provisioner policy.write_runtime other_organization": 403,
+    "machine policy.write_runtime other_organization": 403,
+    "backup policy.write_runtime other_organization": 403,
+    "runtime policy.write_runtime other_organization_path": 403,
+    "issuer policy.write_runtime other_organization_path": 403,
+    "provisioner policy.write_runtime other_organization_path": 403,
+    "machine policy.write_runtime other_organization_path": 403,
+    "backup policy.write_runtime other_organization_path": 403,
+    "runtime policy.write_runtime root": 403,
+    "issuer policy.write_runtime root": 403,
+    "provisioner policy.write_runtime root": 403,
+    "machine policy.write_runtime root": 403,
+    "backup policy.write_runtime root": 403,
+    "runtime policy.list own": 403,
+    "issuer policy.list own": 403,
+    "provisioner policy.list own": 403,
+    "machine policy.list own": 403,
+    "backup policy.list own": 403,
+    "runtime policy.list other_organization": 403,
+    "issuer policy.list other_organization": 403,
+    "provisioner policy.list other_organization": 403,
+    "machine policy.list other_organization": 403,
+    "backup policy.list other_organization": 403,
+    "runtime policy.list other_organization_path": 403,
+    "issuer policy.list other_organization_path": 403,
+    "provisioner policy.list other_organization_path": 403,
+    "machine policy.list other_organization_path": 403,
+    "backup policy.list other_organization_path": 403,
+    "runtime policy.list root": 403,
+    "issuer policy.list root": 403,
+    "provisioner policy.list root": 403,
+    "machine policy.list root": 403,
+    "backup policy.list root": 403,
+    "runtime auth.read own": 403,
+    "issuer auth.read own": 403,
+    "provisioner auth.read own": 403,
+    "machine auth.read own": 403,
+    "backup auth.read own": 403,
+    "runtime auth.read other_organization": 403,
+    "issuer auth.read other_organization": 403,
+    "provisioner auth.read other_organization": 403,
+    "machine auth.read other_organization": 403,
+    "backup auth.read other_organization": 403,
+    "runtime auth.read other_organization_path": 403,
+    "issuer auth.read other_organization_path": 403,
+    "provisioner auth.read other_organization_path": 403,
+    "machine auth.read other_organization_path": 403,
+    "backup auth.read other_organization_path": 403,
+    "runtime auth.read root": 403,
+    "issuer auth.read root": 403,
+    "provisioner auth.read root": 403,
+    "machine auth.read root": 403,
+    "backup auth.read root": 403,
+    "runtime auth.enable own": 403,
+    "issuer auth.enable own": 403,
+    "provisioner auth.enable own": 403,
+    "machine auth.enable own": 403,
+    "backup auth.enable own": 403,
+    "runtime auth.enable other_organization": 403,
+    "issuer auth.enable other_organization": 403,
+    "provisioner auth.enable other_organization": 403,
+    "machine auth.enable other_organization": 403,
+    "backup auth.enable other_organization": 403,
+    "runtime auth.enable other_organization_path": 403,
+    "issuer auth.enable other_organization_path": 403,
+    "provisioner auth.enable other_organization_path": 403,
+    "machine auth.enable other_organization_path": 403,
+    "backup auth.enable other_organization_path": 403,
+    "runtime auth.enable root": 403,
+    "issuer auth.enable root": 403,
+    "provisioner auth.enable root": 403,
+    "machine auth.enable root": 403,
+    "backup auth.enable root": 403,
+    "runtime approle.write_issuer own": 403,
+    "issuer approle.write_issuer own": 403,
+    "provisioner approle.write_issuer own": 403,
+    "machine approle.write_issuer own": 403,
+    "backup approle.write_issuer own": 403,
+    "runtime approle.write_issuer other_organization": 403,
+    "issuer approle.write_issuer other_organization": 403,
+    "provisioner approle.write_issuer other_organization": 403,
+    "machine approle.write_issuer other_organization": 403,
+    "backup approle.write_issuer other_organization": 403,
+    "runtime approle.write_issuer other_organization_path": 403,
+    "issuer approle.write_issuer other_organization_path": 403,
+    "provisioner approle.write_issuer other_organization_path": 403,
+    "machine approle.write_issuer other_organization_path": 403,
+    "backup approle.write_issuer other_organization_path": 403,
+    "runtime approle.secret_id own": 403,
+    "issuer approle.secret_id own": 403,
+    "provisioner approle.secret_id own": 403,
+    "machine approle.secret_id own": 403,
+    "backup approle.secret_id own": 403,
+    "runtime approle.secret_id other_organization": 403,
+    "issuer approle.secret_id other_organization": 403,
+    "provisioner approle.secret_id other_organization": 403,
+    "machine approle.secret_id other_organization": 403,
+    "backup approle.secret_id other_organization": 403,
+    "runtime approle.secret_id other_organization_path": 403,
+    "issuer approle.secret_id other_organization_path": 403,
+    "provisioner approle.secret_id other_organization_path": 403,
+    "machine approle.secret_id other_organization_path": 403,
+    "backup approle.secret_id other_organization_path": 403,
+    "runtime namespace.list own": 403,
+    "issuer namespace.list own": 403,
+    "provisioner namespace.list own": 403,
+    "machine namespace.list own": 403,
+    "backup namespace.list own": 403,
+    "runtime namespace.list other_organization": 403,
+    "issuer namespace.list other_organization": 403,
+    "provisioner namespace.list other_organization": 403,
+    "machine namespace.list other_organization": 403,
+    "backup namespace.list other_organization": 403,
+    "runtime namespace.list other_organization_path": 403,
+    "issuer namespace.list other_organization_path": 403,
+    "provisioner namespace.list other_organization_path": 403,
+    "machine namespace.list other_organization_path": 403,
+    "backup namespace.list other_organization_path": 403,
+    "runtime namespace.list root": 403,
+    "issuer namespace.list root": 403,
+    "provisioner namespace.list root": 403,
+    "machine namespace.list root": 403,
+    "backup namespace.list root": 403,
+    "runtime namespace.create own": 403,
+    "issuer namespace.create own": 403,
+    "provisioner namespace.create own": 403,
+    "machine namespace.create own": 403,
+    "backup namespace.create own": 403,
+    "runtime namespace.create other_organization": 403,
+    "issuer namespace.create other_organization": 403,
+    "provisioner namespace.create other_organization": 403,
+    "machine namespace.create other_organization": 403,
+    "backup namespace.create other_organization": 403,
+    "runtime namespace.create other_organization_path": 403,
+    "issuer namespace.create other_organization_path": 403,
+    "provisioner namespace.create other_organization_path": 403,
+    "machine namespace.create other_organization_path": 403,
+    "backup namespace.create other_organization_path": 403,
+    "runtime namespace.create root": 403,
+    "issuer namespace.create root": 403,
+    "provisioner namespace.create root": 403,
+    "machine namespace.create root": 403,
+    "backup namespace.create root": 403,
+    "runtime raft.snapshot own": 400,
+    "issuer raft.snapshot own": 400,
+    "provisioner raft.snapshot own": 400,
+    "machine raft.snapshot own": 400,
+    "backup raft.snapshot own": 400,
+    "runtime raft.snapshot other_organization": 400,
+    "issuer raft.snapshot other_organization": 400,
+    "provisioner raft.snapshot other_organization": 400,
+    "machine raft.snapshot other_organization": 400,
+    "backup raft.snapshot other_organization": 400,
+    "runtime raft.snapshot other_organization_path": 400,
+    "issuer raft.snapshot other_organization_path": 400,
+    "provisioner raft.snapshot other_organization_path": 400,
+    "machine raft.snapshot other_organization_path": 400,
+    "backup raft.snapshot other_organization_path": 400,
+    "runtime raft.snapshot root": 403,
+    "issuer raft.snapshot root": 403,
+    "provisioner raft.snapshot root": 403,
+    "machine raft.snapshot root": 403,
+    "backup raft.snapshot root": 200,
+    "runtime audit.read own": 400,
+    "issuer audit.read own": 400,
+    "provisioner audit.read own": 400,
+    "machine audit.read own": 400,
+    "backup audit.read own": 400,
+    "runtime audit.read other_organization": 400,
+    "issuer audit.read other_organization": 400,
+    "provisioner audit.read other_organization": 400,
+    "machine audit.read other_organization": 400,
+    "backup audit.read other_organization": 400,
+    "runtime audit.read other_organization_path": 400,
+    "issuer audit.read other_organization_path": 400,
+    "provisioner audit.read other_organization_path": 400,
+    "machine audit.read other_organization_path": 400,
+    "backup audit.read other_organization_path": 400,
+    "runtime audit.read root": 403,
+    "issuer audit.read root": 403,
+    "provisioner audit.read root": 403,
+    "machine audit.read root": 403,
+    "backup audit.read root": 403,
+    "runtime audit.headers own": 400,
+    "issuer audit.headers own": 400,
+    "provisioner audit.headers own": 400,
+    "machine audit.headers own": 400,
+    "backup audit.headers own": 400,
+    "runtime audit.headers other_organization": 400,
+    "issuer audit.headers other_organization": 400,
+    "provisioner audit.headers other_organization": 400,
+    "machine audit.headers other_organization": 400,
+    "backup audit.headers other_organization": 400,
+    "runtime audit.headers other_organization_path": 400,
+    "issuer audit.headers other_organization_path": 400,
+    "provisioner audit.headers other_organization_path": 400,
+    "machine audit.headers other_organization_path": 400,
+    "backup audit.headers other_organization_path": 400,
+    "runtime audit.headers root": 403,
+    "issuer audit.headers root": 403,
+    "provisioner audit.headers root": 403,
+    "machine audit.headers root": 403,
+    "backup audit.headers root": 403,
+    "runtime seal own": 400,
+    "issuer seal own": 400,
+    "provisioner seal own": 400,
+    "machine seal own": 400,
+    "backup seal own": 400,
+    "runtime seal other_organization": 400,
+    "issuer seal other_organization": 400,
+    "provisioner seal other_organization": 400,
+    "machine seal other_organization": 400,
+    "backup seal other_organization": 400,
+    "runtime seal other_organization_path": 400,
+    "issuer seal other_organization_path": 400,
+    "provisioner seal other_organization_path": 400,
+    "machine seal other_organization_path": 400,
+    "backup seal other_organization_path": 400,
+    "runtime seal root": 403,
+    "issuer seal root": 403,
+    "provisioner seal root": 403,
+    "machine seal root": 403,
+    "backup seal root": 403,
+    "runtime raw.read own": 400,
+    "issuer raw.read own": 400,
+    "provisioner raw.read own": 400,
+    "machine raw.read own": 400,
+    "backup raw.read own": 400,
+    "runtime raw.read other_organization": 400,
+    "issuer raw.read other_organization": 400,
+    "provisioner raw.read other_organization": 400,
+    "machine raw.read other_organization": 400,
+    "backup raw.read other_organization": 400,
+    "runtime raw.read other_organization_path": 400,
+    "issuer raw.read other_organization_path": 400,
+    "provisioner raw.read other_organization_path": 400,
+    "machine raw.read other_organization_path": 400,
+    "backup raw.read other_organization_path": 400,
+    "runtime raw.read root": 403,
+    "issuer raw.read root": 403,
+    "provisioner raw.read root": 403,
+    "machine raw.read root": 403,
+    "backup raw.read root": 403
+  },
+  "inline": {
+    "runtime kv.write own": 200,
+    "runtime kv.write other_environment": 200,
+    "runtime kv.write other_organization": 403,
+    "runtime kv.write other_organization_path": 403,
+    "runtime kv.read own": 200,
+    "runtime kv.read other_environment": 200,
+    "runtime kv.read other_organization": 403,
+    "runtime kv.read other_organization_path": 403,
+    "runtime kv.read_version_1 own": 200,
+    "runtime kv.read_version_1 other_environment": 200,
+    "runtime kv.read_version_1 other_organization": 403,
+    "runtime kv.read_version_1 other_organization_path": 403,
+    "runtime kv.list_environment own": 200,
+    "runtime kv.list_environment other_environment": 200,
+    "runtime kv.list_environment other_organization": 403,
+    "runtime kv.list_environment other_organization_path": 403,
+    "runtime kv.list_project own": 200,
+    "runtime kv.list_project other_organization": 403,
+    "runtime kv.list_project other_organization_path": 403,
+    "runtime kv.list_projects own": 200,
+    "runtime kv.list_projects other_organization": 403,
+    "runtime kv.list_projects other_organization_path": 403,
+    "runtime kv.list_mount own": 403,
+    "runtime kv.list_mount other_organization": 403,
+    "runtime kv.list_mount other_organization_path": 403,
+    "runtime kv.soft_delete own": 204,
+    "runtime kv.soft_delete other_environment": 204,
+    "runtime kv.soft_delete other_organization": 403,
+    "runtime kv.soft_delete other_organization_path": 403,
+    "runtime kv.delete_data own": 403,
+    "runtime kv.delete_data other_environment": 403,
+    "runtime kv.delete_data other_organization": 403,
+    "runtime kv.delete_data other_organization_path": 403,
+    "runtime kv.undelete own": 204,
+    "runtime kv.undelete other_environment": 204,
+    "runtime kv.undelete other_organization": 403,
+    "runtime kv.undelete other_organization_path": 403,
+    "runtime kv.destroy own": 403,
+    "runtime kv.destroy other_environment": 403,
+    "runtime kv.destroy other_organization": 403,
+    "runtime kv.destroy other_organization_path": 403,
+    "runtime kv.delete_metadata own": 403,
+    "runtime kv.delete_metadata other_environment": 403,
+    "runtime kv.delete_metadata other_organization": 403,
+    "runtime kv.delete_metadata other_organization_path": 403,
+    "runtime kv.read_metadata own": 200,
+    "runtime kv.read_metadata other_environment": 200,
+    "runtime kv.read_metadata other_organization": 403,
+    "runtime kv.read_metadata other_organization_path": 403,
+    "runtime kv.patch own": 403,
+    "runtime kv.patch other_environment": 403,
+    "runtime kv.patch other_organization": 403,
+    "runtime kv.patch other_organization_path": 403,
+    "runtime kv.read_subkeys own": 403,
+    "runtime kv.read_subkeys other_environment": 403,
+    "runtime kv.read_subkeys other_organization": 403,
+    "runtime kv.read_subkeys other_organization_path": 403,
+    "runtime kv.write_config own": 403,
+    "runtime kv.write_config other_organization": 403,
+    "runtime kv.write_config other_organization_path": 403,
+    "runtime mount.read own": 403,
+    "runtime mount.read other_organization": 403,
+    "runtime mount.read other_organization_path": 403,
+    "runtime mount.tune own": 403,
+    "runtime mount.tune other_organization": 403,
+    "runtime mount.tune other_organization_path": 403,
+    "runtime token.create own": 403,
+    "runtime token.create other_organization": 403,
+    "runtime token.create other_organization_path": 403,
+    "runtime token.create root": 403,
+    "runtime token.create_orphan own": 403,
+    "runtime token.create_orphan other_organization": 403,
+    "runtime token.create_orphan other_organization_path": 403,
+    "runtime token.create_orphan root": 403,
+    "runtime token.create_from_role own": 403,
+    "runtime token.create_from_role other_environment": 403,
+    "runtime token.create_from_role other_organization": 403,
+    "runtime token.create_from_role other_organization_path": 403,
+    "runtime token.renew_self own": 403,
+    "runtime token.renew_self other_organization": 403,
+    "runtime token.renew_self other_organization_path": 403,
+    "runtime token.renew_self root": 403,
+    "runtime token.lookup_self own": 403,
+    "runtime token.lookup_self other_organization": 403,
+    "runtime token.lookup_self other_organization_path": 403,
+    "runtime token.lookup_self root": 403,
+    "runtime token.revoke_self own": 204,
+    "runtime token.revoke_self other_organization": 204,
+    "runtime token.revoke_self other_organization_path": 204,
+    "runtime token.revoke_self root": 204,
+    "runtime token.lookup_accessor own": 403,
+    "runtime token.lookup_accessor other_organization": 403,
+    "runtime token.lookup_accessor other_organization_path": 403,
+    "runtime token.lookup_accessor root": 403,
+    "runtime token.revoke_accessor own": 403,
+    "runtime token.revoke_accessor other_organization": 403,
+    "runtime token.revoke_accessor other_organization_path": 403,
+    "runtime token.revoke_accessor root": 403,
+    "runtime token.list_accessors own": 403,
+    "runtime token.list_accessors other_organization": 403,
+    "runtime token.list_accessors other_organization_path": 403,
+    "runtime token.list_accessors root": 403,
+    "runtime token_role.read own": 403,
+    "runtime token_role.read other_environment": 403,
+    "runtime token_role.read other_organization": 403,
+    "runtime token_role.read other_organization_path": 403,
+    "runtime token_role.write own": 403,
+    "runtime token_role.write other_environment": 403,
+    "runtime token_role.write other_organization": 403,
+    "runtime token_role.write other_organization_path": 403,
+    "runtime token_role.write_other own": 403,
+    "runtime token_role.write_other other_organization": 403,
+    "runtime token_role.write_other other_organization_path": 403,
+    "runtime token_role.write_other root": 403,
+    "runtime policy.read_machine own": 403,
+    "runtime policy.read_machine other_environment": 403,
+    "runtime policy.read_machine other_organization": 403,
+    "runtime policy.read_machine other_organization_path": 403,
+    "runtime policy.write_machine own": 403,
+    "runtime policy.write_machine other_environment": 403,
+    "runtime policy.write_machine other_organization": 403,
+    "runtime policy.write_machine other_organization_path": 403,
+    "runtime policy.write_runtime own": 403,
+    "runtime policy.write_runtime other_organization": 403,
+    "runtime policy.write_runtime other_organization_path": 403,
+    "runtime policy.write_runtime root": 403,
+    "runtime policy.list own": 403,
+    "runtime policy.list other_organization": 403,
+    "runtime policy.list other_organization_path": 403,
+    "runtime policy.list root": 403,
+    "runtime auth.read own": 403,
+    "runtime auth.read other_organization": 403,
+    "runtime auth.read other_organization_path": 403,
+    "runtime auth.read root": 403,
+    "runtime auth.enable own": 403,
+    "runtime auth.enable other_organization": 403,
+    "runtime auth.enable other_organization_path": 403,
+    "runtime auth.enable root": 403,
+    "runtime approle.write_issuer own": 403,
+    "runtime approle.write_issuer other_organization": 403,
+    "runtime approle.write_issuer other_organization_path": 403,
+    "runtime approle.secret_id own": 403,
+    "runtime approle.secret_id other_organization": 403,
+    "runtime approle.secret_id other_organization_path": 403,
+    "runtime namespace.list own": 403,
+    "runtime namespace.list other_organization": 403,
+    "runtime namespace.list other_organization_path": 403,
+    "runtime namespace.list root": 403,
+    "runtime namespace.create own": 403,
+    "runtime namespace.create other_organization": 403,
+    "runtime namespace.create other_organization_path": 403,
+    "runtime namespace.create root": 403,
+    "runtime raft.snapshot own": 400,
+    "runtime raft.snapshot other_organization": 400,
+    "runtime raft.snapshot other_organization_path": 400,
+    "runtime raft.snapshot root": 403,
+    "runtime audit.read own": 400,
+    "runtime audit.read other_organization": 400,
+    "runtime audit.read other_organization_path": 400,
+    "runtime audit.read root": 403,
+    "runtime audit.headers own": 400,
+    "runtime audit.headers other_organization": 400,
+    "runtime audit.headers other_organization_path": 400,
+    "runtime audit.headers root": 403,
+    "runtime seal own": 400,
+    "runtime seal other_organization": 400,
+    "runtime seal other_organization_path": 400,
+    "runtime seal root": 403,
+    "runtime raw.read own": 400,
+    "runtime raw.read other_organization": 400,
+    "runtime raw.read other_organization_path": 400,
+    "runtime raw.read root": 403
+  },
+  "controls": {
+    "approle.secret_id other_organization": {
+      "by": "root",
+      "status": 200
+    },
+    "approle.secret_id other_organization_path": {
+      "by": "root",
+      "status": 200
+    },
+    "approle.secret_id own": {
+      "by": "root",
+      "status": 200
+    },
+    "approle.write_issuer other_organization": {
+      "by": "root",
+      "status": 204
+    },
+    "approle.write_issuer other_organization_path": {
+      "by": "root",
+      "status": 204
+    },
+    "approle.write_issuer own": {
+      "by": "root",
+      "status": 204
+    },
+    "audit.headers other_organization": {
+      "by": "root",
+      "status": 400
+    },
+    "audit.headers other_organization_path": {
+      "by": "root",
+      "status": 400
+    },
+    "audit.headers own": {
+      "by": "root",
+      "status": 400
+    },
+    "audit.headers root": {
+      "by": "root",
+      "status": 200
+    },
+    "audit.read other_organization": {
+      "by": "root",
+      "status": 400
+    },
+    "audit.read other_organization_path": {
+      "by": "root",
+      "status": 400
+    },
+    "audit.read own": {
+      "by": "root",
+      "status": 400
+    },
+    "audit.read root": {
+      "by": "root",
+      "status": 200
+    },
+    "auth.enable other_organization": {
+      "by": "root",
+      "status": 204
+    },
+    "auth.enable other_organization_path": {
+      "by": "root",
+      "status": 204
+    },
+    "auth.enable own": {
+      "by": "root",
+      "status": 204
+    },
+    "auth.enable root": {
+      "by": "root",
+      "status": 204
+    },
+    "auth.read other_organization": {
+      "by": "root",
+      "status": 200
+    },
+    "auth.read other_organization_path": {
+      "by": "root",
+      "status": 200
+    },
+    "auth.read own": {
+      "by": "root",
+      "status": 200
+    },
+    "auth.read root": {
+      "by": "root",
+      "status": 200
+    },
+    "kv.delete_data other_environment": {
+      "by": "root",
+      "status": 204
+    },
+    "kv.delete_data other_organization": {
+      "by": "root",
+      "status": 204
+    },
+    "kv.delete_data other_organization_path": {
+      "by": "root",
+      "status": 204
+    },
+    "kv.delete_data own": {
+      "by": "root",
+      "status": 204
+    },
+    "kv.delete_metadata other_environment": {
+      "by": "root",
+      "status": 204
+    },
+    "kv.delete_metadata other_organization": {
+      "by": "root",
+      "status": 204
+    },
+    "kv.delete_metadata other_organization_path": {
+      "by": "root",
+      "status": 204
+    },
+    "kv.delete_metadata own": {
+      "by": "root",
+      "status": 204
+    },
+    "kv.destroy other_environment": {
+      "by": "root",
+      "status": 204
+    },
+    "kv.destroy other_organization": {
+      "by": "root",
+      "status": 204
+    },
+    "kv.destroy other_organization_path": {
+      "by": "root",
+      "status": 204
+    },
+    "kv.destroy own": {
+      "by": "root",
+      "status": 204
+    },
+    "kv.list_environment other_environment": {
+      "by": "runtime",
+      "status": 200
+    },
+    "kv.list_environment other_organization": {
+      "by": "root",
+      "status": 200
+    },
+    "kv.list_environment other_organization_path": {
+      "by": "root",
+      "status": 200
+    },
+    "kv.list_environment own": {
+      "by": "runtime",
+      "status": 200
+    },
+    "kv.list_mount other_organization": {
+      "by": "root",
+      "status": 200
+    },
+    "kv.list_mount other_organization_path": {
+      "by": "root",
+      "status": 200
+    },
+    "kv.list_mount own": {
+      "by": "root",
+      "status": 200
+    },
+    "kv.list_project other_organization": {
+      "by": "root",
+      "status": 200
+    },
+    "kv.list_project other_organization_path": {
+      "by": "root",
+      "status": 200
+    },
+    "kv.list_project own": {
+      "by": "runtime",
+      "status": 200
+    },
+    "kv.list_projects other_organization": {
+      "by": "root",
+      "status": 200
+    },
+    "kv.list_projects other_organization_path": {
+      "by": "root",
+      "status": 200
+    },
+    "kv.list_projects own": {
+      "by": "runtime",
+      "status": 200
+    },
+    "kv.patch other_environment": {
+      "by": "root",
+      "status": 200
+    },
+    "kv.patch other_organization": {
+      "by": "root",
+      "status": 200
+    },
+    "kv.patch other_organization_path": {
+      "by": "root",
+      "status": 200
+    },
+    "kv.patch own": {
+      "by": "root",
+      "status": 200
+    },
+    "kv.read other_environment": {
+      "by": "runtime",
+      "status": 200
+    },
+    "kv.read other_organization": {
+      "by": "root",
+      "status": 200
+    },
+    "kv.read other_organization_path": {
+      "by": "root",
+      "status": 200
+    },
+    "kv.read own": {
+      "by": "runtime",
+      "status": 200
+    },
+    "kv.read_metadata other_environment": {
+      "by": "runtime",
+      "status": 200
+    },
+    "kv.read_metadata other_organization": {
+      "by": "root",
+      "status": 200
+    },
+    "kv.read_metadata other_organization_path": {
+      "by": "root",
+      "status": 200
+    },
+    "kv.read_metadata own": {
+      "by": "runtime",
+      "status": 200
+    },
+    "kv.read_subkeys other_environment": {
+      "by": "root",
+      "status": 200
+    },
+    "kv.read_subkeys other_organization": {
+      "by": "root",
+      "status": 200
+    },
+    "kv.read_subkeys other_organization_path": {
+      "by": "root",
+      "status": 200
+    },
+    "kv.read_subkeys own": {
+      "by": "root",
+      "status": 200
+    },
+    "kv.read_version_1 other_environment": {
+      "by": "runtime",
+      "status": 200
+    },
+    "kv.read_version_1 other_organization": {
+      "by": "root",
+      "status": 200
+    },
+    "kv.read_version_1 other_organization_path": {
+      "by": "root",
+      "status": 200
+    },
+    "kv.read_version_1 own": {
+      "by": "runtime",
+      "status": 200
+    },
+    "kv.soft_delete other_environment": {
+      "by": "runtime",
+      "status": 204
+    },
+    "kv.soft_delete other_organization": {
+      "by": "root",
+      "status": 204
+    },
+    "kv.soft_delete other_organization_path": {
+      "by": "root",
+      "status": 204
+    },
+    "kv.soft_delete own": {
+      "by": "runtime",
+      "status": 204
+    },
+    "kv.undelete other_environment": {
+      "by": "runtime",
+      "status": 204
+    },
+    "kv.undelete other_organization": {
+      "by": "root",
+      "status": 204
+    },
+    "kv.undelete other_organization_path": {
+      "by": "root",
+      "status": 204
+    },
+    "kv.undelete own": {
+      "by": "runtime",
+      "status": 204
+    },
+    "kv.write other_environment": {
+      "by": "runtime",
+      "status": 200
+    },
+    "kv.write other_organization": {
+      "by": "root",
+      "status": 200
+    },
+    "kv.write other_organization_path": {
+      "by": "root",
+      "status": 200
+    },
+    "kv.write own": {
+      "by": "runtime",
+      "status": 200
+    },
+    "kv.write_config other_organization": {
+      "by": "root",
+      "status": 204
+    },
+    "kv.write_config other_organization_path": {
+      "by": "root",
+      "status": 204
+    },
+    "kv.write_config own": {
+      "by": "root",
+      "status": 204
+    },
+    "mount.read other_organization": {
+      "by": "root",
+      "status": 200
+    },
+    "mount.read other_organization_path": {
+      "by": "root",
+      "status": 200
+    },
+    "mount.read own": {
+      "by": "root",
+      "status": 200
+    },
+    "mount.tune other_organization": {
+      "by": "root",
+      "status": 204
+    },
+    "mount.tune other_organization_path": {
+      "by": "root",
+      "status": 204
+    },
+    "mount.tune own": {
+      "by": "root",
+      "status": 204
+    },
+    "namespace.create other_organization": {
+      "by": "root",
+      "status": 200
+    },
+    "namespace.create other_organization_path": {
+      "by": "root",
+      "status": 200
+    },
+    "namespace.create own": {
+      "by": "root",
+      "status": 200
+    },
+    "namespace.create root": {
+      "by": "root",
+      "status": 200
+    },
+    "namespace.list other_organization": {
+      "by": "root",
+      "status": 200
+    },
+    "namespace.list other_organization_path": {
+      "by": "root",
+      "status": 200
+    },
+    "namespace.list own": {
+      "by": "root",
+      "status": 200
+    },
+    "namespace.list root": {
+      "by": "root",
+      "status": 200
+    },
+    "policy.list other_organization": {
+      "by": "root",
+      "status": 200
+    },
+    "policy.list other_organization_path": {
+      "by": "root",
+      "status": 200
+    },
+    "policy.list own": {
+      "by": "root",
+      "status": 200
+    },
+    "policy.list root": {
+      "by": "root",
+      "status": 200
+    },
+    "policy.read_machine other_environment": {
+      "by": "issuer",
+      "status": 200
+    },
+    "policy.read_machine other_organization": {
+      "by": "root",
+      "status": 200
+    },
+    "policy.read_machine other_organization_path": {
+      "by": "root",
+      "status": 200
+    },
+    "policy.read_machine own": {
+      "by": "issuer",
+      "status": 200
+    },
+    "policy.write_machine other_environment": {
+      "by": "provisioner",
+      "status": 204
+    },
+    "policy.write_machine other_organization": {
+      "by": "root",
+      "status": 204
+    },
+    "policy.write_machine other_organization_path": {
+      "by": "root",
+      "status": 204
+    },
+    "policy.write_machine own": {
+      "by": "provisioner",
+      "status": 204
+    },
+    "policy.write_runtime other_organization": {
+      "by": "root",
+      "status": 204
+    },
+    "policy.write_runtime other_organization_path": {
+      "by": "root",
+      "status": 204
+    },
+    "policy.write_runtime own": {
+      "by": "root",
+      "status": 204
+    },
+    "policy.write_runtime root": {
+      "by": "root",
+      "status": 204
+    },
+    "raft.snapshot other_organization": {
+      "by": "root",
+      "status": 400
+    },
+    "raft.snapshot other_organization_path": {
+      "by": "root",
+      "status": 400
+    },
+    "raft.snapshot own": {
+      "by": "root",
+      "status": 400
+    },
+    "raft.snapshot root": {
+      "by": "backup",
+      "status": 200
+    },
+    "raw.read other_organization": {
+      "by": "root",
+      "status": 400
+    },
+    "raw.read other_organization_path": {
+      "by": "root",
+      "status": 400
+    },
+    "raw.read own": {
+      "by": "root",
+      "status": 400
+    },
+    "raw.read root": {
+      "by": "root",
+      "status": 404
+    },
+    "seal other_organization": {
+      "by": "root",
+      "status": 400
+    },
+    "seal other_organization_path": {
+      "by": "root",
+      "status": 400
+    },
+    "seal own": {
+      "by": "root",
+      "status": 400
+    },
+    "seal root": {
+      "by": "root (own stack)",
+      "status": 204
+    },
+    "token_role.read other_environment": {
+      "by": "issuer",
+      "status": 200
+    },
+    "token_role.read other_organization": {
+      "by": "root",
+      "status": 200
+    },
+    "token_role.read other_organization_path": {
+      "by": "root",
+      "status": 200
+    },
+    "token_role.read own": {
+      "by": "issuer",
+      "status": 200
+    },
+    "token_role.write other_environment": {
+      "by": "provisioner",
+      "status": 204
+    },
+    "token_role.write other_organization": {
+      "by": "root",
+      "status": 204
+    },
+    "token_role.write other_organization_path": {
+      "by": "root",
+      "status": 204
+    },
+    "token_role.write own": {
+      "by": "provisioner",
+      "status": 204
+    },
+    "token_role.write_other other_organization": {
+      "by": "root",
+      "status": 204
+    },
+    "token_role.write_other other_organization_path": {
+      "by": "root",
+      "status": 204
+    },
+    "token_role.write_other own": {
+      "by": "root",
+      "status": 204
+    },
+    "token_role.write_other root": {
+      "by": "root",
+      "status": 204
+    },
+    "token.create other_organization": {
+      "by": "root",
+      "status": 200
+    },
+    "token.create other_organization_path": {
+      "by": "root",
+      "status": 200
+    },
+    "token.create own": {
+      "by": "root",
+      "status": 200
+    },
+    "token.create root": {
+      "by": "root",
+      "status": 200
+    },
+    "token.create_from_role other_environment": {
+      "by": "issuer",
+      "status": 200
+    },
+    "token.create_from_role other_organization": {
+      "by": "root",
+      "status": 200
+    },
+    "token.create_from_role other_organization_path": {
+      "by": "root",
+      "status": 200
+    },
+    "token.create_from_role own": {
+      "by": "issuer",
+      "status": 200
+    },
+    "token.create_orphan other_organization": {
+      "by": "root",
+      "status": 200
+    },
+    "token.create_orphan other_organization_path": {
+      "by": "root",
+      "status": 200
+    },
+    "token.create_orphan own": {
+      "by": "root",
+      "status": 200
+    },
+    "token.create_orphan root": {
+      "by": "root",
+      "status": 200
+    },
+    "token.list_accessors other_organization": {
+      "by": "root",
+      "status": 200
+    },
+    "token.list_accessors other_organization_path": {
+      "by": "root",
+      "status": 200
+    },
+    "token.list_accessors own": {
+      "by": "root",
+      "status": 200
+    },
+    "token.list_accessors root": {
+      "by": "root",
+      "status": 200
+    },
+    "token.lookup_accessor other_organization": {
+      "by": "root",
+      "status": 200
+    },
+    "token.lookup_accessor other_organization_path": {
+      "by": "root",
+      "status": 200
+    },
+    "token.lookup_accessor own": {
+      "by": "issuer",
+      "status": 200
+    },
+    "token.lookup_accessor root": {
+      "by": "root",
+      "status": 200
+    },
+    "token.lookup_self other_organization": {
+      "by": "runtime",
+      "status": 200
+    },
+    "token.lookup_self other_organization_path": {
+      "by": "runtime",
+      "status": 200
+    },
+    "token.lookup_self own": {
+      "by": "runtime",
+      "status": 200
+    },
+    "token.lookup_self root": {
+      "by": "runtime",
+      "status": 200
+    },
+    "token.renew_self other_organization": {
+      "by": "renewable default-policy token",
+      "status": 200
+    },
+    "token.renew_self other_organization_path": {
+      "by": "renewable default-policy token",
+      "status": 200
+    },
+    "token.renew_self own": {
+      "by": "renewable default-policy token",
+      "status": 200
+    },
+    "token.renew_self root": {
+      "by": "renewable default-policy token",
+      "status": 200
+    },
+    "token.revoke_accessor other_organization": {
+      "by": "root",
+      "status": 204
+    },
+    "token.revoke_accessor other_organization_path": {
+      "by": "root",
+      "status": 204
+    },
+    "token.revoke_accessor own": {
+      "by": "issuer",
+      "status": 204
+    },
+    "token.revoke_accessor root": {
+      "by": "root",
+      "status": 204
+    },
+    "token.revoke_self other_organization": {
+      "by": "runtime",
+      "status": 204
+    },
+    "token.revoke_self other_organization_path": {
+      "by": "runtime",
+      "status": 204
+    },
+    "token.revoke_self own": {
+      "by": "runtime",
+      "status": 204
+    },
+    "token.revoke_self root": {
+      "by": "runtime",
+      "status": 204
+    }
+  }
+}

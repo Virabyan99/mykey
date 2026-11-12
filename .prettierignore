@@ -7,3 +7,4 @@ tests/fixtures/
 .superpowers/
 .trivyignore.images
 docs/evidence/registry.json
+.claude/

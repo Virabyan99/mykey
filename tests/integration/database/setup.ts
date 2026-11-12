@@ -37,8 +37,11 @@ export function rolePasswords(stack: Stack): Record<RoleName, string> {
   };
 }
 
-export async function prepareDatabase(options: { migrate?: boolean } = {}): Promise<TestDatabase> {
-  const stack = await getSharedStack();
+/** A fresh database on the shared stack, or on `options.stack` (a suite that owns its stack). */
+export async function prepareDatabase(
+  options: { migrate?: boolean; stack?: Stack } = {},
+): Promise<TestDatabase> {
+  const stack = options.stack ?? (await getSharedStack());
   const fresh = await freshDatabase(stack);
   const base = {
     host: stack.pg.host,

@@ -11,7 +11,8 @@ name: mykey-dev
 
 services:
   # One-shot: writes the development CA, server certificates and the static seal
-  # key into the `pki` volume. Idempotent.
+  # key into the `pki` volume, and gives the `baoaudit` volume to the OpenBao
+  # uid. Idempotent.
   pki-init:
     image: postgres@sha256:e3d24f6906d0760bf4da0dae872415391ededefad23fd471c47dc53b0ddf3c42
     user: "0:0"
@@ -24,6 +25,7 @@ services:
       OPENBAO_KEY_OWNER: "100:1000"
     volumes:
       - pki:/pki
+      - baoaudit:/audit
       - ./dev/pki-init.sh:/init/pki-init.sh:ro
 
   postgres:
@@ -61,6 +63,7 @@ services:
       BAO_CACERT: /pki/ca.crt
     volumes:
       - baodata:/openbao/file
+      - baoaudit:/openbao/audit
       - pki:/pki:ro
       - ./dev/openbao.hcl:/openbao/config/openbao.hcl:ro
     ports:
@@ -77,6 +80,7 @@ volumes:
   pki:
   pgdata:
   baodata:
+  baoaudit:
 
 secrets:
   pg_superuser_password:

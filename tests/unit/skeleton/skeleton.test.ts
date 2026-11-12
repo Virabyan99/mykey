@@ -70,6 +70,30 @@ describe("repository skeleton", () => {
     }
   });
 
+  it("operator authority over OpenBao is not reachable from the public API", () => {
+    // OpenBaoAdmin lives behind the subpath `@mykey/openbao/admin`; the package
+    // root must not re-export it, and no source file of apps/api may import it.
+    const index = readFileSync(join(root, "packages/openbao/src/index.ts"), "utf8");
+    expect(index).toMatch(/from "\.\/client\.ts"/);
+    expect(index).not.toMatch(/from\s+["'][^"']*admin/);
+
+    const sources: string[] = [];
+    const walk = (dir: string): void => {
+      for (const entry of readdirSync(dir, { withFileTypes: true })) {
+        if (entry.name === "node_modules" || entry.name === "dist") continue;
+        const path = join(dir, entry.name);
+        if (entry.isDirectory()) walk(path);
+        else if (/\.(c|m)?(t|j)sx?$/.test(entry.name)) sources.push(path);
+      }
+    };
+    walk(join(root, "apps/api"));
+    expect(sources.length).toBeGreaterThan(0);
+    for (const file of sources) {
+      const text = readFileSync(file, "utf8");
+      expect(text, file).not.toMatch(/@mykey\/openbao\/admin|openbao\/src\/admin/);
+    }
+  });
+
   it("spec documents are untouched", () => {
     const docs = readdirSync(join(root, "docs")).filter((f) => /^doc_\d\d_.*\.md$/.test(f));
     const numbers = docs.map((f) => f.slice(4, 6)).sort();

@@ -1,0 +1,16 @@
+[
+  {
+    "id": "kms-cert-expiry",
+    "notBefore": "2026-12-12T09:57:34.000Z",
+    "file": "tests/staging/kms-expiry.staging.test.ts",
+    "command": "MYKEY_CHECKPOINT=kms-cert-expiry pnpm run test:staging -- tests/staging/kms-expiry.staging.test.ts",
+    "expects": "start with the expired certificate stays sealed; start with a valid losstest certificate unseals and the secret reads back",
+    "needs": "a losstest-domain certificate valid at that time (losstest-ops also expires on 12 Dec 2026): issue losstest-ops-2 from a new CSR and kms-import it",
+    "instance": {
+      "name": "expiry",
+      "address": "10.78.4.7",
+      "keyB": "64d8c056-de88-4404-bc78-7a70bbb3b4d6"
+    },
+    "secretSha256": "5b9ad0a4e122fa059b0d3cb3bdb5b1a72a0fb03af8c5a3a82eb76b595136f38b"
+  }
+]

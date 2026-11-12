@@ -11,116 +11,22 @@ import {
   type Login,
   type TestDatabase,
 } from "./setup.ts";
+import {
+  GRANTEES,
+  I,
+  IDENTITY_COLUMNS,
+  RUNTIME_ROLES,
+  S,
+  SCHEMAS,
+  TABLE_PRIVILEGES,
+  TABLES,
+  U,
+  expectedColumnUpdate,
+  expectedTablePrivileges,
+  type ColumnRow,
+} from "../../harness/privilege-matrix.ts";
 
 const DENIED = "42501";
-const S = "SELECT";
-const I = "INSERT";
-const U = "UPDATE";
-const D = "DELETE";
-
-const RUNTIME_ROLES = ["api_runtime", "provisioner_runtime", "backup_reader", "maintenance"];
-const GRANTEES = [...RUNTIME_ROLES, "public"];
-const TABLE_PRIVILEGES = [S, I, U, D, "TRUNCATE", "REFERENCES", "TRIGGER", "MAINTAIN"];
-const SCHEMAS = ["app", "audit", "auth", "jobs", "meta"];
-
-/** Columns `api_runtime` may never update, in addition to primary-key columns. */
-const IDENTITY_COLUMNS = [
-  "id",
-  "organization_id",
-  "project_id",
-  "environment_id",
-  "namespace",
-  "lock_key",
-  "created_at",
-];
-const OPERATION_KEY_COLUMNS = [
-  "principal_kind",
-  "principal_id",
-  "action",
-  "target",
-  "idempotency_key",
-];
-
-interface Expected {
-  api: string[];
-  provisioner: string[];
-  /** Columns `provisioner_runtime` may update without table-level UPDATE. */
-  provisionerColumns?: string[];
-}
-
-/**
- * The expected-grants matrix. Every table in the database must be listed here;
- * a new table without an entry fails the sweep.
- */
-const TABLES: Record<string, Expected> = {
-  "app.organization": {
-    api: [S, I],
-    provisioner: [S],
-    provisionerColumns: ["state", "config_digest", "provisioning_operation_id"],
-  },
-  "app.membership": { api: [S, I], provisioner: [] },
-  "app.project": { api: [S, I], provisioner: [S] },
-  "app.environment": {
-    api: [S, I],
-    provisioner: [S],
-    provisionerColumns: ["state", "kv_ready", "policy_digest"],
-  },
-  "app.access_grant": { api: [S, I], provisioner: [] },
-  "app.secret_index": { api: [S, I], provisioner: [] },
-  "app.secret_version_event": { api: [S, I], provisioner: [] },
-  "app.machine_credential": { api: [S, I], provisioner: [] },
-  "app.operation": { api: [S, I], provisioner: [S, I, U] },
-  "app.operation_tombstone": { api: [S, I], provisioner: [] },
-  "app.operation_step": { api: [S, I], provisioner: [S, I, U] },
-  "app.effect_slot": { api: [S, I, D], provisioner: [S, I, D] },
-  "app.outbox": { api: [S, I], provisioner: [S, I, U] },
-  "app.import_preview": { api: [S, I, D], provisioner: [] },
-  "app.import_entry": { api: [S, I], provisioner: [] },
-  "app.service_control": { api: [S, I], provisioner: [] },
-  "app.backup_pair": { api: [S, I], provisioner: [] },
-  "app.rate_limit": { api: [S, I, D], provisioner: [] },
-  "audit.event": { api: [S, I], provisioner: [I] },
-  "meta.schema_migration": { api: [], provisioner: [] },
-};
-
-function expectedTablePrivileges(table: string, grantee: string): string[] {
-  const expected = TABLES[table];
-  if (expected === undefined) throw new Error(`table ${table} is not in the matrix`);
-  const schema = table.split(".")[0];
-  switch (grantee) {
-    case "api_runtime":
-      return expected.api;
-    case "provisioner_runtime":
-      return expected.provisioner;
-    case "backup_reader":
-      return [S];
-    case "maintenance":
-      if (schema === "app") return [S, I, U, D];
-      if (table === "audit.event") return [S, D];
-      return [S];
-    default:
-      return [];
-  }
-}
-
-interface ColumnRow {
-  table: string;
-  column: string;
-  primary_key: boolean;
-}
-
-function expectedColumnUpdate(row: ColumnRow, grantee: string): boolean {
-  if (expectedTablePrivileges(row.table, grantee).includes(U)) return true;
-  if (grantee === "provisioner_runtime") {
-    return TABLES[row.table]?.provisionerColumns?.includes(row.column) ?? false;
-  }
-  if (grantee === "api_runtime" && row.table.startsWith("app.")) {
-    if (row.primary_key || IDENTITY_COLUMNS.includes(row.column)) return false;
-    if (row.table === "app.operation" && OPERATION_KEY_COLUMNS.includes(row.column)) return false;
-    return true;
-  }
-  return false;
-}
 
 let db: TestDatabase;
 const organizationId = randomUUID();
@@ -242,6 +148,34 @@ const CASES: Case[] = [
   ["provisioner_runtime", "cannot delete audit events", "DELETE FROM audit.event", DENIED],
   ["provisioner_runtime", "cannot create a table in app", "CREATE TABLE app.x ()", DENIED],
   ["provisioner_runtime", "cannot create a table in auth", "CREATE TABLE auth.x ()", DENIED],
+  ["api_runtime", "cannot delete a used TOTP step", "DELETE FROM auth.totp_step_used", DENIED],
+  [
+    "api_runtime",
+    "cannot rewrite a recovery code's verifier",
+    "UPDATE auth.recovery_code SET verifier = verifier",
+    DENIED,
+  ],
+  [
+    "api_runtime",
+    "marks a recovery code consumed (control)",
+    "UPDATE auth.recovery_code SET consumed_at = now() WHERE consumed_at IS NULL",
+    "ok",
+  ],
+  ["api_runtime", "removes sessions (control)", "DELETE FROM auth.session", "ok"],
+  [
+    "api_runtime",
+    "cannot rewrite a session's verifier",
+    "UPDATE auth.session SET token = token",
+    DENIED,
+  ],
+  [
+    "api_runtime",
+    "updates a session's phase (control)",
+    "UPDATE auth.session SET phase = phase",
+    "ok",
+  ],
+  ["maintenance", "reads sessions", "SELECT * FROM auth.session", "ok"],
+  ["maintenance", "cannot remove sessions", "DELETE FROM auth.session", DENIED],
   [
     "provisioner_runtime",
     "cannot alter a table",

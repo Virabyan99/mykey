@@ -12,12 +12,15 @@ ignoredBuiltDependencies:
 catalog:
   "zod": 4.6.7
   "hono": 4.13.17
+  "@hono/node-server": 2.1.6
   "drizzle-orm": 0.45.4
   "drizzle-kit": 0.31.11
   "pg": 8.23.1
   "@types/pg": 8.23.1
   "pg-boss": 12.38.1
   "better-auth": 1.7.19
+  "jose": 6.2.17
+  "otpauth": 9.6.0
   "react": 19.3.1
   "react-dom": 19.3.1
   "@tanstack/react-query": 5.107.1

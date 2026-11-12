@@ -28,6 +28,7 @@ import {
   uuid,
   type AnyPgColumn,
 } from "drizzle-orm/pg-core";
+import { user } from "./auth.ts";
 
 export const appSchema = pgSchema("app");
 
@@ -67,7 +68,10 @@ export const membership = appSchema.table(
     organizationId: uuid("organization_id")
       .notNull()
       .references(() => organization.id),
-    userId: uuid("user_id").notNull(),
+    // P-14: a membership names a user of the session library (Run 2.3).
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => user.id),
     role: text("role").notNull(),
     state: text("state").notNull(),
   },

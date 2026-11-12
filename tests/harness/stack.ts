@@ -10,6 +10,7 @@ import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node
 import https from "node:https";
 import { join, resolve } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
+import { OpenBaoAdmin } from "@mykey/openbao/admin";
 import pg from "pg";
 
 export interface Stack {
@@ -23,6 +24,11 @@ export interface Stack {
     caCertPath: string;
   };
   bao: { url: string; caCertPath: string; rootToken: string };
+  /**
+   * A server certificate (names `api`, `localhost`, 127.0.0.1) signed by the
+   * stack's CA, for an API that a test starts in its own process.
+   */
+  api: { certPath: string; keyPath: string; certAuthorityPath: string };
   /** `docker compose down -v` and removal of `.stack/<project>`. */
   stop(): Promise<void>;
 }
@@ -46,12 +52,17 @@ export function stackDirectory(project: string): string {
   return join(STACK_ROOT, project);
 }
 
-function run(file: string, args: string[], env?: NodeJS.ProcessEnv): Promise<string> {
+function run(
+  file: string,
+  args: string[],
+  env?: NodeJS.ProcessEnv,
+  maxBuffer = 16 * 1024 * 1024,
+): Promise<string> {
   return new Promise((resolveRun, reject) => {
     execFile(
       file,
       args,
-      { env: { ...process.env, ...env }, maxBuffer: 16 * 1024 * 1024, windowsHide: true },
+      { env: { ...process.env, ...env }, maxBuffer, windowsHide: true },
       (error, stdout, stderr) => {
         if (error === null) resolveRun(stdout);
         else reject(new Error(`${file} ${args.slice(0, 6).join(" ")} failed: ${stderr.trim()}`));
@@ -60,12 +71,18 @@ function run(file: string, args: string[], env?: NodeJS.ProcessEnv): Promise<str
   });
 }
 
-function compose(project: string, args: string[], env?: NodeJS.ProcessEnv): Promise<string> {
+function compose(
+  project: string,
+  args: string[],
+  env?: NodeJS.ProcessEnv,
+  maxBuffer?: number,
+): Promise<string> {
   return run(
     "docker",
     ["compose", "-p", project, "-f", COMPOSE_FILE, ...args],
     // The Compose file needs the state directory even for commands that do not start anything.
     { MYKEY_STACK_DIR: stackDirectory(project), ...env },
+    maxBuffer,
   );
 }
 
@@ -121,6 +138,8 @@ interface BaoRequest {
   body?: unknown;
   namespace?: string;
   token?: string;
+  /** Extra request headers; a `content-type` here replaces `application/json`. */
+  headers?: Record<string, string>;
 }
 
 function baoRequest(
@@ -130,13 +149,24 @@ function baoRequest(
 ): Promise<Response> {
   const url = new URL(path, state.bao.url);
   const token = init.token ?? state.bao.rootToken;
-  const payload = init.body === undefined ? undefined : JSON.stringify(init.body);
+  // Bytes (a Raft snapshot) go as they are; anything else as JSON.
+  const raw = init.body instanceof Uint8Array;
+  const payload =
+    init.body === undefined
+      ? undefined
+      : init.body instanceof Uint8Array
+        ? Buffer.from(init.body)
+        : JSON.stringify(init.body);
   const headers: Record<string, string> = {};
   if (token !== "") headers["X-Vault-Token"] = token;
   if (init.namespace !== undefined) headers["X-Vault-Namespace"] = init.namespace;
   if (payload !== undefined) {
-    headers["Content-Type"] = "application/json";
+    headers["Content-Type"] = raw ? "application/octet-stream" : "application/json";
     headers["Content-Length"] = String(Buffer.byteLength(payload));
+  }
+  for (const [name, value] of Object.entries(init.headers ?? {})) {
+    if (name.toLowerCase() === "content-type") delete headers["Content-Type"];
+    headers[name] = value;
   }
   return new Promise((resolveRequest, reject) => {
     const request = https.request(
@@ -272,6 +302,11 @@ export async function startStack(opts?: {
       caCertPath: join(directory, "ca.crt"),
       rootToken: previous?.bao.rootToken ?? "",
     },
+    api: {
+      certPath: join(directory, "api.crt"),
+      keyPath: join(directory, "api.key"),
+      certAuthorityPath: join(directory, "ca.crt"),
+    },
   };
 
   const fixed = opts?.fixedPorts === true;
@@ -282,10 +317,15 @@ export async function startStack(opts?: {
     });
     await refreshPorts(state);
     await compose(project, ["cp", "postgres:/pki/ca.crt", state.pg.caCertPath]);
+    await compose(project, ["cp", "postgres:/pki/api.crt", state.api.certPath]);
+    await compose(project, ["cp", "postgres:/pki/api.key", state.api.keyPath]);
     await waitForPostgres(state);
     await waitForOpenBaoListener(state);
     await initialiseOpenBao(state);
     await waitForOpenBaoActive(state);
+    // The audit device is declared in openbao.hcl; the correlation headers can only
+    // be registered through the API. Idempotent, so it runs on every start.
+    await new OpenBaoAdmin(state.bao, state.bao.rootToken).registerAuditHeaders();
     writeState(state);
   } catch (error) {
     if (previous === undefined) await removeStack(project).catch(() => undefined);
@@ -375,7 +415,16 @@ export async function mountKvV2(stack: Stack, namespace: string, mount = "kv"): 
 export async function restartService(stack: Stack, service: "postgres" | "openbao"): Promise<void> {
   await compose(stack.project, ["restart", "--timeout", "10", service]);
   // stack.pg and stack.bao are shared by reference, so the new ports land on `stack`.
-  const state: StackState = { project: stack.project, pg: stack.pg, bao: stack.bao };
+  await afterServiceStart(stack, service);
+}
+
+async function afterServiceStart(stack: Stack, service: "postgres" | "openbao"): Promise<void> {
+  const state: StackState = {
+    project: stack.project,
+    pg: stack.pg,
+    bao: stack.bao,
+    api: stack.api,
+  };
   await refreshPorts(state);
   if (service === "postgres") await waitForPostgres(stack);
   else {
@@ -383,6 +432,90 @@ export async function restartService(stack: Stack, service: "postgres" | "openba
     await waitForOpenBaoActive(stack);
   }
   writeState(state);
+}
+
+/** `docker compose stop`: the container is gone from the network until `startService`. */
+export async function stopService(stack: Stack, service: "postgres" | "openbao"): Promise<void> {
+  await compose(stack.project, ["stop", "--timeout", "10", service]);
+}
+
+/** `docker compose pause`: the processes are frozen; the kernel still accepts connections. */
+export async function pauseService(stack: Stack, service: "postgres" | "openbao"): Promise<void> {
+  await compose(stack.project, ["pause", service]);
+}
+
+/** `docker compose kill` (SIGKILL), also of a paused service. Start it again with startService. */
+export async function killService(stack: Stack, service: "postgres" | "openbao"): Promise<void> {
+  await compose(stack.project, ["kill", service]);
+}
+
+/** Whether the service's container is running (not stopped, killed or paused). */
+export async function serviceRunning(
+  stack: Stack,
+  service: "postgres" | "openbao",
+): Promise<boolean> {
+  const status = await stackStatus(stack.project);
+  return status.services.some((entry) => entry.service === service && entry.state === "running");
+}
+
+/** Starts a stopped service and waits until it answers. Its published port may have changed. */
+export async function startService(stack: Stack, service: "postgres" | "openbao"): Promise<void> {
+  await compose(stack.project, ["start", service]);
+  await afterServiceStart(stack, service);
+}
+
+export interface AuditEntry {
+  type: "request" | "response";
+  /** e.g. "org-<uuid>/"; "" for the root namespace. */
+  namespacePath: string;
+  path: string;
+  operation: string;
+  /** Audited request headers (lower-case names), as OpenBao recorded them. */
+  headers: Record<string, string[]>;
+  /** The JSON line exactly as written. */
+  raw: string;
+}
+
+const AUDIT_FILE = "/openbao/audit/audit.log";
+
+/**
+ * Every request and response entry of the stack's file audit device, in order.
+ * The file holds HMACs of tokens, not tokens; it is still never printed.
+ */
+export async function readAuditLog(stack: Stack): Promise<AuditEntry[]> {
+  const output = await compose(
+    stack.project,
+    ["exec", "-T", "openbao", "cat", AUDIT_FILE],
+    undefined,
+    512 * 1024 * 1024,
+  );
+  const entries: AuditEntry[] = [];
+  const lines = output.split("\n");
+  // Suites share one stack and run in parallel: OpenBao may be writing the last
+  // line right now. A final segment without its newline is not an entry yet.
+  lines.pop();
+  for (const raw of lines) {
+    if (raw.trim() === "") continue;
+    const line = JSON.parse(raw) as {
+      type?: string;
+      request?: {
+        path?: string;
+        operation?: string;
+        namespace?: { path?: string };
+        headers?: Record<string, string[]>;
+      };
+    };
+    if (line.type !== "request" && line.type !== "response") continue;
+    entries.push({
+      type: line.type,
+      namespacePath: line.request?.namespace?.path ?? "",
+      path: line.request?.path ?? "",
+      operation: line.request?.operation ?? "",
+      headers: line.request?.headers ?? {},
+      raw,
+    });
+  }
+  return entries;
 }
 
 export interface StackStatus {
@@ -422,4 +555,154 @@ export async function listStackProjects(): Promise<string[]> {
 
 export async function stopStack(project: string): Promise<void> {
   await removeStack(project);
+}
+
+/**
+ * A plain-format `pg_dump` of one database, made inside the PostgreSQL
+ * container. The superuser password travels in the environment of the docker
+ * client, never in an argument. The dump is returned, never printed.
+ */
+export async function pgDump(stack: Stack, database: string): Promise<string> {
+  return compose(
+    stack.project,
+    [
+      "exec",
+      "-T",
+      "-e",
+      "PGPASSWORD",
+      "postgres",
+      "pg_dump",
+      "-U",
+      stack.pg.superuser.user,
+      "-d",
+      database,
+      "--no-owner",
+    ],
+    { PGPASSWORD: stack.pg.superuser.password },
+    256 * 1024 * 1024,
+  );
+}
+
+/** The PostgreSQL container's log since `since` (RFC 3339). Returned, never printed. */
+export async function postgresLog(stack: Stack, since: string): Promise<string> {
+  return compose(
+    stack.project,
+    ["logs", "--no-color", "--since", since, "postgres"],
+    undefined,
+    64 * 1024 * 1024,
+  );
+}
+
+/**
+ * Copies database `from` into the existing database `to` with
+ * `pg_dump --format=custom | pg_restore --exit-on-error`, inside the
+ * PostgreSQL container, as the superuser. Throws when pg_restore fails.
+ */
+export async function copyDatabase(stack: Stack, from: string, to: string): Promise<void> {
+  if (!/^[a-z0-9_]+$/.test(from) || !/^[a-z0-9_]+$/.test(to))
+    throw new Error("invalid database name");
+  const user = stack.pg.superuser.user;
+  await compose(
+    stack.project,
+    [
+      "exec",
+      "-T",
+      "-e",
+      "PGPASSWORD",
+      "postgres",
+      "sh",
+      "-c",
+      `pg_dump -U ${user} -d ${from} --format=custom | pg_restore -U ${user} -d ${to} --exit-on-error`,
+    ],
+    { PGPASSWORD: stack.pg.superuser.password },
+  );
+}
+
+/** `pg_dump --format=custom` of one database into a local file (through the container). */
+export async function pgDumpToFile(
+  stack: Stack,
+  database: string,
+  localPath: string,
+): Promise<void> {
+  if (!/^[a-z0-9_]+$/.test(database)) throw new Error("invalid database name");
+  const inside = `/tmp/${database}.dump`;
+  await compose(
+    stack.project,
+    [
+      "exec",
+      "-T",
+      "-e",
+      "PGPASSWORD",
+      "postgres",
+      "pg_dump",
+      "-U",
+      stack.pg.superuser.user,
+      "-d",
+      database,
+      "--format=custom",
+      "-f",
+      inside,
+    ],
+    { PGPASSWORD: stack.pg.superuser.password },
+  );
+  await compose(stack.project, ["cp", `postgres:${inside}`, localPath]);
+  await compose(stack.project, ["exec", "-T", "postgres", "rm", "-f", inside]);
+}
+
+/** `pg_dumpall --globals-only --no-role-passwords` into a local file. */
+export async function pgGlobalsToFile(stack: Stack, localPath: string): Promise<void> {
+  const inside = "/tmp/globals.sql";
+  await compose(
+    stack.project,
+    [
+      "exec",
+      "-T",
+      "-e",
+      "PGPASSWORD",
+      "postgres",
+      "pg_dumpall",
+      "-U",
+      stack.pg.superuser.user,
+      "--globals-only",
+      "--no-role-passwords",
+      "-f",
+      inside,
+    ],
+    { PGPASSWORD: stack.pg.superuser.password },
+  );
+  await compose(stack.project, ["cp", `postgres:${inside}`, localPath]);
+  await compose(stack.project, ["exec", "-T", "postgres", "rm", "-f", inside]);
+}
+
+/** `pg_restore --exit-on-error` of a local custom-format dump into an existing database. */
+export async function pgRestoreFromFile(
+  stack: Stack,
+  localPath: string,
+  database: string,
+): Promise<void> {
+  if (!/^[a-z0-9_]+$/.test(database)) throw new Error("invalid database name");
+  const inside = `/tmp/restore-${database}.dump`;
+  await compose(stack.project, ["cp", localPath, `postgres:${inside}`]);
+  try {
+    await compose(
+      stack.project,
+      [
+        "exec",
+        "-T",
+        "-e",
+        "PGPASSWORD",
+        "postgres",
+        "pg_restore",
+        "-U",
+        stack.pg.superuser.user,
+        "-d",
+        database,
+        "--exit-on-error",
+        inside,
+      ],
+      { PGPASSWORD: stack.pg.superuser.password },
+    );
+  } finally {
+    await compose(stack.project, ["exec", "-T", "-u", "0", "postgres", "rm", "-f", inside]);
+  }
 }

@@ -35,13 +35,13 @@ Runs 2.9 and 6.8 follow this order and record the result of each step.
 1. Start PostgreSQL 18 with the configuration files and certificates from the table above.
 2. As the superuser, create an empty database.
 3. Run `applyRoles()` against that database with newly generated passwords. This creates the five roles, sets the verifiers, and makes `migration_owner` the database owner.
-4. Restore the dump as `migration_owner`.
-5. Re-apply the database-level access: `REVOKE ALL ON DATABASE … FROM PUBLIC` and `GRANT CONNECT … TO` the four runtime roles (the first block of `0001_grants.sql`). Skip this only when the dump was taken and restored with `--create`.
+4. Re-apply the database-level access with `applyDatabaseAccess(pool, database)` (`packages/db/src/roles.ts`, Run 2.9): `REVOKE ALL ON DATABASE … FROM PUBLIC` and `GRANT CONNECT … TO` the four runtime roles (the first block of `0001_grants.sql`), which a dump does not carry. Skip this only when the dump was taken and restored with `--create`. Without it the matrix reports `CREATE or TEMP on the database` for every runtime role (proven in Run 2.9).
+5. Restore the dump with `pg_restore --exit-on-error`, owners kept (Run 2.9 restored as the cluster's superuser into a new cluster; the dump was taken as `backup_reader`). A role missing from step 3 stops the restore (`role "backup_reader" does not exist`), never "restored with warnings".
 6. Run `migrate()`. Expected: nothing applied, no `MigrationChecksumMismatch`.
-7. Run the catalog sweep of `tests/integration/database/privileges.test.ts` against the restored database: table, column, schema, database and sequence privileges must equal the matrix, and a role without grants must not be able to connect.
+7. Run the privilege matrix (`tests/harness/privilege-matrix.ts`, `matrixProblems`) against the restored database: table, column, schema, database and sequence privileges must equal the matrix, and a role without grants must not be able to connect.
 8. Give the new role passwords to the services that use them. `maintenance` is never given to `api` or `provisioner`.
 
-## Open points for Run 2.9
+## Closed in Run 2.9
 
-- Step 5 is manual today. If the restore drill shows it is easy to forget, add a function next to `applyRoles()` that re-applies it.
-- Confirm on a real dump that default privileges are restored (second list above).
+- The database-level access is now `applyDatabaseAccess()` next to `applyRoles()` (step 4); forgetting it is caught by the matrix.
+- Default privileges come back with the dump: the matrix passed on the database restored from staging's pair (`tests/staging/pair.staging.test.ts`, "PostgreSQL is whole"), and `pg_dumpall --globals-only` of the new cluster equals the captured `globals.sql` apart from comments.

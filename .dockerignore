@@ -1,0 +1,13 @@
+# The build context is the repository root (apps/api/Dockerfile). Everything is
+# left out except what an image is built from, so no credential, test fixture
+# or local state can end up in an image layer.
+*
+!package.json
+!pnpm-lock.yaml
+!pnpm-workspace.yaml
+!apps/api/package.json
+!apps/api/src
+!packages/contracts/package.json
+!packages/contracts/src
+!packages/db/package.json
+!packages/db/src

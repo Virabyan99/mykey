@@ -2,3 +2,9 @@
 # The line below is a prose table row in specification document 02 (a work-package title
 # and its hour estimate); the generic-api-key rule matches ordinary words. No credential.
 c6f52f4956e2b39f86c8f37e169151b186f011c4:docs/doc_02_mykey_project_stage_breakdown_v0.3_preimplementation_audited.md:generic-api-key:264
+# Session 2 (reviewed at the Run 2.10 gate). The key name "secretSha256" holds the SHA-256 of a
+# synthetic value written by key-loss.staging.test.ts, not the value. No credential.
+7fba06b58dec9c777074512abe3e9162a1335442:docs/evidence/session-2/kms-checkpoints.json:generic-api-key:14
+# The KMS key *id* of the staging seal key (an identifier the console and okms print; the key
+# material cannot leave the KMS: Never Extractable). No credential.
+ebd03634b9a217641010e7718745f5b2292ed884:docs/runbooks/kms-and-unseal.md:generic-api-key:7

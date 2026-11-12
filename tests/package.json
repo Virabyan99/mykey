@@ -4,12 +4,22 @@
   "private": true,
   "type": "module",
   "devDependencies": {
+    "@mykey/api": "workspace:*",
+    "@mykey/auth": "workspace:*",
     "@mykey/cli": "workspace:*",
     "@mykey/contracts": "workspace:*",
     "@mykey/db": "workspace:*",
+    "@mykey/openbao": "workspace:*",
+    "@mykey/operations": "workspace:*",
+    "@mykey/probe": "workspace:*",
     "@next/env": "catalog:",
     "@scalar/openapi-parser": "catalog:",
     "@types/pg": "catalog:",
+    "better-auth": "catalog:",
+    "drizzle-orm": "catalog:",
+    "hono": "catalog:",
+    "jose": "catalog:",
+    "otpauth": "catalog:",
     "pg": "catalog:",
     "zod": "catalog:"
   }

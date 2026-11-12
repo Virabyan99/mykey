@@ -1,0 +1,10 @@
+[Unit]
+Description=MyKey: refresh the firewall egress sets every 5 minutes
+
+[Timer]
+OnActiveSec=5min
+OnUnitActiveSec=5min
+AccuracySec=10s
+
+[Install]
+WantedBy=timers.target

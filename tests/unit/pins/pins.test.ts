@@ -1,11 +1,18 @@
 import { readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { describe, expect, it } from "vitest";
+import { SCANNED_IMAGES } from "../../../scripts/ci-scan.ts";
 import {
+  OWN_IMAGES,
+  REQUIRED_BINARIES,
+  REQUIRED_IMAGES,
+  REQUIRED_NPM,
   collectPinnedVersions,
   composeImageProblems,
   consistencyProblems,
   digestProblems,
+  dockerfileProblems,
+  ownDockerfiles,
   forbiddenComponents,
   listFiles,
   loadLock,
@@ -40,6 +47,24 @@ describe("dependency pins", () => {
       "npm.better-auth",
       "actions.actions/checkout",
     ]);
+  });
+
+  // Run 2.10: a release archive run on a host (okms-cli, Run 2.7) is pinned like an image.
+  it("requires every binary, each with an exact version and a SHA-256", () => {
+    expect(REQUIRED_BINARIES).toEqual(["okms-cli"]);
+    expect(digestProblems(lock)).toEqual([]);
+    const missing = clone();
+    delete (missing as { binaries?: unknown }).binaries;
+    expect(missingRequiredKeys(missing)).toEqual(["binaries.okms-cli"]);
+    const bad = clone();
+    bad.binaries!["okms-cli"]!.sha256 = "abc";
+    bad.binaries!["okms-cli"]!.version = "0.6.0-rc.1";
+    expect(digestProblems(bad)).toEqual(
+      expect.arrayContaining([expect.stringMatching(/binaries\.okms-cli.*sha256/)]),
+    );
+    expect(unpinnedVersions(collectPinnedVersions(root, bad))).toEqual(
+      expect.arrayContaining([expect.stringContaining("okms-cli")]),
+    );
   });
 
   it("no pre-release version is pinned", () => {
@@ -107,6 +132,62 @@ describe("dependency pins", () => {
     expect(composeImageProblems(unknown, lock, "unknown.yml")).toHaveLength(1);
     const variable = "services:\n  pg:\n    image: ${PG_IMAGE}\n";
     expect(composeImageProblems(variable, lock, "var.yml")).toHaveLength(1);
+  });
+
+  it("accepts an image we build ourselves only as a required variable of the own-image list", () => {
+    expect(OWN_IMAGES).toEqual(["api"]);
+    const own =
+      "services:\n  api:\n    image: ${API_IMAGE:?load it with host.ts image api <tar>}\n";
+    expect(composeImageProblems(own, lock, "own.yml")).toEqual([]);
+    // Without `:?` an unset variable would silently become an empty image name.
+    const optional = "services:\n  api:\n    image: ${API_IMAGE}\n";
+    expect(composeImageProblems(optional, lock, "optional.yml")).toHaveLength(1);
+    const withDefault = "services:\n  api:\n    image: ${API_IMAGE:-node:24}\n";
+    expect(composeImageProblems(withDefault, lock, "default.yml")).toHaveLength(1);
+    // An upstream image may never hide behind a variable.
+    const upstream = "services:\n  pg:\n    image: ${POSTGRES_IMAGE:?set it}\n";
+    expect(composeImageProblems(upstream, lock, "upstream.yml")).toHaveLength(1);
+  });
+
+  it("every FROM in a Dockerfile is a digest present in the lock or an earlier stage", () => {
+    const dockerfiles = ownDockerfiles(root);
+    expect(dockerfiles.length).toBeGreaterThan(0);
+    for (const file of dockerfiles) {
+      expect(dockerfileProblems(readFileSync(file, "utf8"), lock, file)).toEqual([]);
+    }
+
+    const node = `${lock.images.node!.image}@${lock.images.node!.digest}`;
+    const good = `FROM ${node} AS build\nRUN true\nFROM ${node}\nCOPY --from=build /app /app\n`;
+    expect(dockerfileProblems(good, lock, "good")).toEqual([]);
+    expect(dockerfileProblems(`FROM ${node} AS build\nFROM build\n`, lock, "stage")).toEqual([]);
+    expect(dockerfileProblems("FROM node:24.22.2\n", lock, "tag")).toHaveLength(1);
+    expect(dockerfileProblems(`FROM node@${DIGEST_NOT_IN_LOCK}\n`, lock, "unknown")).toHaveLength(
+      1,
+    );
+    expect(dockerfileProblems("FROM later\nFROM scratch AS later\n", lock, "order")).toHaveLength(
+      2,
+    );
+    expect(dockerfileProblems("ARG BASE\nFROM ${BASE}\n", lock, "variable")).toHaveLength(1);
+  });
+
+  it("the node image is required in the lock and is scanned", () => {
+    expect(REQUIRED_IMAGES).toContain("node");
+    expect(SCANNED_IMAGES).toContain("node");
+    expect(lock.images.node?.tag).toBe(lock.node.version);
+  });
+
+  it("the libraries of the product-owned second factor are required in the lock (Run 2.3)", () => {
+    expect(REQUIRED_NPM).toEqual(expect.arrayContaining(["better-auth", "jose", "otpauth"]));
+    expect(lock.npm.jose?.version).toMatch(/^\d+\.\d+\.\d+$/);
+    expect(lock.npm.otpauth?.version).toMatch(/^\d+\.\d+\.\d+$/);
+  });
+
+  it("the nmap image of the outside scan is required in the lock by digest (Run 2.5)", () => {
+    expect(REQUIRED_IMAGES).toContain("nmap");
+    expect(lock.images.nmap?.image).toBe("instrumentisto/nmap");
+    expect(lock.images.nmap?.digest).toMatch(/^sha256:[0-9a-f]{64}$/);
+    // A tool run on the workstation against a host, like gitleaks and trivy: not deployed.
+    expect(SCANNED_IMAGES).not.toContain("nmap");
   });
 
   it("every uses: in .github/workflows is a SHA present in the lock", () => {

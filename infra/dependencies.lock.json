@@ -49,6 +49,21 @@
       "digest": "sha256:8f6bb947dbc528902e11f2f5be52f7b519f6a39d5d148f41166f2040499768fb",
       "releaseUrl": "https://github.com/aquasecurity/trivy/releases/tag/v0.76.2",
       "advisoriesChecked": "2026-11-10"
+    },
+    "node": {
+      "image": "node",
+      "tag": "24.22.2",
+      "variant": "alpine",
+      "digest": "sha256:a34ab6d7f6f4813f4d0c5469d74685604b962fbdbf5793a7bc7b4998ecb867c8",
+      "releaseUrl": "https://nodejs.org/en/blog/release/v24.22.2",
+      "advisoriesChecked": "2026-11-11"
+    },
+    "nmap": {
+      "image": "instrumentisto/nmap",
+      "tag": "7.98",
+      "digest": "sha256:96f6ed194519b62421a1a1c57809e65a7f94d2aa1c8c25676f247e5e148c0827",
+      "releaseUrl": "https://nmap.org/changelog.html",
+      "advisoriesChecked": "2026-11-11"
     }
   },
   "npm": {
@@ -100,7 +115,12 @@
     "hono": {
       "version": "4.13.17",
       "advisoriesChecked": "2026-11-10",
-      "note": "catalog only until Run 3.1"
+      "note": ""
+    },
+    "@hono/node-server": {
+      "version": "2.1.6",
+      "advisoriesChecked": "2026-11-11",
+      "note": "HTTPS listener of apps/api (Run 2.5); 2.1.7 was published on the day of pinning and is deliberately not taken"
     },
     "drizzle-orm": {
       "version": "0.45.4",
@@ -129,8 +149,18 @@
     },
     "better-auth": {
       "version": "1.7.19",
-      "advisoriesChecked": "2026-11-10",
-      "note": "catalog only until Run 2.3; Doc 06 names 1.7.18, 1.7.19 is the newer stable patch"
+      "advisoriesChecked": "2026-11-11",
+      "note": "used by @mykey/auth from Run 2.3; Doc 06 names 1.7.18, 1.7.19 is the newer stable patch; 1.7.20 was one day old at Run 2.3"
+    },
+    "jose": {
+      "version": "6.2.17",
+      "advisoriesChecked": "2026-11-11",
+      "note": "JWE of the TOTP seed (Run 2.3, D-19)"
+    },
+    "otpauth": {
+      "version": "9.6.0",
+      "advisoriesChecked": "2026-11-11",
+      "note": "TOTP codes (Run 2.3, D-19)"
     },
     "react": {
       "version": "19.3.1",
@@ -166,6 +196,17 @@
       "version": "16.4.6",
       "advisoriesChecked": "2026-11-10",
       "note": "test-only loader for the dotenv compatibility evidence"
+    }
+  },
+  "binaries": {
+    "okms-cli": {
+      "version": "0.6.0",
+      "asset": "okms-cli-linux-x86_64.tar.gz",
+      "sha256": "e31456da425b179917accf57739bee1c9c5b4f3355c262979adb743014b95bda",
+      "releaseUrl": "https://github.com/ovh/okms-cli/releases/tag/v0.6.0",
+      "licence": "Apache-2.0",
+      "advisoriesChecked": "2026-11-12",
+      "note": "operator tool for OVHcloud KMS (Run 2.7); ghcr.io/ovh/okms-cli refuses anonymous pulls, so the release archive is pinned and run in the pinned restic image"
     }
   },
   "python": {

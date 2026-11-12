@@ -1,0 +1,15 @@
+[Unit]
+Description=MyKey: resolve the allowed egress names into the firewall sets
+Wants=network-online.target
+After=network-online.target nftables.service systemd-resolved.service
+# Containers must not start against empty sets after a reboot (Review focus 3).
+Before=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/opt/mykey/hosts/firewall/mykey-egress.sh refresh
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,32 @@
+# Run 2.9 paired backup on staging (appended)
+2026-11-12T11:20:42.383Z seeded: 40 secrets in 2 organizations x 2 environments, 2 machine tokens; writer running
+2026-11-12T11:23:26.163Z restore fa6225e4-cb4c-4b7b-b75d-48dd0e4f0436: sys/storage/raft/snapshot (HTTP 204); timings {"download":5.394,"restic":5.688,"restore_postgres":20.907,"restore_openbao":22.195}
+2026-11-12T11:25:15.995Z pair fa6225e4-cb4c-4b7b-b75d-48dd0e4f0436 eligible
+2026-11-12T11:27:29.350Z unresolved effect: capture refused at drain (operations still running after the drain deadline); after reconcile pair 42cca813-e5ee-40b3-a192-6d5b63a15d9b captured
+2026-11-12T11:28:00.790Z capture died after the dump: freeze held, writes busy, pair candidate; abortCapture → idle, ineligible
+2026-11-12T11:28:34.991Z swapped manifest (pair 42cca813-e5ee-40b3-a192-6d5b63a15d9b's with fa6225e4-cb4c-4b7b-b75d-48dd0e4f0436's bundle): refused before anything was restored
+2026-11-12T11:30:29.097Z applyDatabaseAccess skipped: matrix reports api_runtime CREATE or TEMP on the database | provisioner_runtime CREATE or TEMP on the database | backup_reader CREATE or TEMP on the database
+2026-11-12T11:32:56.438Z snapshot into an instance on another seal key (L-C): sys/storage/raft/snapshot-force (HTTP 204; plain HTTP 400); secret readable=false
+2026-11-12T11:41:12.666Z seeded: 40 secrets in 2 organizations x 2 environments, 2 machine tokens; writer running
+2026-11-12T11:42:44.313Z capture 0e2e593e-b5f6-4f45-b3db-2a9e132ae156: freeze 40128 ms (drain 7128 ms); writer inside the freeze {"rejected/busy":7,"succeeded":1}, around it {"rejected/busy":8,"succeeded":1}, after {"succeeded":4}; timings {"freeze":7.128,"dump":6.16,"snapshot":2.396,"restic":13.617,"upload":5.723}
+2026-11-12T11:43:57.528Z restore 0e2e593e-b5f6-4f45-b3db-2a9e132ae156: sys/storage/raft/snapshot (HTTP 204); timings {"download":5.496,"restic":5.721,"restore_postgres":21.067,"restore_openbao":24.152}
+2026-11-12T11:45:45.945Z pair 0e2e593e-b5f6-4f45-b3db-2a9e132ae156 eligible
+2026-11-12T11:47:57.941Z unresolved effect: capture refused at drain (operations still running after the drain deadline); after reconcile pair 0d1b8876-a801-4f73-ae7e-253e7277989e captured
+2026-11-12T11:48:29.318Z capture died after the dump: freeze held, writes busy, pair candidate; abortCapture → idle, ineligible
+2026-11-12T11:49:02.615Z swapped manifest (pair 0d1b8876-a801-4f73-ae7e-253e7277989e's with 0e2e593e-b5f6-4f45-b3db-2a9e132ae156's bundle): refused before anything was restored
+2026-11-12T11:49:57.079Z missing role backup_reader: restore reported failed=false (role "backup_reader" does not exist)
+2026-11-12T11:50:52.178Z applyDatabaseAccess skipped: matrix reports api_runtime CREATE or TEMP on the database | provisioner_runtime CREATE or TEMP on the database | backup_reader CREATE or TEMP on the database
+2026-11-12T11:53:16.221Z snapshot into an instance on another seal key (L-C): sys/storage/raft/snapshot-force (HTTP 204; plain HTTP 400); secret readable=false
+2026-11-12T12:00:49.330Z seeded: 40 secrets in 2 organizations x 2 environments, 2 machine tokens; writer running
+2026-11-12T12:02:21.802Z capture 5d71b716-e339-4d18-a7a4-37ed9ef45db8: freeze 40494 ms (drain 7340 ms); writer inside the freeze {"rejected/busy":7}, around it {"rejected/busy":8,"succeeded":1}, after {"succeeded":4}; timings {"freeze":7.34,"dump":5.814,"snapshot":2.422,"restic":13.477,"upload":5.878}
+2026-11-12T12:03:17.118Z missing role backup_reader: restore reported failed=true (restore refused at postgres: role "backup_reader" does not exist)
+2026-11-12T12:17:05.378Z seeded: 40 secrets in 2 organizations x 2 environments, 2 machine tokens; writer running
+2026-11-12T12:18:36.489Z capture 7d2fd409-ef9f-43c0-9405-b2047a708dae: freeze 39880 ms (drain 6564 ms); writer inside the freeze {"rejected/busy":7}, around it {"rejected/busy":8,"succeeded":1}, after {"succeeded":4}; timings {"freeze":6.564,"dump":6.151,"snapshot":2.432,"restic":15.027,"upload":6.08}
+2026-11-12T12:19:51.203Z restore 7d2fd409-ef9f-43c0-9405-b2047a708dae: sys/storage/raft/snapshot (HTTP 204); timings {"download":5.439,"restic":5.925,"restore_postgres":21.281,"restore_openbao":24.798}
+2026-11-12T12:21:44.722Z pair 7d2fd409-ef9f-43c0-9405-b2047a708dae eligible
+2026-11-12T12:23:57.621Z unresolved effect: capture refused at drain (operations still running after the drain deadline); after reconcile pair acab3234-6e39-440d-94a8-55d27d54644d captured
+2026-11-12T12:24:28.552Z capture died after the dump: freeze held, writes busy, pair candidate; abortCapture → idle, ineligible
+2026-11-12T12:25:01.617Z swapped manifest (pair acab3234-6e39-440d-94a8-55d27d54644d's with 7d2fd409-ef9f-43c0-9405-b2047a708dae's bundle): refused before anything was restored
+2026-11-12T12:25:56.963Z missing role backup_reader: restore reported failed=true (restore refused at postgres: role "backup_reader" does not exist)
+2026-11-12T12:26:52.706Z applyDatabaseAccess skipped: matrix reports api_runtime CREATE or TEMP on the database | provisioner_runtime CREATE or TEMP on the database | backup_reader CREATE or TEMP on the database
+2026-11-12T12:29:20.876Z snapshot into an instance on another seal key (L-C): sys/storage/raft/snapshot-force (HTTP 204; plain HTTP 400); secret readable=false

@@ -2,7 +2,7 @@
 
 **Date:** 2026-11-10
 
-**Status:** ASSUMED — awaiting owner
+**Status:** CONFIRMED by the owner on 2026-11-11 (explicit yes)
 
 ## Decision
 
