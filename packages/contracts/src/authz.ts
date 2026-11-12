@@ -1,0 +1,108 @@
+// Doc 04 §1.1 as data and one pure function (Run 3.7, P-52). The API resolves the
+// caller's authority from current rows on every request and asks `decide`; no
+// other code decides who may see or do what.
+import type { RouteDef } from "./routes.ts";
+
+/** What a route asks of its caller beyond seeing the target. `null`: seeing is enough. */
+export const ACTIONS = [
+  "resources.manage",
+  "secrets.read",
+  "secrets.history",
+  "secrets.write",
+  "credentials.manage",
+  "audit.view",
+] as const;
+export type Action = (typeof ACTIONS)[number];
+
+/** The deepest resource a route's path names. */
+export type RouteScope = "none" | "organization" | "project" | "environment" | "operation";
+
+export type Role = "owner" | "admin" | "member";
+export type GrantRole = "reader" | "editor";
+
+export interface Authority {
+  readonly role: Role;
+  readonly projectGrants: ReadonlyMap<string, GrantRole>;
+  readonly environmentGrants: ReadonlyMap<string, { projectId: string; role: GrantRole }>;
+}
+
+/** Empty: the organization itself. An environment target always carries its project. */
+export interface Target {
+  readonly projectId?: string;
+  readonly environmentId?: string;
+}
+
+/** `hidden` answers 404 (the same as absent), `denied` answers 403. */
+export type Decision = "allow" | "hidden" | "denied";
+
+const MEMBER_READS: ReadonlySet<Action> = new Set(["secrets.read", "secrets.history"]);
+
+function stronger(a: GrantRole | undefined, b: GrantRole | undefined): GrantRole | undefined {
+  if (a === "editor" || b === "editor") return "editor";
+  return a ?? b;
+}
+
+export function decide(
+  authority: Authority | null,
+  target: Target,
+  action: Action | null,
+): Decision {
+  if (authority === null) return "hidden";
+  if (target.environmentId !== undefined && target.projectId === undefined) return "hidden";
+  if (authority.role === "owner" || authority.role === "admin") return "allow";
+
+  // A member.
+  const { projectId, environmentId } = target;
+  if (projectId === undefined) return action === null ? "allow" : "denied";
+
+  const projectRole = authority.projectGrants.get(projectId);
+  if (environmentId === undefined) {
+    const visible =
+      projectRole !== undefined ||
+      [...authority.environmentGrants.values()].some((grant) => grant.projectId === projectId);
+    if (!visible) return "hidden";
+    return action === null ? "allow" : "denied";
+  }
+
+  const own = authority.environmentGrants.get(environmentId);
+  const effective = stronger(projectRole, own?.projectId === projectId ? own.role : undefined);
+  if (effective === undefined) return "hidden";
+  if (action === null || MEMBER_READS.has(action)) return "allow";
+  if (action === "secrets.write") return effective === "editor" ? "allow" : "denied";
+  return "denied";
+}
+
+/** Which column of the state table (P-53) a route's request falls in. */
+export type StateClass =
+  | "none"
+  | "metadata_read"
+  | "metadata_write"
+  | "secret_read"
+  | "secret_write"
+  | "credential_issue"
+  | "lifecycle";
+
+const LIFECYCLE: ReadonlySet<string> = new Set([
+  "projects.archive",
+  "projects.reactivate",
+  "environments.archive",
+  "environments.reactivate",
+  "credentials.revoke",
+]);
+
+export function stateClassOf(route: RouteDef): StateClass {
+  if (route.auth !== "human" && route.auth !== "human_fresh_totp") return "none";
+  if (LIFECYCLE.has(route.id)) return "lifecycle";
+  if (route.id === "credentials.issue") return "credential_issue";
+  switch (route.action) {
+    case "secrets.read":
+    case "secrets.history":
+      return "secret_read";
+    case "secrets.write":
+      return "secret_write";
+    case "resources.manage":
+      return route.method === "GET" ? "metadata_read" : "metadata_write";
+    default:
+      return route.method === "GET" ? "metadata_read" : "none";
+  }
+}

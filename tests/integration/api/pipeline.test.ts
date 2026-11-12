@@ -32,6 +32,8 @@ const ECHO: RouteDef = {
   request: { body: echoBody },
   responses: { 200: z.strictObject({ ok: z.literal(true) }) },
   errors: ["malformed_request", "validation_failed", "audit_unavailable", "quarantined"],
+  action: null,
+  scope: "none",
 };
 
 let reached = 0;

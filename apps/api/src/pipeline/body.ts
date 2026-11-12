@@ -221,4 +221,6 @@ const AUTH_BODY_ROUTE = {
   request: { body: "pending" },
   responses: {},
   errors: [],
+  action: null,
+  scope: "none",
 } as const satisfies RouteDef;
