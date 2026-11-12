@@ -147,6 +147,9 @@ export function ownImageScanArgs(
       ...TRIVY_FLAGS,
       "--pkg-types",
       "library",
+      // npm and corepack bundled by the base image belong to the node image's scan.
+      "--skip-dirs",
+      "/usr/local/lib/node_modules",
       "--ignorefile",
       "/repo/.trivyignore",
       "--input",

@@ -55,6 +55,8 @@ describe("scanner commands", () => {
     expect(args).toContain("--input /archive/api.tar");
     // The base image's OS packages are the pinned node image's (scanned on their own).
     expect(args).toContain("--pkg-types library");
+    // The base image's bundled npm and corepack are the node image's packages, not ours.
+    expect(args).toContain("--skip-dirs /usr/local/lib/node_modules");
     expect(args).toContain("--ignorefile /repo/.trivyignore");
     expect(args).not.toContain(".trivyignore.images");
     expect(OWN_SCANNED_IMAGES).toEqual(["api"]);
