@@ -11,3 +11,11 @@
 !packages/contracts/src
 !packages/db/package.json
 !packages/db/src
+!packages/audit/package.json
+!packages/audit/src
+!packages/operations/package.json
+!packages/operations/src
+!packages/openbao/package.json
+!packages/openbao/src
+!packages/auth/package.json
+!packages/auth/src
