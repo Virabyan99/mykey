@@ -34,9 +34,7 @@ export interface AppDeps {
   auth?: {
     auth: Auth;
     keys: AuthKeys;
-    throttle?: Throttle;
-    /** The integration harness only, until Run 3.3. */
-    allowUnthrottled?: "test";
+    throttle: Throttle;
   };
   /** Set by the integration harness only; the production entry never sets it. */
   test?: { routes?: readonly TestRouteEntry[] };

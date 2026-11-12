@@ -11,6 +11,7 @@ import { headerBytes, readAuthBody } from "./pipeline/body.ts";
 import type { ApiEnv, AppDeps, Handler } from "./pipeline/context.ts";
 import { readGate } from "./pipeline/gate.ts";
 import { errorResponse } from "./pipeline/respond.ts";
+import { requestSource } from "./pipeline/source.ts";
 import { mountRoute, mountRouteDef } from "./pipeline/route.ts";
 import { healthHandler } from "./routes/health.ts";
 import { versionHandler } from "./routes/version.ts";
@@ -23,7 +24,12 @@ function mountAuth(app: Hono<ApiEnv>, deps: AppDeps, module: NonNullable<AppDeps
     baseUrl: deps.config.baseUrl,
     respondError: errorResponse,
     requestId: (c) => (c as Context<ApiEnv>).get("requestId"),
-    source: (c) => (c as Context<ApiEnv>).env.incoming.socket.remoteAddress ?? "",
+    source: (c) =>
+      requestSource(
+        (c as Context<ApiEnv>).env.incoming.socket.remoteAddress,
+        c.req.header("x-forwarded-for"),
+        deps.config.trustedProxy,
+      ),
     async readBody(c) {
       const context = c as Context<ApiEnv>;
       context.set("routePattern", routePath(context));
@@ -42,8 +48,7 @@ function mountAuth(app: Hono<ApiEnv>, deps: AppDeps, module: NonNullable<AppDeps
     audit: async (event) => {
       await appendAudit(deps.pool, event);
     },
-    ...(module.throttle === undefined ? {} : { throttle: module.throttle }),
-    ...(module.allowUnthrottled === undefined ? {} : { allowUnthrottled: module.allowUnthrottled }),
+    throttle: module.throttle,
   });
 }
 

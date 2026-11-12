@@ -13,15 +13,8 @@ import { join } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 import { rootCertificates } from "node:tls";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import {
-  createApp,
-  createHealthCheck,
-  listen,
-  type ApiConfig,
-  type ApiServer,
-  type LogEntry,
-} from "@mykey/api";
-import { createPool, type DbTarget as Target } from "@mykey/db";
+import { startServer, type ApiConfig, type ApiServer, type LogEntry } from "@mykey/api";
+import { generateKeyFiles } from "@mykey/auth";
 import { ROUTES, errorEnvelopeSchema } from "@mykey/contracts";
 import { ROLE_NAMES, applyRoles, type DbTarget, type RoleName } from "@mykey/db";
 import type { z } from "zod";
@@ -33,39 +26,6 @@ import {
   stopService,
   type Stack,
 } from "../../harness/stack.ts";
-
-/**
- * The API as startServer builds it, without the auth module: from Run 3.2 the
- * production entry refuses to start without throttling (Run 3.3), and this
- * suite is about /health only. Ledgered: back to startServer in Run 3.3.
- */
-async function startServer(config: {
-  hostname: string;
-  port: number;
-  tls: { certPath: string; keyPath: string };
-  database: Target;
-  openbao?: { url: string; caCertPath: string };
-  api: ApiConfig;
-  log: (entry: LogEntry) => void;
-}): Promise<ApiServer> {
-  const health = createHealthCheck(config.database, config.openbao);
-  const pool = createPool(config.database, { max: 2 });
-  const app = createApp({
-    pool,
-    config: config.api,
-    health: () => health.check(),
-    log: config.log,
-  });
-  const server = await listen(app, config);
-  return {
-    port: server.port,
-    async close() {
-      await server.close();
-      await health.close();
-      await pool.end();
-    },
-  };
-}
 
 interface Answer {
   status: number;
@@ -126,6 +86,9 @@ describe("API health stub", () => {
   let database: DbTarget;
   const log: LogEntry[] = [];
   const directory = mkdtempSync(join(tmpdir(), "mykey-api-"));
+  // The production entry loads the auth keys from a directory (Run 3.2).
+  const keysDirectory = mkdtempSync(join(tmpdir(), "mykey-api-keys-"));
+  generateKeyFiles(keysDirectory);
   // An open gate (Run 3.1): this suite is about health, not the gate.
   const hostInstanceId = randomUUID();
   const apiConfig: ApiConfig = {
@@ -198,6 +161,7 @@ describe("API health stub", () => {
       tls: { certPath: stack.api.certPath, keyPath: stack.api.keyPath },
       database,
       api: apiConfig,
+      keysDirectory,
       log: (entry) => log.push(entry),
     });
     cleanup.push(() => api.close());
@@ -207,6 +171,7 @@ describe("API health stub", () => {
     // In reverse order of creation; a failed beforeAll leaves only what it made.
     for (const release of cleanup.reverse()) await release();
     rmSync(directory, { recursive: true, force: true });
+    rmSync(keysDirectory, { recursive: true, force: true });
   });
 
   it("answers 200 up when a SELECT as api_runtime over verified TLS succeeds", async () => {
@@ -276,6 +241,7 @@ describe("API health stub", () => {
       tls: { certPath: stack.api.certPath, keyPath: stack.api.keyPath },
       database: { ...database, caCertPath: otherCa },
       api: apiConfig,
+      keysDirectory,
       log: (entry) => lines.push(entry),
     });
     try {
@@ -366,6 +332,7 @@ describe("API health stub", () => {
           caCertPath: stack.bao.caCertPath,
         },
         api: apiConfig,
+        keysDirectory,
         log: (entry) => baoLog.push(entry),
       });
       cleanup.push(() => withBao.close());

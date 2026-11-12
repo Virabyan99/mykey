@@ -33,6 +33,7 @@ export {
 } from "./pipeline/context.ts";
 export { ERROR_MESSAGES, errorResponse, jsonResponse } from "./pipeline/respond.ts";
 export { requestSource } from "./pipeline/source.ts";
+export { startThrottleSweep } from "./throttle-sweep.ts";
 export { mountRoute, mountRouteDef } from "./pipeline/route.ts";
 export {
   MissingSetting,

@@ -7,7 +7,9 @@ import {
   nativeRoutes,
   offlineAuth,
   sessionCookie,
+  type AuthRouteEnv,
   type NativeRoute,
+  type Throttle,
 } from "@mykey/auth";
 import { Hono } from "hono";
 import { describe, expect, it } from "vitest";
@@ -64,13 +66,18 @@ describe("auth routes on the pipeline (Run 3.2)", () => {
     readBody: () => Promise.resolve({ ok: false as const }),
   };
 
-  it("mountAuthRoutes without a throttle and without the test flag throws", () => {
+  it("mountAuthRoutes without a throttle throws", () => {
     expect(() => {
-      mountAuthRoutes(new Hono(), auth, env);
+      mountAuthRoutes(new Hono(), auth, env as unknown as AuthRouteEnv);
     }).toThrow(/throttl/);
-    // Control: with the test flag it mounts.
+    // Control: with a throttle it mounts.
+    const throttle: Throttle = {
+      admit: () => Promise.resolve({ allowed: true }),
+      recordFailure: () => Promise.resolve(),
+      clearAccount: () => Promise.resolve(),
+    };
     expect(() => {
-      mountAuthRoutes(new Hono(), auth, { ...env, allowUnthrottled: "test" });
+      mountAuthRoutes(new Hono(), auth, { ...env, throttle });
     }).not.toThrow();
   });
 

@@ -44,6 +44,7 @@ export type LogEntry =
   | { event: "unlisted_error"; time: string; requestId: string; routeId: string; code: ErrorCode }
   | { event: "output_invalid"; time: string; requestId: string; routeId: string; status: number }
   | { event: "outbox"; time: string; outcome: "failed"; errorClass: string }
+  | { event: "throttle_sweep"; time: string; outcome: "failed"; errorClass: string }
   | { event: "listening"; port: number }
   | { event: "startup_refused"; missing: string };
 

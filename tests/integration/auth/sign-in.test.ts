@@ -12,7 +12,9 @@ let api: TestApi;
 let owner: Awaited<ReturnType<typeof seedOwner>>;
 
 beforeAll(async () => {
-  api = await startTestApi();
+  // Each request from its own source (the harness's peer is the trusted edge
+  // here): this suite tests sign-in, not the per-source limit (throttle.test.ts).
+  api = await startTestApi({ config: { trustedProxy: "127.0.0.1" } });
   owner = await seedOwner(api);
 });
 
@@ -20,8 +22,14 @@ afterAll(async () => {
   await api.close();
 });
 
-const signIn = (email: string, password: string): Promise<Response> =>
-  api.request("POST", "/v1/auth/sign-in/email", { body: { email, password } });
+let sources = 0;
+const signIn = (email: string, password: string): Promise<Response> => {
+  sources += 1;
+  return api.request("POST", "/v1/auth/sign-in/email", {
+    body: { email, password },
+    headers: { "x-forwarded-for": `198.51.100.${String(sources)}` },
+  });
+};
 
 async function sessionCount(): Promise<number> {
   const result = await api.superuser.query<{ n: number }>(

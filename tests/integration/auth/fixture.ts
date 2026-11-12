@@ -6,6 +6,7 @@ import { randomBytes, randomUUID } from "node:crypto";
 import {
   codeAt,
   createAuth,
+  createThrottle,
   stepAt,
   type FactorDeps,
   mountAuthRoutes,
@@ -111,7 +112,9 @@ export async function authFixture(): Promise<AuthFixture> {
       baseUrl: BASE_URL,
       respondError: errorResponse,
       requestId: () => randomUUID(),
-      source: () => "127.0.0.1",
+      // A fresh source per request: these suites test the factors, not the
+      // per-source limit (tests/integration/auth/throttle.test.ts does).
+      source: () => randomUUID(),
       async readBody(c) {
         try {
           return { ok: true, value: await readAuthBody(c.req.raw, () => undefined) };
@@ -119,7 +122,7 @@ export async function authFixture(): Promise<AuthFixture> {
           return { ok: false };
         }
       },
-      allowUnthrottled: "test",
+      throttle: createThrottle({ pool, ring: keys.rateLimit }),
     });
   };
   build();

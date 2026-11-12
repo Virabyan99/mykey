@@ -31,6 +31,8 @@ interface RouteContract {
   phases: string;
 }
 
+// Run 3.3: the password phase throttles sign-in; the factor phase is shared by
+// TOTP activation and verification and recovery codes.
 const COMMON_ERRORS = [
   "400 `malformed_request` (body not JSON, a field missing, an unknown field)",
 ];
@@ -46,6 +48,8 @@ const ROUTES: RouteContract[] = [
       ...COMMON_ERRORS,
       "401 `unauthenticated`, byte-identical but for the request id, for an unknown e-mail, a wrong password, an account that is `disabled` or `recovery_pending`, and an epoch that moved during the sign-in; no cookie, no session row",
       "503 `audit_unavailable` (the audit row could not be written; no session remains)",
+      "429 `rate_limited` with `Retry-After` (P-48, Run 3.3: more than 5 attempts a minute from the source, or the account locked for 900 s after 5 failures in the current and previous 15-minute window; checked before any credential, alike for known and unknown accounts)",
+      "503 `dependency_unavailable` (the rate counter could not be written: nothing is checked)",
     ],
     cookies:
       "sets the session cookie of a new `password_verified` session bound to the account's current auth epoch; `Max-Age=43200`",
@@ -124,6 +128,8 @@ const ROUTES: RouteContract[] = [
       ...COMMON_ERRORS,
       "401 `unauthenticated` (wrong, replayed or expired code, or no session)",
       "409 `state_conflict`",
+      "429 `rate_limited` with `Retry-After` (P-48, Run 3.3: more than 5 attempts a minute from the source, or the account locked for 900 s after 5 failures in the current and previous 15-minute window; checked before any credential, alike for known and unknown accounts)",
+      "503 `dependency_unavailable` (the rate counter could not be written: nothing is checked)",
     ],
     cookies: "sets the cookie of a new `mfa_complete` session; the old cookie stops working",
     accountStates: "`enrollment_pending`",
@@ -139,6 +145,8 @@ const ROUTES: RouteContract[] = [
       ...COMMON_ERRORS,
       "401 `unauthenticated` (wrong, replayed or expired code, or no session)",
       "409 `state_conflict`",
+      "429 `rate_limited` with `Retry-After` (P-48, Run 3.3: more than 5 attempts a minute from the source, or the account locked for 900 s after 5 failures in the current and previous 15-minute window; checked before any credential, alike for known and unknown accounts)",
+      "503 `dependency_unavailable` (the rate counter could not be written: nothing is checked)",
     ],
     cookies: "sets the cookie of a new `mfa_complete` session; the old cookie stops working",
     accountStates: "`active`",
@@ -155,6 +163,8 @@ const ROUTES: RouteContract[] = [
       ...COMMON_ERRORS,
       "401 `unauthenticated` (unknown or used code, or no session)",
       "409 `state_conflict`",
+      "429 `rate_limited` with `Retry-After` (P-48, Run 3.3: more than 5 attempts a minute from the source, or the account locked for 900 s after 5 failures in the current and previous 15-minute window; checked before any credential, alike for known and unknown accounts)",
+      "503 `dependency_unavailable` (the rate counter could not be written: nothing is checked)",
     ],
     cookies: "sets the cookie of a new `mfa_complete` session; the old cookie stops working",
     accountStates: "`active`",

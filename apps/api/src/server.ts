@@ -4,7 +4,7 @@ import { readFileSync } from "node:fs";
 import https from "node:https";
 import type { AddressInfo } from "node:net";
 import { serve } from "@hono/node-server";
-import { createAuth, loadAuthKeys } from "@mykey/auth";
+import { createAuth, createThrottle, loadAuthKeys } from "@mykey/auth";
 import { createPool, type DbTarget } from "@mykey/db";
 import { drizzle } from "drizzle-orm/node-postgres";
 import type { Hono } from "hono";
@@ -12,6 +12,7 @@ import { createApp } from "./app.ts";
 import { createHealthCheck, type OpenBaoHealthTarget } from "./health.ts";
 import { createLogger, type LogEntry } from "./log.ts";
 import { startOutboxDispatcher } from "./outbox-dispatcher.ts";
+import { startThrottleSweep } from "./throttle-sweep.ts";
 import type { ApiConfig, ApiEnv } from "./pipeline/context.ts";
 
 export interface ListenOptions {
@@ -85,14 +86,15 @@ export async function startServer(config: ServerConfig): Promise<ApiServer> {
     config: config.api,
     health: () => health.check(),
     log: config.log,
-    // Without throttling the auth routes refuse to mount: no start (Run 3.3 adds it).
-    auth: { auth, keys },
+    auth: { auth, keys, throttle: createThrottle({ pool, ring: keys.rateLimit }) },
   });
   const server = await listen(app, config);
   const dispatcher = startOutboxDispatcher(pool, config.log);
+  const sweep = startThrottleSweep(pool, config.log);
   return {
     port: server.port,
     async close() {
+      sweep.stop();
       await dispatcher.stop();
       await server.close();
       await health.close();

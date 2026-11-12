@@ -22,10 +22,19 @@ import {
   type Handler,
   type LogEntry,
 } from "@mykey/api";
-import { createAuth, ephemeralKeys, type Auth, type AuthKeys } from "@mykey/auth";
+import {
+  codeAt,
+  createAuth,
+  createThrottle,
+  ephemeralKeys,
+  stepAt,
+  type Auth,
+  type AuthKeys,
+} from "@mykey/auth";
 import { bootstrapOwner } from "@mykey/auth/operator";
 import type { RouteDef } from "@mykey/contracts";
 import { drizzle } from "drizzle-orm/node-postgres";
+import * as OTPAuth from "otpauth";
 import { createPool } from "@mykey/db";
 import { ensureQueues } from "@mykey/operations";
 import type pg from "pg";
@@ -178,8 +187,7 @@ export async function startTestApi(opts: StartTestApiOptions = {}): Promise<Test
       config,
       health: () => health.check(),
       log: (entry) => logs.push(entry),
-      // Throttling arrives in Run 3.3; until then the harness says so explicitly.
-      auth: { auth, keys, allowUnthrottled: "test" },
+      auth: { auth, keys, throttle: createThrottle({ pool, ring: keys.rateLimit }) },
       ...(opts.routes === undefined ? {} : { test: { routes: opts.routes } }),
     });
     const server: ApiServer = await listen(app, {
@@ -305,4 +313,57 @@ export async function seedOwner(api: TestApi, opts: { email?: string } = {}): Pr
   );
   if (result.outcome !== "created") throw new Error(`seedOwner: ${result.outcome}`);
   return { userId: result.userId, organizationId: result.organizationId, email, password };
+}
+
+/** The `name=value` pair of the session cookie a response set; throws when there is none. */
+export function sessionCookieOf(response: Response): string {
+  for (const cookie of response.headers.getSetCookie()) {
+    const pair = cookie.split(";")[0] ?? "";
+    if (pair.startsWith("__Secure-better-auth.session_token=") && pair.length > 40) return pair;
+  }
+  throw new Error("the response set no session cookie");
+}
+
+export interface EnrolledOwner extends SeededOwner {
+  /** The TOTP seed as the authenticator app holds it. */
+  seed: Uint8Array;
+  recoveryCodes: string[];
+  /** The mfa_complete cookie that activation set. */
+  cookie: string;
+}
+
+/**
+ * Takes an `enrollment_pending` account through the HTTP routes: sign-in,
+ * enroll, activate with a code of the current step. `source` is sent as
+ * X-Forwarded-For (meaningful only where the harness's peer is the trusted edge).
+ */
+export async function enrollOwner(
+  api: TestApi,
+  owner: SeededOwner,
+  opts: { source?: string } = {},
+): Promise<EnrolledOwner> {
+  const headers: Record<string, string> =
+    opts.source === undefined ? {} : { "x-forwarded-for": opts.source };
+  const signedIn = await api.request("POST", "/v1/auth/sign-in/email", {
+    body: { email: owner.email, password: owner.password },
+    headers,
+  });
+  if (signedIn.status !== 200) throw new Error(`sign-in answered ${String(signedIn.status)}`);
+  const password = sessionCookieOf(signedIn);
+  const enrolled = await api.request("POST", "/v1/auth/totp/enroll", {
+    body: {},
+    cookie: password,
+    headers,
+  });
+  if (enrolled.status !== 200) throw new Error(`enroll answered ${String(enrolled.status)}`);
+  const { secret } = (await enrolled.json()) as { secret: string };
+  const seed = OTPAuth.Secret.fromBase32(secret).bytes;
+  const activated = await api.request("POST", "/v1/auth/totp/activate", {
+    body: { code: codeAt(seed, stepAt(new Date())) },
+    cookie: password,
+    headers,
+  });
+  if (activated.status !== 200) throw new Error(`activate answered ${String(activated.status)}`);
+  const { recoveryCodes } = (await activated.json()) as { recoveryCodes: string[] };
+  return { ...owner, seed, recoveryCodes, cookie: sessionCookieOf(activated) };
 }
