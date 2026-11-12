@@ -68,6 +68,8 @@ export interface StartTestApiOptions {
    * their id in `reached` (Run 3.4), instead of the terminal 404.
    */
   stubs?: boolean;
+  /** Runs inside the stub after the id is recorded; the stub answers when it settles (Run 3.7). */
+  stubHook?: (routeId: string) => Promise<void> | void;
 }
 
 /** A TCP relay to the stack's PostgreSQL, reading its current port for every connection. */
@@ -209,7 +211,14 @@ export async function startTestApi(opts: StartTestApiOptions = {}): Promise<Test
         auth: { auth, keys, throttle: createThrottle({ pool, ring: keys.rateLimit }) },
         test: {
           ...(opts.routes === undefined ? {} : { routes: opts.routes }),
-          ...(opts.stubs === true ? { stubs: (routeId: string) => reached.push(routeId) } : {}),
+          ...(opts.stubs === true
+            ? {
+                stubs: async (routeId: string) => {
+                  reached.push(routeId);
+                  await opts.stubHook?.(routeId);
+                },
+              }
+            : {}),
           // TOTP codes are checked at the time a test sends (Run 3.4).
           clock: (headers: Headers) => {
             const value = headers.get("x-test-now");

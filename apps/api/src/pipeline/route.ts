@@ -152,7 +152,7 @@ async function run(
     }
     if (handler === terminal && deps.test?.stubs !== undefined) {
       // The harness's stub: every check of the pipeline has passed.
-      deps.test.stubs(route.id);
+      await deps.test.stubs(route.id);
       return new Response(null, { status: 204 });
     }
     const result = await handler(

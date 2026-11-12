@@ -42,7 +42,7 @@ export interface AppDeps {
   test?: {
     routes?: readonly TestRouteEntry[];
     /** Replaces the terminal 404 of a route without a handler: records the id, answers 204. */
-    stubs?: (routeId: string) => void;
+    stubs?: (routeId: string) => void | Promise<void>;
     /** The time TOTP codes are checked at, from a request header. */
     clock?: (headers: Headers) => Date | undefined;
   };
