@@ -6,7 +6,10 @@ import { environmentIdSchema } from "./ids.ts";
 import { LIMITS } from "./limits.ts";
 import {
   ENVIRONMENT_NAME_PATTERN,
+  PASSWORD_MAX_CHARACTERS,
+  PASSWORD_MIN_CHARACTERS,
   SECRET_NAME_PATTERN,
+  checkPassword,
   checkProjectName,
   checkSecretName,
   checkSecretValue,
@@ -87,6 +90,19 @@ const healthBody = z.strictObject({ status: z.enum(["up", "down"]) });
 const activityBody = z.strictObject({
   idleExpiresAt: z.iso.datetime(),
   absoluteExpiresAt: z.iso.datetime(),
+});
+
+/** auth.reset.complete (Run 3.6, P-51): the token of the link, the new password, and for a password reset a factor code. */
+const password = z
+  .string()
+  .refine((value) => checkPassword(value).ok)
+  .describe(
+    `${String(PASSWORD_MIN_CHARACTERS)} to ${String(PASSWORD_MAX_CHARACTERS)} Unicode code points and at most ${String(LIMITS.body.passwordMaxBytes)} bytes of UTF-8.`,
+  );
+const resetCompleteBody = z.strictObject({
+  token: z.string().length(43),
+  newPassword: password,
+  code: z.string().min(1).max(64).optional(),
 });
 
 const versionBody = z.strictObject({
@@ -361,7 +377,9 @@ export const ROUTES: readonly RouteDef[] = Object.freeze([
     responses: { 200: activityBody },
   }),
   define("auth.reset.complete", "POST", "/v1/auth/reset/complete", "reset_flow", false, "3.6", {
-    body: PENDING,
+    body: resetCompleteBody,
+    responses: { 200: z.strictObject({ next: z.enum(["sign_in", "enroll"]) }) },
+    errors: ["audit_unavailable"],
   }),
   define("reference.get", "GET", "/v1/reference", "human", false, "5.9"),
   define("openapi.get", "GET", "/v1/openapi.json", "human", false, "5.9"),

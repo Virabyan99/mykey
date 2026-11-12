@@ -5056,7 +5056,27 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "x-mykey-pending": true
+                "properties": {
+                  "token": {
+                    "type": "string",
+                    "minLength": 43,
+                    "maxLength": 43
+                  },
+                  "newPassword": {
+                    "type": "string",
+                    "description": "12 to 1024 Unicode code points and at most 1024 bytes of UTF-8."
+                  },
+                  "code": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 64
+                  }
+                },
+                "required": [
+                  "token",
+                  "newPassword"
+                ],
+                "additionalProperties": false
               }
             }
           }
@@ -5068,7 +5088,19 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "x-mykey-pending": true
+                  "properties": {
+                    "next": {
+                      "type": "string",
+                      "enum": [
+                        "sign_in",
+                        "enroll"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "next"
+                  ],
+                  "additionalProperties": false
                 }
               }
             }
@@ -5124,7 +5156,7 @@
             }
           },
           "503": {
-            "description": "Service unavailable. Codes: busy, quarantined, dependency_unavailable.",
+            "description": "Service unavailable. Codes: busy, quarantined, dependency_unavailable, audit_unavailable.",
             "content": {
               "application/json": {
                 "schema": {

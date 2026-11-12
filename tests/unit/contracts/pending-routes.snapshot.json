@@ -14,7 +14,6 @@
   "overview.get",
   "credentials.summary",
   "metrics.get",
-  "auth.reset.complete",
   "reference.get",
   "openapi.get",
   "machine.keys"

@@ -34,6 +34,7 @@ const BODIES: Record<string, unknown> = {
   "export.create": { confirmed: true },
   "credentials.issue": { name: "c" },
   "credentials.revoke": { confirmed: true },
+  "auth.reset.complete": { token: "A".repeat(43), newPassword: "a-long-new-password" },
 };
 
 function concretePath(route: RouteDef): string {
