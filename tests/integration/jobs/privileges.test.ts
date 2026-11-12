@@ -1,0 +1,83 @@
+// Run 3.1 Task A: the job queue (pg-boss in schema `jobs`, migration 0004) and
+// the least rights each runtime role needs to use it.
+import { randomUUID } from "node:crypto";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { createPool } from "@mykey/db";
+import { JOB_KINDS, createSender, createWorker, ensureQueues } from "@mykey/operations";
+import type { OperationId } from "@mykey/contracts";
+import { prepareDatabase, run, type TestDatabase } from "../database/setup.ts";
+
+let db: TestDatabase;
+
+beforeAll(async () => {
+  db = await prepareDatabase();
+});
+
+afterAll(async () => {
+  await db.drop();
+});
+
+describe("job queue", () => {
+  it("ensureQueues run twice leaves one queue per job kind", async () => {
+    await ensureQueues(db.pool("migration_owner"));
+    await ensureQueues(db.pool("migration_owner"));
+    const queues = await run<{ name: string }>(
+      db.pool("superuser"),
+      "SELECT name FROM jobs.queue ORDER BY name",
+    );
+    expect(queues.map((row) => row.name)).toEqual([...JOB_KINDS].sort());
+  });
+
+  it("api_runtime sends a job and provisioner_runtime receives it", async () => {
+    await ensureQueues(db.pool("migration_owner"));
+    const operationId = randomUUID() as OperationId;
+    const received: string[] = [];
+    let release: () => void = () => undefined;
+    const done = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const worker = await createWorker(db.pool("provisioner_runtime"), {
+      "environment.provision": (id) => {
+        received.push(id);
+        release();
+        return Promise.resolve();
+      },
+    });
+    const sender = await createSender(db.pool("api_runtime"));
+    try {
+      await sender.send("environment.provision", operationId);
+      await Promise.race([
+        done,
+        new Promise((_, reject) =>
+          setTimeout(() => {
+            reject(new Error("no job received"));
+          }, 15_000),
+        ),
+      ]);
+      expect(received).toEqual([operationId]);
+    } finally {
+      await sender.stop();
+      await worker.stop();
+    }
+  });
+
+  it("api_runtime cannot send where ensureQueues never ran (it cannot create the queue)", async () => {
+    const bare = await prepareDatabase();
+    const pool = createPool(bare.targets.api_runtime, { max: 2 });
+    try {
+      const sender = await createSender(pool);
+      try {
+        await expect(
+          sender.send("environment.provision", randomUUID() as OperationId),
+        ).rejects.toThrow();
+      } finally {
+        await sender.stop();
+      }
+      const queues = await run(bare.pool("superuser"), "SELECT name FROM jobs.queue");
+      expect(queues).toEqual([]);
+    } finally {
+      await pool.end();
+      await bare.drop();
+    }
+  });
+});

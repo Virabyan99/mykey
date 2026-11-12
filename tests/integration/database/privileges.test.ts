@@ -18,11 +18,13 @@ import {
   RUNTIME_ROLES,
   S,
   SCHEMAS,
+  SCHEMA_USAGE,
   TABLE_PRIVILEGES,
   TABLES,
   U,
   expectedColumnUpdate,
   expectedTablePrivileges,
+  matrixName,
   type ColumnRow,
 } from "../../harness/privilege-matrix.ts";
 
@@ -175,7 +177,33 @@ const CASES: Case[] = [
     "ok",
   ],
   ["maintenance", "reads sessions", "SELECT * FROM auth.session", "ok"],
-  ["maintenance", "cannot remove sessions", "DELETE FROM auth.session", DENIED],
+  // Run 3.1 (P-45): the operator bootstrap and reset run as maintenance.
+  ["maintenance", "removes sessions", "DELETE FROM auth.session", "ok"],
+  ["maintenance", "cannot change a session", "UPDATE auth.session SET phase = phase", DENIED],
+  [
+    "maintenance",
+    "inserts a user",
+    "INSERT INTO auth.user (id, name, email) VALUES (gen_random_uuid(), 'n', 'maintenance-case@example.invalid')",
+    "ok",
+  ],
+  [
+    "maintenance",
+    "changes an account's state and epochs",
+    "UPDATE auth.account_state SET state = state, auth_epoch = auth_epoch, credential_epoch = credential_epoch, updated_at = now()",
+    "ok",
+  ],
+  [
+    "maintenance",
+    "cannot change a stored password",
+    "UPDATE auth.account SET password = password",
+    DENIED,
+  ],
+  ["maintenance", "cannot remove a user", "DELETE FROM auth.user", DENIED],
+  ["maintenance", "inserts an audit event", auditInsert, "ok"],
+  ["api_runtime", "cannot create a table in jobs", "CREATE TABLE jobs.x ()", DENIED],
+  ["provisioner_runtime", "cannot create a table in jobs", "CREATE TABLE jobs.x ()", DENIED],
+  ["api_runtime", "cannot remove a queue", "DELETE FROM jobs.queue", DENIED],
+  ["provisioner_runtime", "cannot remove a queue", "DELETE FROM jobs.queue", DENIED],
   [
     "provisioner_runtime",
     "cannot alter a table",
@@ -269,7 +297,10 @@ describe("catalog sweep", () => {
           AND n.nspname <> 'information_schema' AND n.nspname NOT LIKE 'pg\\_%'
         ORDER BY 1`,
     );
-    expect(tables.map((table) => table.name)).toEqual(Object.keys(TABLES).sort());
+    // A daily partition of pg-boss's queue statistics counts as its parent.
+    expect([...new Set(tables.map((table) => matrixName(table.name)))].sort()).toEqual(
+      Object.keys(TABLES).sort(),
+    );
     expect(tables.filter((table) => table.owner !== "migration_owner")).toEqual([]);
   });
 
@@ -357,13 +388,7 @@ describe("catalog sweep", () => {
   });
 
   it("schema, database and sequence privileges are the least each role needs", async () => {
-    const usage: Record<string, string[]> = {
-      api_runtime: ["app", "audit", "auth"],
-      provisioner_runtime: ["app", "audit"],
-      backup_reader: SCHEMAS,
-      maintenance: SCHEMAS,
-      public: [],
-    };
+    const usage = SCHEMA_USAGE;
     const schemas = await run<{ schema: string; grantee: string; usage: boolean; create: boolean }>(
       db.pool("superuser"),
       `SELECT s AS schema, g AS grantee,

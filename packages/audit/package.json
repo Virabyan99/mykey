@@ -5,5 +5,11 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@mykey/contracts": "workspace:*",
+    "@mykey/db": "workspace:*",
+    "pg": "catalog:",
+    "zod": "catalog:"
   }
 }

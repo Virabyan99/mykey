@@ -11,7 +11,9 @@
     "@mykey/contracts": "workspace:*",
     "@mykey/db": "workspace:*",
     "@mykey/openbao": "workspace:*",
-    "pg": "catalog:"
+    "pg": "catalog:",
+    "pg-boss": "catalog:",
+    "zod": "catalog:"
   },
   "devDependencies": {
     "@types/pg": "catalog:"

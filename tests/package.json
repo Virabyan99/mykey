@@ -5,6 +5,7 @@
   "type": "module",
   "devDependencies": {
     "@mykey/api": "workspace:*",
+    "@mykey/audit": "workspace:*",
     "@mykey/auth": "workspace:*",
     "@mykey/cli": "workspace:*",
     "@mykey/contracts": "workspace:*",
