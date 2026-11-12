@@ -1,6 +1,27 @@
+import { existsSync, readFileSync } from "node:fs";
 import { defineConfig } from "vitest/config";
 
 const cloudTests = "tests/**/*.cloud.test.ts";
+
+/**
+ * Dated checkpoints (Run 2.7): a checkpoint's test file stays out of the
+ * staging run until its `notBefore`, unless MYKEY_CHECKPOINT names it (then
+ * the file itself says "checkpoint not due" when it is early).
+ */
+function checkpointFilesNotDue(): string[] {
+  const file = "docs/evidence/session-2/kms-checkpoints.json";
+  // Not prepared yet (key-loss.staging.test.ts writes it): nothing to check.
+  if (!existsSync(file)) return ["tests/staging/kms-expiry.staging.test.ts"];
+  const entries = JSON.parse(readFileSync(file, "utf8")) as {
+    id: string;
+    notBefore: string;
+    file: string;
+  }[];
+  return entries
+    .filter((entry) => entry.id !== process.env.MYKEY_CHECKPOINT)
+    .filter((entry) => Date.now() < Date.parse(entry.notBefore))
+    .map((entry) => entry.file);
+}
 
 export default defineConfig({
   test: {
@@ -40,6 +61,7 @@ export default defineConfig({
         test: {
           name: "staging",
           include: ["tests/staging/**/*.staging.test.ts"],
+          exclude: checkpointFilesNotDue(),
           testTimeout: 300_000,
           hookTimeout: 900_000,
           // One host: suites must not reboot it under each other.

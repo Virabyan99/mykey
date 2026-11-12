@@ -1,0 +1,68 @@
+# Disposable OpenBao instances for the key-loss and expiry tests (Run 2.7
+# Step 7, tests/staging/key-loss.staging.test.ts). Staging only, never
+# production. One Compose project per instance (`-p mykey-spike-<name>`), with:
+#
+#   SPIKE         instance name (losstest, restore, expiry): config file and volumes
+#   SPIKE_CERT    certificate name in /etc/mykey/secrets/kms (losstest-ops, losstest-1day)
+#   SPIKE_ADDRESS fixed address on the KMS bridge (10.78.4.5 to 10.78.4.7)
+#
+# Same OpenBao image and the same configuration template as the real service
+# (rendered to /etc/mykey/openbao/spike-<name>.hcl). They join the existing
+# KMS bridge, whose only way out is the KMIP endpoint (no new firewall rule).
+# The server certificate is the host's openbao certificate (reached through a
+# tunnel on 127.0.0.1). This file holds no secret.
+services:
+  prepare:
+    image: postgres@sha256:e3d24f6906d0760bf4da0dae872415391ededefad23fd471c47dc53b0ddf3c42
+    user: "0:0"
+    network_mode: none
+    read_only: true
+    cap_drop: [ALL]
+    cap_add: [CHOWN, FOWNER]
+    security_opt: ["no-new-privileges:true"]
+    restart: "no"
+    entrypoint: ["sh", "-c", "chown 100:1000 /data /audit && chmod 0700 /data /audit"]
+    volumes:
+      - data:/data
+      - audit:/audit
+
+  bao:
+    image: openbao/openbao@sha256:5046911075e137e154ce49ab051502f4ec7cf367d484ae4a4dce665d9b90561f
+    user: "100:1000"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    restart: unless-stopped
+    depends_on:
+      prepare:
+        condition: service_completed_successfully
+    command: ["bao", "server", "-config=/openbao/config/openbao.hcl"]
+    environment:
+      SKIP_CHOWN: "true"
+      SKIP_SETCAP: "true"
+    pids_limit: 200
+    mem_limit: 512m
+    tmpfs:
+      - /tmp
+    volumes:
+      - data:/openbao/file
+      - audit:/openbao/audit
+      - /etc/mykey/openbao/spike-${SPIKE:?}.hcl:/openbao/config/openbao.hcl:ro
+      - /etc/mykey/pki/openbao.crt:/openbao/tls/server.crt:ro
+      - /etc/mykey/pki/openbao.key:/openbao/tls/server.key:ro
+      - /etc/mykey/secrets/kms/${SPIKE_CERT:?}.crt:/openbao/kms/seal.crt:ro
+      - /etc/mykey/secrets/kms/${SPIKE_CERT:?}.key:/openbao/kms/seal.key:ro
+    networks:
+      kms:
+        ipv4_address: ${SPIKE_ADDRESS:?}
+
+networks:
+  kms:
+    external: true
+    name: mykey_kms
+
+volumes:
+  data:
+    name: mykey-spike-${SPIKE:?}-data
+  audit:
+    name: mykey-spike-${SPIKE:?}-audit
