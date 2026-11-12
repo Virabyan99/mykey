@@ -27,8 +27,16 @@ export function connectionConfig(target: DbTarget): pg.ClientConfig {
   };
 }
 
-export function createPool(target: DbTarget, opts: { max?: number } = {}): pg.Pool {
-  const pool = new pg.Pool({ ...connectionConfig(target), max: opts.max ?? 10 });
+export function createPool(
+  target: DbTarget,
+  opts: { max?: number; queryTimeoutMs?: number } = {},
+): pg.Pool {
+  const pool = new pg.Pool({
+    ...connectionConfig(target),
+    max: opts.max ?? 10,
+    // A query on a connection that died silently must not hold its caller forever.
+    ...(opts.queryTimeoutMs === undefined ? {} : { query_timeout: opts.queryTimeoutMs }),
+  });
   // An idle connection that breaks must not crash the process; the next query reconnects.
   pool.on("error", () => undefined);
   return pool;

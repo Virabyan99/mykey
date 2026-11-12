@@ -49,7 +49,8 @@ export function startOutboxDispatcher(
     async stop() {
       stopped = true;
       clearInterval(timer);
-      await running;
+      // A pass stuck on a dead connection does not hold the shutdown.
+      await Promise.race([running, new Promise((resolve) => setTimeout(resolve, 5_000))]);
       await sender?.stop();
     },
   };

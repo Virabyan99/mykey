@@ -179,7 +179,7 @@ export async function startTestApi(opts: StartTestApiOptions = {}): Promise<Test
     };
     setGate(opts.gate ?? "open");
 
-    const pool = createPool(database.targets.api_runtime, { max: 10 });
+    const pool = createPool(database.targets.api_runtime, { max: 10, queryTimeoutMs: 30_000 });
     cleanup.push(() => pool.end());
     const health = createHealthCheck(database.targets.api_runtime);
     cleanup.push(() => health.close());

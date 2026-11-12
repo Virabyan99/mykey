@@ -5,6 +5,7 @@ import https from "node:https";
 import type { AddressInfo } from "node:net";
 import { serve } from "@hono/node-server";
 import { createAuth, createThrottle, loadAuthKeys } from "@mykey/auth";
+import { LIMITS } from "@mykey/contracts";
 import { createPool, type DbTarget } from "@mykey/db";
 import { drizzle } from "drizzle-orm/node-postgres";
 import type { Hono } from "hono";
@@ -78,7 +79,10 @@ export interface ServerConfig extends ListenOptions {
 
 export async function startServer(config: ServerConfig): Promise<ApiServer> {
   const health = createHealthCheck(config.database, config.openbao);
-  const pool = createPool(config.database, { max: 20 });
+  const pool = createPool(config.database, {
+    max: LIMITS.db.apiPool,
+    queryTimeoutMs: LIMITS.deadlines.requestMs,
+  });
   const keys = loadAuthKeys(config.keysDirectory);
   const auth = createAuth({ db: drizzle(pool), keys, baseURL: config.api.baseUrl });
   const app = createApp({

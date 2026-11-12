@@ -82,14 +82,13 @@ beforeAll(async () => {
     keep("recovery code", code);
   }
 
-  // Last: Better Auth replaces the caller's session by a new one here.
+  // Last: the product-owned password change (Run 3.5) from the fresh TOTP session.
   const newPassword = keep("password", `${user.password}-changed`);
   const changed = await fixture.request("POST", "/v1/auth/change-password", {
-    cookie: recoveredCookie,
-    body: { currentPassword: user.password, newPassword, revokeOtherSessions: true },
+    cookie: verifiedCookie,
+    body: { currentPassword: user.password, newPassword },
   });
   expect(changed.status).toBe(200);
-  keep("session token", tokenOf(cookieOf(changed) ?? ""));
 
   // One failing statement with a raw token as its bind parameter.
   const failing = fixture.pool.query(

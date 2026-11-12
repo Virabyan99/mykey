@@ -74,7 +74,9 @@ describe("stored sessions", () => {
     expect(await sessionOf(await signedCookie(verifier))).toBeNull();
   });
 
-  it("sign-out removes the row; change-password keeps one; revoke-sessions keeps none", async () => {
+  // Run 3.5 (P-49, D-29): the password change is product-owned and never calls
+  // the native endpoint; tests/integration/auth/password.test.ts covers it.
+  it("sign-out removes the row; revoke-sessions keeps none", async () => {
     const other = await fixture.seedUser();
     const first = await fixture.signIn(other);
     expect(await storedTokens(other.id)).toHaveLength(1);
@@ -83,30 +85,7 @@ describe("stored sessions", () => {
     );
     expect(await storedTokens(other.id)).toEqual([]);
 
-    await fixture.signIn(other);
-    await fixture.signIn(other);
-    const current = await fixture.signIn(other);
-    await elevateNewest(other.id);
-    expect(await storedTokens(other.id)).toHaveLength(3);
-    const newPassword = `${other.password}-2`;
-    const changed = await fixture.request("POST", "/v1/auth/change-password", {
-      cookie: current,
-      body: { currentPassword: other.password, newPassword, revokeOtherSessions: true },
-    });
-    expect(changed.status).toBe(200);
-    expect(await changed.json()).not.toHaveProperty("token");
-    expect(await storedTokens(other.id)).toHaveLength(1);
-    // Observed on 1.7.19 (D-19): the caller's session is replaced by a new one,
-    // which has passed the password only. The owner must pass the factor again.
-    expect(cookieOf(changed)).toBeDefined();
-    expect(await sessionOf(current)).toBeNull();
-    const kept = await run<{ phase: string }>(
-      fixture.pool,
-      "SELECT phase FROM auth.session WHERE user_id = $1",
-      [other.id],
-    );
-    expect(kept).toEqual([{ phase: "password_verified" }]);
-
+    const newPassword = other.password;
     const fresh = await fixture.signIn({ ...other, password: newPassword });
     await elevateNewest(other.id);
     const revoked = await fixture.request("POST", "/v1/auth/revoke-sessions", { cookie: fresh });
@@ -194,12 +173,8 @@ describe("the wrapper", () => {
       tokens.push(tokenOf(first));
       await sessionOf(first);
       await elevateNewest(observed.id);
-      const newPassword = `${observed.password}-2`;
-      const changed = await fixture.request("POST", "/v1/auth/change-password", {
-        cookie: first,
-        body: { currentPassword: observed.password, newPassword, revokeOtherSessions: true },
-      });
-      expect(changed.status).toBe(200);
+      // Run 3.5: no native password change any more (product-owned, no token path).
+      const newPassword = observed.password;
       const second = await fixture.signIn({ ...observed, password: newPassword });
       tokens.push(tokenOf(second));
       await elevateNewest(observed.id);
