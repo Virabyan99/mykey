@@ -11,6 +11,8 @@ import {
   type NativeRoute,
   type Throttle,
 } from "@mykey/auth";
+import { readFileSync, readdirSync } from "node:fs";
+import { join, resolve } from "node:path";
 import { Hono } from "hono";
 import { describe, expect, it } from "vitest";
 
@@ -91,5 +93,27 @@ describe("auth routes on the pipeline (Run 3.2)", () => {
     expect(parts.some((part) => part.toLowerCase().startsWith("domain="))).toBe(false);
     const signIn = await sessionCookie(auth, "token-value", new Date(), 43_200);
     expect(signIn.split("; ")).toContain("Max-Age=43200");
+  });
+});
+
+describe("one validity decision (Run 3.5)", () => {
+  it("no source file but packages/auth/src/sessions.ts calls Better Auth's getSession", () => {
+    const root = resolve(import.meta.dirname, "../../..");
+    const offenders: string[] = [];
+    const walk = (dir: string): void => {
+      for (const entry of readdirSync(dir, { withFileTypes: true })) {
+        if (entry.name === "node_modules" || entry.name === "dist") continue;
+        const path = join(dir, entry.name);
+        if (entry.isDirectory()) walk(path);
+        else if (
+          entry.name.endsWith(".ts") &&
+          readFileSync(path, "utf8").includes("api.getSession")
+        ) {
+          offenders.push(path.slice(root.length + 1).replaceAll("\\", "/"));
+        }
+      }
+    };
+    for (const top of ["apps", "packages"]) walk(join(root, top));
+    expect(offenders).toEqual(["packages/auth/src/sessions.ts"]);
   });
 });

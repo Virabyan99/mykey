@@ -50,7 +50,7 @@ describe("elevation with TOTP", () => {
   it("is required by a product route, and rotates the bearer when it succeeds", async () => {
     const { cookie, token } = await passwordSession();
     const headers = new Headers({ cookie });
-    const refused = await requireMfaComplete(fixture.auth, headers, fixture.pool);
+    const refused = await requireMfaComplete(factorDeps(fixture), headers);
     expect(refused).toBe("mfa_incomplete");
 
     const before = await run<{ authenticated_at: Date }>(
@@ -72,7 +72,7 @@ describe("elevation with TOTP", () => {
     expect(await resolves(cookie)).toBe(false);
     expect(await resolves(elevated)).toBe(true);
     expect(
-      await requireMfaComplete(fixture.auth, new Headers({ cookie: elevated }), fixture.pool),
+      await requireMfaComplete(factorDeps(fixture), new Headers({ cookie: elevated })),
     ).toBeNull();
     const after = await run<{
       authenticated_at: Date;
@@ -104,7 +104,7 @@ describe("elevation with TOTP", () => {
     if (!result.ok) throw new Error(`elevation: ${result.reason}`);
     const headers = new Headers({ cookie: pairOf(result.setCookie) });
     // Control: elevated and active.
-    expect(await requireMfaComplete(fixture.auth, headers, fixture.pool)).toBeNull();
+    expect(await requireMfaComplete(factorDeps(fixture), headers)).toBeNull();
     const [original] = await run<{ auth_epoch: string }>(
       fixture.pool,
       "SELECT auth_epoch FROM auth.account_state WHERE user_id = $1",
@@ -116,18 +116,18 @@ describe("elevation with TOTP", () => {
         "UPDATE auth.account_state SET state = 'disabled' WHERE user_id = $1",
         [owner.id],
       );
-      const disabled = await requireMfaComplete(fixture.auth, headers, fixture.pool);
+      const disabled = await requireMfaComplete(factorDeps(fixture), headers);
       expect(disabled).toBe("unauthenticated");
       await run(fixture.pool, "UPDATE auth.account_state SET state = 'active' WHERE user_id = $1", [
         owner.id,
       ]);
-      expect(await requireMfaComplete(fixture.auth, headers, fixture.pool)).toBeNull();
+      expect(await requireMfaComplete(factorDeps(fixture), headers)).toBeNull();
       await run(
         fixture.pool,
         "UPDATE auth.account_state SET auth_epoch = auth_epoch + 1 WHERE user_id = $1",
         [owner.id],
       );
-      const older = await requireMfaComplete(fixture.auth, headers, fixture.pool);
+      const older = await requireMfaComplete(factorDeps(fixture), headers);
       expect(older).toBe("unauthenticated");
     } finally {
       await run(

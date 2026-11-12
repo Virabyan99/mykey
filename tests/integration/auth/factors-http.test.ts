@@ -121,9 +121,11 @@ describe("product routes are closed to incomplete sessions (Task A)", () => {
     for (const route of HUMAN) {
       const response = await call(route, enrolled.cookie);
       // Authorization arrives in Run 3.7; until then the stub is reached.
-      expect([204, 403, 404], route.id).toContain(response.status);
+      expect([200, 204, 403, 404], route.id).toContain(response.status);
     }
-    expect(new Set(api.reached)).toEqual(new Set(HUMAN.map((route) => route.id)));
+    // Every route without a real handler (session.activity has one since Run 3.5).
+    const stubbed = HUMAN.filter((route) => route.id !== "session.activity");
+    expect(new Set(api.reached)).toEqual(new Set(stubbed.map((route) => route.id)));
   });
 
   it("an enrollment-phase session reaches no product route", async () => {

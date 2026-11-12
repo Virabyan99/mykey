@@ -8,7 +8,7 @@ import { ROUTES, type RouteDef } from "@mykey/contracts";
 import { enrollOwner, errorOf, seedOwner, startTestApi, type TestApi } from "../../harness/api.ts";
 
 /** Routes with a real handler at this point of the session. */
-const HANDLED = new Set(["health.get", "version.get"]);
+const HANDLED = new Set(["health.get", "version.get", "session.activity"]);
 
 /** A valid body for every contract route that takes one. */
 const BODIES: Record<string, unknown> = {

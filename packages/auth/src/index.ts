@@ -22,7 +22,6 @@ export {
   authBodyJsonSchema,
   NATIVE_ALLOWED,
   NATIVE_DENIED,
-  currentSession,
   mountAuthRoutes,
   nativeRoutes,
   relayNative,
@@ -50,6 +49,16 @@ export {
 } from "./throttle.ts";
 export { normalizeEmail } from "./email.ts";
 export { hasFreshTotp } from "./fresh.ts";
+export {
+  SESSION_COOKIE_NAME,
+  resolveSession,
+  sessionExpiries,
+  tokenOfRequest,
+  touchActivity,
+  type SessionDeps,
+  type SessionPhase,
+  type SessionVerdict,
+} from "./sessions.ts";
 export { sessionVerifier, sessionVerifierCandidates } from "./session-verifier.ts";
 export {
   RECOVERY_ALPHABET,

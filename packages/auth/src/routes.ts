@@ -22,6 +22,7 @@ import {
   type FailureReason,
 } from "./factors/elevate.ts";
 import type { AuthKeys } from "./keys.ts";
+import { nativeSessionResponse, resolveSession, type SessionDeps } from "./sessions.ts";
 import { signInWithPassword } from "./sign-in.ts";
 import { normalizeEmail } from "./email.ts";
 import type { Admission, Throttle, ThrottlePhase } from "./throttle.ts";
@@ -197,48 +198,17 @@ export async function strictBody<T>(
   return result.success ? result.data : undefined;
 }
 
-/** The session of the request with its factor phase and auth epoch, or null. */
-export async function currentSession(
-  auth: Auth,
-  headers: Headers,
-): Promise<{ id: string; userId: string; phase: string; authEpoch: number } | null> {
-  const found = await auth.api.getSession({ headers });
-  if (found === null) return null;
-  const session = found.session as unknown as {
-    id: string;
-    userId: string;
-    phase: string;
-    authEpoch?: number | string;
-  };
-  return {
-    id: session.id,
-    userId: session.userId,
-    phase: session.phase,
-    authEpoch: Number(session.authEpoch ?? 0),
-  };
-}
-
 /**
  * A product route's guard (Doc 10 §4.1 rule 5: from current database state on
- * every request): the session completed the second factor, its account is
- * `active` and the session belongs to the account's current auth epoch.
- * Answers the refusal's code, or null. Run 3.5 replaces it by `resolveSession`.
+ * every request), decided by `resolveSession`: the refusal's code, or null.
  */
 export async function requireMfaComplete(
-  auth: Auth,
+  deps: SessionDeps,
   headers: Headers,
-  pool: pg.Pool,
 ): Promise<ErrorCode | null> {
-  const session = await currentSession(auth, headers);
-  if (session === null) return "unauthenticated";
-  if (session.phase !== "mfa_complete") return "mfa_incomplete";
-  const account = await pool.query<{ state: string; auth_epoch: string }>(
-    "SELECT state, auth_epoch FROM auth.account_state WHERE user_id = $1",
-    [session.userId],
-  );
-  const row = account.rows[0];
-  if (row?.state !== "active") return "unauthenticated";
-  if (Number(row.auth_epoch) !== session.authEpoch) return "unauthenticated";
+  const verdict = await resolveSession(deps, headers);
+  if (!verdict.ok) return "unauthenticated";
+  if (verdict.session.phase !== "mfa_complete") return "mfa_incomplete";
   return null;
 }
 
@@ -254,18 +224,13 @@ const factorFailureCode = (reason: FailureReason): ErrorCode =>
 
 const codeBody = z.strictObject({ code: z.string().min(1).max(64) });
 
-/** The raw token and the user of the request's session (the protected adapter returns the token for a lookup by token). */
+/** The raw token and the user of the request's session, when `resolveSession` admits it. */
 async function sessionOf(
-  auth: Auth,
+  deps: SessionDeps,
   headers: Headers,
 ): Promise<{ token: string; userId: string } | null> {
-  const found = await auth.api.getSession({ headers });
-  const session = found?.session as { token?: unknown; userId?: unknown } | undefined;
-  const token = session?.token;
-  const userId = session?.userId;
-  return typeof token === "string" && token !== "" && typeof userId === "string"
-    ? { token, userId }
-    : null;
+  const verdict = await resolveSession(deps, headers);
+  return verdict.ok ? { token: verdict.session.token, userId: verdict.session.userId } : null;
 }
 
 /** What a throttled step answers before its credential is looked at, or null to go on. */
@@ -362,6 +327,7 @@ export function mountAuthRoutes(app: AnyHono, auth: Auth, env: AuthRouteEnv): vo
   const base = AUTH_BASE_PATH;
   const refuse = (c: Context, code: ErrorCode): Response =>
     env.respondError(code, env.requestId(c));
+  const sessions: SessionDeps = { auth, pool: env.pool, keys: env.keys };
 
   app.post(`${base}/sign-in/email`, async (c) => {
     const body = await strictBody(c, signInBody, env);
@@ -394,17 +360,16 @@ export function mountAuthRoutes(app: AnyHono, auth: Auth, env: AuthRouteEnv): vo
 
   app.get(`${base}/get-session`, async (c) => {
     if (!(await env.readBody(c)).ok) return refuse(c, "malformed_request");
-    return relayNative(
-      await auth.api.getSession({ headers: c.req.raw.headers, asResponse: true }),
-      env,
-      env.requestId(c),
-    );
+    // The same decision as every product route: a session it refuses does not exist here either.
+    const verdict = await resolveSession(sessions, c.req.raw.headers);
+    if (!verdict.ok) return json(null);
+    return relayNative(await nativeSessionResponse(auth, c.req.raw.headers), env, env.requestId(c));
   });
 
   app.post(`${base}/change-password`, async (c) => {
     const body = await strictBody(c, changePasswordBody, env);
     if (body === undefined) return refuse(c, "malformed_request");
-    const denied = await requireMfaComplete(auth, c.req.raw.headers, env.pool);
+    const denied = await requireMfaComplete(sessions, c.req.raw.headers);
     if (denied !== null) return refuse(c, denied);
     return relayNative(
       await auth.api.changePassword({ body, headers: c.req.raw.headers, asResponse: true }),
@@ -415,7 +380,7 @@ export function mountAuthRoutes(app: AnyHono, auth: Auth, env: AuthRouteEnv): vo
 
   app.post(`${base}/revoke-sessions`, async (c) => {
     if ((await strictBody(c, emptyBody, env)) === undefined) return refuse(c, "malformed_request");
-    const denied = await requireMfaComplete(auth, c.req.raw.headers, env.pool);
+    const denied = await requireMfaComplete(sessions, c.req.raw.headers);
     if (denied !== null) return refuse(c, denied);
     return relayNative(
       await auth.api.revokeSessions({ headers: c.req.raw.headers, asResponse: true }),
@@ -444,7 +409,7 @@ function mountFactorRoutes(
   ): Promise<{ body: T; token: string; userId: string } | Response> => {
     const body = await strictBody(c, schema, env);
     if (body === undefined) return refuse(c, "malformed_request");
-    const session = await sessionOf(deps.auth, c.req.raw.headers);
+    const session = await sessionOf(deps, c.req.raw.headers);
     if (session === null) return refuse(c, "unauthenticated");
     return { body, ...session };
   };

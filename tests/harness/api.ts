@@ -452,3 +452,38 @@ export function requestTo(
     outgoing.end(payload);
   });
 }
+
+let completeSteps = 0;
+
+/**
+ * Signs in with password and TOTP and returns the mfa_complete cookie and the
+ * session id. Each call verifies at a step of its own, far from the present,
+ * so no two calls (or activation) ever share a step (Run 3.5).
+ */
+export async function signInComplete(
+  api: TestApi,
+  user: { email: string; password: string; seed: Uint8Array },
+  opts: { source?: string } = {},
+): Promise<{ cookie: string; sessionId: string }> {
+  completeSteps += 1;
+  const headers: Record<string, string> =
+    opts.source === undefined ? {} : { "x-forwarded-for": opts.source };
+  const signedIn = await api.request("POST", "/v1/auth/sign-in/email", {
+    body: { email: user.email, password: user.password },
+    headers,
+  });
+  if (signedIn.status !== 200) throw new Error(`sign-in answered ${String(signedIn.status)}`);
+  const now = new Date(Date.now() + (1000 + completeSteps) * 90_000);
+  const verified = await api.request("POST", "/v1/auth/totp/verify", {
+    body: { code: codeAt(user.seed, stepAt(now)) },
+    cookie: sessionCookieOf(signedIn),
+    headers: { ...headers, "x-test-now": now.toISOString() },
+  });
+  if (verified.status !== 200) throw new Error(`verify answered ${String(verified.status)}`);
+  const cookie = sessionCookieOf(verified);
+  const session = await api.request("GET", "/v1/auth/get-session", { cookie, headers });
+  const body = (await session.json()) as { session?: { id?: string } } | null;
+  const sessionId = body?.session?.id;
+  if (sessionId === undefined) throw new Error("get-session named no session");
+  return { cookie, sessionId };
+}
