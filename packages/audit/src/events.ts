@@ -1,0 +1,68 @@
+// The closed list of audit actions (P-44). Each action has a strict `details`
+// schema whose fields are ids, enums, integers or booleans — or strings with a
+// pattern and a maximum under 64 — so no free text, value, name or credential
+// can be written into the log. The list grows only in this file, one action at
+// a time, by the run that first records it.
+import { z } from "zod";
+
+const routeId = z
+  .string()
+  .max(48)
+  .regex(/^[a-z]+(?:\.[a-z]+)+$/);
+
+export const AUDIT_DETAILS = {
+  /** Run 3.2: the owner bootstrap. Ids are in actor and target. */
+  "operator.bootstrap": z.strictObject({}),
+  /** Run 3.2: a password sign-in attempt. */
+  "auth.sign_in": z.strictObject({
+    reason: z.enum(["credentials", "account", "epoch"]).optional(),
+  }),
+  /** Run 3.7: a request of an authenticated caller that the pipeline refused. */
+  "access.denied": z.strictObject({
+    routeId,
+    reason: z.enum(["hidden", "action", "state", "fresh"]),
+  }),
+} as const;
+
+export type AuditAction = keyof typeof AUDIT_DETAILS;
+
+export const AUDIT_ACTIONS = Object.freeze(Object.keys(AUDIT_DETAILS) as AuditAction[]);
+
+export type AuditDetails = Record<string, string | number | boolean | null>;
+
+export interface AuditEvent {
+  action: AuditAction;
+  actor: { kind: "user" | "machine" | "operator" | "system" | "anonymous"; id: string | null };
+  source: "web" | "cli" | "api" | "operator" | "system";
+  organizationId: string | null;
+  target: { kind: string; id: string | null } | null;
+  outcome: "success" | "denied" | "failure";
+  requestId: string | null;
+  operationId: string | null;
+  details: AuditDetails;
+}
+
+/** The parts of an event outside `details`: ids, enums and a short kind name. */
+export const auditEnvelopeSchema = z.strictObject({
+  action: z.enum(AUDIT_ACTIONS as [AuditAction, ...AuditAction[]]),
+  actor: z.strictObject({
+    kind: z.enum(["user", "machine", "operator", "system", "anonymous"]),
+    // A user, machine credential or operation id; the operator and the system have none.
+    id: z.uuid().nullable(),
+  }),
+  source: z.enum(["web", "cli", "api", "operator", "system"]),
+  organizationId: z.uuid().nullable(),
+  target: z
+    .strictObject({
+      kind: z
+        .string()
+        .max(32)
+        .regex(/^[a-z_]+$/),
+      id: z.uuid().nullable(),
+    })
+    .nullable(),
+  outcome: z.enum(["success", "denied", "failure"]),
+  requestId: z.uuid().nullable(),
+  operationId: z.uuid().nullable(),
+  details: z.record(z.string(), z.unknown()),
+});

@@ -1,0 +1,98 @@
+// Run 3.1 Task B: the closed list of audit actions and their strict details.
+import { describe, expect, it } from "vitest";
+import { z } from "zod";
+import { AUDIT_ACTIONS, AUDIT_DETAILS, appendAudit, type AuditEvent } from "@mykey/audit";
+
+type Json = Record<string, unknown>;
+
+/** Every leaf a details schema allows must be an id, an enum, an integer, a boolean or a short string. */
+function looseLeaves(schema: Json, path: string): string[] {
+  if (Array.isArray(schema.anyOf)) {
+    return (schema.anyOf as Json[]).flatMap((part, i) => looseLeaves(part, `${path}|${String(i)}`));
+  }
+  switch (schema.type) {
+    case "object": {
+      const properties = (schema.properties ?? {}) as Record<string, Json>;
+      const problems = Object.entries(properties).flatMap(([key, child]) =>
+        looseLeaves(child, `${path}.${key}`),
+      );
+      if (schema.additionalProperties !== false) problems.push(`${path}: not strict`);
+      return problems;
+    }
+    case "string":
+      if (schema.format === "uuid" || Array.isArray(schema.enum) || "const" in schema) return [];
+      if (typeof schema.maxLength === "number" && schema.maxLength < 64) return [];
+      return [`${path}: a string that is neither an id, an enum nor shorter than 64`];
+    case "integer":
+    case "boolean":
+    case "null":
+      return [];
+    default:
+      return [`${path}: type ${String(schema.type)}`];
+  }
+}
+
+const event = (action: string, details: Json): AuditEvent =>
+  ({
+    action,
+    actor: { kind: "system", id: null },
+    source: "system",
+    organizationId: null,
+    target: null,
+    outcome: "success",
+    requestId: null,
+    operationId: null,
+    details,
+  }) as AuditEvent;
+
+/** A Queryable that fails the test if any statement reaches it. */
+const noSql = {
+  query: () => {
+    throw new Error("a statement was sent");
+  },
+} as never;
+
+describe("audit actions", () => {
+  it("starts with the three actions of Run 3.1 and gives every action a details schema", () => {
+    expect(AUDIT_ACTIONS).toEqual(
+      expect.arrayContaining(["operator.bootstrap", "auth.sign_in", "access.denied"]),
+    );
+    expect(Object.keys(AUDIT_DETAILS).sort()).toEqual([...AUDIT_ACTIONS].sort());
+  });
+
+  it("every details schema is strict and holds only ids, enums, integers, booleans or short strings", () => {
+    const problems = AUDIT_ACTIONS.flatMap((action) =>
+      looseLeaves(z.toJSONSchema(AUDIT_DETAILS[action], { io: "input" }) as Json, action),
+    );
+    expect(problems).toEqual([]);
+  });
+
+  it("the walking test catches a loose string (control)", () => {
+    const loose = z.strictObject({ note: z.string() });
+    expect(looseLeaves(z.toJSONSchema(loose, { io: "input" }) as Json, "x")).toHaveLength(1);
+  });
+
+  it("an action outside the list is refused before any SQL", async () => {
+    // @ts-expect-error -- not an action of the list
+    const unknown: AuditEvent = { ...event("auth.sign_in", {}), action: "secret.dump" };
+    await expect(appendAudit(noSql, unknown)).rejects.toThrow(/action/);
+  });
+
+  it("details with an extra key are refused before any SQL", async () => {
+    await expect(
+      appendAudit(
+        noSql,
+        event("access.denied", { routeId: "projects.create", reason: "hidden", extra: 1 }),
+      ),
+    ).rejects.toThrow(/details/);
+  });
+
+  it("a target id that is not a uuid is refused before any SQL", async () => {
+    await expect(
+      appendAudit(noSql, {
+        ...event("operator.bootstrap", {}),
+        target: { kind: "organization", id: "not-an-id" },
+      }),
+    ).rejects.toThrow(/event/);
+  });
+});
