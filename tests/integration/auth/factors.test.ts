@@ -50,7 +50,7 @@ describe("elevation with TOTP", () => {
   it("is required by a product route, and rotates the bearer when it succeeds", async () => {
     const { cookie, token } = await passwordSession();
     const headers = new Headers({ cookie });
-    const refused = await requireMfaComplete(fixture.auth, headers);
+    const refused = await requireMfaComplete(fixture.auth, headers, fixture.pool);
     expect(refused?.status).toBe(401);
     expect(errorEnvelopeSchema.parse(await refused?.json()).error.code).toBe("mfa_incomplete");
 
@@ -72,7 +72,9 @@ describe("elevation with TOTP", () => {
     expect(result.setCookie).toMatch(/Secure/);
     expect(await resolves(cookie)).toBe(false);
     expect(await resolves(elevated)).toBe(true);
-    expect(await requireMfaComplete(fixture.auth, new Headers({ cookie: elevated }))).toBeNull();
+    expect(
+      await requireMfaComplete(fixture.auth, new Headers({ cookie: elevated }), fixture.pool),
+    ).toBeNull();
     const after = await run<{
       authenticated_at: Date;
       totp_verified_at: Date | null;
@@ -85,6 +87,53 @@ describe("elevation with TOTP", () => {
     expect(after[0]?.phase).toBe("mfa_complete");
     expect(after[0]?.authenticated_at).toEqual(before[0]?.authenticated_at);
     expect(after[0]?.totp_verified_at).toEqual(now);
+  });
+
+  // Run 2.10 review finding I4 (Doc 10 §4.1 rule 5: checked on every request, from current
+  // database state): the guard reads the account, not only the session's phase.
+  it("the product-route guard ends an elevated session of a disabled account or an older epoch", async () => {
+    const { token } = await passwordSession();
+    const now = new Date(Date.now() + 180_000);
+    const result = await elevateWithTotp(factorDeps(fixture), {
+      sessionToken: token,
+      code: codeAt(owner.seed, stepAt(now)),
+      now,
+    });
+    if (!result.ok) throw new Error(`elevation: ${result.reason}`);
+    const headers = new Headers({ cookie: pairOf(result.setCookie) });
+    // Control: elevated and active.
+    expect(await requireMfaComplete(fixture.auth, headers, fixture.pool)).toBeNull();
+    const [original] = await run<{ auth_epoch: string }>(
+      fixture.pool,
+      "SELECT auth_epoch FROM auth.account_state WHERE user_id = $1",
+      [owner.id],
+    );
+    try {
+      await run(
+        fixture.pool,
+        "UPDATE auth.account_state SET state = 'disabled' WHERE user_id = $1",
+        [owner.id],
+      );
+      const disabled = await requireMfaComplete(fixture.auth, headers, fixture.pool);
+      expect(disabled?.status).toBe(401);
+      await run(fixture.pool, "UPDATE auth.account_state SET state = 'active' WHERE user_id = $1", [
+        owner.id,
+      ]);
+      expect(await requireMfaComplete(fixture.auth, headers, fixture.pool)).toBeNull();
+      await run(
+        fixture.pool,
+        "UPDATE auth.account_state SET auth_epoch = auth_epoch + 1 WHERE user_id = $1",
+        [owner.id],
+      );
+      const older = await requireMfaComplete(fixture.auth, headers, fixture.pool);
+      expect(older?.status).toBe(401);
+    } finally {
+      await run(
+        fixture.pool,
+        "UPDATE auth.account_state SET state = 'active', auth_epoch = $2 WHERE user_id = $1",
+        [owner.id, original?.auth_epoch ?? "0"],
+      );
+    }
   });
 
   it("accepts the steps next to now and refuses those two away", async () => {

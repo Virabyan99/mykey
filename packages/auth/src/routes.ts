@@ -6,6 +6,7 @@ import { randomUUID } from "node:crypto";
 import type { ErrorCode, ErrorEnvelope } from "@mykey/contracts";
 import { ERROR_CODES } from "@mykey/contracts";
 import type { Context, Hono } from "hono";
+import type pg from "pg";
 import { z } from "zod";
 import { AUTH_BASE_PATH, type Auth } from "./auth.ts";
 import {
@@ -182,22 +183,49 @@ export async function strictBody<T>(c: Context, schema: z.ZodType<T>): Promise<T
   return result.success ? result.data : undefined;
 }
 
-/** The session of the request with its factor phase, or null. */
+/** The session of the request with its factor phase and auth epoch, or null. */
 export async function currentSession(
   auth: Auth,
   headers: Headers,
-): Promise<{ id: string; userId: string; phase: string } | null> {
+): Promise<{ id: string; userId: string; phase: string; authEpoch: number } | null> {
   const found = await auth.api.getSession({ headers });
   if (found === null) return null;
-  const session = found.session as unknown as { id: string; userId: string; phase: string };
-  return { id: session.id, userId: session.userId, phase: session.phase };
+  const session = found.session as unknown as {
+    id: string;
+    userId: string;
+    phase: string;
+    authEpoch?: number | string;
+  };
+  return {
+    id: session.id,
+    userId: session.userId,
+    phase: session.phase,
+    authEpoch: Number(session.authEpoch ?? 0),
+  };
 }
 
-/** A product route's guard: the session must have completed the second factor. */
-export async function requireMfaComplete(auth: Auth, headers: Headers): Promise<Response | null> {
+/**
+ * A product route's guard (Doc 10 §4.1 rule 5: from current database state on
+ * every request): the session completed the second factor, its account is
+ * `active` and the session belongs to the account's current auth epoch.
+ * Without a pool it refuses. Not yet: the idle limit (Session 3).
+ */
+export async function requireMfaComplete(
+  auth: Auth,
+  headers: Headers,
+  pool: pg.Pool | undefined,
+): Promise<Response | null> {
   const session = await currentSession(auth, headers);
   if (session === null) return errorResponse("unauthenticated");
   if (session.phase !== "mfa_complete") return errorResponse("mfa_incomplete");
+  if (pool === undefined) return errorResponse("unauthenticated");
+  const account = await pool.query<{ state: string; auth_epoch: string }>(
+    "SELECT state, auth_epoch FROM auth.account_state WHERE user_id = $1",
+    [session.userId],
+  );
+  const row = account.rows[0];
+  if (row?.state !== "active") return errorResponse("unauthenticated");
+  if (Number(row.auth_epoch) !== session.authEpoch) return errorResponse("unauthenticated");
   return null;
 }
 
@@ -244,7 +272,7 @@ export function mountAuthRoutes(app: Hono, auth: Auth, factors?: Omit<FactorDeps
   app.post(`${base}/change-password`, async (c) => {
     const body = await strictBody(c, changePasswordBody);
     if (body === undefined) return errorResponse("malformed_request");
-    const denied = await requireMfaComplete(auth, c.req.raw.headers);
+    const denied = await requireMfaComplete(auth, c.req.raw.headers, factors?.pool);
     if (denied !== null) return denied;
     return relay(
       await auth.api.changePassword({ body, headers: c.req.raw.headers, asResponse: true }),
@@ -253,7 +281,7 @@ export function mountAuthRoutes(app: Hono, auth: Auth, factors?: Omit<FactorDeps
 
   app.post(`${base}/revoke-sessions`, async (c) => {
     if ((await strictBody(c, emptyBody)) === undefined) return errorResponse("malformed_request");
-    const denied = await requireMfaComplete(auth, c.req.raw.headers);
+    const denied = await requireMfaComplete(auth, c.req.raw.headers, factors?.pool);
     if (denied !== null) return denied;
     return relay(await auth.api.revokeSessions({ headers: c.req.raw.headers, asResponse: true }));
   });
