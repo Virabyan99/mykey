@@ -37,6 +37,10 @@ export function testKeys(): AuthKeys {
     sessionLookup: keyRing("k1"),
     seedEncryption: keyRing("k1"),
     recoveryVerifier: keyRing("k1"),
+    rateLimit: keyRing("k1"),
+    resetVerifier: keyRing("k1"),
+    replayFingerprint: keyRing("k1"),
+    cursorMac: keyRing("k1"),
   };
 }
 

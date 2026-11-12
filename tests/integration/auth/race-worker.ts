@@ -6,6 +6,7 @@
 import { createInterface } from "node:readline";
 import {
   createAuth,
+  ephemeralKeys,
   elevateWithRecoveryCode,
   elevateWithTotp,
   type AuthKeys,
@@ -38,6 +39,15 @@ const reply = (value: unknown): void => {
   process.stdout.write(`${JSON.stringify(value)}\n`);
 };
 
+/** The rings the factor code does not use: fresh, since nothing compares them across processes. */
+function ephemeralRest(): Pick<
+  AuthKeys,
+  "rateLimit" | "resetVerifier" | "replayFingerprint" | "cursorMac"
+> {
+  const { rateLimit, resetVerifier, replayFingerprint, cursorMac } = ephemeralKeys();
+  return { rateLimit, resetVerifier, replayFingerprint, cursorMac };
+}
+
 let deps: FactorDeps | undefined;
 let pool: pg.Pool | undefined;
 
@@ -51,6 +61,7 @@ for await (const line of createInterface({ input: process.stdin })) {
       sessionLookup: ring(wire.sessionLookup as WireRing),
       seedEncryption: ring(wire.seedEncryption as WireRing),
       recoveryVerifier: ring(wire.recoveryVerifier as WireRing),
+      ...ephemeralRest(),
     };
     pool = new pg.Pool({ ...connectionConfig(command.init.target), max: 2 });
     deps = {

@@ -19,7 +19,7 @@ import {
 import { stripTypeScriptTypes } from "node:module";
 import { homedir } from "node:os";
 import { join, resolve } from "node:path";
-import { expectSuccess, loadHosts, registerSecret, sshExec } from "../tests/harness/staging.ts";
+import { expectSuccess, loadHosts, registerSecret, sshExec } from "@mykey/ops/remote";
 
 const ROOT = resolve(import.meta.dirname, "..");
 const WORKER = join(ROOT, "workers/probe");

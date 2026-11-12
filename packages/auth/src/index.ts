@@ -6,7 +6,16 @@ export {
   type Auth,
   type AuthDeps,
 } from "./auth.ts";
-export { loadAuthKeys, ringKey, type AuthKeys, type KeyRing } from "./keys.ts";
+export {
+  KEY_RINGS,
+  ephemeralKeys,
+  generateKeyFiles,
+  loadAuthKeys,
+  ringKey,
+  type AuthKeys,
+  type KeyRing,
+  type RingName,
+} from "./keys.ts";
 export { UnsupportedTokenOperation, protectedAdapter } from "./protected-adapter.ts";
 export {
   AUTH_BODIES,

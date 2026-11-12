@@ -1,6 +1,6 @@
 // The operator's tool for the two OVHcloud hosts. Run: node scripts/host.ts
 // <staging|prod> <command> (see USAGE). Every remote step is one SSH command
-// through tests/harness/staging.ts; nothing is printed except through the
+// through apps/ops/src/remote (@mykey/ops/remote); nothing is printed except through the
 // redacting logger, and no file under /etc/mykey/secrets or /root/mykey-custody
 // is ever printed (Review focus 2).
 //
@@ -42,7 +42,7 @@ import {
   sshExec,
   type HostEntry,
   type Hosts,
-} from "../tests/harness/staging.ts";
+} from "@mykey/ops/remote";
 import type { RoleName } from "@mykey/db";
 
 const REPOSITORY = resolve(import.meta.dirname, "..");

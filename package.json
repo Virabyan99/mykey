@@ -45,6 +45,7 @@
     "@mykey/db": "workspace:*",
     "@mykey/openbao": "workspace:*",
     "@mykey/operations": "workspace:*",
+    "@mykey/ops": "workspace:*",
     "@types/node": "24.19.2",
     "@types/pg": "catalog:",
     "eslint": "10.14.0",

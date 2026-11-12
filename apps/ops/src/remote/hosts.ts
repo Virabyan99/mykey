@@ -1,0 +1,113 @@
+// The two OVHcloud hosts as the operator's workstation knows them: the host
+// list in ~/.mykey/hosts.json and where things live on a host (Run 2.5).
+// Moved from tests/harness/staging.ts in Run 3.2 (M17).
+import { existsSync, readFileSync } from "node:fs";
+import { homedir } from "node:os";
+import { join } from "node:path";
+
+export interface HostEntry {
+  name: "staging" | "prod";
+  publicIp: string;
+  vpnIp: string;
+  hostname: string;
+  sshUser: "ubuntu";
+}
+
+export interface Hosts {
+  region: string;
+  staging: HostEntry;
+  prod: HostEntry;
+}
+
+/**
+ * Where the remote files live. scripts/host.ts and the files of Run 2.5
+ * Task B (bootstrap, firewall, checks, compose) follow this one table.
+ */
+export const REMOTE = {
+  hostsDir: "/opt/mykey/hosts",
+  composeDir: "/opt/mykey/compose",
+  hostEnv: "/etc/mykey/host.env",
+  secretsDir: "/etc/mykey/secrets",
+  custodyDir: "/root/mykey-custody",
+  /** The host's private CA certificate (public, 0644). */
+  caCert: "/etc/mykey/pki/ca.crt",
+  pgSuperuserPassword: "/etc/mykey/secrets/postgres/superuser-password",
+  postgres: { address: "10.78.2.2", port: 5432 },
+  openbao: { address: "10.78.3.2", port: 8200 },
+} as const;
+
+// ---------------------------------------------------------------- hosts.json
+
+export function hostsFile(home: string = homedir()): string {
+  return join(home, ".mykey", "hosts.json");
+}
+
+export function sshPaths(home: string = homedir()): { key: string; knownHosts: string } {
+  const dir = join(home, ".mykey", "ssh");
+  return { key: join(dir, "mykey_ops_ed25519"), knownHosts: join(dir, "known_hosts") };
+}
+
+const IPV4 = /^(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}$/;
+const HOSTNAME =
+  /^(?=.{1,253}$)([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)+$/;
+
+/** A DNS name of at least two lower-case labels: no IP literal syntax, no wildcard, no underscore. */
+export function isHostname(value: string): boolean {
+  return HOSTNAME.test(value);
+}
+
+function hostEntry(raw: unknown, name: "staging" | "prod"): HostEntry {
+  if (typeof raw !== "object" || raw === null)
+    throw new Error(`hosts.json: field ${name} is missing`);
+  const entry = raw as Record<string, unknown>;
+  const field = (key: string, valid: (value: string) => boolean): string => {
+    const value = entry[key];
+    if (value === undefined) throw new Error(`hosts.json: field ${name}.${key} is missing`);
+    if (typeof value !== "string" || !valid(value)) {
+      throw new Error(`hosts.json: field ${name}.${key} is malformed`);
+    }
+    return value;
+  };
+  field("name", (value) => value === name);
+  field("sshUser", (value) => value === "ubuntu");
+  return {
+    name,
+    publicIp: field("publicIp", (value) => IPV4.test(value)),
+    vpnIp: field("vpnIp", (value) => IPV4.test(value)),
+    hostname: field("hostname", (value) => HOSTNAME.test(value)),
+    sshUser: "ubuntu",
+  };
+}
+
+/** Reads and validates ~/.mykey/hosts.json; throws naming the missing or malformed field. */
+export function loadHosts(file: string = hostsFile()): Hosts {
+  if (!existsSync(file)) throw new Error(`~/.mykey/hosts.json is missing (${file})`);
+  let raw: unknown;
+  try {
+    raw = JSON.parse(readFileSync(file, "utf8"));
+  } catch {
+    throw new Error(`~/.mykey/hosts.json is not valid JSON (${file})`);
+  }
+  if (typeof raw !== "object" || raw === null) throw new Error("hosts.json: not an object");
+  const record = raw as Record<string, unknown>;
+  const region = record.region;
+  if (region === undefined) throw new Error("hosts.json: field region is missing");
+  if (typeof region !== "string" || !/^[a-z0-9-]+$/.test(region)) {
+    throw new Error("hosts.json: field region is malformed");
+  }
+  return {
+    region,
+    staging: hostEntry(record.staging, "staging"),
+    prod: hostEntry(record.prod, "prod"),
+  };
+}
+
+/** KEY=value lines of host.env (no secrets there). */
+export function parseHostEnv(text: string): Record<string, string> {
+  const result: Record<string, string> = {};
+  for (const line of text.split("\n")) {
+    const match = /^([A-Z][A-Z0-9_]*)=(.*)$/.exec(line.trim());
+    if (match?.[1] !== undefined) result[match[1]] = match[2] ?? "";
+  }
+  return result;
+}
