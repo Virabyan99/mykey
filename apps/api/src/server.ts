@@ -4,19 +4,18 @@ import { readFileSync } from "node:fs";
 import https from "node:https";
 import type { AddressInfo } from "node:net";
 import { serve } from "@hono/node-server";
-import type { DbTarget } from "@mykey/db";
-import { createApp, type RequestLogEntry } from "./app.ts";
+import { createPool, type DbTarget } from "@mykey/db";
+import type { Hono } from "hono";
+import { createApp } from "./app.ts";
 import { createHealthCheck, type OpenBaoHealthTarget } from "./health.ts";
+import { createLogger, type LogEntry } from "./log.ts";
+import type { ApiConfig, ApiEnv } from "./pipeline/context.ts";
 
-export interface ServerConfig {
+export interface ListenOptions {
   hostname: string;
   /** 0 picks a free port. */
   port: number;
   tls: { certPath: string; keyPath: string };
-  database: DbTarget;
-  /** On a host with OpenBao (Run 2.7): /health also requires it unsealed. */
-  openbao?: OpenBaoHealthTarget;
-  log: (entry: RequestLogEntry) => void;
 }
 
 export interface ApiServer {
@@ -24,20 +23,24 @@ export interface ApiServer {
   close(): Promise<void>;
 }
 
-export function startServer(config: ServerConfig): Promise<ApiServer> {
-  const health = createHealthCheck(config.database, config.openbao);
-  const app = createApp({ health: () => health.check(), log: config.log });
+/**
+ * Serves `app` over HTTPS. Node's own header limit is set above the API's
+ * (LIMITS.body.headersMaxBytes), so the pipeline is the one that refuses
+ * oversized headers, with the error envelope.
+ */
+export function listen(app: Hono<ApiEnv>, options: ListenOptions): Promise<ApiServer> {
   return new Promise((resolve, reject) => {
     const server = serve(
       {
         fetch: app.fetch,
-        hostname: config.hostname,
-        port: config.port,
+        hostname: options.hostname,
+        port: options.port,
         createServer: https.createServer,
         serverOptions: {
-          cert: readFileSync(config.tls.certPath),
-          key: readFileSync(config.tls.keyPath),
+          cert: readFileSync(options.tls.certPath),
+          key: readFileSync(options.tls.keyPath),
           minVersion: "TLSv1.2",
+          maxHeaderSize: 64 * 1024,
         },
       },
       (info: AddressInfo) => {
@@ -46,10 +49,8 @@ export function startServer(config: ServerConfig): Promise<ApiServer> {
           close: () =>
             new Promise<void>((done, failed) => {
               server.close((error) => {
-                health.close().then(() => {
-                  if (error === undefined) done();
-                  else failed(error);
-                }, failed);
+                if (error === undefined) done();
+                else failed(error);
               });
               // Idle keep-alive connections would hold `close` open.
               if ("closeAllConnections" in server) server.closeAllConnections();
@@ -61,25 +62,69 @@ export function startServer(config: ServerConfig): Promise<ApiServer> {
   });
 }
 
+export interface ServerConfig extends ListenOptions {
+  database: DbTarget;
+  /** On a host with OpenBao (Run 2.7): /health also requires it unsealed. */
+  openbao?: OpenBaoHealthTarget;
+  api: ApiConfig;
+  log: (entry: LogEntry) => void;
+}
+
+export async function startServer(config: ServerConfig): Promise<ApiServer> {
+  const health = createHealthCheck(config.database, config.openbao);
+  const pool = createPool(config.database, { max: 20 });
+  const app = createApp({
+    pool,
+    config: config.api,
+    health: () => health.check(),
+    log: config.log,
+  });
+  const server = await listen(app, config);
+  return {
+    port: server.port,
+    async close() {
+      await server.close();
+      await health.close();
+      await pool.end();
+    },
+  };
+}
+
+/** A setting the container must have; its absence refuses the start, naming it. */
+export class MissingSetting extends Error {
+  readonly setting: string;
+
+  constructor(setting: string, problem = "is not set") {
+    super(`${setting} ${problem}`);
+    this.name = "MissingSetting";
+    this.setting = setting;
+  }
+}
+
 const required = (env: NodeJS.ProcessEnv, name: string): string => {
   const value = env[name];
-  if (value === undefined || value === "") throw new Error(`${name} is not set`);
+  if (value === undefined || value === "") throw new MissingSetting(name);
   return value;
 };
 
 /**
- * Settings of the container. Only paths and names come from the environment;
- * the database password is read from a file (Doc 10 Run 2.5: a service reads
- * its secrets from files, never from environment variables).
+ * Settings of the container. Only paths, names and addresses come from the
+ * environment; the database password is read from a file (Doc 10 Run 2.5).
  */
 export function configFromEnvironment(env: NodeJS.ProcessEnv): Omit<ServerConfig, "log"> {
   const port = Number(env.MYKEY_API_PORT ?? "8443");
   const databasePort = Number(env.MYKEY_DB_PORT ?? "5432");
   if (!Number.isInteger(port) || port < 0 || port > 65_535) {
-    throw new Error("MYKEY_API_PORT is not a port");
+    throw new MissingSetting("MYKEY_API_PORT", "is not a port");
   }
   if (!Number.isInteger(databasePort) || databasePort < 1 || databasePort > 65_535) {
-    throw new Error("MYKEY_DB_PORT is not a port");
+    throw new MissingSetting("MYKEY_DB_PORT", "is not a port");
+  }
+  const build = required(env, "MYKEY_BUILD");
+  if (!/^[0-9a-f]{7,40}$/.test(build)) throw new MissingSetting("MYKEY_BUILD", "is not a commit");
+  const baseUrl = required(env, "MYKEY_BASE_URL");
+  if (new URL(baseUrl).origin !== baseUrl) {
+    throw new MissingSetting("MYKEY_BASE_URL", "is not an origin");
   }
   return {
     hostname: env.MYKEY_API_HOST ?? "0.0.0.0",
@@ -100,15 +145,34 @@ export function configFromEnvironment(env: NodeJS.ProcessEnv): Omit<ServerConfig
     ...(env.MYKEY_BAO_URL === undefined || env.MYKEY_BAO_URL === ""
       ? {}
       : { openbao: { url: env.MYKEY_BAO_URL, caCertPath: required(env, "MYKEY_BAO_CA_FILE") } }),
+    api: {
+      baseUrl,
+      build,
+      gatePath: required(env, "MYKEY_GATE_PATH"),
+      hostInstanceId: required(env, "MYKEY_HOST_INSTANCE_ID"),
+      trustedProxy:
+        env.MYKEY_TRUSTED_PROXY === undefined || env.MYKEY_TRUSTED_PROXY === ""
+          ? null
+          : env.MYKEY_TRUSTED_PROXY,
+    },
   };
 }
 
 if (import.meta.main) {
-  const log = (entry: RequestLogEntry): void => {
-    process.stdout.write(`${JSON.stringify(entry)}\n`);
-  };
-  const server = await startServer({ ...configFromEnvironment(process.env), log });
-  process.stdout.write(`${JSON.stringify({ event: "listening", port: server.port })}\n`);
+  const log = createLogger((line) => process.stdout.write(line));
+  let settings: Omit<ServerConfig, "log">;
+  try {
+    settings = configFromEnvironment(process.env);
+  } catch (error) {
+    // One typed line naming what is missing, never a value (Review focus 5).
+    log({
+      event: "startup_refused",
+      missing: error instanceof MissingSetting ? error.setting : "configuration",
+    });
+    process.exit(1);
+  }
+  const server = await startServer({ ...settings, log });
+  log({ event: "listening", port: server.port });
   const stop = (): void => {
     server.close().then(
       () => process.exit(0),

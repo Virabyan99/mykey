@@ -1,88 +1,65 @@
-// The HTTP surface of the API stub (Run 2.5): GET /health and nothing else.
-// Run 3.1 replaces this piece by piece with the routes of @mykey/contracts.
+// The HTTP surface of the API. Every route is mounted from the contract
+// through `mountRoute` (P-40); nothing else registers a route.
 import { randomUUID } from "node:crypto";
-import type { HttpBindings } from "@hono/node-server";
-import type { ErrorEnvelope } from "@mykey/contracts";
+import { ROUTES } from "@mykey/contracts";
 import { Hono } from "hono";
-import type { HealthCause, HealthReading } from "./health.ts";
+import { now } from "./log.ts";
+import type { ApiEnv, AppDeps, Handler } from "./pipeline/context.ts";
+import { errorResponse } from "./pipeline/respond.ts";
+import { mountRoute, mountRouteDef } from "./pipeline/route.ts";
+import { healthHandler } from "./routes/health.ts";
+import { versionHandler } from "./routes/version.ts";
 
-export type RequestLogEntry =
-  | {
-      event: "request";
-      time: string;
-      requestId: string;
-      method: string;
-      path: string;
-      status: number;
-      durationMs: number;
-      /** The address of the TCP peer: the proxy in production. */
-      peer: string | null;
-      /** The X-Forwarded-For value as received. Informational; nothing trusts it. */
-      forwardedFor: string | null;
-      /** The X-Forwarded-Proto value as received. Informational; nothing trusts it. */
-      forwardedProto: string | null;
-    }
-  | {
-      event: "health_down";
-      time: string;
-      requestId: string;
-      cause: HealthCause;
-      code: string | null;
-    };
-
-export interface AppDependencies {
-  health: () => Promise<HealthReading>;
-  /** One call per line. The entry never holds a request body, a credential or a database setting. */
-  log: (entry: RequestLogEntry) => void;
+/** The handlers that exist; every other contract route ends in the terminal 404. */
+function handlers(): Partial<Record<string, Handler>> {
+  return {
+    "health.get": healthHandler,
+    "version.get": versionHandler,
+  };
 }
 
-interface Environment {
-  Bindings: HttpBindings;
-  Variables: { requestId: string };
-}
-
-export function createApp(deps: AppDependencies): Hono<Environment> {
-  const app = new Hono<Environment>();
+export function createApp(deps: AppDeps): Hono<ApiEnv> {
+  const app = new Hono<ApiEnv>();
 
   app.use(async (c, next) => {
     const started = performance.now();
+    // Always the API's own: a client-sent x-request-id is ignored.
     const requestId = randomUUID();
     c.set("requestId", requestId);
+    c.set("routePattern", null);
+    c.set("bodyBytesRead", 0);
     await next();
-    // Names the log line of this request, so it can be found from outside.
-    c.header("x-request-id", requestId);
+    c.res.headers.set("x-request-id", requestId);
+    c.res.headers.set("cache-control", "no-store");
     deps.log({
       event: "request",
-      time: new Date().toISOString(),
+      time: now(),
       requestId,
       method: c.req.method,
-      path: c.req.path,
+      path: c.get("routePattern"),
       status: c.res.status,
       durationMs: Math.round(performance.now() - started),
+      bodyBytesRead: c.get("bodyBytesRead"),
       peer: c.env.incoming.socket.remoteAddress ?? null,
-      forwardedFor: c.req.header("x-forwarded-for") ?? null,
-      forwardedProto: c.req.header("x-forwarded-proto") ?? null,
+      forwardedFor: c.req.header("x-forwarded-for")?.slice(0, 256) ?? null,
+      forwardedProto: c.req.header("x-forwarded-proto")?.slice(0, 16) ?? null,
     });
   });
 
-  app.get("/health", async (c) => {
-    const reading = await deps.health();
-    if (reading.up) return c.json({ status: "up" }, 200);
+  const known = handlers();
+  for (const route of ROUTES) mountRoute(app, deps, route.id, known[route.id] ?? null);
+  for (const entry of deps.test?.routes ?? []) mountRouteDef(app, deps, entry.def, entry.handler);
+
+  app.notFound((c) => errorResponse("not_found", c.get("requestId")));
+  app.onError((error, c) => {
     deps.log({
-      event: "health_down",
-      time: new Date().toISOString(),
+      event: "unhandled",
+      time: now(),
       requestId: c.get("requestId"),
-      cause: reading.cause,
-      code: reading.code,
+      routeId: null,
+      errorClass: error.constructor.name,
     });
-    return c.json({ status: "down" }, 503);
-  });
-
-  app.notFound((c) => {
-    const body = {
-      error: { code: "not_found", message: "Not found.", requestId: c.get("requestId") },
-    } as ErrorEnvelope;
-    return c.json(body, 404);
+    return errorResponse("dependency_unavailable", c.get("requestId"));
   });
 
   return app;

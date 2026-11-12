@@ -8,10 +8,13 @@
   },
   "dependencies": {
     "@hono/node-server": "catalog:",
+    "@mykey/audit": "workspace:*",
     "@mykey/contracts": "workspace:*",
     "@mykey/db": "workspace:*",
+    "@mykey/operations": "workspace:*",
     "hono": "catalog:",
-    "pg": "catalog:"
+    "pg": "catalog:",
+    "zod": "catalog:"
   },
   "devDependencies": {
     "@types/pg": "catalog:"
