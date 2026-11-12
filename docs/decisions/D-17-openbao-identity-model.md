@@ -70,3 +70,9 @@ With a **provisioner** token the process can write any policy text under a `mach
 - Inline authentication turns out to cost too much per request under load (Session 4/5 measurements): the runtime returns to the standard AppRole login of P-22, and the stored 15-minute token is accepted as the residual risk.
 - A later OpenBao release changes the self-operation behaviour or the inline restrictions: the matrix is re-run on the new pin before it is adopted.
 - The co-resident runtime + issuer blast radius above is judged too large at the Session 8 review: a separate private issuer process is promoted (Doc 06 §17.4).
+
+## Amendment (Run 3.8, 2026-11-13)
+
+- **Foreign accessors.** The sentences above that say the client maps the "cannot lookup token in different namespace" 500 to `invalid`, status 500, describe Run 2.1's client. Since ruling R8 (Run 2.4) a 5xx other than 503 on a call that changes something is `unknown/unclear_answer`: `revoke-accessor` with a foreign accessor now answers `unknown`, and only `lookup-accessor` (a read) answers `invalid`, status 500. The token store's refusal itself is unchanged (Run 2.1, Run 2.2). `revoke-self` is a change too and answers the same way (M13).
+- **The provisioner reads what it verifies.** Its policy gains `read` on `sys/policies/acl/runtime`, `…/issuer`, `…/provisioner`, `sys/mounts/kv` and `kv/config` (P-55); it still writes only machine policies and machine token roles, and still cannot read secrets, AppRoles or create tokens (authority matrix regenerated, 935 cells).
+- **AppRoles are bound to addresses** (P-56, M14): `secret_id_bound_cidrs` and `token_bound_cidrs`. OpenBao 2.7.2 reads `secret_id_bound_cidrs` back as written and `token_bound_cidrs` with a `/32` as the bare address.

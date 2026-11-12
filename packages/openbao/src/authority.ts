@@ -226,6 +226,7 @@ const ACTIONS: readonly ActionSpec[] = [
     columns: NAMESPACE,
   },
   { action: "mount.read", request: { method: "GET", path: "sys/mounts/kv" }, columns: NAMESPACE },
+  { action: "kv.read_config", request: { method: "GET", path: "kv/config" }, columns: NAMESPACE },
   {
     action: "mount.tune",
     request: { method: "POST", path: "sys/mounts/kv/tune", body: { description: "kv" } },
@@ -324,6 +325,12 @@ const ACTIONS: readonly ActionSpec[] = [
     },
     columns: EVERYWHERE,
   },
+  // Run 3.8: the provisioner reads the organization policies its sweep compares.
+  ...(["runtime", "issuer", "provisioner"] as const).map((name) => ({
+    action: `policy.read_${name}`,
+    request: { method: "GET" as const, path: `sys/policies/acl/${name}` },
+    columns: NAMESPACE,
+  })),
   {
     action: "policy.list",
     request: { method: "GET", path: "sys/policies/acl?list=true" },
@@ -354,6 +361,11 @@ const ACTIONS: readonly ActionSpec[] = [
   {
     action: "approle.secret_id",
     request: { method: "POST", path: "auth/approle/role/runtime/secret-id" },
+    columns: NAMESPACE,
+  },
+  {
+    action: "approle.read",
+    request: { method: "GET", path: "auth/approle/role/runtime" },
     columns: NAMESPACE,
   },
   // System
@@ -410,6 +422,12 @@ const ALLOWED: readonly string[] = [
   "issuer token.revoke_accessor own",
   "issuer token.revoke_self own",
   "provisioner token.revoke_self own",
+  // Run 3.8: reads for verification and drift; nothing it can write changes.
+  "provisioner policy.read_runtime own",
+  "provisioner policy.read_issuer own",
+  "provisioner policy.read_provisioner own",
+  "provisioner mount.read own",
+  "provisioner kv.read_config own",
   "machine kv.read own",
   // Doc 06 §5: a raw machine token can read retained versions; the product API does not.
   "machine kv.read_version_1 own",

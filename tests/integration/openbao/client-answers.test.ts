@@ -124,6 +124,7 @@ describe("answers the server cannot be made to give", () => {
   // send an answer the real server does not send on demand; no store is involved.
   let status = 200;
   let body = "";
+  let requests = 0;
   let server: https.Server;
   let url = "";
 
@@ -131,6 +132,7 @@ describe("answers the server cannot be made to give", () => {
     server = https.createServer(
       { cert: readFileSync(stack.api.certPath), key: readFileSync(stack.api.keyPath) },
       (request, response) => {
+        requests += 1;
         request.resume();
         request.on("end", () => {
           response.writeHead(status, { "content-type": "application/json" });
@@ -187,6 +189,23 @@ describe("answers the server cannot be made to give", () => {
         status: code,
       });
     }
+  });
+
+  it("M13: revoke-self is a change — a 5xx other than 503 is unclear", async () => {
+    for (const code of [500, 502, 504]) {
+      const client = answering(code, '{"errors":["synthetic"]}');
+      expect(await client.tokenRevokeSelf(), String(code)).toEqual(unclear);
+    }
+  });
+
+  it("M13: kvRead of version 0 is refused before any request (0 is not a version)", async () => {
+    const client = answering(200, "{}");
+    const before = requests;
+    await expect(client.kvRead(freshPath(), 0)).rejects.toThrow(/invalid version/);
+    expect(requests).toBe(before);
+    // Control: version 1 is sent.
+    await client.kvRead(freshPath(), 1);
+    expect(requests).toBe(before + 1);
   });
 
   it("a 503 stays sealed, and a definite refusal stays definite (controls)", async () => {
