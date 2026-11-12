@@ -22,7 +22,14 @@ import {
   type FailureReason,
 } from "./factors/elevate.ts";
 import type { AuthKeys } from "./keys.ts";
-import { nativeSessionResponse, resolveSession, type SessionDeps } from "./sessions.ts";
+import { changePassword, type ChangeResult } from "./password.ts";
+import {
+  listSessions,
+  nativeSessionResponse,
+  resolveSession,
+  revokeSession,
+  type SessionDeps,
+} from "./sessions.ts";
 import { signInWithPassword } from "./sign-in.ts";
 import { normalizeEmail } from "./email.ts";
 import type { Admission, Throttle, ThrottlePhase } from "./throttle.ts";
@@ -32,13 +39,24 @@ export interface NativeRoute {
   path: string;
 }
 
-/** The five native endpoints MyKey serves. None has a path parameter. */
+/**
+ * The four native endpoints MyKey serves (the password change is product-owned
+ * since Run 3.5, P-49). None has a path parameter.
+ */
 export const NATIVE_ALLOWED: readonly NativeRoute[] = Object.freeze([
   { method: "POST", path: "/sign-in/email" },
   { method: "POST", path: "/sign-out" },
   { method: "GET", path: "/get-session" },
-  { method: "POST", path: "/change-password" },
   { method: "POST", path: "/revoke-sessions" },
+]);
+
+/**
+ * Paths of native endpoints that are served by product code instead (the
+ * native handler is never called): they answer, although the native endpoint
+ * is denied.
+ */
+export const PRODUCT_OWNED: readonly NativeRoute[] = Object.freeze([
+  { method: "POST", path: "/change-password" },
 ]);
 
 /**
@@ -46,6 +64,7 @@ export const NATIVE_ALLOWED: readonly NativeRoute[] = Object.freeze([
  * that adds one fails `routes.test.ts` until it is placed in one of the lists.
  */
 export const NATIVE_DENIED: readonly NativeRoute[] = Object.freeze([
+  { method: "POST", path: "/change-password" },
   { method: "POST", path: "/sign-in/social" },
   { method: "GET", path: "/callback/:id" },
   { method: "POST", path: "/callback/:id" },
@@ -182,8 +201,8 @@ const signInBody = z.strictObject({
 const changePasswordBody = z.strictObject({
   currentPassword: z.string().min(1).max(MAX_PASSWORD),
   newPassword: z.string().min(1).max(MAX_PASSWORD),
-  revokeOtherSessions: z.boolean().optional(),
 });
+const revokeSessionBody = z.strictObject({ sessionId: z.uuid() });
 const emptyBody = z.strictObject({});
 
 /** The body parsed by the pipeline's reader and by `schema`, or undefined when either refuses it. */
@@ -294,15 +313,17 @@ const FACTOR_PATHS = [
   "/recovery/regenerate",
 ] as const;
 
+/** Product routes of the auth module that have no native counterpart (P-50). */
+const PRODUCT_ROUTES: readonly NativeRoute[] = [
+  { method: "GET", path: "/sessions" },
+  { method: "POST", path: "/sessions/revoke" },
+];
+
 /** Every route the auth module serves, as the app registers it (full paths). */
 export function servedAuthRoutes(): NativeRoute[] {
-  return [
-    ...NATIVE_ALLOWED.map((route) => ({
-      method: route.method,
-      path: `${AUTH_BASE_PATH}${route.path}`,
-    })),
-    ...FACTOR_PATHS.map((path) => ({ method: "POST", path: `${AUTH_BASE_PATH}${path}` })),
-  ];
+  return [...NATIVE_ALLOWED, ...PRODUCT_OWNED, ...PRODUCT_ROUTES]
+    .map((route) => ({ method: route.method, path: `${AUTH_BASE_PATH}${route.path}` }))
+    .concat(FACTOR_PATHS.map((path) => ({ method: "POST", path: `${AUTH_BASE_PATH}${path}` })));
 }
 
 const json = (body: unknown, setCookie?: string): Response => {
@@ -366,16 +387,66 @@ export function mountAuthRoutes(app: AnyHono, auth: Auth, env: AuthRouteEnv): vo
     return relayNative(await nativeSessionResponse(auth, c.req.raw.headers), env, env.requestId(c));
   });
 
+  // The product-owned password change (P-49): see password.ts.
   app.post(`${base}/change-password`, async (c) => {
     const body = await strictBody(c, changePasswordBody, env);
     if (body === undefined) return refuse(c, "malformed_request");
-    const denied = await requireMfaComplete(sessions, c.req.raw.headers);
-    if (denied !== null) return refuse(c, denied);
-    return relayNative(
-      await auth.api.changePassword({ body, headers: c.req.raw.headers, asResponse: true }),
-      env,
-      env.requestId(c),
+    const verdict = await resolveSession(sessions, c.req.raw.headers);
+    if (!verdict.ok) return refuse(c, "unauthenticated");
+    if (verdict.session.phase !== "mfa_complete") return refuse(c, "mfa_incomplete");
+    const email = await env.pool.query<{ email: string }>(
+      'SELECT email FROM auth."user" WHERE id = $1',
+      [verdict.session.userId],
     );
+    const account = email.rows[0]?.email ?? verdict.session.userId;
+    const refusal = await throttled(env, c, "password", account);
+    if (refusal !== null) return refusal;
+    let result: ChangeResult;
+    try {
+      result = await changePassword(
+        { auth, pool: env.pool },
+        { ...body, sessionId: verdict.session.id, requestId: env.requestId(c) },
+      );
+    } catch (error) {
+      if (error instanceof AuditUnavailable) return refuse(c, "audit_unavailable");
+      throw error;
+    }
+    if (result.ok) return json({ revokedSessions: result.revoked });
+    if (result.reason === "wrong_password") {
+      return failed(env, c, "password", account, "unauthenticated");
+    }
+    return refuse(
+      c,
+      result.reason === "not_fresh"
+        ? "fresh_verification_required"
+        : result.reason === "password_rejected"
+          ? "validation_failed"
+          : "unauthenticated",
+    );
+  });
+
+  // P-50: the user's sessions and the revocation of one of them. No token leaves.
+  app.get(`${base}/sessions`, async (c) => {
+    if (!(await env.readBody(c)).ok) return refuse(c, "malformed_request");
+    const verdict = await resolveSession(sessions, c.req.raw.headers);
+    if (!verdict.ok) return refuse(c, "unauthenticated");
+    if (verdict.session.phase !== "mfa_complete") return refuse(c, "mfa_incomplete");
+    return json({
+      sessions: await listSessions(env.pool, verdict.session.userId, verdict.session.id),
+    });
+  });
+
+  app.post(`${base}/sessions/revoke`, async (c) => {
+    const body = await strictBody(c, revokeSessionBody, env);
+    if (body === undefined) return refuse(c, "malformed_request");
+    const verdict = await resolveSession(sessions, c.req.raw.headers);
+    if (!verdict.ok) return refuse(c, "unauthenticated");
+    if (verdict.session.phase !== "mfa_complete") return refuse(c, "mfa_incomplete");
+    // Another user's session is the same 404 as an absent one.
+    if (!(await revokeSession(env.pool, verdict.session.userId, body.sessionId))) {
+      return refuse(c, "not_found");
+    }
+    return json({});
   });
 
   app.post(`${base}/revoke-sessions`, async (c) => {
@@ -542,6 +613,7 @@ function mountFactorRoutes(
 export const AUTH_BODIES = {
   signIn: signInBody,
   changePassword: changePasswordBody,
+  revokeSession: revokeSessionBody,
   empty: emptyBody,
   code: codeBody,
 } as const;

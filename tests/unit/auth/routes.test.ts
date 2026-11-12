@@ -40,12 +40,11 @@ describe("native routes", () => {
     expect([...allowed, ...denied].filter((route) => !routes.map(key).includes(route))).toEqual([]);
   });
 
-  it("allows exactly five routes, none with a path parameter", () => {
+  it("allows exactly four routes, none with a path parameter (Run 3.5: the password change is product-owned)", () => {
     expect(NATIVE_ALLOWED.map(key)).toEqual([
       "POST /sign-in/email",
       "POST /sign-out",
       "GET /get-session",
-      "POST /change-password",
       "POST /revoke-sessions",
     ]);
     expect(NATIVE_ALLOWED.filter((route) => route.path.includes(":"))).toEqual([]);

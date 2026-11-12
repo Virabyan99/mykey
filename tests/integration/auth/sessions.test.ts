@@ -195,3 +195,128 @@ describe("one validity decision (Task A)", () => {
     expect((await product((await complete()).cookie)).status).toBe(204);
   });
 });
+
+describe("list and revoke (Task B)", () => {
+  interface Listed {
+    id: string;
+    createdAt: string;
+    lastActivityAt: string;
+    client: string;
+    current: boolean;
+  }
+  const list = async (cookie: string): Promise<Response> =>
+    api.request("GET", "/v1/auth/sessions", { cookie, headers: from() });
+  const revoke = (cookie: string, sessionId: string): Promise<Response> =>
+    api.request("POST", "/v1/auth/sessions/revoke", {
+      body: { sessionId },
+      cookie,
+      headers: from(),
+    });
+
+  it("lists this user's sessions with creation, last activity and client, marks the current one, and holds no token", async () => {
+    const mine = await complete();
+    const other = await complete();
+    const response = await list(mine.cookie);
+    expect(response.status).toBe(200);
+    const text = await response.text();
+    const value = mine.cookie.slice(mine.cookie.indexOf("=") + 1);
+    expect(text.includes(decodeURIComponent(value).split(".")[0] ?? "x")).toBe(false);
+    expect(text.includes("v1.")).toBe(false);
+    const { sessions } = JSON.parse(text) as { sessions: Listed[] };
+    const current = sessions.filter((session) => session.current);
+    expect(current.map((session) => session.id)).toEqual([mine.sessionId]);
+    expect(sessions.map((session) => session.id)).toContain(other.sessionId);
+    for (const session of sessions) {
+      expect(Object.keys(session).sort()).toEqual([
+        "client",
+        "createdAt",
+        "current",
+        "id",
+        "lastActivityAt",
+      ]);
+      expect(session.client.length).toBeLessThanOrEqual(120);
+      expect(Number.isNaN(Date.parse(session.createdAt))).toBe(false);
+    }
+  });
+
+  it("revoking another session ends it for its next request and leaves this one", async () => {
+    const mine = await complete();
+    const other = await complete();
+    expect((await revoke(mine.cookie, other.sessionId)).status).toBe(200);
+    expect((await product(other.cookie)).status).toBe(401);
+    expect((await product(mine.cookie)).status).toBe(204);
+  });
+
+  it("an id of another user is the same 404 as an absent one, and ends nothing", async () => {
+    const stranger = await enrollOwner(api, await anotherUser(), { source: "198.51.100.253" });
+    const theirs = await signInComplete(api, stranger, { source: "198.51.100.254" });
+    const mine = await complete();
+    const foreign = await revoke(mine.cookie, theirs.sessionId);
+    const absent = await revoke(mine.cookie, "6f1c4c4e-2a52-4c4b-9a39-2c1f3a1d4e5f");
+    expect(foreign.status).toBe(404);
+    expect(absent.status).toBe(404);
+    const body = async (response: Response) => {
+      const parsed = (await response.json()) as { error: Record<string, unknown> };
+      return { ...parsed.error, requestId: "" };
+    };
+    expect(await body(foreign)).toEqual(await body(absent));
+    // Control: the stranger's session still answers.
+    expect((await product(theirs.cookie)).status).toBe(204);
+  });
+
+  it("revoke-all ends every session, this one included", async () => {
+    const mine = await complete();
+    const other = await complete();
+    const response = await api.request("POST", "/v1/auth/revoke-sessions", {
+      body: {},
+      cookie: mine.cookie,
+      headers: from(),
+    });
+    expect(response.status).toBe(200);
+    expect((await product(mine.cookie)).status).toBe(401);
+    expect((await product(other.cookie)).status).toBe(401);
+  });
+
+  it("a password-only session can neither list nor revoke", async () => {
+    const victim = await complete();
+    const signedIn = await api.request("POST", "/v1/auth/sign-in/email", {
+      body: { email: owner.email, password: owner.password },
+      headers: from(),
+    });
+    const passwordOnly = sessionCookieOf(signedIn);
+    const listed = await list(passwordOnly);
+    expect(listed.status).toBe(401);
+    expect(((await listed.json()) as { error: { code: string } }).error.code).toBe(
+      "mfa_incomplete",
+    );
+    expect((await revoke(passwordOnly, victim.sessionId)).status).toBe(401);
+    expect((await product(victim.cookie)).status).toBe(204);
+  });
+});
+
+/** Another account with its own enrollment (the bootstrap allows one owner). */
+async function anotherUser(): Promise<{
+  userId: string;
+  organizationId: string;
+  email: string;
+  password: string;
+}> {
+  const email = `other-${String(Date.now())}@mykey.invalid`;
+  const password = `pw-${String(Date.now())}-long-enough`;
+  const hash = await (await api.auth.$context).password.hash(password);
+  const operator = api.database.pool("maintenance");
+  const user = await operator.query<{ id: string }>(
+    `INSERT INTO auth."user" (id, name, email, email_verified) VALUES (gen_random_uuid(), 'Other', $1, true) RETURNING id`,
+    [email],
+  );
+  const userId = user.rows[0]!.id;
+  await operator.query(
+    "INSERT INTO auth.account (id, account_id, provider_id, user_id, password) VALUES (gen_random_uuid(), $1, 'credential', $2, $3)",
+    [userId, userId, hash],
+  );
+  await operator.query(
+    "INSERT INTO auth.account_state (user_id, state) VALUES ($1, 'enrollment_pending')",
+    [userId],
+  );
+  return { userId, organizationId: "", email, password };
+}

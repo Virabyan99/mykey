@@ -3,7 +3,7 @@
 // contract's 404 — with the pipeline's request id and no-store — and writes
 // nothing (P-25). No route of the app creates a user.
 import { errorEnvelopeSchema } from "@mykey/contracts";
-import { NATIVE_DENIED } from "@mykey/auth";
+import { NATIVE_DENIED, PRODUCT_OWNED } from "@mykey/auth";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { seedOwner, startTestApi, type TestApi } from "../../harness/api.ts";
 import { authRowCounts } from "./fixture.ts";
@@ -70,7 +70,9 @@ const BODIES: Record<string, unknown> = {
 describe("denied native routes", () => {
   it("answer 404 with the not_found envelope and create no row, with or without a session", async () => {
     const before = await authRowCounts(api.superuser);
-    for (const route of NATIVE_DENIED) {
+    // A product-owned path answers (Run 3.5: change-password); its native handler is never called.
+    const owned = new Set(PRODUCT_OWNED.map((route) => `${route.method} ${route.path}`));
+    for (const route of NATIVE_DENIED.filter((r) => !owned.has(`${r.method} ${r.path}`))) {
       const path = `/v1/auth${route.path.replaceAll(/:[a-z]+/g, "x")}`;
       for (const cookie of [undefined, passwordCookie, elevatedCookie]) {
         const response = await api.request(route.method, path, {

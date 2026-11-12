@@ -22,7 +22,7 @@ const CONTRACT_FILE = resolve(ROOT, "docs/auth-route-contract.md");
 interface RouteContract {
   method: "GET" | "POST";
   path: string;
-  kind: "native" | "factor";
+  kind: "native" | "factor" | "product";
   body: keyof typeof AUTH_BODIES | null;
   success: string;
   errors: string[];
@@ -81,17 +81,50 @@ const ROUTES: RouteContract[] = [
   {
     method: "POST",
     path: "/change-password",
-    kind: "native",
+    kind: "product",
     body: "changePassword",
-    success: "200, `{ user }` without `token`",
+    success:
+      "200, `{ revokedSessions }`: one transaction stores the new hash, raises the credential epoch, deletes every other session of the user and writes `auth.password_change` (P-49, Run 3.5; the native endpoint is never called)",
     errors: [
       ...COMMON_ERRORS,
-      "401 `unauthenticated` (no session, or wrong current password)",
+      "401 `unauthenticated` (no valid session, or a wrong current password — counted against the `password` phase)",
       "401 `mfa_incomplete` (session not `mfa_complete`)",
+      "403 `fresh_verification_required` (no TOTP verification of this session in the last 600 s)",
+      "422 `validation_failed` (the new password breaks the rule of P-46)",
+      "429 `rate_limited` with `Retry-After` (the `password` phase of P-48, for the account's e-mail)",
+      "503 `dependency_unavailable` (the rate counter could not be written)",
     ],
-    cookies:
-      "with `revokeOtherSessions: true`: every session of the user is removed and a new `password_verified` session cookie is set (observed on 1.7.19, D-19); the owner passes the factor again",
-    accountStates: "any (Run 3.5 adds fresh verification)",
+    cookies: "none: this session keeps its token and its phase",
+    accountStates: "`active`",
+    phases: "`mfa_complete`",
+  },
+  {
+    method: "GET",
+    path: "/sessions",
+    kind: "product",
+    body: null,
+    success:
+      "200, `{ sessions: [{ id, createdAt, lastActivityAt, client, current }] }` — the user's sessions; `client` is the user agent cut to 120 printable ASCII characters; no token or verifier (P-50)",
+    errors: ["401 `unauthenticated`", "401 `mfa_incomplete`"],
+    cookies: "none",
+    accountStates: "`active`",
+    phases: "`mfa_complete`",
+  },
+  {
+    method: "POST",
+    path: "/sessions/revoke",
+    kind: "product",
+    body: "revokeSession",
+    success:
+      "200, `{}`: that session ends for its next request; the current one may be revoked (= sign-out)",
+    errors: [
+      ...COMMON_ERRORS,
+      "401 `unauthenticated`",
+      "401 `mfa_incomplete`",
+      "404 `not_found` (the id is not one of this user's sessions — the same answer as an absent id)",
+    ],
+    cookies: "none",
+    accountStates: "`active`",
     phases: "`mfa_complete`",
   },
   {

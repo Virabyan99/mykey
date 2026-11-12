@@ -163,3 +163,53 @@ export async function sessionExpiries(
   if (row === undefined) return null;
   return { idleExpiresAt: row.idle, absoluteExpiresAt: row.absolute };
 }
+
+export interface SessionInfo {
+  id: string;
+  createdAt: string;
+  lastActivityAt: string;
+  /** The stored user agent, cut to 120 printable ASCII characters. */
+  client: string;
+  current: boolean;
+}
+
+const printable = (text: string | null): string =>
+  (text ?? "").replace(/[^\x20-\x7e]/g, "").slice(0, 120);
+
+/** The user's sessions, oldest first; no token or verifier leaves this function. */
+export async function listSessions(
+  db: Queryable,
+  userId: UserId,
+  currentSessionId: string,
+): Promise<SessionInfo[]> {
+  const result = await db.query<{
+    id: string;
+    created_at: Date;
+    last_user_activity_at: Date;
+    user_agent: string | null;
+  }>(
+    `SELECT id, created_at, last_user_activity_at, user_agent
+       FROM auth.session WHERE user_id = $1 ORDER BY created_at, id`,
+    [userId],
+  );
+  return result.rows.map((row) => ({
+    id: row.id,
+    createdAt: row.created_at.toISOString(),
+    lastActivityAt: row.last_user_activity_at.toISOString(),
+    client: printable(row.user_agent),
+    current: row.id === currentSessionId,
+  }));
+}
+
+/** Ends one session of this user; false when the id is not one of theirs (or none at all). */
+export async function revokeSession(
+  db: Queryable,
+  userId: UserId,
+  sessionId: string,
+): Promise<boolean> {
+  const result = await db.query("DELETE FROM auth.session WHERE id = $1 AND user_id = $2", [
+    sessionId,
+    userId,
+  ]);
+  return result.rowCount === 1;
+}

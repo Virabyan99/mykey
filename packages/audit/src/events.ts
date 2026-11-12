@@ -28,6 +28,8 @@ export const AUDIT_DETAILS = {
   }),
   "auth.step_up": z.strictObject({ reason: factorReason.optional() }),
   "auth.recovery_regenerate": z.strictObject({ reason: factorReason.optional() }),
+  /** Run 3.5: the product-owned password change. */
+  "auth.password_change": z.strictObject({ revokedSessions: z.int().nonnegative() }),
   /** Run 3.3: an attempt refused by throttling before any credential was checked. */
   "auth.throttled": z.strictObject({
     phase: z.enum(["password", "factor", "reset"]),
