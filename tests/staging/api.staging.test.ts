@@ -58,13 +58,20 @@ describe("staging service gate", () => {
   it("the gate file is root-owned and the API container sees it read-only", async () => {
     await writeGate("open");
     expect((await run(`stat -c '%U:%G %a' ${GATE_FILE}`)).trim()).toBe("root:root 644");
+    // As root inside the container, so only the mount can refuse the write.
     const attempt = await sshExec(
       host,
-      `docker exec ${API_CONTAINER} sh -c 'echo x >> /run/mykey/gate/gate.json'`,
+      `docker exec -u 0 ${API_CONTAINER} sh -c 'echo x >> /run/mykey/gate/gate.json'`,
       { sudo: true },
     );
     expect(attempt.code).not.toBe(0);
     expect(attempt.stderr).toMatch(/Read-only file system/);
+    const mounts = JSON.parse(
+      await run(`docker inspect --format '{{json .Mounts}}' ${API_CONTAINER}`),
+    ) as { Source: string; Destination: string; RW: boolean }[];
+    expect(mounts.filter((mount) => mount.Destination === "/run/mykey/gate")).toEqual([
+      expect.objectContaining({ Source: "/etc/mykey/gate", RW: false }),
+    ]);
   });
 
   it("closed gate: /health down and /v1/version quarantined through the public name", async () => {
