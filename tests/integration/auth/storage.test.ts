@@ -6,7 +6,6 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { run } from "../database/setup.ts";
 import {
   COOKIE_NAME,
-  cookieOf,
   authFixture,
   keyRing,
   tokenOf,
