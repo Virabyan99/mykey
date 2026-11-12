@@ -110,6 +110,19 @@ const resetCompleteBody = z.strictObject({
   code: z.string().min(1).max(64).optional(),
 });
 
+/** organizations.list (Run 3.7): the caller's active memberships; no namespace, no digest. */
+const organizationsBody = z.strictObject({
+  organizations: z.array(
+    z.strictObject({
+      id: z.uuid(),
+      role: z.enum(["owner", "admin", "member"]),
+      state: z.enum(["provisioning", "active", "failed", "needs_review"]),
+      /** Why the organization is `needs_review`; null in every other state. */
+      reviewReason: z.string().nullable(),
+    }),
+  ),
+});
+
 const versionBody = z.strictObject({
   apiMajor: z.literal(1),
   /** The commit the image was built from. */
@@ -263,7 +276,10 @@ export const ROUTES: readonly RouteDef[] = Object.freeze([
   define("version.get", "GET", "/v1/version", "public", false, "3.1", {
     responses: { 200: versionBody },
   }),
-  define("organizations.list", "GET", "/v1/organizations", "human", false, "3.7", { action: null }),
+  define("organizations.list", "GET", "/v1/organizations", "human", false, "3.7", {
+    action: null,
+    responses: { 200: organizationsBody },
+  }),
 
   define("projects.list", "GET", `${O}/projects`, "human", false, "3.9", { action: null }),
   define("projects.create", "POST", `${O}/projects`, "human", true, "3.9", {

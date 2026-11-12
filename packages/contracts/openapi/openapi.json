@@ -140,7 +140,55 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "x-mykey-pending": true
+                  "properties": {
+                    "organizations": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                          },
+                          "role": {
+                            "type": "string",
+                            "enum": [
+                              "owner",
+                              "admin",
+                              "member"
+                            ]
+                          },
+                          "state": {
+                            "type": "string",
+                            "enum": [
+                              "provisioning",
+                              "active",
+                              "failed",
+                              "needs_review"
+                            ]
+                          },
+                          "reviewReason": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "role",
+                          "state",
+                          "reviewReason"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "organizations"
+                  ],
+                  "additionalProperties": false
                 }
               }
             }
