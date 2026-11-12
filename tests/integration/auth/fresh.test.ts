@@ -154,45 +154,38 @@ describe("clean-up", () => {
 
   it("cleanUpFactors removes old steps, consumed codes and codes of retired enrollments, and nothing live", async () => {
     const superuser = api.superuser;
-    // The two DELETE rights arrive with migration 0006 (Run 3.6); until then this test grants them.
-    await superuser.query("GRANT DELETE ON auth.totp_step_used, auth.recovery_code TO maintenance");
-    try {
-      const enrollment = await superuser.query<{ id: string }>(
-        "SELECT id FROM auth.totp_enrollment WHERE user_id = $1 AND state = 'active'",
-        [owner.userId],
-      );
-      const active = enrollment.rows[0]!.id;
-      const oldStep = stepAt(new Date()) - 5000;
-      await superuser.query(
-        "INSERT INTO auth.totp_step_used (enrollment_id, step, used_at) VALUES ($1, $2, now() - interval '2 days'), ($1, $3, now())",
-        [active, oldStep, oldStep + 1],
-      );
-      const retired = randomUUID();
-      await superuser.query(
-        "INSERT INTO auth.totp_enrollment (id, user_id, seed_jwe, key_id, state) VALUES ($1, $2, '', 'k1', 'retired')",
-        [retired, owner.userId],
-      );
-      await superuser.query(
-        "INSERT INTO auth.recovery_code (id, enrollment_id, verifier, key_id) VALUES (gen_random_uuid(), $1, '\\x01', 'k1')",
-        [retired],
-      );
-      const before = await counts(active);
-      const removed = await cleanUpFactors(api.database.pool("maintenance"));
-      const after = await counts(active);
-      expect(removed.steps).toBeGreaterThanOrEqual(1);
-      expect(removed.codes).toBeGreaterThanOrEqual(1 + before.consumed);
-      expect(after.oldSteps).toBe(0);
-      expect(after.newSteps).toBe(before.newSteps);
-      expect(after.consumed).toBe(0);
-      expect(after.unconsumed).toBe(before.unconsumed);
-      expect(after.retiredCodes).toBe(0);
-      // A step removed after a day is long out of its window: it cannot be replayed.
-      expect(stepAt(new Date()) - oldStep).toBeGreaterThan(1);
-    } finally {
-      await superuser.query(
-        "REVOKE DELETE ON auth.totp_step_used, auth.recovery_code FROM maintenance",
-      );
-    }
+    // maintenance holds the two DELETE rights from migration 0006 (Run 3.6).
+    const enrollment = await superuser.query<{ id: string }>(
+      "SELECT id FROM auth.totp_enrollment WHERE user_id = $1 AND state = 'active'",
+      [owner.userId],
+    );
+    const active = enrollment.rows[0]!.id;
+    const oldStep = stepAt(new Date()) - 5000;
+    await superuser.query(
+      "INSERT INTO auth.totp_step_used (enrollment_id, step, used_at) VALUES ($1, $2, now() - interval '2 days'), ($1, $3, now())",
+      [active, oldStep, oldStep + 1],
+    );
+    const retired = randomUUID();
+    await superuser.query(
+      "INSERT INTO auth.totp_enrollment (id, user_id, seed_jwe, key_id, state) VALUES ($1, $2, '', 'k1', 'retired')",
+      [retired, owner.userId],
+    );
+    await superuser.query(
+      "INSERT INTO auth.recovery_code (id, enrollment_id, verifier, key_id) VALUES (gen_random_uuid(), $1, '\\x01', 'k1')",
+      [retired],
+    );
+    const before = await counts(active);
+    const removed = await cleanUpFactors(api.database.pool("maintenance"));
+    const after = await counts(active);
+    expect(removed.steps).toBeGreaterThanOrEqual(1);
+    expect(removed.codes).toBeGreaterThanOrEqual(1 + before.consumed);
+    expect(after.oldSteps).toBe(0);
+    expect(after.newSteps).toBe(before.newSteps);
+    expect(after.consumed).toBe(0);
+    expect(after.unconsumed).toBe(before.unconsumed);
+    expect(after.retiredCodes).toBe(0);
+    // A step removed after a day is long out of its window: it cannot be replayed.
+    expect(stepAt(new Date()) - oldStep).toBeGreaterThan(1);
   });
 });
 

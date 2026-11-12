@@ -43,6 +43,13 @@
       "when": 1794500750604,
       "tag": "0005_operator_only_accounts",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1794506832713,
+      "tag": "0006_reset",
+      "breakpoints": true
     }
   ]
 }

@@ -10,6 +10,7 @@ import type { Readable, Writable } from "node:stream";
 import type { DbTarget } from "@mykey/db";
 import { authCleanupCommand } from "./commands/auth-cleanup.ts";
 import { bootstrapOwnerCommand } from "./commands/bootstrap-owner.ts";
+import { resetAccountCommand } from "./commands/reset-account.ts";
 
 export interface OpsEnv {
   /** The database as `maintenance` (through the tunnel on a host). */
@@ -40,6 +41,7 @@ export interface OpsCommand {
 export const COMMANDS: Readonly<Record<string, OpsCommand>> = {
   "bootstrap-owner": bootstrapOwnerCommand,
   "auth-cleanup": authCleanupCommand,
+  "reset-account": resetAccountCommand,
 };
 
 export const OPS_COMMANDS = Object.freeze(Object.keys(COMMANDS));

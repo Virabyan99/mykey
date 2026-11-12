@@ -147,12 +147,22 @@ export const TABLES: Record<string, Expected> = {
     provisioner: [],
     apiColumns: ["seed_jwe", "key_id", "state", "activated_at"],
   },
-  // Written once: a used step is never changed or removed by the API.
-  "auth.totp_step_used": { api: [S, I], provisioner: [] },
+  // Written once: a used step is never changed or removed by the API; the
+  // operator's clean-up removes old ones (Run 3.5, migration 0006).
+  "auth.totp_step_used": { api: [S, I], provisioner: [], maintenance: [S, D] },
   "auth.recovery_code": {
     api: [S, I],
     provisioner: [],
     apiColumns: ["consumed_at", "consumed_by_session"],
+    maintenance: [S, D],
+  },
+  // Run 3.6 (D-30): the operator issues and supersedes, the API consumes.
+  "auth.reset_token": {
+    api: [S],
+    provisioner: [],
+    apiColumns: ["verifier", "consumed_at"],
+    maintenance: [S, I],
+    maintenanceColumns: ["verifier", "superseded_at"],
   },
   ...JOB_TABLES,
 };

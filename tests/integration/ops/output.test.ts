@@ -2,7 +2,7 @@
 // bootstrap reads the password from stdin; neither the password nor its hash
 // reaches stdout, stderr or the audit row.
 import { randomBytes } from "node:crypto";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { PassThrough } from "node:stream";
@@ -90,6 +90,29 @@ describe("ops bootstrap-owner output", () => {
     );
     expect(other.code).toBe(2);
     expect(other.stdout).toBe("refused: another_owner_exists\n");
+  });
+
+  it("reset-account prints a path and an expiry, never the token or the link; the file is 0600", async () => {
+    const [owner] = (
+      await run<{ email: string }>(
+        db.pool("superuser"),
+        `SELECT u.email FROM auth."user" u JOIN app.membership m ON m.user_id = u.id WHERE m.role = 'owner'`,
+      )
+    ).map((row) => row.email);
+    const result = await ops(["reset-account", "--email", owner!, "--kind", "password"], "");
+    expect(result.code).toBe(0);
+    const match = /link in (\S+); expires (\S+)\n$/.exec(result.stdout);
+    expect(match).not.toBeNull();
+    const path = match![1]!;
+    const link = readFileSync(path, "utf8").trim();
+    expect(link).toMatch(/^https:\/\/mykey\.test\/reset#t=[A-Za-z0-9_-]{43}&k=password$/);
+    const token = link.slice(link.indexOf("#t=") + 3, link.indexOf("&k="));
+    for (const text of [result.stdout, result.stderr]) {
+      expect(text.includes(token)).toBe(false);
+      expect(text.includes(link)).toBe(false);
+    }
+    if (process.platform !== "win32") expect(statSync(path).mode & 0o777).toBe(0o600);
+    expect(Number.isNaN(Date.parse(match![2]!))).toBe(false);
   });
 
   it("refuses an empty stdin and a missing --email", async () => {

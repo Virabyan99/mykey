@@ -8,3 +8,13 @@ export {
 } from "./bootstrap.ts";
 export { checkPassword, type PasswordCheck } from "../password-rule.ts";
 export { cleanUpFactors } from "./cleanup.ts";
+export {
+  RESET_POINTS,
+  initiateReset,
+  resetLink,
+  resetVerifier,
+  type InitiateDeps,
+  type InitiateResult,
+  type ResetKind,
+  type ResetPoint,
+} from "./reset.ts";

@@ -15,6 +15,8 @@ const factorReason = z.enum(["invalid", "replayed", "expired", "wrong_state", "n
 export const AUDIT_DETAILS = {
   /** Run 3.2: the owner bootstrap. Ids are in actor and target. */
   "operator.bootstrap": z.strictObject({}),
+  /** Run 3.6: an operator reset was issued. */
+  "operator.reset_initiate": z.strictObject({ kind: z.enum(["password", "mfa"]) }),
   /** Run 3.2: a password sign-in attempt. */
   "auth.sign_in": z.strictObject({
     reason: z.enum(["credentials", "account", "epoch"]).optional(),
