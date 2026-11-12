@@ -55,11 +55,15 @@ export interface ApiContext {
   query: unknown;
   params: Record<string, string>;
   principal: Principal | null;
+  /** The harness's clock for TOTP codes (AppDeps.test.clock); undefined in production. */
+  now?: Date;
 }
 
 export interface HandlerResult {
   status: number;
   body: unknown;
+  /** Extra response headers (a session cookie, Run 3.6). */
+  headers?: Record<string, string>;
 }
 
 export type Handler = (ctx: ApiContext, deps: AppDeps) => Promise<HandlerResult>;
@@ -68,12 +72,15 @@ export type Handler = (ctx: ApiContext, deps: AppDeps) => Promise<HandlerResult>
 export class ApiError extends Error {
   readonly code: ErrorCode;
   readonly reason: string | undefined;
+  /** Headers of the error answer (Retry-After of a 429). */
+  readonly headers: Record<string, string> | undefined;
 
-  constructor(code: ErrorCode, reason?: string) {
+  constructor(code: ErrorCode, reason?: string, headers?: Record<string, string>) {
     super(code);
     this.name = "ApiError";
     this.code = code;
     this.reason = reason;
+    this.headers = headers;
   }
 }
 

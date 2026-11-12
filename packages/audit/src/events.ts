@@ -17,6 +17,11 @@ export const AUDIT_DETAILS = {
   "operator.bootstrap": z.strictObject({}),
   /** Run 3.6: an operator reset was issued. */
   "operator.reset_initiate": z.strictObject({ kind: z.enum(["password", "mfa"]) }),
+  /** Run 3.6: a reset completed; or refused, with the reason. */
+  "auth.reset_complete": z.strictObject({ kind: z.enum(["password", "mfa"]) }),
+  "auth.reset_failed": z.strictObject({
+    reason: z.enum(["token", "factor", "state", "password"]),
+  }),
   /** Run 3.2: a password sign-in attempt. */
   "auth.sign_in": z.strictObject({
     reason: z.enum(["credentials", "account", "epoch"]).optional(),

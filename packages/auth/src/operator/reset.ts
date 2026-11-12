@@ -8,14 +8,17 @@
 //
 // After the commit the throttle locks of the account are cleared, so an owner
 // locked out by failures can complete the reset (Review focus 2).
-import { createHmac, randomBytes, randomUUID } from "node:crypto";
+import { randomBytes, randomUUID } from "node:crypto";
 import { appendAudit } from "@mykey/audit";
 import { LIMITS, type UserId } from "@mykey/contracts";
 import { withTransaction } from "@mykey/db";
 import type pg from "pg";
 import { normalizeEmail } from "../email.ts";
-import { ringKey, type AuthKeys, type KeyRing } from "../keys.ts";
+import type { AuthKeys } from "../keys.ts";
+import { resetVerifier } from "../reset/verifier.ts";
 import type { Throttle } from "../throttle.ts";
+
+export { resetVerifier };
 
 export type ResetKind = "password" | "mfa";
 
@@ -33,11 +36,6 @@ export interface InitiateDeps {
   throttle: Throttle;
   /** Tests only: called after each statement. */
   crashAt?: (point: ResetPoint) => void;
-}
-
-/** HMAC-SHA-256(reset key, token): what the table stores instead of the token. */
-export function resetVerifier(ring: KeyRing, token: string, keyId: string = ring.current): Buffer {
-  return createHmac("sha256", ringKey(ring, keyId)).update(token, "utf8").digest();
 }
 
 /** The link the owner opens: the token travels in the fragment, which never reaches a server. */

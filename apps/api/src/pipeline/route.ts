@@ -13,6 +13,7 @@ import type { Context, Hono } from "hono";
 import { now } from "../log.ts";
 import { authenticateHuman } from "./authn.ts";
 import { headerBytes, readBody } from "./body.ts";
+import { requestSource } from "./source.ts";
 import {
   ApiError,
   type ApiEnv,
@@ -61,7 +62,7 @@ export function failureResponse(
   }
   // A route without the code in its list never sends it.
   if (route.errors.includes(code)) {
-    return errorResponse(code, requestId);
+    return errorResponse(code, requestId, error instanceof ApiError ? error.headers : undefined);
   }
   deps.log({ event: "unlisted_error", time: now(), requestId, routeId: route.id, code });
   return errorResponse("dependency_unavailable", requestId);
@@ -95,7 +96,7 @@ function outputResponse(
     });
     return errorResponse("dependency_unavailable", requestId);
   }
-  return jsonResponse(result.status, parsed.data);
+  return jsonResponse(result.status, parsed.data, result.headers);
 }
 
 async function run(
@@ -118,6 +119,7 @@ async function run(
       route.auth === "human" || route.auth === "human_fresh_totp"
         ? await authenticateHuman(deps, c.req.raw.headers)
         : null;
+    const clock = deps.test?.clock?.(c.req.raw.headers);
     const query = validateQuery(route, new URL(c.req.url).searchParams);
     const body = validateBody(route, raw);
     // Freshness (FR-1.77): last before the handler (Run 3.7 puts authorization and state before it).
@@ -132,12 +134,17 @@ async function run(
     const result = await handler(
       {
         requestId,
-        source: c.env.incoming.socket.remoteAddress ?? "",
+        source: requestSource(
+          c.env.incoming.socket.remoteAddress,
+          c.req.header("x-forwarded-for"),
+          deps.config.trustedProxy,
+        ),
         route,
         body,
         query,
         params: c.req.param(),
         principal,
+        ...(clock === undefined ? {} : { now: clock }),
       },
       deps,
     );

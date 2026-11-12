@@ -7,6 +7,7 @@ import { codeAt, createThrottle, stepAt, throttleDigest, ringKey } from "@mykey/
 import { bootstrapOwner } from "@mykey/auth/operator";
 import { bumpCounter, createPool, sumCounters } from "@mykey/db";
 import { pgDump } from "../../harness/stack.ts";
+import { awaitFreshWindow } from "../../harness/windows.ts";
 import {
   enrollOwner,
   seedOwner,
@@ -148,6 +149,8 @@ describe("limits on the routes (Task B)", () => {
   });
 
   it("per source: attempts 1–5 reach the credential check, the 6th is 429 even with the right password", async () => {
+    // Inside one window: the count of a new window starts at zero.
+    await awaitFreshWindow(api.superuser);
     const address = source();
     for (let i = 0; i < 5; i += 1) {
       const response = await signIn(unused(), "wrong-password-0", address);

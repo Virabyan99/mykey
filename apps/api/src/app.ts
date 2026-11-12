@@ -14,6 +14,7 @@ import { errorResponse } from "./pipeline/respond.ts";
 import { requestSource } from "./pipeline/source.ts";
 import { mountRoute, mountRouteDef } from "./pipeline/route.ts";
 import { healthHandler } from "./routes/health.ts";
+import { resetCompleteHandler } from "./routes/reset.ts";
 import { sessionActivityHandler } from "./routes/session.ts";
 import { versionHandler } from "./routes/version.ts";
 
@@ -62,6 +63,7 @@ function handlers(): Partial<Record<string, Handler>> {
     "health.get": healthHandler,
     "version.get": versionHandler,
     "session.activity": sessionActivityHandler,
+    "auth.reset.complete": resetCompleteHandler,
   };
 }
 

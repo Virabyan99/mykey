@@ -12,6 +12,7 @@ import { ensureQueues } from "@mykey/operations";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { TEST_ORIGIN, requestTo } from "../../harness/api.ts";
 import { startApiProcess, type ApiProcess } from "../../harness/api-worker.ts";
+import { awaitFreshWindow } from "../../harness/windows.ts";
 import { prepareDatabase, type TestDatabase } from "../database/setup.ts";
 
 let db: TestDatabase;
@@ -105,6 +106,8 @@ const tally = (statuses: number[]) => ({
 
 describe("throttling across two API processes", () => {
   it("ten attempts from one source, alternating between the processes: exactly five reach the check", async () => {
+    // Inside one window: the count of a new window starts at zero.
+    await awaitFreshWindow(db.pool("superuser"));
     const address = source();
     const statuses: number[] = [];
     for (let i = 0; i < 10; i += 1) {
@@ -126,6 +129,7 @@ describe("throttling across two API processes", () => {
   });
 
   it("ten parallel attempts, five to each process, released together: at most five 401", async () => {
+    await awaitFreshWindow(db.pool("superuser"));
     const address = source();
     const statuses = await Promise.all(
       Array.from({ length: 10 }, (_, i) =>

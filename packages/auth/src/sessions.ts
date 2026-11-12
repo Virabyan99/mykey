@@ -26,7 +26,15 @@ export type SessionPhase = "password_verified" | "enrollment" | "mfa_complete";
 export type SessionVerdict =
   | {
       ok: true;
-      session: { id: string; userId: UserId; phase: SessionPhase; fresh: boolean; token: string };
+      session: {
+        id: string;
+        userId: UserId;
+        phase: SessionPhase;
+        fresh: boolean;
+        token: string;
+        /** The challenge session of an `mfa` reset (Run 3.6): it may only enroll, activate and sign out. */
+        resetChallenge: boolean;
+      };
     }
   | { ok: false; reason: "absent" | "absolute" | "idle" | "challenge" | "account" | "epoch" };
 
@@ -70,6 +78,8 @@ export async function tokenOfRequest(auth: Auth, headers: Headers): Promise<stri
 }
 
 interface Judged {
+  reset_challenge: boolean;
+  reset_expired: boolean;
   id: string;
   user_id: UserId;
   phase: SessionPhase;
@@ -94,10 +104,13 @@ export async function resolveSession(deps: SessionDeps, headers: Headers): Promi
             (s.phase <> 'mfa_complete'
               AND s.authenticated_at + make_interval(secs => $4) <= now()) AS challenge_expired,
             coalesce(s.totp_verified_at > now() - make_interval(secs => $5)
-                     AND e.state = 'active' AND e.user_id = s.user_id, false) AS fresh
+                     AND e.state = 'active' AND e.user_id = s.user_id, false) AS fresh,
+            s.reset_token_id IS NOT NULL AS reset_challenge,
+            coalesce(r.expires_at <= now(), false) AS reset_expired
        FROM auth.session s
        JOIN auth.account_state a ON a.user_id = s.user_id
        LEFT JOIN auth.totp_enrollment e ON e.id = s.enrollment_id
+       LEFT JOIN auth.reset_token r ON r.id = s.reset_token_id
       WHERE s.token = ANY ($1::text[])`,
     [
       sessionVerifierCandidates(deps.keys.sessionLookup, token),
@@ -113,20 +126,29 @@ export async function resolveSession(deps: SessionDeps, headers: Headers): Promi
     ? "absolute"
     : row.idle_expired
       ? "idle"
-      : row.challenge_expired
+      : row.challenge_expired || row.reset_expired
         ? "challenge"
         : null;
   if (expired !== null) {
     await deps.pool.query("DELETE FROM auth.session WHERE id = $1", [row.id]);
     return { ok: false, reason: expired };
   }
-  if (!STATES_OF_PHASE[row.phase].includes(row.account_state)) {
-    return { ok: false, reason: "account" };
-  }
+  // A reset challenge lives while its account waits for the new factor (P-51).
+  const allowed = row.reset_challenge
+    ? row.phase === "enrollment" && row.account_state === "recovery_pending"
+    : STATES_OF_PHASE[row.phase].includes(row.account_state);
+  if (!allowed) return { ok: false, reason: "account" };
   if (!row.epoch_ok) return { ok: false, reason: "epoch" };
   return {
     ok: true,
-    session: { id: row.id, userId: row.user_id, phase: row.phase, fresh: row.fresh, token },
+    session: {
+      id: row.id,
+      userId: row.user_id,
+      phase: row.phase,
+      fresh: row.fresh,
+      token,
+      resetChallenge: row.reset_challenge,
+    },
   };
 }
 
@@ -226,6 +248,10 @@ export async function cleanUpSessions(db: Queryable): Promise<number> {
          OR (phase = 'mfa_complete' AND last_user_activity_at + make_interval(secs => $2) <= now())
          OR (phase <> 'mfa_complete' AND authenticated_at + make_interval(secs => $3) <= now())`,
     [limits.absoluteSeconds, limits.idleSeconds, limits.incompleteChallengeSeconds],
+  );
+  // An expired reset link keeps its row, without a verifier (Doc 04 §2.1).
+  await db.query(
+    "UPDATE auth.reset_token SET verifier = NULL WHERE expires_at <= now() AND verifier IS NOT NULL",
   );
   return result.rowCount ?? 0;
 }

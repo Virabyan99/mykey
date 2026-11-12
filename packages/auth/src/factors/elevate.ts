@@ -57,6 +57,8 @@ interface SessionRow {
   /** Database time: older than LIMITS.session.incompleteChallengeSeconds since the password. */
   challenge_expired: boolean;
   authenticated_at: Date;
+  /** Run 3.6: set on the challenge session of an `mfa` reset. */
+  reset_token_id: string | null;
   ip_address: string | null;
   user_agent: string | null;
   enrollment_id: string | null;
@@ -133,7 +135,7 @@ async function withLockedSession<T>(
       if (state === undefined) throw new Refused("wrong_state");
       const found = await client.query<SessionRow>(
         `SELECT id, user_id, phase, auth_epoch, expires_at, authenticated_at, ip_address,
-                user_agent, enrollment_id,
+                user_agent, enrollment_id, reset_token_id,
                 expires_at <= now() AS expired,
                 authenticated_at <= now() - make_interval(secs => $2) AS challenge_expired
            FROM auth.session WHERE token = ANY ($1::text[]) FOR UPDATE`,
@@ -160,6 +162,14 @@ async function withLockedSession<T>(
   } finally {
     client.release();
   }
+}
+
+/** The account may enroll: waiting for its first factor, or an mfa reset's challenge (Run 3.6). */
+function enrollingState(locked: Locked): boolean {
+  return (
+    locked.state === "enrollment_pending" ||
+    (locked.state === "recovery_pending" && locked.session.reset_token_id !== null)
+  );
 }
 
 /**
@@ -364,7 +374,7 @@ export async function enrollTotp(
     input.sessionToken,
     async (locked) => {
       if (
-        locked.state !== "enrollment_pending" ||
+        !enrollingState(locked) ||
         !["password_verified", "enrollment"].includes(locked.session.phase)
       ) {
         throw new Refused("wrong_state");
@@ -407,7 +417,7 @@ export async function enrollTotp(
 }
 
 export type ActivateResult =
-  { ok: true; setCookie: string; recoveryCodes: string[] } | { ok: false; reason: FailureReason };
+  { ok: true; setCookie?: string; recoveryCodes: string[] } | { ok: false; reason: FailureReason };
 
 /** Proves the authenticator with one code, activates it, elevates the session and returns the recovery codes once. */
 export async function activateTotp(
@@ -421,7 +431,7 @@ export async function activateTotp(
     async (locked) => {
       const enrollmentId = locked.session.enrollment_id;
       if (
-        locked.state !== "enrollment_pending" ||
+        !enrollingState(locked) ||
         locked.session.phase !== "enrollment" ||
         enrollmentId === null
       ) {
@@ -446,17 +456,30 @@ export async function activateTotp(
         "UPDATE auth.totp_enrollment SET state = 'active', activated_at = $2 WHERE id = $1",
         [enrollmentId, now],
       );
+      const recoveryCodes = await storeRecoveryCodes(deps, locked, enrollmentId);
+      if (locked.session.reset_token_id !== null) {
+        // The end of an mfa reset (P-51): the account is active again, every
+        // session ends (the challenge too), and the user signs in afresh.
+        await locked.client.query(
+          `UPDATE auth.account_state
+              SET state = 'active', auth_epoch = auth_epoch + 1, updated_at = now()
+            WHERE user_id = $1`,
+          [userId],
+        );
+        await locked.client.query("DELETE FROM auth.session WHERE user_id = $1", [userId]);
+        return { token: null, sessionId: null, expiresAt: null, recoveryCodes };
+      }
       await locked.client.query(
         "UPDATE auth.account_state SET state = 'active', updated_at = $2 WHERE user_id = $1",
         [userId, now],
       );
-      const recoveryCodes = await storeRecoveryCodes(deps, locked, enrollmentId);
       const rotated = await rotateToComplete(deps, locked, { enrollmentId, totp: true });
       return { ...rotated, recoveryCodes };
     },
     { action: "auth.totp_activate", audit: input.audit },
   );
   if ("ok" in result) return result;
+  if (result.token === null) return { ok: true, recoveryCodes: result.recoveryCodes };
   return {
     ok: true,
     setCookie: await sessionCookie(deps.auth, result.token, result.expiresAt),

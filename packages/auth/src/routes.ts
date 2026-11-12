@@ -243,13 +243,20 @@ const factorFailureCode = (reason: FailureReason): ErrorCode =>
 
 const codeBody = z.strictObject({ code: z.string().min(1).max(64) });
 
-/** The raw token and the user of the request's session, when `resolveSession` admits it. */
+/**
+ * The raw token and the user of the request's session, when `resolveSession`
+ * admits it. A reset challenge is admitted only where `challenge` says so
+ * (enroll and activate, Run 3.6).
+ */
 async function sessionOf(
   deps: SessionDeps,
   headers: Headers,
+  challenge: "allowed" | "refused" = "refused",
 ): Promise<{ token: string; userId: string } | null> {
   const verdict = await resolveSession(deps, headers);
-  return verdict.ok ? { token: verdict.session.token, userId: verdict.session.userId } : null;
+  if (!verdict.ok) return null;
+  if (verdict.session.resetChallenge && challenge === "refused") return null;
+  return { token: verdict.session.token, userId: verdict.session.userId };
 }
 
 /** What a throttled step answers before its credential is looked at, or null to go on. */
@@ -384,6 +391,8 @@ export function mountAuthRoutes(app: AnyHono, auth: Auth, env: AuthRouteEnv): vo
     // The same decision as every product route: a session it refuses does not exist here either.
     const verdict = await resolveSession(sessions, c.req.raw.headers);
     if (!verdict.ok) return json(null);
+    // A reset challenge is not a session to show (Run 3.6).
+    if (verdict.session.resetChallenge) return refuse(c, "unauthenticated");
     return relayNative(await nativeSessionResponse(auth, c.req.raw.headers), env, env.requestId(c));
   });
 
@@ -480,7 +489,11 @@ function mountFactorRoutes(
   ): Promise<{ body: T; token: string; userId: string } | Response> => {
     const body = await strictBody(c, schema, env);
     if (body === undefined) return refuse(c, "malformed_request");
-    const session = await sessionOf(deps, c.req.raw.headers);
+    // Only enrollment and activation serve the challenge session of an mfa reset.
+    const path = c.req.path;
+    const challenge =
+      path.endsWith("/totp/enroll") || path.endsWith("/totp/activate") ? "allowed" : "refused";
+    const session = await sessionOf(deps, c.req.raw.headers, challenge);
     if (session === null) return refuse(c, "unauthenticated");
     return { body, ...session };
   };
@@ -549,9 +562,11 @@ function mountFactorRoutes(
         code: ready.body.code,
         ...context(c),
       });
-      return result.ok
-        ? { ok: true, body: { recoveryCodes: result.recoveryCodes }, setCookie: result.setCookie }
-        : result;
+      if (!result.ok) return result;
+      // After an mfa reset's activation there is no session to set: the user signs in afresh.
+      return result.setCookie === undefined
+        ? { ok: true, body: { recoveryCodes: result.recoveryCodes } }
+        : { ok: true, body: { recoveryCodes: result.recoveryCodes }, setCookie: result.setCookie };
     }),
   );
 

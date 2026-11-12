@@ -52,6 +52,13 @@ export { normalizeEmail } from "./email.ts";
 export { hasFreshTotp } from "./fresh.ts";
 export { changePassword, type ChangeDeps, type ChangeResult } from "./password.ts";
 export {
+  completeReset,
+  type CompleteDeps,
+  type CompleteResult,
+  type ResetFailure,
+} from "./reset/complete.ts";
+export { resetVerifier } from "./reset/verifier.ts";
+export {
   SESSION_COOKIE_NAME,
   cleanUpSessions,
   listSessions,
