@@ -1,15 +1,51 @@
 // The HTTP surface of the API. Every route is mounted from the contract
 // through `mountRoute` (P-40); nothing else registers a route.
 import { randomUUID } from "node:crypto";
-import { ROUTES } from "@mykey/contracts";
-import { Hono } from "hono";
+import { appendAudit } from "@mykey/audit";
+import { mountAuthRoutes } from "@mykey/auth";
+import { LIMITS, ROUTES } from "@mykey/contracts";
+import { Hono, type Context } from "hono";
+import { routePath } from "hono/route";
 import { now } from "./log.ts";
+import { headerBytes, readAuthBody } from "./pipeline/body.ts";
 import type { ApiEnv, AppDeps, Handler } from "./pipeline/context.ts";
 import { readGate } from "./pipeline/gate.ts";
 import { errorResponse } from "./pipeline/respond.ts";
 import { mountRoute, mountRouteDef } from "./pipeline/route.ts";
 import { healthHandler } from "./routes/health.ts";
 import { versionHandler } from "./routes/version.ts";
+
+/** The auth module on the pipeline: its envelope, request id and body rules are the API's. */
+function mountAuth(app: Hono<ApiEnv>, deps: AppDeps, module: NonNullable<AppDeps["auth"]>): void {
+  mountAuthRoutes(app, module.auth, {
+    pool: deps.pool,
+    keys: module.keys,
+    baseUrl: deps.config.baseUrl,
+    respondError: errorResponse,
+    requestId: (c) => (c as Context<ApiEnv>).get("requestId"),
+    source: (c) => (c as Context<ApiEnv>).env.incoming.socket.remoteAddress ?? "",
+    async readBody(c) {
+      const context = c as Context<ApiEnv>;
+      context.set("routePattern", routePath(context));
+      try {
+        if (headerBytes(context.env.incoming.rawHeaders) > LIMITS.body.headersMaxBytes) {
+          return { ok: false };
+        }
+        const value = await readAuthBody(context.req.raw, (bytes) => {
+          context.set("bodyBytesRead", context.get("bodyBytesRead") + bytes);
+        });
+        return { ok: true, value };
+      } catch {
+        return { ok: false };
+      }
+    },
+    audit: async (event) => {
+      await appendAudit(deps.pool, event);
+    },
+    ...(module.throttle === undefined ? {} : { throttle: module.throttle }),
+    ...(module.allowUnthrottled === undefined ? {} : { allowUnthrottled: module.allowUnthrottled }),
+  });
+}
 
 /** The handlers that exist; every other contract route ends in the terminal 404. */
 function handlers(): Partial<Record<string, Handler>> {
@@ -59,6 +95,8 @@ export function createApp(deps: AppDeps): Hono<ApiEnv> {
   const known = handlers();
   for (const route of ROUTES) mountRoute(app, deps, route.id, known[route.id] ?? null);
   for (const entry of deps.test?.routes ?? []) mountRouteDef(app, deps, entry.def, entry.handler);
+  // After the contract routes: the auth module closes the rest of /v1/auth with a 404.
+  if (deps.auth !== undefined) mountAuth(app, deps, deps.auth);
 
   app.notFound((c) => errorResponse("not_found", c.get("requestId")));
   app.onError((error, c) => {

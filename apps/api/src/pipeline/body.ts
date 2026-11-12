@@ -189,3 +189,36 @@ export async function readBody(
   if (!parsed.ok) throw malformed();
   return parsed.value;
 }
+
+/**
+ * The body of an auth route (Run 3.2): the same rules with the auth limit. A
+ * request without any body counts as `{}` (sign-out, enroll); a GET has none.
+ */
+export async function readAuthBody(
+  request: Request,
+  counted: (bytes: number) => void,
+): Promise<unknown> {
+  const length = request.headers.get("content-length");
+  const chunked = request.headers.get("transfer-encoding") !== null;
+  const empty = !chunked && (length === null || length === "0");
+  if (request.method === "GET") {
+    if (!empty) throw malformed();
+    return undefined;
+  }
+  if (empty && request.headers.get("content-type") === null) return {};
+  return readBody(request, AUTH_BODY_ROUTE, counted);
+}
+
+/** The shape `readBody` needs for an auth route: a JSON body under /v1/auth. */
+const AUTH_BODY_ROUTE = {
+  id: "auth.body",
+  method: "POST",
+  path: "/v1/auth/",
+  auth: "public",
+  idempotent: false,
+  ownerRun: "3.2",
+  pending: true,
+  request: { body: "pending" },
+  responses: {},
+  errors: [],
+} as const satisfies RouteDef;

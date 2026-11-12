@@ -51,8 +51,7 @@ describe("elevation with TOTP", () => {
     const { cookie, token } = await passwordSession();
     const headers = new Headers({ cookie });
     const refused = await requireMfaComplete(fixture.auth, headers, fixture.pool);
-    expect(refused?.status).toBe(401);
-    expect(errorEnvelopeSchema.parse(await refused?.json()).error.code).toBe("mfa_incomplete");
+    expect(refused).toBe("mfa_incomplete");
 
     const before = await run<{ authenticated_at: Date }>(
       fixture.pool,
@@ -115,7 +114,7 @@ describe("elevation with TOTP", () => {
         [owner.id],
       );
       const disabled = await requireMfaComplete(fixture.auth, headers, fixture.pool);
-      expect(disabled?.status).toBe(401);
+      expect(disabled).toBe("unauthenticated");
       await run(fixture.pool, "UPDATE auth.account_state SET state = 'active' WHERE user_id = $1", [
         owner.id,
       ]);
@@ -126,7 +125,7 @@ describe("elevation with TOTP", () => {
         [owner.id],
       );
       const older = await requireMfaComplete(fixture.auth, headers, fixture.pool);
-      expect(older?.status).toBe(401);
+      expect(older).toBe("unauthenticated");
     } finally {
       await run(
         fixture.pool,

@@ -9,9 +9,11 @@
   "dependencies": {
     "@hono/node-server": "catalog:",
     "@mykey/audit": "workspace:*",
+    "@mykey/auth": "workspace:*",
     "@mykey/contracts": "workspace:*",
     "@mykey/db": "workspace:*",
     "@mykey/operations": "workspace:*",
+    "drizzle-orm": "catalog:",
     "hono": "catalog:",
     "pg": "catalog:",
     "zod": "catalog:"

@@ -14,6 +14,7 @@ import {
   type AuthKeys,
   type KeyRing,
 } from "@mykey/auth";
+import { errorResponse, readAuthBody } from "@mykey/api";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { Hono } from "hono";
 import * as OTPAuth from "otpauth";
@@ -104,7 +105,22 @@ export async function authFixture(): Promise<AuthFixture> {
       ...(observeAdapter === undefined ? {} : { observeAdapter }),
     });
     app = new Hono();
-    mountAuthRoutes(app, auth, { pool, keys });
+    mountAuthRoutes(app, auth, {
+      pool,
+      keys,
+      baseUrl: BASE_URL,
+      respondError: errorResponse,
+      requestId: () => randomUUID(),
+      source: () => "127.0.0.1",
+      async readBody(c) {
+        try {
+          return { ok: true, value: await readAuthBody(c.req.raw, () => undefined) };
+        } catch {
+          return { ok: false };
+        }
+      },
+      allowUnthrottled: "test",
+    });
   };
   build();
 

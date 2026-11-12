@@ -2,10 +2,14 @@
 import {
   NATIVE_ALLOWED,
   NATIVE_DENIED,
+  ephemeralKeys,
+  mountAuthRoutes,
   nativeRoutes,
   offlineAuth,
+  sessionCookie,
   type NativeRoute,
 } from "@mykey/auth";
+import { Hono } from "hono";
 import { describe, expect, it } from "vitest";
 
 // The database is never contacted: listing routes reads no table.
@@ -46,5 +50,39 @@ describe("native routes", () => {
   it("keeps the origin and CSRF checks on, also in a test run", () => {
     expect(auth.options.advanced.disableOriginCheck).toBe(false);
     expect(auth.options.advanced.disableCSRFCheck).toBe(false);
+  });
+});
+
+describe("auth routes on the pipeline (Run 3.2)", () => {
+  const env = {
+    pool: {} as never,
+    keys: ephemeralKeys(),
+    baseUrl: "https://mykey.example",
+    respondError: () => new Response(null, { status: 500 }),
+    requestId: () => "6f1c4c4e-2a52-4c4b-9a39-2c1f3a1d4e5f",
+    source: () => "127.0.0.1",
+    readBody: () => Promise.resolve({ ok: false as const }),
+  };
+
+  it("mountAuthRoutes without a throttle and without the test flag throws", () => {
+    expect(() => {
+      mountAuthRoutes(new Hono(), auth, env);
+    }).toThrow(/throttl/);
+    // Control: with the test flag it mounts.
+    expect(() => {
+      mountAuthRoutes(new Hono(), auth, { ...env, allowUnthrottled: "test" });
+    }).not.toThrow();
+  });
+
+  it("the session cookie is Strict, Secure, HttpOnly, Path=/ and host-only, in one helper", async () => {
+    const cookie = await sessionCookie(auth, "token-value", new Date(Date.now() + 60_000));
+    const parts = cookie.split("; ");
+    expect(parts[0]?.startsWith("__Secure-better-auth.session_token=")).toBe(true);
+    expect(parts).toEqual(
+      expect.arrayContaining(["HttpOnly", "Secure", "SameSite=Strict", "Path=/"]),
+    );
+    expect(parts.some((part) => part.toLowerCase().startsWith("domain="))).toBe(false);
+    const signIn = await sessionCookie(auth, "token-value", new Date(), 43_200);
+    expect(signIn.split("; ")).toContain("Max-Age=43200");
   });
 });

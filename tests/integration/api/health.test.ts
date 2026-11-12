@@ -13,7 +13,15 @@ import { join } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 import { rootCertificates } from "node:tls";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { startServer, type ApiConfig, type ApiServer, type LogEntry } from "@mykey/api";
+import {
+  createApp,
+  createHealthCheck,
+  listen,
+  type ApiConfig,
+  type ApiServer,
+  type LogEntry,
+} from "@mykey/api";
+import { createPool, type DbTarget as Target } from "@mykey/db";
 import { ROUTES, errorEnvelopeSchema } from "@mykey/contracts";
 import { ROLE_NAMES, applyRoles, type DbTarget, type RoleName } from "@mykey/db";
 import type { z } from "zod";
@@ -25,6 +33,39 @@ import {
   stopService,
   type Stack,
 } from "../../harness/stack.ts";
+
+/**
+ * The API as startServer builds it, without the auth module: from Run 3.2 the
+ * production entry refuses to start without throttling (Run 3.3), and this
+ * suite is about /health only. Ledgered: back to startServer in Run 3.3.
+ */
+async function startServer(config: {
+  hostname: string;
+  port: number;
+  tls: { certPath: string; keyPath: string };
+  database: Target;
+  openbao?: { url: string; caCertPath: string };
+  api: ApiConfig;
+  log: (entry: LogEntry) => void;
+}): Promise<ApiServer> {
+  const health = createHealthCheck(config.database, config.openbao);
+  const pool = createPool(config.database, { max: 2 });
+  const app = createApp({
+    pool,
+    config: config.api,
+    health: () => health.check(),
+    log: config.log,
+  });
+  const server = await listen(app, config);
+  return {
+    port: server.port,
+    async close() {
+      await server.close();
+      await health.close();
+      await pool.end();
+    },
+  };
+}
 
 interface Answer {
   status: number;

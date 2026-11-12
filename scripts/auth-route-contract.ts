@@ -41,10 +41,15 @@ const ROUTES: RouteContract[] = [
     path: "/sign-in/email",
     kind: "native",
     body: "signIn",
-    success: "200, `{ redirect, user }` as Better Auth returns it, without `token`",
-    errors: [...COMMON_ERRORS, "401 `unauthenticated` (unknown e-mail or wrong password)"],
-    cookies: "sets the session cookie of a new `password_verified` session",
-    accountStates: "not checked yet (Run 3.4 refuses `disabled` and `recovery_pending`)",
+    success: '200, exactly `{"phase":"password_verified"}` (Run 3.2)',
+    errors: [
+      ...COMMON_ERRORS,
+      "401 `unauthenticated`, byte-identical but for the request id, for an unknown e-mail, a wrong password, an account that is `disabled` or `recovery_pending`, and an epoch that moved during the sign-in; no cookie, no session row",
+      "503 `audit_unavailable` (the audit row could not be written; no session remains)",
+    ],
+    cookies:
+      "sets the session cookie of a new `password_verified` session bound to the account's current auth epoch; `Max-Age=43200`",
+    accountStates: "`enrollment_pending` or `active`",
     phases: "none needed; creates `password_verified`",
   },
   {

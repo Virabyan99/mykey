@@ -37,5 +37,7 @@ describe("the production entry", () => {
     // AppDeps.test (test routes, stubs, clock) is set by the harness only.
     expect(source).not.toMatch(/\btest\s*:/);
     expect(source).not.toMatch(/deps\.test|\.test\s*=/);
+    // Nor does it ever start the auth routes without throttling (Run 3.2).
+    expect(source).not.toMatch(/allowUnthrottled/);
   });
 });

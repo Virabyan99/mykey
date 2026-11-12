@@ -62,18 +62,9 @@ export function authOptions(deps: AuthDeps) {
       additionalFields: {
         phase: { type: "string", input: false, required: false, defaultValue: "password_verified" },
         authEpoch: { type: "number", input: false, required: false, defaultValue: 0 },
-        authenticatedAt: {
-          type: "date",
-          input: false,
-          required: false,
-          defaultValue: () => new Date(),
-        },
-        lastUserActivityAt: {
-          type: "date",
-          input: false,
-          required: false,
-          defaultValue: () => new Date(),
-        },
+        // No default here: the database's now() fills both (Run 3.2, database time).
+        authenticatedAt: { type: "date", input: false, required: false },
+        lastUserActivityAt: { type: "date", input: false, required: false },
         totpVerifiedAt: { type: "date", input: false, required: false },
         enrollmentId: { type: "string", input: false, required: false },
       },
@@ -87,6 +78,12 @@ export function authOptions(deps: AuthDeps) {
       disableOriginCheck: false,
       disableCSRFCheck: false,
       useSecureCookies: true,
+      // P-39 (D-27): SameSite=Strict, host-only (no Domain), Secure, HttpOnly.
+      cookies: {
+        session_token: {
+          attributes: { sameSite: "strict", secure: true, httpOnly: true, path: "/" },
+        },
+      },
     },
     telemetry: { enabled: false },
   } satisfies BetterAuthOptions;

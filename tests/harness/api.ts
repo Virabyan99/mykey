@@ -6,7 +6,7 @@
 // `request` always sends `Origin: <origin>` and `Sec-Fetch-Site: same-origin`
 // unless the caller overrides them: Run 3.7 turns the Origin check on, and no
 // earlier test may break when it does.
-import { randomUUID } from "node:crypto";
+import { randomBytes, randomUUID } from "node:crypto";
 import { mkdtempSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import https from "node:https";
 import net from "node:net";
@@ -22,7 +22,10 @@ import {
   type Handler,
   type LogEntry,
 } from "@mykey/api";
+import { createAuth, ephemeralKeys, type Auth, type AuthKeys } from "@mykey/auth";
+import { bootstrapOwner } from "@mykey/auth/operator";
 import type { RouteDef } from "@mykey/contracts";
+import { drizzle } from "drizzle-orm/node-postgres";
 import { createPool } from "@mykey/db";
 import { ensureQueues } from "@mykey/operations";
 import type pg from "pg";
@@ -87,6 +90,9 @@ export interface RequestInit {
 }
 
 export interface TestApi {
+  /** Better Auth as the API uses it, and the API's keys (fresh for each API). */
+  auth: Auth;
+  keys: AuthKeys;
   baseUrl: string;
   origin: string;
   port: number;
@@ -157,6 +163,8 @@ export async function startTestApi(opts: StartTestApiOptions = {}): Promise<Test
     const health = createHealthCheck(database.targets.api_runtime);
     cleanup.push(() => health.close());
     const logs: LogEntry[] = [];
+    const keys = ephemeralKeys();
+    const auth = createAuth({ db: drizzle(pool), keys, baseURL: TEST_ORIGIN });
     const config: ApiConfig = {
       baseUrl: TEST_ORIGIN,
       build: "0000000",
@@ -170,6 +178,8 @@ export async function startTestApi(opts: StartTestApiOptions = {}): Promise<Test
       config,
       health: () => health.check(),
       log: (entry) => logs.push(entry),
+      // Throttling arrives in Run 3.3; until then the harness says so explicitly.
+      auth: { auth, keys, allowUnthrottled: "test" },
       ...(opts.routes === undefined ? {} : { test: { routes: opts.routes } }),
     });
     const server: ApiServer = await listen(app, {
@@ -235,6 +245,8 @@ export async function startTestApi(opts: StartTestApiOptions = {}): Promise<Test
       });
 
     return {
+      auth,
+      keys,
       baseUrl: `https://127.0.0.1:${String(server.port)}`,
       origin: TEST_ORIGIN,
       port: server.port,
@@ -271,4 +283,26 @@ export async function errorOf(
     error: { code: string; message: string; requestId: string };
   };
   return body.error;
+}
+
+export interface SeededOwner {
+  userId: string;
+  organizationId: string;
+  email: string;
+  password: string;
+}
+
+/**
+ * The owner of a test API, made the way an operator makes one: through
+ * `bootstrapOwner` as `maintenance` (Run 3.2). The password is synthetic.
+ */
+export async function seedOwner(api: TestApi, opts: { email?: string } = {}): Promise<SeededOwner> {
+  const email = opts.email ?? `owner-${randomUUID().slice(0, 8)}@mykey.invalid`;
+  const password = randomBytes(18).toString("base64url");
+  const result = await bootstrapOwner(
+    { auth: api.auth, pool: api.database.pool("maintenance") },
+    { email, password },
+  );
+  if (result.outcome !== "created") throw new Error(`seedOwner: ${result.outcome}`);
+  return { userId: result.userId, organizationId: result.organizationId, email, password };
 }

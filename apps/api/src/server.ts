@@ -4,7 +4,9 @@ import { readFileSync } from "node:fs";
 import https from "node:https";
 import type { AddressInfo } from "node:net";
 import { serve } from "@hono/node-server";
+import { createAuth, loadAuthKeys } from "@mykey/auth";
 import { createPool, type DbTarget } from "@mykey/db";
+import { drizzle } from "drizzle-orm/node-postgres";
 import type { Hono } from "hono";
 import { createApp } from "./app.ts";
 import { createHealthCheck, type OpenBaoHealthTarget } from "./health.ts";
@@ -68,17 +70,23 @@ export interface ServerConfig extends ListenOptions {
   /** On a host with OpenBao (Run 2.7): /health also requires it unsealed. */
   openbao?: OpenBaoHealthTarget;
   api: ApiConfig;
+  /** The key files of the auth module (read-only mount on a host). */
+  keysDirectory: string;
   log: (entry: LogEntry) => void;
 }
 
 export async function startServer(config: ServerConfig): Promise<ApiServer> {
   const health = createHealthCheck(config.database, config.openbao);
   const pool = createPool(config.database, { max: 20 });
+  const keys = loadAuthKeys(config.keysDirectory);
+  const auth = createAuth({ db: drizzle(pool), keys, baseURL: config.api.baseUrl });
   const app = createApp({
     pool,
     config: config.api,
     health: () => health.check(),
     log: config.log,
+    // Without throttling the auth routes refuse to mount: no start (Run 3.3 adds it).
+    auth: { auth, keys },
   });
   const server = await listen(app, config);
   const dispatcher = startOutboxDispatcher(pool, config.log);
@@ -148,6 +156,7 @@ export function configFromEnvironment(env: NodeJS.ProcessEnv): Omit<ServerConfig
     ...(env.MYKEY_BAO_URL === undefined || env.MYKEY_BAO_URL === ""
       ? {}
       : { openbao: { url: env.MYKEY_BAO_URL, caCertPath: required(env, "MYKEY_BAO_CA_FILE") } }),
+    keysDirectory: env.MYKEY_KEYS_DIR ?? "/run/mykey/keys",
     api: {
       baseUrl,
       build,

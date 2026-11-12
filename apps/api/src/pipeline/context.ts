@@ -1,5 +1,6 @@
 // Types shared by every step of the request pipeline (Run 3.1).
 import type { HttpBindings } from "@hono/node-server";
+import type { Auth, AuthKeys, Throttle } from "@mykey/auth";
 import type { ErrorCode, RouteDef } from "@mykey/contracts";
 import type pg from "pg";
 import type { HealthReading } from "../health.ts";
@@ -29,6 +30,14 @@ export interface AppDeps {
   config: ApiConfig;
   health: () => Promise<HealthReading>;
   log: (entry: LogEntry) => void;
+  /** The auth module (Run 3.2): Better Auth, the key rings and throttling. */
+  auth?: {
+    auth: Auth;
+    keys: AuthKeys;
+    throttle?: Throttle;
+    /** The integration harness only, until Run 3.3. */
+    allowUnthrottled?: "test";
+  };
   /** Set by the integration harness only; the production entry never sets it. */
   test?: { routes?: readonly TestRouteEntry[] };
 }

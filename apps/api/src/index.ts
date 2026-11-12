@@ -13,7 +13,7 @@ export {
   startOutboxDispatcher,
   type OutboxDispatcher,
 } from "./outbox-dispatcher.ts";
-export { parseStrictJson } from "./pipeline/body.ts";
+export { parseStrictJson, readAuthBody } from "./pipeline/body.ts";
 export {
   GATE_MAX_BYTES,
   readGate,

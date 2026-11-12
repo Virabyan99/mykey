@@ -156,7 +156,13 @@ async function rotateToComplete(
 }
 
 /** The Set-Cookie value for a session token, signed and named as Better Auth does it. */
-export async function sessionCookie(auth: Auth, token: string, expiresAt: Date): Promise<string> {
+export async function sessionCookie(
+  auth: Auth,
+  token: string,
+  expiresAt: Date,
+  /** A new session's full lifetime; otherwise what is left until `expiresAt`. */
+  maxAgeSeconds?: number,
+): Promise<string> {
   const context = await auth.$context;
   const cookie = context.authCookies.sessionToken;
   const value = encodeURIComponent(`${token}.${await makeSignature(token, context.secret)}`);
@@ -167,7 +173,8 @@ export async function sessionCookie(auth: Auth, token: string, expiresAt: Date):
     secure?: boolean;
     sameSite?: string;
   };
-  const maxAge = Math.max(0, Math.floor((expiresAt.getTime() - Date.now()) / 1000));
+  const maxAge =
+    maxAgeSeconds ?? Math.max(0, Math.floor((expiresAt.getTime() - Date.now()) / 1000));
   return [
     `${cookie.name}=${value}`,
     `Max-Age=${maxAge}`,

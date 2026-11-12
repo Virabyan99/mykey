@@ -3,6 +3,7 @@
 // handler passes every check of the pipeline and then answers 404 not_found.
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { servedAuthRoutes } from "@mykey/auth";
 import { ROUTES, type RouteDef } from "@mykey/contracts";
 import { errorOf, startTestApi, type TestApi } from "../../harness/api.ts";
 
@@ -54,8 +55,10 @@ afterAll(async () => {
 });
 
 describe("mounted routes", () => {
-  it("every route of the app is a contract route or /health", () => {
-    const allowed = new Set(ROUTES.map((route) => `${route.method} ${route.path}`));
+  it("every route of the app is a contract route, an auth route or /health", () => {
+    const allowed = new Set(
+      [...ROUTES, ...servedAuthRoutes()].map((route) => `${route.method} ${route.path}`),
+    );
     const extra = api.routes
       .map((route) => `${route.method} ${route.path}`)
       .filter((route) => !allowed.has(route));

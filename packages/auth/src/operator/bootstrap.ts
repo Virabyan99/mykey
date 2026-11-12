@@ -16,6 +16,7 @@ import type { OrganizationId, UserId } from "@mykey/contracts";
 import { withTransaction } from "@mykey/db";
 import type pg from "pg";
 import type { Auth } from "../auth.ts";
+import { normalizeEmail } from "../email.ts";
 import { checkPassword } from "../password-rule.ts";
 
 export const BOOTSTRAP_POINTS = [
@@ -41,9 +42,6 @@ export interface BootstrapDeps {
   /** Tests only: called after each statement. */
   crashAt?: (point: BootstrapPoint) => void;
 }
-
-/** E-mail addresses are stored the way Better Auth looks them up at sign-in. */
-export const normalizeEmail = (email: string): string => email.trim().toLowerCase();
 
 export async function bootstrapOwner(
   deps: BootstrapDeps,

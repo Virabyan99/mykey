@@ -23,12 +23,25 @@ export {
   NATIVE_ALLOWED,
   NATIVE_DENIED,
   currentSession,
-  errorResponse,
   mountAuthRoutes,
   nativeRoutes,
+  relayNative,
   requireMfaComplete,
+  servedAuthRoutes,
+  strictBody,
+  type AuthRouteEnv,
   type NativeRoute,
 } from "./routes.ts";
+export {
+  SESSION_COOKIE,
+  signInWithPassword,
+  type SignInDeps,
+  type SignInFailure,
+  type SignInInput,
+  type SignInResult,
+} from "./sign-in.ts";
+export type { Admission, Throttle, ThrottlePhase } from "./throttle.ts";
+export { normalizeEmail } from "./email.ts";
 export { sessionVerifier, sessionVerifierCandidates } from "./session-verifier.ts";
 export {
   RECOVERY_ALPHABET,
