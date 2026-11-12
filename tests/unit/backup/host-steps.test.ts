@@ -16,6 +16,7 @@ import {
   r2Url,
   resticCommand,
   restoreClusterCommands,
+  restoreGlobalsCommand,
   tmpfsCommands,
   transferCommand,
 } from "../../../infra/backup/pair-spike/host-steps.ts";
@@ -102,6 +103,12 @@ describe("pair host steps", () => {
     expect(cluster.start).toContain("-c ssl=on");
     expect(cluster.remove).toMatch(
       /docker rm -f mykey-pair-pg; docker volume rm -f mykey-pair-pg-/,
+    );
+    const globals = restoreGlobalsCommand(ID);
+    expect(globals).toContain(`--add-host postgres:${RESTORE_PG_ADDRESS}`);
+    expect(globals).toContain("-e PGPASSFILE=/pair/in/pgpass-restore");
+    expect(globals).toContain(
+      "--globals-only --no-role-passwords --file=/pair/restore/globals-new.sql",
     );
     const restore = pgRestoreCommand(ID);
     expect(restore).toContain(`--add-host postgres:${RESTORE_PG_ADDRESS}`);

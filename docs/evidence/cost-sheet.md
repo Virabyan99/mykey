@@ -57,8 +57,24 @@ Operations for 30 pairs a month — 60 Class A and about 90 Class B with one ver
 
 The fixture itself holds 11.2 MB for four days: below one billing unit.
 
+## Measured: one paired backup of staging (Run 2.9, 12 Nov 2026)
+
+A pair of the integrated stores — `pg_dump` of the staging database, its globals and an OpenBao Raft snapshot — sealed in one Restic repository (`docs/evidence/session-2/pair-spike.json`). Staging held two synthetic organizations with about 60 secrets, so this is the size of a nearly empty product, not of a used one.
+
+| Item                                          | Bytes                              |
+| --------------------------------------------- | ---------------------------------- |
+| `postgres.dump` (custom format)               | 145,471                            |
+| `globals.sql`                                 | 1,204                              |
+| `openbao.snap`                                | 158,755                            |
+| `repo.tar` (Restic, compressed and encrypted) | 297,000 to 338,000 over five pairs |
+| `manifest.json`                               | 1,460                              |
+
+Operations per pair: 2 `PutObject` (Class A) for the capture; 2 `GetObject` (Class B) for each restore. The Run 2.9 tests made 5 pairs and about 20 restore downloads: 10 Class A, about 40 Class B. Bucket `mykey-staging-pairs` holds 11 objects, 1.77 MB, on 12 Nov 2026.
+
+Projected for one pair a day at this size (**estimated**): 30 pairs ≈ 10 MB stored, 60 Class A and 60 Class B operations a month — below every billing unit; $0.015 a month if no included amount were left.
+
 ## What is still missing for COST-B1
 
-- The size of a real PostgreSQL dump and a real OpenBao snapshot pair (Run 6.5).
+- The size of a PostgreSQL dump and an OpenBao snapshot of a used product (Run 6.5); the staging pair above is nearly empty.
 - Whether large bundles need multipart upload, which adds Class A operations per part.
 - The monthly figure on a Cloudflare invoice, to compare with this sheet.

@@ -94,6 +94,11 @@ export function pgRestoreCommand(pairId: string): string {
   return `${pgClient(pairId, "pg_restore", "pgpass-restore", `--add-host postgres:${RESTORE_PG_ADDRESS}`)} --exit-on-error --dbname=${dsn("postgres")} /pair/restore/out/pair/artifacts/postgres.dump`;
 }
 
+/** The globals of the restore cluster, to compare with the captured globals.sql. */
+export function restoreGlobalsCommand(pairId: string): string {
+  return `${pgClient(pairId, "pg_dumpall", "pgpass-restore", `--add-host postgres:${RESTORE_PG_ADDRESS}`)} --globals-only --no-role-passwords --file=/pair/restore/globals-new.sql --dbname=${dsn("postgres")}`;
+}
+
 export function resticCommand(
   pairId: string,
   repo: "repo" | "restore/repo",

@@ -1,0 +1,34 @@
+{
+  "pairId": "0e2e593e-b5f6-4f45-b3db-2a9e132ae156",
+  "captured": "2026-11-12T11:41:29.425Z",
+  "frozenMs": 40128,
+  "bytes": {
+    "postgres.dump": 145471,
+    "globals.sql": 1204,
+    "openbao.snap": 158755,
+    "repo.tar": 317440
+  },
+  "secondsCapture": {
+    "freeze": 7.128,
+    "dump": 6.16,
+    "snapshot": 2.396,
+    "restic": 13.617,
+    "upload": 5.723
+  },
+  "secondsRestore": {
+    "download": 5.496,
+    "restic": 5.721,
+    "restore_postgres": 21.067,
+    "restore_openbao": 24.152
+  },
+  "snapshotEndpoint": "sys/storage/raft/snapshot (HTTP 204)",
+  "images": {
+    "postgres": "sha256:e3d24f6906d0760bf4da0dae872415391ededefad23fd471c47dc53b0ddf3c42",
+    "openbao": "sha256:5046911075e137e154ce49ab051502f4ec7cf367d484ae4a4dce665d9b90561f",
+    "restic": "sha256:136600b6ff6843d61d355f7f71f460a166429f35de6fd11b568fece3c9a4d510"
+  },
+  "objects": [
+    "pairs/0e2e593e-b5f6-4f45-b3db-2a9e132ae156/repo.tar",
+    "pairs/0e2e593e-b5f6-4f45-b3db-2a9e132ae156/manifest.json"
+  ]
+}

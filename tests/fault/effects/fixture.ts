@@ -53,9 +53,16 @@ export interface ExecutorChild {
   kill(): Promise<void>;
 }
 
-export async function effectsFixture(stack: Stack): Promise<EffectsFixture> {
-  const db = await prepareDatabase({ stack });
-  const org = await createOrgFixture(stack);
+/**
+ * `opts.db` replaces the fresh database (Run 2.9 on staging: the real one,
+ * whose `drop()` only closes pools); `opts.environments` defaults to two.
+ */
+export async function effectsFixture(
+  stack: Stack,
+  opts: { db?: TestDatabase; environments?: number } = {},
+): Promise<EffectsFixture> {
+  const db = opts.db ?? (await prepareDatabase({ stack }));
+  const org = await createOrgFixture(stack, { environments: opts.environments ?? 2 });
   const maintenance = db.pool("maintenance");
   await run(
     maintenance,
