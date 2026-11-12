@@ -20,3 +20,11 @@ export {
   type PrincipalKind,
 } from "./repos/operations.ts";
 export { claimOutbox, enqueueOutbox, markOutboxDelivered, type OutboxRow } from "./repos/outbox.ts";
+export {
+  bumpCounter,
+  deleteCounters,
+  insertLock,
+  lockSecondsLeft,
+  sumCounters,
+  sweepCounters,
+} from "./repos/rate-limits.ts";

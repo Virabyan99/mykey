@@ -17,6 +17,10 @@ export const AUDIT_DETAILS = {
   "auth.sign_in": z.strictObject({
     reason: z.enum(["credentials", "account", "epoch"]).optional(),
   }),
+  /** Run 3.3: an attempt refused by throttling before any credential was checked. */
+  "auth.throttled": z.strictObject({
+    phase: z.enum(["password", "factor", "reset"]),
+  }),
   /** Run 3.7: a request of an authenticated caller that the pipeline refused. */
   "access.denied": z.strictObject({
     routeId,

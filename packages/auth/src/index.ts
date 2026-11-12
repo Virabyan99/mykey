@@ -40,7 +40,14 @@ export {
   type SignInInput,
   type SignInResult,
 } from "./sign-in.ts";
-export type { Admission, Throttle, ThrottlePhase } from "./throttle.ts";
+export {
+  THROTTLE_PHASES,
+  createThrottle,
+  throttleDigest,
+  type Admission,
+  type Throttle,
+  type ThrottlePhase,
+} from "./throttle.ts";
 export { normalizeEmail } from "./email.ts";
 export { sessionVerifier, sessionVerifierCandidates } from "./session-verifier.ts";
 export {
