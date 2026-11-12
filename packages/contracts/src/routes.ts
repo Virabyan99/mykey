@@ -83,6 +83,12 @@ const deleteBody = z.strictObject({ ...expected, confirmed });
 
 const healthBody = z.strictObject({ status: z.enum(["up", "down"]) });
 
+/** session.activity (Run 3.5): when the session ends if nothing else happens, and at the latest. */
+const activityBody = z.strictObject({
+  idleExpiresAt: z.iso.datetime(),
+  absoluteExpiresAt: z.iso.datetime(),
+});
+
 const versionBody = z.strictObject({
   apiMajor: z.literal(1),
   /** The commit the image was built from. */
@@ -351,7 +357,9 @@ export const ROUTES: readonly RouteDef[] = Object.freeze([
   define("credentials.summary", "GET", `${O}/credentials/summary`, "human", false, "7.7"),
   define("metrics.get", "GET", `${O}/metrics`, "human", false, "7.8"),
 
-  define("session.activity", "POST", "/v1/session/activity", "human", false, "3.5"),
+  define("session.activity", "POST", "/v1/session/activity", "human", false, "3.5", {
+    responses: { 200: activityBody },
+  }),
   define("auth.reset.complete", "POST", "/v1/auth/reset/complete", "reset_flow", false, "3.6", {
     body: PENDING,
   }),
