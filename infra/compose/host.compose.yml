@@ -108,6 +108,8 @@ services:
       MYKEY_HOST_INSTANCE_ID: ${MYKEY_HOST_INSTANCE_ID:?run node scripts/host.ts <host> up}
       MYKEY_BASE_URL: ${MYKEY_BASE_URL:?run node scripts/host.ts <host> up}
       MYKEY_TRUSTED_PROXY: 10.78.1.2
+      # Run 3.2: the auth key rings (host.ts <host> keys init), read-only.
+      MYKEY_KEYS_DIR: /run/mykey/keys
     pids_limit: 100
     mem_limit: 512m
     tmpfs:
@@ -118,6 +120,7 @@ services:
       - /etc/mykey/pki/api.key:/run/mykey/tls/api.key:ro
       - /etc/mykey/pki/ca.crt:/run/mykey/tls/ca.crt:ro
       - /etc/mykey/gate:/run/mykey/gate:ro
+      - /etc/mykey/secrets/api-keys:/run/mykey/keys:ro
     networks:
       edge:
         ipv4_address: 10.78.1.3

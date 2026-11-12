@@ -1,15 +1,23 @@
 // Run 3.1 Task F: the API image with the service gate on staging, proven
 // through the public name. Leaves the gate open.
+import { spawnSync } from "node:child_process";
+import { readFileSync } from "node:fs";
+import { homedir } from "node:os";
+import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { KEY_RINGS } from "@mykey/auth";
+import { createPool } from "@mykey/db";
 import { GATE_FILE, gateRecordText, gateWriteCommand } from "../../scripts/host.ts";
 import { httpsGet, type HttpsAnswer } from "../harness/outside.ts";
 import {
   REMOTE,
+  connectStaging,
   expectSuccess,
   loadHosts,
   parseHostEnv,
   sshExec,
   type HostEntry,
+  type StagingStack,
 } from "../harness/staging.ts";
 
 const host: HostEntry = loadHosts().staging;
@@ -144,5 +152,74 @@ describe("staging service gate", () => {
       await run(`chmod 0644 ${GATE_FILE}`);
     }
     expect((await httpsGet(host.hostname, "/v1/version")).status).toBe(200);
+  });
+});
+
+describe("staging owner and keys (Run 3.2)", () => {
+  const OWNER_EMAIL = "owner@mykey-staging.invalid";
+
+  async function counts(stack: StagingStack): Promise<unknown> {
+    const pool = createPool({
+      ...stack.pg,
+      user: "postgres",
+      password: stack.pg.superuser.password,
+    });
+    try {
+      const result = await pool.query(
+        `SELECT (SELECT count(*)::int FROM auth."user") AS users,
+                (SELECT count(*)::int FROM app.organization) AS organizations,
+                (SELECT count(*)::int FROM app.membership WHERE role = 'owner') AS owners,
+                (SELECT count(*)::int FROM audit.event WHERE action = 'operator.bootstrap') AS bootstraps`,
+      );
+      return result.rows[0];
+    } finally {
+      await pool.end();
+    }
+  }
+
+  it("the bootstrap repeated on staging reports already_present and the row counts are unchanged", async () => {
+    const stack = await connectStaging();
+    try {
+      const before = await counts(stack);
+      // Session 2 spikes left synthetic organizations; the owner and its bootstrap are one each.
+      expect(before).toMatchObject({ users: 1, owners: 1, bootstraps: 1 });
+      const password = readFileSync(
+        join(homedir(), ".mykey", "secrets", "hosts", "staging", "owner-password"),
+      );
+      const result = spawnSync(
+        process.execPath,
+        ["scripts/host.ts", "staging", "ops", "bootstrap-owner", "--email", OWNER_EMAIL],
+        {
+          input: password,
+          encoding: "utf8",
+          timeout: 300_000,
+          env: { ...process.env, MSYS_NO_PATHCONV: "1" },
+        },
+      );
+      expect(result.status).toBe(0);
+      expect(result.stdout).toMatch(
+        /^already_present user [0-9a-f-]{36} organization [0-9a-f-]{36}\n$/,
+      );
+      expect(result.stdout.includes(password.toString("utf8").trim())).toBe(false);
+      expect(result.stderr.includes(password.toString("utf8").trim())).toBe(false);
+      expect(await counts(stack)).toEqual(before);
+    } finally {
+      await stack.close();
+    }
+  });
+
+  it("the key directory on the host holds the eight rings, owner 1000:1000, mode 0600", async () => {
+    const listing = await sshExec(
+      host,
+      "stat -c '%n %u:%g %a' /etc/mykey/secrets/api-keys/*.key && stat -c '%u:%g %a' /etc/mykey/secrets/api-keys",
+      { sudo: true, secretOutput: true },
+    );
+    expect(listing.code).toBe(0);
+    const lines = listing.stdout.trim().split("\n");
+    const files = lines
+      .slice(0, -1)
+      .map((line) => line.replace("/etc/mykey/secrets/api-keys/", ""));
+    expect(files.sort()).toEqual(KEY_RINGS.map((ring) => `${ring}.k1.key 1000:1000 600`).sort());
+    expect(lines.at(-1)).toBe("1000:1000 700");
   });
 });

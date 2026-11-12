@@ -10,6 +10,7 @@ import {
   gateRecordText,
   gateWriteCommand,
   hostEnvSetCommand,
+  keyInstallCommand,
   imageEnvKey,
   imageIdFromLoadOutput,
   loadedImageReference,
@@ -313,5 +314,37 @@ describe("gate (Run 3.1, P-43)", () => {
       at = next;
     }
     expect(command).toContain("chmod 0644");
+  });
+});
+
+describe("auth keys and operator commands (Run 3.2)", () => {
+  it("installs a key file of a known ring under api-keys, 0600 for the API's uid", () => {
+    const command = keyInstallCommand("cookie.k1.key");
+    expect(command).toContain("/etc/mykey/secrets/api-keys/cookie.k1.key");
+    expect(command).toContain("install -m 0600 -o 1000 -g 1000 /dev/stdin");
+    // An existing key on the host is never replaced.
+    expect(command.indexOf("test -e")).toBeLessThan(command.indexOf("install -m 0600"));
+  });
+
+  it.each([["evil.k1.key"], ["cookie.k01.key"], ["cookie.k1.key/../x"], ["../cookie.k1.key"]])(
+    "refuses the key file name %s",
+    (name) => {
+      expect(() => keyInstallCommand(name)).toThrow();
+    },
+  );
+
+  it("passes everything after `ops` to the operator tool, flags included", () => {
+    expect(parseHostArgs(["staging", "ops", "bootstrap-owner", "--email", "a@b.invalid"])).toEqual({
+      host: "staging",
+      via: "vpn",
+      command: "ops",
+      argv: ["bootstrap-owner", "--email", "a@b.invalid"],
+    });
+    expect(() => parseHostArgs(["staging", "ops"])).toThrow(/ops/);
+  });
+
+  it("parses keys init", () => {
+    expect(parseHostArgs(["staging", "keys", "init"])).toMatchObject({ command: "keys" });
+    expect(() => parseHostArgs(["staging", "keys", "rotate"])).toThrow(/keys/);
   });
 });

@@ -43,6 +43,7 @@ import {
   type HostEntry,
   type Hosts,
 } from "@mykey/ops/remote";
+import { KEY_RINGS } from "@mykey/auth";
 import type { RoleName } from "@mykey/db";
 
 const REPOSITORY = resolve(import.meta.dirname, "..");
@@ -109,6 +110,8 @@ export const USAGE = `usage: node scripts/host.ts <staging|prod> <command> [--pu
   bao-init                       initialise OpenBao once; custody copy; root-namespace setup (staging only)
   status                         print the host status as JSON
   gate <open|close|status>       the service gate record (P-43); every deploy starts closed
+  keys init                      the auth key rings: new files on the workstation, installed on the host
+  ops <command> [--flag value]   an operator command (apps/ops) as maintenance, through a tunnel
 --public uses the public address instead of the VPN (bootstrap always does).`;
 
 export type HostCommand = { host: HostName; via: Address } & (
@@ -126,6 +129,8 @@ export type HostCommand = { host: HostName; via: Address } & (
   | { command: "env"; key: OpenBaoEnvKey; value: string }
   | { command: "maint"; minutes: number; argv: string[] }
   | { command: "gate"; action: GateAction }
+  | { command: "keys"; action: "init" }
+  | { command: "ops"; argv: string[] }
 );
 
 export type GateAction = "open" | "close" | "status";
@@ -160,6 +165,11 @@ export function parseHostArgs(argv: string[]): HostCommand {
   }
   if (host === "prod" && STAGING_ONLY.has(command)) {
     throw new Error(`${command}: production holds no OpenBao or KMS material in Session 2`);
+  }
+  if (command === "ops") {
+    // Everything after `ops` belongs to the operator tool, flags included.
+    if (rest.length === 0) throw new Error("ops needs a command (see apps/ops)");
+    return { host, via: "vpn", command, argv: rest };
   }
   let words = rest;
   let tail: string[] = [];
@@ -284,6 +294,12 @@ export function parseHostArgs(argv: string[]): HostCommand {
         throw new Error(`env needs <key> <value>; keys: ${OPENBAO_ENV_KEYS.join(", ")}`);
       }
       return { ...base, command, key: key as OpenBaoEnvKey, value };
+    }
+    case "keys": {
+      if (positional.length !== 1 || positional[0] !== "init") {
+        throw new Error("keys needs init");
+      }
+      return { ...base, command, action: "init" };
     }
     case "gate": {
       const [action] = positional;
@@ -853,6 +869,26 @@ export const ROLE_PASSWORD_PLACE: Record<RoleName, "host" | "workstation"> = {
   backup_reader: "workstation",
   maintenance: "workstation",
 };
+
+/** Where the API's auth key files live on a host (mounted read-only at /run/mykey/keys). */
+export const API_KEYS_DIRECTORY = `${REMOTE.secretsDir}/api-keys`;
+const KEY_FILE_NAME = new RegExp(`^(${KEY_RINGS.join("|")})[.]k[1-9][0-9]{0,8}[.]key$`);
+
+/** Installs one key file from stdin, unless the host already has it (Run 3.2, P-45). */
+export function keyInstallCommand(name: string): string {
+  if (!KEY_FILE_NAME.test(name)) throw new Error(`not a key file name: ${name.slice(0, 60)}`);
+  const path = `${API_KEYS_DIRECTORY}/${name}`;
+  return [
+    `install -d -m 0755 -o root -g root ${REMOTE.secretsDir}`,
+    `install -d -m 0700 -o 1000 -g 1000 ${API_KEYS_DIRECTORY}`,
+    `{ test -e ${path} || install -m 0600 -o 1000 -g 1000 /dev/stdin ${path}; }`,
+  ].join(" && ");
+}
+
+/** The workstation's custody copy of a host's auth keys. */
+export function workstationKeysDirectory(host: HostName, home: string = homedir()): string {
+  return join(home, ".mykey", "secrets", "hosts", host, "auth-keys");
+}
 
 /** Installs stdin as a secret file under /etc/mykey/secrets/<service>/, owned by the service's user. */
 export function secretInstallCommand(path: string, owner: string): string {
@@ -1592,6 +1628,82 @@ async function main(argv: string[], log: Logger): Promise<number> {
       return 0;
     case "gate":
       return runGate(host, command.action, address, log);
+    case "keys":
+      await runKeysInit(host, address, log);
+      return 0;
+    case "ops":
+      return runOpsOnHost(host, command.argv, address);
+  }
+}
+
+/**
+ * Creates the missing key files on the workstation (existing ones are kept)
+ * and installs every key file the host does not have yet. Prints names only.
+ */
+async function runKeysInit(host: HostEntry, address: Address, log: Logger): Promise<void> {
+  const { generateKeyFiles } = await import("@mykey/auth");
+  const directory = workstationKeysDirectory(host.name);
+  mkdirSync(directory, { recursive: true, mode: 0o700 });
+  const created = generateKeyFiles(directory);
+  log.info(
+    `${host.name}: created on the workstation: ${created.length === 0 ? "nothing" : created.join(", ")}`,
+  );
+  const names = readdirSync(directory)
+    .filter((name) => KEY_FILE_NAME.test(name))
+    .sort();
+  for (const name of names) {
+    const content = readFileSync(join(directory, name), "utf8");
+    registerSecret(content.trim());
+    expectSuccess(
+      await sshExec(host, keyInstallCommand(name), {
+        sudo: true,
+        address,
+        secretOutput: true,
+        stdin: content,
+      }),
+      `installing ${name}`,
+    );
+  }
+  log.info(`${host.name}: key files present on the host: ${names.join(", ")}`);
+}
+
+/**
+ * Runs one operator command (apps/ops) against the host's database as
+ * `maintenance`, through an SSH tunnel; stdin, stdout and stderr are this
+ * process's. The keys are the workstation's custody copy.
+ */
+async function runOpsOnHost(host: HostEntry, argv: string[], address: Address): Promise<number> {
+  const { runOps } = await import("@mykey/ops");
+  const password = localSecret(workstationRoleSecretFile(host.name, "maintenance"));
+  const dir = mkdtempSync(join(tmpdir(), "mykey-ops-"));
+  const tunnel = await openTunnel(host, REMOTE.postgres);
+  try {
+    const caCertPath = join(dir, "ca.crt");
+    writeFileSync(
+      caCertPath,
+      expectSuccess(await sshExec(host, `cat ${REMOTE.caCert}`, { address }), "reading the host CA")
+        .stdout,
+    );
+    return await runOps(argv, {
+      stdin: process.stdin,
+      stdout: process.stdout,
+      stderr: process.stderr,
+      env: {
+        database: {
+          host: "127.0.0.1",
+          port: tunnel.localPort,
+          database: "postgres",
+          user: "maintenance",
+          password,
+          caCertPath,
+        },
+        keysDirectory: workstationKeysDirectory(host.name),
+        baseUrl: `https://${host.hostname}`,
+      },
+    });
+  } finally {
+    await tunnel.close();
+    rmSync(dir, { recursive: true, force: true });
   }
 }
 
