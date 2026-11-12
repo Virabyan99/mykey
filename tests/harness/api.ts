@@ -367,3 +367,50 @@ export async function enrollOwner(
   const { recoveryCodes } = (await activated.json()) as { recoveryCodes: string[] };
   return { ...owner, seed, recoveryCodes, cookie: sessionCookieOf(activated) };
 }
+
+/** One HTTPS request to an API on 127.0.0.1:`port`, with the product's Origin (another process's API). */
+export function requestTo(
+  target: { port: number; ca: Buffer },
+  method: string,
+  path: string,
+  init: RequestInit = {},
+): Promise<Response> {
+  return new Promise((resolve, reject) => {
+    const headers: Record<string, string> = {
+      origin: TEST_ORIGIN,
+      "sec-fetch-site": "same-origin",
+    };
+    let payload: Buffer | undefined;
+    if (init.body !== undefined) {
+      payload = Buffer.from(JSON.stringify(init.body), "utf8");
+      headers["content-type"] = "application/json";
+      headers["content-length"] = String(payload.length);
+    }
+    if (init.cookie !== undefined) headers.cookie = init.cookie;
+    for (const [name, value] of Object.entries(init.headers ?? {}))
+      headers[name.toLowerCase()] = value;
+    const outgoing = https.request(
+      { host: "127.0.0.1", port: target.port, path, method, headers, ca: target.ca, agent: false },
+      (response) => {
+        const chunks: Buffer[] = [];
+        response.on("data", (chunk: Buffer) => chunks.push(chunk));
+        response.on("end", () => {
+          const answerHeaders = new Headers();
+          for (const [name, value] of Object.entries(response.headers)) {
+            if (Array.isArray(value)) for (const v of value) answerHeaders.append(name, v);
+            else if (value !== undefined) answerHeaders.set(name, value);
+          }
+          resolve(
+            new Response(Buffer.concat(chunks), {
+              status: response.statusCode ?? 0,
+              headers: answerHeaders,
+            }),
+          );
+        });
+        response.on("error", reject);
+      },
+    );
+    outgoing.on("error", reject);
+    outgoing.end(payload);
+  });
+}
