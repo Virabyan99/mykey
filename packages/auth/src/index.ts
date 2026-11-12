@@ -53,6 +53,7 @@ export { hasFreshTotp } from "./fresh.ts";
 export { changePassword, type ChangeDeps, type ChangeResult } from "./password.ts";
 export {
   SESSION_COOKIE_NAME,
+  cleanUpSessions,
   listSessions,
   resolveSession,
   revokeSession,

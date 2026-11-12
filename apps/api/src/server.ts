@@ -13,7 +13,7 @@ import { createApp } from "./app.ts";
 import { createHealthCheck, type OpenBaoHealthTarget } from "./health.ts";
 import { createLogger, type LogEntry } from "./log.ts";
 import { startOutboxDispatcher } from "./outbox-dispatcher.ts";
-import { startThrottleSweep } from "./throttle-sweep.ts";
+import { startSessionCleanup, startThrottleSweep } from "./throttle-sweep.ts";
 import type { ApiConfig, ApiEnv } from "./pipeline/context.ts";
 
 export interface ListenOptions {
@@ -95,10 +95,12 @@ export async function startServer(config: ServerConfig): Promise<ApiServer> {
   const server = await listen(app, config);
   const dispatcher = startOutboxDispatcher(pool, config.log);
   const sweep = startThrottleSweep(pool, config.log);
+  const sessionCleanup = startSessionCleanup(pool, config.log);
   return {
     port: server.port,
     async close() {
       sweep.stop();
+      sessionCleanup.stop();
       await dispatcher.stop();
       await server.close();
       await health.close();

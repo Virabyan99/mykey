@@ -213,3 +213,19 @@ export async function revokeSession(
   ]);
   return result.rowCount === 1;
 }
+
+/**
+ * Deletes every session past either limit or past the challenge limit
+ * (database time); returns how many. The API runs it at start and hourly.
+ */
+export async function cleanUpSessions(db: Queryable): Promise<number> {
+  const limits = LIMITS.session;
+  const result = await db.query(
+    `DELETE FROM auth.session
+      WHERE authenticated_at + make_interval(secs => $1) <= now()
+         OR (phase = 'mfa_complete' AND last_user_activity_at + make_interval(secs => $2) <= now())
+         OR (phase <> 'mfa_complete' AND authenticated_at + make_interval(secs => $3) <= now())`,
+    [limits.absoluteSeconds, limits.idleSeconds, limits.incompleteChallengeSeconds],
+  );
+  return result.rowCount ?? 0;
+}

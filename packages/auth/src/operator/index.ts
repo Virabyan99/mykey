@@ -7,3 +7,4 @@ export {
   type BootstrapResult,
 } from "./bootstrap.ts";
 export { checkPassword, type PasswordCheck } from "../password-rule.ts";
+export { cleanUpFactors } from "./cleanup.ts";

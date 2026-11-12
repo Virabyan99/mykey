@@ -120,6 +120,10 @@ async function run(
         : null;
     const query = validateQuery(route, new URL(c.req.url).searchParams);
     const body = validateBody(route, raw);
+    // Freshness (FR-1.77): last before the handler (Run 3.7 puts authorization and state before it).
+    if (route.auth === "human_fresh_totp" && principal?.fresh !== true) {
+      throw new ApiError("fresh_verification_required");
+    }
     if (handler === terminal && deps.test?.stubs !== undefined) {
       // The harness's stub: every check of the pipeline has passed.
       deps.test.stubs(route.id);

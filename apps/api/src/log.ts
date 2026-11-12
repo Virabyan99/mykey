@@ -45,6 +45,7 @@ export type LogEntry =
   | { event: "output_invalid"; time: string; requestId: string; routeId: string; status: number }
   | { event: "outbox"; time: string; outcome: "failed"; errorClass: string }
   | { event: "throttle_sweep"; time: string; outcome: "failed"; errorClass: string }
+  | { event: "session_cleanup"; time: string; outcome: "failed"; errorClass: string }
   | { event: "listening"; port: number }
   | { event: "startup_refused"; missing: string };
 
