@@ -2,7 +2,7 @@
 # Manages the table `inet mykey` and its address sets.
 #
 #   mykey-egress.sh apply                     install and load the rules, fill the sets, enable the timer
-#   mykey-egress.sh revert                    remove the rules (the revert of `apply`)
+#   mykey-egress.sh revert                    back to the rules loaded before the last apply (none on a first install)
 #   mykey-egress.sh refresh                   resolve egress-names.conf into the sets (1 h per address)
 #   mykey-egress.sh block <purpose> <seconds> cut a purpose off; ends by itself
 #   mykey-egress.sh maint <minutes>           open registry egress for a window
@@ -16,6 +16,7 @@ HERE=/opt/mykey/hosts
 NAMES="$HERE/firewall/egress-names.conf"
 RULES_SRC="$HERE/firewall/mykey.nft"
 RULES=/etc/nftables.d/mykey.nft
+PREVIOUS=/etc/nftables.d/previous
 STATE=/run/mykey
 # Written by 30-ssh.sh apply, removed by its revert.
 SSH_VPN_ONLY=/etc/systemd/system/ssh.socket.d/10-mykey.conf
@@ -80,8 +81,23 @@ refresh() {
 	echo "refreshed: $resolved addresses"
 }
 
+# The rules loaded before an apply, so that its revert returns to them and not
+# to no firewall (Run 2.10 review). Empty when nothing was loaded (first install).
+save_previous() {
+	rm -rf "$PREVIOUS"
+	if nft list table inet mykey >/dev/null 2>&1 && [ -f "$RULES" ]; then
+		install -d -m 0755 "$PREVIOUS"
+		cp -p "$RULES" "$PREVIOUS/mykey.nft"
+		for f in /etc/nftables.d/mykey-temp-*.nft; do
+			if [ -f "$f" ]; then cp -p "$f" "$PREVIOUS/"; fi
+		done
+	fi
+	return 0
+}
+
 apply() {
 	install -d -m 0755 /etc/nftables.d
+	save_previous
 	install -m 0644 "$RULES_SRC" "$RULES"
 	rm -f "$RULES.reverted"
 	# The firewall never closes the SSH path that is in use: while sshd still
@@ -104,11 +120,24 @@ EOF
 	systemctl start mykey-egress-refresh.timer
 	# Loading replaced the table, so every block has ended with it.
 	rm -f "$STATE"/block-* 2>/dev/null || true
-	refresh
+	# A resolver hiccup must not fail (and so revert) a good load: the timer refills the sets.
+	refresh || echo "mykey-egress: refresh failed; the timer fills the sets" >&2
 	echo "loaded: inet mykey"
 }
 
 revert() {
+	if [ -f "$PREVIOUS/mykey.nft" ]; then
+		install -m 0644 "$PREVIOUS/mykey.nft" "$RULES"
+		rm -f /etc/nftables.d/mykey-temp-*.nft
+		for f in "$PREVIOUS"/mykey-temp-*.nft; do
+			if [ -f "$f" ]; then install -m 0644 "$f" /etc/nftables.d/; fi
+		done
+		nft -f /etc/nftables.conf
+		refresh || echo "mykey-egress: refresh failed; the timer fills the sets" >&2
+		echo "restored: the previous inet mykey"
+		return 0
+	fi
+	# Nothing was loaded before the apply: back to no MyKey table.
 	nft delete table inet mykey 2>/dev/null || true
 	systemctl disable --quiet --now mykey-egress-refresh.timer 2>/dev/null || true
 	systemctl disable --quiet nftables.service mykey-egress-refresh.service 2>/dev/null || true

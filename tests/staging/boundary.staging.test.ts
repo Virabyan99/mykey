@@ -25,6 +25,7 @@ import {
 import {
   connectStaging,
   expectSuccess,
+  hostStatus,
   loadHosts,
   parseHostEnv,
   REMOTE,
@@ -250,6 +251,11 @@ const INSPECT_FORMAT = [
   "[{{range .Mounts}}{{json .Source}},{{end}}null]",
 ].join(",");
 
+/** Whether the host runs OpenBao (Run 2.7): host.env says MYKEY_OPENBAO=1. */
+async function runsOpenBao(host: HostEntry): Promise<boolean> {
+  return parseHostEnv(await run(host, `cat ${REMOTE.hostEnv}`, false)).MYKEY_OPENBAO === "1";
+}
+
 async function expectContainersRestricted(host: HostEntry): Promise<void> {
   const output = await run(host, `docker inspect --format '[${INSPECT_FORMAT}]' $(docker ps -q)`);
   const containers = output
@@ -257,7 +263,10 @@ async function expectContainersRestricted(host: HostEntry): Promise<void> {
     .split("\n")
     .map((line) => JSON.parse(line) as unknown[]);
   const names = containers.map((fields) => String(fields[0]).replace(/^\//, ""));
-  expect(names.sort()).toEqual(["mykey-api-1", "mykey-edge-1", "mykey-postgres-1"]);
+  const openbao = (await runsOpenBao(host)) ? ["mykey-openbao-1"] : [];
+  expect(names.sort()).toEqual(
+    ["mykey-api-1", "mykey-edge-1", "mykey-postgres-1", ...openbao].sort(),
+  );
   for (const [
     name,
     user,
@@ -359,8 +368,21 @@ async function expectEgressAsTheTableSays(host: HostEntry): Promise<void> {
     .trim()
     .split("\n")
     .sort();
-  // mykey_kms and mykey_bao arrive with OpenBao in Run 2.7; this list must grow with them.
-  expect(networks).toEqual(["mykey_db", "mykey_edge", "mykey_pub"]);
+  // Run 2.7: where OpenBao runs, mykey_bao and mykey_kms exist. A host without OpenBao has the
+  // internal mykey_bao only once `up` ran with the Run 2.7 Compose file (R62; production has
+  // not been redeployed since): there it may exist, and then it must reach nothing.
+  const openbao = await runsOpenBao(host);
+  const hasBao = networks.includes("mykey_bao");
+  expect(networks).toEqual(
+    [
+      "mykey_db",
+      "mykey_edge",
+      "mykey_pub",
+      ...(openbao || hasBao ? ["mykey_bao"] : []),
+      ...(openbao ? ["mykey_kms"] : []),
+    ].sort(),
+  );
+  if (openbao) expect(hasBao).toBe(true);
   const acme = (await setMembers(host, "acme"))[0];
   const kms = (await setMembers(host, "kms"))[0];
   if (acme === undefined || kms === undefined) throw new Error("the acme or kms set is empty");
@@ -376,6 +398,15 @@ async function expectEgressAsTheTableSays(host: HostEntry): Promise<void> {
   });
   expect(await egressFrom(host, "mykey_edge", { acme, kms })).toEqual(nothing);
   expect(await egressFrom(host, "mykey_db", { acme, kms })).toEqual(nothing);
+  if (hasBao) expect(await egressFrom(host, "mykey_bao", { acme, kms })).toEqual(nothing);
+  if (openbao) {
+    // OpenBao's way to the KMS: the KMIP endpoint and the resolver, nothing else.
+    expect(await egressFrom(host, "mykey_kms", { acme, kms })).toEqual({
+      ...nothing,
+      kms5696: true,
+      dns: true,
+    });
+  }
 }
 
 async function expectHostEgressLimited(host: HostEntry): Promise<void> {
@@ -521,3 +552,34 @@ describe("production, read-only checks from outside", () => {
     await expectContainersRestricted(host);
   });
 });
+
+// Run 2.10 review finding I2: a revert must return to the rules that were
+// loaded before the apply, never to no firewall (the old revert deleted the
+// table and disabled nftables.service on every host that had one).
+describe("the firewall revert on staging", () => {
+  const host = hosts.staging;
+  const EGRESS = "/opt/mykey/hosts/firewall/mykey-egress.sh";
+  const chains = async (): Promise<string> =>
+    (
+      await run(
+        host,
+        "nft list chain inet mykey input; nft list chain inet mykey forward; nft list chain inet mykey output",
+      )
+    ).replace(/ # handle \d+/g, "");
+
+  it("returns to the previous rules, never to no firewall", async () => {
+    expect((await stagingStatusPending(host)).length).toBe(0);
+    const before = await chains();
+    await run(host, `${EGRESS} apply`);
+    await run(host, `${EGRESS} revert`);
+    expect(await chains()).toBe(before);
+    expect((await run(host, "systemctl is-enabled nftables.service")).trim()).toBe("enabled");
+    expect((await run(host, "systemctl is-active mykey-egress-refresh.timer")).trim()).toBe(
+      "active",
+    );
+  }, 300_000);
+});
+
+async function stagingStatusPending(host: HostEntry): Promise<string[]> {
+  return (await hostStatus(host)).pendingRevert;
+}
