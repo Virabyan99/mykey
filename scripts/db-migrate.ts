@@ -6,7 +6,15 @@
 import { randomBytes } from "node:crypto";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { ROLE_NAMES, applyRoles, migrate, type DbTarget, type RoleName } from "@mykey/db";
+import {
+  ROLE_NAMES,
+  applyRoles,
+  createPool,
+  migrate,
+  type DbTarget,
+  type RoleName,
+} from "@mykey/db";
+import { ensureQueues } from "@mykey/operations";
 import { DEV_PROJECT, stackDirectory, startStack } from "../tests/harness/stack.ts";
 
 function rolePasswords(file: string): Record<RoleName, string> {
@@ -36,6 +44,13 @@ if (import.meta.main) {
   await applyRoles(superuser, passwords);
   const owner: DbTarget = { ...base, user: "migration_owner", password: passwords.migration_owner };
   const result = await migrate(owner);
+  // Run 3.1: the job queues, created by the schema owner after the migrations.
+  const ownerPool = createPool(owner, { max: 1 });
+  try {
+    await ensureQueues(ownerPool);
+  } finally {
+    await ownerPool.end();
+  }
   console.log(`roles: ${ROLE_NAMES.join(", ")}`);
   console.log(`applied: ${result.applied.length === 0 ? "nothing" : result.applied.join(", ")}`);
   console.log(`already applied: ${String(result.alreadyApplied.length)}`);

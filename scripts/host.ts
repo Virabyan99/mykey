@@ -1327,15 +1327,22 @@ async function runDbInit(host: HostEntry, address: Address, log: Logger): Promis
     );
     const base = { host: "127.0.0.1", port: tunnel.localPort, database: "postgres", caCertPath };
     await applyRoles({ ...base, user: "postgres", password: superuserPassword }, passwords);
-    const result = await migrate({
-      ...base,
-      user: "migration_owner",
-      password: passwords.migration_owner,
-    });
+    const owner = { ...base, user: "migration_owner", password: passwords.migration_owner };
+    const result = await migrate(owner);
+    // Run 3.1: the job queues, created by the schema owner after the migrations.
+    const { createPool } = await import("@mykey/db");
+    const { ensureQueues } = await import("@mykey/operations");
+    const ownerPool = createPool(owner, { max: 1 });
+    try {
+      await ensureQueues(ownerPool);
+    } finally {
+      await ownerPool.end();
+    }
     log.info(`${host.name}: roles ${ROLE_NAMES.join(", ")}`);
     log.info(
       `${host.name}: applied ${result.applied.length === 0 ? "nothing" : result.applied.join(", ")}`,
     );
+    log.info(`${host.name}: job queues present`);
   } finally {
     await tunnel.close();
     rmSync(dir, { recursive: true, force: true });

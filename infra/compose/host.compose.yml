@@ -102,6 +102,12 @@ services:
       # and then /health checks PostgreSQL only.
       MYKEY_BAO_URL: ${MYKEY_BAO_URL:-}
       MYKEY_BAO_CA_FILE: /run/mykey/tls/ca.crt
+      # Run 3.1: the service gate (P-43) and the API's own settings. host.ts up
+      # writes the host instance id (once) and the base URL into host.env.
+      MYKEY_GATE_PATH: /run/mykey/gate/gate.json
+      MYKEY_HOST_INSTANCE_ID: ${MYKEY_HOST_INSTANCE_ID:?run node scripts/host.ts <host> up}
+      MYKEY_BASE_URL: ${MYKEY_BASE_URL:?run node scripts/host.ts <host> up}
+      MYKEY_TRUSTED_PROXY: 10.78.1.2
     pids_limit: 100
     mem_limit: 512m
     tmpfs:
@@ -111,6 +117,7 @@ services:
       - /etc/mykey/pki/api.crt:/run/mykey/tls/api.crt:ro
       - /etc/mykey/pki/api.key:/run/mykey/tls/api.key:ro
       - /etc/mykey/pki/ca.crt:/run/mykey/tls/ca.crt:ro
+      - /etc/mykey/gate:/run/mykey/gate:ro
     networks:
       edge:
         ipv4_address: 10.78.1.3
