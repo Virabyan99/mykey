@@ -348,6 +348,15 @@ describe("up", () => {
     expect(composeUpCommand(true)).toMatch(/ -p mykey --profile openbao up -d$/);
   });
 
+  it("without OpenBao, gives the provisioner's required variables placeholders (the service never starts there)", () => {
+    // Compose interpolates every service, also those of an inactive profile (found
+    // before the first production update with the provisioner in the file).
+    expect(composeUpCommand(false)).toMatch(
+      /^PROVISIONER_IMAGE=unused-without-openbao MYKEY_BAO_URL=https:\/\/unused\.invalid docker compose /,
+    );
+    expect(composeUpCommand(true)).toMatch(/^docker compose /);
+  });
+
   it("renders OpenBao's configuration from host.env, and refuses an incomplete one", () => {
     const env = {
       MYKEY_OPENBAO: "1",
