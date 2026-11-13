@@ -28,6 +28,9 @@ import {
 import { resetCompleteHandler } from "./routes/reset.ts";
 import {
   secretsCreateHandler,
+  secretsDeleteHandler,
+  secretsRestoreHandler,
+  secretsUndeleteHandler,
   secretsHistoryHandler,
   secretsListHandler,
   secretsRevealHandler,
@@ -95,6 +98,9 @@ function handlers(): Partial<Record<string, Handler>> {
     "secrets.reveal": secretsRevealHandler,
     "secrets.create": secretsCreateHandler,
     "secrets.update": secretsUpdateHandler,
+    "secrets.delete": secretsDeleteHandler,
+    "secrets.undelete": secretsUndeleteHandler,
+    "secrets.restore": secretsRestoreHandler,
     "session.activity": sessionActivityHandler,
     "auth.reset.complete": resetCompleteHandler,
   };

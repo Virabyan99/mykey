@@ -132,8 +132,9 @@ async function onMainPool<T>(pool: pg.Pool, fn: (tx: pg.PoolClient) => Promise<T
 
 interface BackendState {
   currentVersion: number;
-  /** The current version is deleted or destroyed. */
+  /** The current version is deleted (soft) or destroyed. */
   deleted: boolean;
+  destroyed: boolean;
 }
 
 const AUDIT_ACTION: Record<SecretAction, AuditAction> = {
@@ -160,20 +161,75 @@ function audit(
     outcome,
     requestId: request.requestId,
     operationId,
-    details: { name: request.name, ...(version === undefined ? {} : { version }) },
+    details: {
+      name: request.name,
+      ...(version === undefined ? {} : { version }),
+      ...(request.action === "restore" && request.sourceVersion !== undefined
+        ? { sourceVersion: request.sourceVersion }
+        : {}),
+    },
   });
 }
 
 /** The value's length in bytes (the request was validated: well-formed UTF-8). */
 const byteLength = (value: string | undefined): number => Buffer.byteLength(value ?? "", "utf8");
 
-/** What the action will send, decided at admission. */
+/** The one change of an action (P-74). */
+type Effect =
+  | { kind: "write"; value: string; cas: number }
+  | { kind: "delete"; version: number }
+  | { kind: "undelete"; version: number };
+
+/** What the action will send and record, decided at admission. */
 interface Plan {
-  cas: number;
-  bytes: number;
-  /** environment.live_value_bytes moves by this at finalize. */
-  liveDelta: number;
+  effect: Effect;
+  /** The index row's state after finalize. */
+  finalState: "live" | "deleted";
+  /** The row's live_value_bytes after finalize; null: the length read back (undelete). */
+  bytes: number | null;
+  /** What the row counted toward environment.live_value_bytes before (its bytes when live). */
+  previousLive: number;
 }
+
+/** The source of a restore, read under the lock before admission. */
+type Source = { value: string } | "unreadable" | null;
+
+/**
+ * The common checks of the versioned actions (P-74): the row exists, is not
+ * in review, is in one of `states`, and carries the expected version and tag.
+ */
+function versionedRow(
+  request: SecretRequest,
+  row: IndexRow | null,
+  states: readonly IndexRow["state"][],
+): IndexRow & { currentVersion: number } {
+  const expected = request.expected;
+  if (expected === undefined) throw new Error("a versioned action carries its expected version");
+  if (row === null) throw new Refusal(refused("not_found"));
+  if (row.state === "needs_review") throw new Refusal(refused("key_under_review"));
+  if (!states.includes(row.state)) throw new Refusal(refused("state_conflict"));
+  if (row.currentVersion !== expected.version || row.stateTag !== expected.stateTag) {
+    throw new Refusal(
+      refused("version_conflict", {
+        details: {
+          currentVersion: row.currentVersion,
+          currentStateTag: row.stateTag,
+          state: row.state,
+        },
+      }),
+    );
+  }
+  return { ...row, currentVersion: expected.version };
+}
+
+const overCapacity = (liveBytes: number, delta: number): boolean =>
+  liveBytes + delta > LIMITS.environment.maxLiveValueBytes;
+
+const bytesExceeded = (): Refusal =>
+  new Refusal(refused("capacity_exceeded", { details: { limit: "bytes" } }));
+
+/** The index and the backend must agree before anything is sent (P-68): otherwise the key goes to review. */
+const inconsistent = (): Refusal => new Refusal(refused("backend_inconsistent"), true);
 
 /**
  * The action's checks (P-68, P-70), comparing the request, the locked index
@@ -184,50 +240,92 @@ function checkAction(
   row: IndexRow | null,
   backend: BackendState | null,
   counters: { names: number; liveBytes: number },
+  source: Source,
 ): Plan {
   switch (request.action) {
     case "create": {
       if (row !== null) throw new Refusal(refused("already_exists"));
-      if (backend !== null) throw new Refusal(refused("backend_inconsistent"), true);
+      if (backend !== null) throw inconsistent();
       if (counters.names >= LIMITS.environment.maxNames) {
         throw new Refusal(refused("capacity_exceeded", { details: { limit: "names" } }));
       }
       const bytes = byteLength(request.value);
-      if (counters.liveBytes + bytes > LIMITS.environment.maxLiveValueBytes) {
-        throw new Refusal(refused("capacity_exceeded", { details: { limit: "bytes" } }));
-      }
-      return { cas: 0, bytes, liveDelta: bytes };
+      if (overCapacity(counters.liveBytes, bytes)) throw bytesExceeded();
+      return {
+        effect: { kind: "write", value: request.value ?? "", cas: 0 },
+        finalState: "live",
+        bytes,
+        previousLive: 0,
+      };
     }
     case "update": {
-      const expected = request.expected;
-      if (expected === undefined) throw new Error("an update carries its expected version");
-      if (row === null) throw new Refusal(refused("not_found"));
-      if (row.state === "needs_review") throw new Refusal(refused("key_under_review"));
-      if (row.state === "deleted") throw new Refusal(refused("state_conflict"));
-      if (row.currentVersion !== expected.version || row.stateTag !== expected.stateTag) {
-        throw new Refusal(
-          refused("version_conflict", {
-            details: {
-              currentVersion: row.currentVersion,
-              currentStateTag: row.stateTag,
-              state: row.state,
-            },
-          }),
-        );
-      }
-      // The index and the backend must agree before anything is sent (P-68).
-      if (backend === null || backend.deleted || backend.currentVersion !== row.currentVersion) {
-        throw new Refusal(refused("backend_inconsistent"), true);
+      const current = versionedRow(request, row, ["live"]);
+      if (
+        backend === null ||
+        backend.deleted ||
+        backend.currentVersion !== current.currentVersion
+      ) {
+        throw inconsistent();
       }
       const bytes = byteLength(request.value);
-      const liveDelta = bytes - row.liveValueBytes;
-      if (counters.liveBytes + liveDelta > LIMITS.environment.maxLiveValueBytes) {
-        throw new Refusal(refused("capacity_exceeded", { details: { limit: "bytes" } }));
-      }
-      return { cas: expected.version, bytes, liveDelta };
+      if (overCapacity(counters.liveBytes, bytes - current.liveValueBytes)) throw bytesExceeded();
+      return {
+        effect: { kind: "write", value: request.value ?? "", cas: current.currentVersion },
+        finalState: "live",
+        bytes,
+        previousLive: current.liveValueBytes,
+      };
     }
-    default:
-      throw new Error(`secret action ${request.action} is not implemented`);
+    case "delete": {
+      const current = versionedRow(request, row, ["live"]);
+      if (
+        backend === null ||
+        backend.deleted ||
+        backend.currentVersion !== current.currentVersion
+      ) {
+        throw inconsistent();
+      }
+      return {
+        effect: { kind: "delete", version: current.currentVersion },
+        finalState: "deleted",
+        // P-70: the row keeps its byte count while its version is deleted.
+        bytes: current.liveValueBytes,
+        previousLive: current.liveValueBytes,
+      };
+    }
+    case "undelete": {
+      const current = versionedRow(request, row, ["deleted"]);
+      if (
+        backend === null ||
+        !backend.deleted ||
+        backend.destroyed ||
+        backend.currentVersion !== current.currentVersion
+      ) {
+        throw inconsistent();
+      }
+      // Capacity from the kept byte count: a deleted value cannot be read to learn its length.
+      if (overCapacity(counters.liveBytes, current.liveValueBytes)) throw bytesExceeded();
+      return {
+        effect: { kind: "undelete", version: current.currentVersion },
+        finalState: "live",
+        bytes: null,
+        previousLive: 0,
+      };
+    }
+    case "restore": {
+      const current = versionedRow(request, row, ["live", "deleted"]);
+      if (backend?.currentVersion !== current.currentVersion) throw inconsistent();
+      if (source === null || source === "unreadable") throw new Refusal(refused("state_conflict"));
+      const bytes = byteLength(source.value);
+      const previousLive = current.state === "live" ? current.liveValueBytes : 0;
+      if (overCapacity(counters.liveBytes, bytes - previousLive)) throw bytesExceeded();
+      return {
+        effect: { kind: "write", value: source.value, cas: current.currentVersion },
+        finalState: "live",
+        bytes,
+        previousLive,
+      };
+    }
   }
 }
 
@@ -318,9 +416,22 @@ async function underLock(
     backend = {
       currentVersion: pre.data.currentVersion,
       deleted: current === undefined || current.deleted || current.destroyed,
+      destroyed: current?.destroyed === true,
     };
   } else if (pre.kind !== "not_found") {
     return refused(await backendRefusal(deps.pool, scope, pre, request.requestId));
+  }
+  // A restore's source, read under the lock; its value stays in this process's memory only.
+  let source: Source = null;
+  if (request.action === "restore" && request.sourceVersion !== undefined) {
+    const read = await bao.kvRead(path, request.sourceVersion);
+    if (read.ok) source = { value: read.data.envelope.value };
+    else if (read.kind === "not_found" || (read.kind === "invalid" && read.status === 200)) {
+      // Deleted, destroyed, trimmed, or not an envelope: judged after the index checks.
+      source = "unreadable";
+    } else {
+      return refused(await backendRefusal(deps.pool, scope, read, request.requestId));
+    }
   }
 
   // (b) Admission.
@@ -372,7 +483,7 @@ async function underLock(
       }
       const row = await lockIndexRow(tx, scope, request.name);
       const counters = await environmentCounters(tx, scope);
-      const decided = checkAction(request, row, backend, counters);
+      const decided = checkAction(request, row, backend, counters, source);
       await tx.query(
         `INSERT INTO app.operation_step (id, operation_id, ordinal, target, before_state)
          VALUES ($1, $2, 1, $3, $4)`,
@@ -501,16 +612,23 @@ async function afterMarker(
   await fault("after_dispatch_marker", operationId);
 
   // (d) The one change.
-  const written = await bao.kvWrite(
-    path,
-    { value: request.value ?? "", operation_id: operationId, format: 1 },
-    plan.cas,
-    { operationId, dispatchId: step.dispatchId },
-  );
+  const correlation = { operationId, dispatchId: step.dispatchId };
+  const effect = plan.effect;
+  const sent =
+    effect.kind === "write"
+      ? await bao.kvWrite(
+          path,
+          { value: effect.value, operation_id: operationId, format: 1 },
+          effect.cas,
+          correlation,
+        )
+      : effect.kind === "delete"
+        ? await bao.kvSoftDelete(path, effect.version, correlation)
+        : await bao.kvUndelete(path, effect.version, correlation);
   await fault("after_send", operationId);
 
-  if (!written.ok) {
-    const definite = definiteRefusal(written);
+  if (!sent.ok) {
+    const definite = definiteRefusal(sent);
     if (definite === null || locked.lost()) {
       await settleUnknown(settleOn(deps, locked), deps, request, operationId);
       return { kind: "unknown", operationId };
@@ -535,27 +653,50 @@ async function afterMarker(
     return refused(definite.code, { operationId });
   }
 
-  // (e) Read-back: the version holds this operation's envelope.
-  const version = written.data.version;
-  const read = await bao.kvRead(path, version);
+  // (e) Read-back (P-74). A write: the new version holds this operation's
+  // envelope. A delete: the version is current and deleted. An undelete: the
+  // version reads again — and gives the byte count the row keeps. Delete and
+  // undelete carry no marker (D-20): their proof is the pre-read under this
+  // lock, the slot held throughout, and this read-back together.
+  let version: number;
+  let bytes: number | null = plan.bytes;
+  let proven: boolean;
+  if (effect.kind === "write") {
+    version = (sent.data as { version: number }).version;
+    const read = await bao.kvRead(path, version);
+    proven = read.ok && read.data.envelope.operation_id === operationId;
+  } else if (effect.kind === "delete") {
+    version = effect.version;
+    const metadata = await bao.kvMetadata(path);
+    proven =
+      metadata.ok &&
+      metadata.data.currentVersion === version &&
+      metadata.data.versions[String(version)]?.deleted === true;
+  } else {
+    version = effect.version;
+    const read = await bao.kvRead(path, version);
+    proven = read.ok && read.data.version === version;
+    if (read.ok) bytes = byteLength(read.data.envelope.value);
+  }
   await fault("after_read_back", operationId);
-  const proven = read.ok && read.data.envelope.operation_id === operationId;
-  if (!proven || locked.lost()) {
+  if (!proven || bytes === null || locked.lost()) {
     await settleUnknown(settleOn(deps, locked), deps, request, operationId);
     return { kind: "unknown", operationId };
   }
+  const finalBytes = bytes;
+  const liveDelta = (plan.finalState === "live" ? finalBytes : 0) - plan.previousLive;
 
   // (f) Finalize.
   const stateTag = freshStateTag();
   const finished = await inTransaction(locked.client, async (tx) => {
-    const generation = await applyCounters(tx, scope, plan.liveDelta);
+    const generation = await applyCounters(tx, scope, liveDelta);
     const finish: Finish = {
       state: "succeeded",
       result: {
         name: request.name,
         version,
         stateTag,
-        state: "live",
+        state: plan.finalState,
         generation: generation.toString(),
       },
     };
@@ -571,8 +712,8 @@ async function afterMarker(
       name: request.name,
       currentVersion: version,
       stateTag,
-      state: "live",
-      liveValueBytes: plan.bytes,
+      state: plan.finalState,
+      liveValueBytes: finalBytes,
       lastOperationId: operationId,
     });
     await recordVersionEvent(tx, scope, {

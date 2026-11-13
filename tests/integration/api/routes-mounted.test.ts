@@ -27,6 +27,9 @@ const HANDLED = new Set([
   "secrets.reveal",
   "secrets.create",
   "secrets.update",
+  "secrets.delete",
+  "secrets.undelete",
+  "secrets.restore",
   "session.activity",
   "auth.reset.complete",
 ]);

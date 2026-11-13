@@ -86,6 +86,23 @@ export interface SecretsFixture {
     expected: { version: number; stateTag: string },
     opts?: { user?: FixtureUser; key?: string; to?: "first" | "second" },
   ): Promise<Answer>;
+  /**
+   * delete, undelete or restore (Run 4.4) with the expected version and tag;
+   * `confirmed` defaults to true (null leaves it out).
+   */
+  act(
+    env: EnvName,
+    name: string,
+    kind: "delete" | "undelete" | "restore",
+    expected: { version: number; stateTag: string },
+    opts?: {
+      user?: FixtureUser;
+      key?: string;
+      to?: "first" | "second";
+      sourceVersion?: number;
+      confirmed?: boolean | null;
+    },
+  ): Promise<Answer>;
   /** The operator's view of a secret (root token): metadata and per-version digests, never values. */
   backend(
     env: EnvName,
@@ -287,6 +304,22 @@ export async function createSecretsFixture(
       return fixture.send("PATCH", `${ids(env).path}/secrets/${name}`, {
         body: { value, expectedVersion: expected.version, expectedStateTag: expected.stateTag },
         ...init,
+      });
+    },
+    act(env, name, kind, expected, init = {}) {
+      const { sourceVersion, confirmed, ...opts } = init;
+      return fixture.send("POST", `${ids(env).path}/secrets/${name}/${kind}`, {
+        body: {
+          expectedVersion: expected.version,
+          expectedStateTag: expected.stateTag,
+          ...(confirmed === undefined
+            ? { confirmed: true }
+            : confirmed === null
+              ? {}
+              : { confirmed }),
+          ...(sourceVersion === undefined ? {} : { sourceVersion }),
+        },
+        ...opts,
       });
     },
     async backend(env, name) {

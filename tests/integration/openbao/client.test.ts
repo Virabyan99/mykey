@@ -173,6 +173,35 @@ describe("OpenBao client against the real server", () => {
     });
   });
 
+  it("a soft delete of an already deleted version and an undelete of a live one answer ok (Run 4.4)", async () => {
+    const client = await runtimeClient();
+    const path = freshPath();
+    const c = correlation();
+    expect(await client.kvWrite(path, envelope("synthetic-4b", c.operationId), 0, c)).toMatchObject(
+      {
+        ok: true,
+      },
+    );
+    // An undelete of a live version changes nothing and is not an error.
+    expect(await client.kvUndelete(path, 1, correlation())).toMatchObject({
+      ok: true,
+      status: 204,
+    });
+    expect(await client.kvSoftDelete(path, 1, correlation())).toMatchObject({
+      ok: true,
+      status: 204,
+    });
+    // A second soft delete of the same version: also ok — the backend cannot tell who deleted it.
+    expect(await client.kvSoftDelete(path, 1, correlation())).toMatchObject({
+      ok: true,
+      status: 204,
+    });
+    expect(await client.kvMetadata(path)).toMatchObject({
+      ok: true,
+      data: { currentVersion: 1, versions: { "1": { deleted: true, destroyed: false } } },
+    });
+  });
+
   it("kvList names what an environment holds", async () => {
     const client = await runtimeClient();
     const path = freshPath(1);

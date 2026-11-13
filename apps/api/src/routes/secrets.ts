@@ -268,6 +268,33 @@ export const secretsUpdateHandler: Handler = (ctx, deps) => {
   });
 };
 
+interface Versioned {
+  expectedVersion: number;
+  expectedStateTag: string;
+}
+
+const expectedOf = (body: Versioned) => ({
+  version: body.expectedVersion,
+  stateTag: body.expectedStateTag,
+});
+
+export const secretsDeleteHandler: Handler = (ctx, deps) =>
+  mutate(ctx, deps, "delete", nameParam(ctx), { expected: expectedOf(ctx.body as Versioned) });
+
+export const secretsUndeleteHandler: Handler = (ctx, deps) =>
+  mutate(ctx, deps, "undelete", nameParam(ctx), { expected: expectedOf(ctx.body as Versioned) });
+
+/** A restore names an older version: sourceVersion ≥ expectedVersion is 422 before the lock (P-74). */
+export const secretsRestoreHandler: Handler = (ctx, deps) => {
+  const body = ctx.body as Versioned & { sourceVersion: number };
+  const name = nameParam(ctx);
+  if (body.sourceVersion >= body.expectedVersion) throw new ApiError("validation_failed");
+  return mutate(ctx, deps, "restore", name, {
+    expected: expectedOf(body),
+    sourceVersion: body.sourceVersion,
+  });
+};
+
 export const secretsCreateHandler: Handler = (ctx, deps) => {
   const body = ctx.body as { name: string; value: string };
   return mutate(ctx, deps, "create", body.name, { value: body.value });
