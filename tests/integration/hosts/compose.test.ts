@@ -51,6 +51,9 @@ function render(): Rendered {
       env: {
         ...process.env,
         API_IMAGE,
+        // Run 3.8: the provisioner service (profile openbao).
+        PROVISIONER_IMAGE: API_IMAGE,
+        MYKEY_BAO_URL: "https://openbao:8200",
         MYKEY_HOSTNAME: "mykey-staging.example.test",
         MYKEY_HOST_INSTANCE_ID: "6f1c4c4e-2a52-4c4b-9a39-2c1f3a1d4e5f",
         MYKEY_BASE_URL: "https://mykey-staging.example.test",
@@ -75,6 +78,7 @@ describe("host compose file", () => {
       "openbao",
       "pki-init",
       "postgres",
+      "provisioner",
     ]);
     expect(rendered.services.api?.image).toBe(API_IMAGE);
   });
@@ -228,6 +232,7 @@ describe("OpenBao on a host (Run 2.7)", () => {
         env: {
           ...process.env,
           API_IMAGE,
+          PROVISIONER_IMAGE: API_IMAGE,
           MYKEY_HOSTNAME: "mykey-staging.example.test",
           MYKEY_HOST_INSTANCE_ID: "6f1c4c4e-2a52-4c4b-9a39-2c1f3a1d4e5f",
           MYKEY_BASE_URL: "https://mykey-staging.example.test",

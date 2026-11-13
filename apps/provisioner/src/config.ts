@@ -56,7 +56,7 @@ export function configFromEnvironment(env: NodeJS.ProcessEnv): ProvisionerConfig
       url: required(env, "MYKEY_BAO_URL"),
       caCertPath: required(env, "MYKEY_BAO_CA_FILE"),
     },
-    secretsDirectory: env.MYKEY_PROVISIONER_SECRETS_DIR ?? "/run/mykey/secrets",
+    secretsDirectory: env.MYKEY_PROVISIONER_CREDENTIALS_DIR ?? "/run/mykey/secrets",
     gatePath: required(env, "MYKEY_GATE_PATH"),
     hostInstanceId: required(env, "MYKEY_HOST_INSTANCE_ID"),
     sweepSeconds,

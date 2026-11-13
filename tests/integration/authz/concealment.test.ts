@@ -14,7 +14,8 @@ let tenants: Tenants;
 let cookie: string;
 
 beforeAll(async () => {
-  api = await startTestApi({ stubs: true });
+  // No outbox dispatcher: its background polls share the API's pool and would be counted.
+  api = await startTestApi({ stubs: true, dispatcher: false });
   tenants = await createTenants(api);
   cookie = await tenants.cookie("ownerA");
 }, 300_000);

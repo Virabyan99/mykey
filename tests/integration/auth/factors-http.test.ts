@@ -36,12 +36,13 @@ afterAll(async () => {
 const HUMAN = ROUTES.filter((route) => route.auth === "human" || route.auth === "human_fresh_totp");
 
 const BODIES: Record<string, unknown> = {
-  "projects.create": { name: "p" },
-  "projects.rename": { name: "p" },
+  // Run 3.9: these run for real now; names of their own, apart from the target's.
+  "projects.create": { name: "Created by the control" },
+  "projects.rename": { name: "Renamed by the control" },
   "projects.archive": { confirmed: true },
   "projects.reactivate": { confirmed: true },
-  "environments.create": { name: "dev" },
-  "environments.rename": { name: "dev" },
+  "environments.create": { name: "created-by-control" },
+  "environments.rename": { name: "renamed-by-control" },
   "environments.archive": { confirmed: true },
   "environments.reactivate": { confirmed: true },
   "secrets.reveal": {},
@@ -129,14 +130,23 @@ describe("product routes are closed to incomplete sessions (Task A)", () => {
     api.reached.length = 0;
     for (const route of HUMAN.filter((r) => r.scope !== "operation")) {
       const response = await call(route, enrolled.cookie);
-      expect([200, 204], route.id).toContain(response.status);
+      expect([200, 201, 204], route.id).toContain(response.status);
     }
     // Every route without a real handler (session.activity since Run 3.5,
-    // organizations.list since Run 3.7); operations.get is 404 until Run 4.1.
+    // organizations.list since Run 3.7, projects and environments since Run 3.9);
+    // operations.get is 404 until Run 4.1.
+    const handled = [
+      "session.activity",
+      "organizations.list",
+      "projects.list",
+      "projects.create",
+      "projects.rename",
+      "environments.list",
+      "environments.create",
+      "environments.rename",
+    ];
     const stubbed = HUMAN.filter(
-      (route) =>
-        !["session.activity", "organizations.list"].includes(route.id) &&
-        route.scope !== "operation",
+      (route) => !handled.includes(route.id) && route.scope !== "operation",
     );
     expect(new Set(api.reached)).toEqual(new Set(stubbed.map((route) => route.id)));
   });

@@ -191,7 +191,7 @@ services:
       # The name in OpenBao's certificate, as the API uses it (host.env).
       MYKEY_BAO_URL: ${MYKEY_BAO_URL:?set in /etc/mykey/host.env}
       MYKEY_BAO_CA_FILE: /run/mykey/tls/ca.crt
-      MYKEY_PROVISIONER_SECRETS_DIR: /run/mykey/secrets
+      MYKEY_PROVISIONER_CREDENTIALS_DIR: /run/mykey/secrets
       MYKEY_GATE_PATH: /run/mykey/gate/gate.json
       MYKEY_HOST_INSTANCE_ID: ${MYKEY_HOST_INSTANCE_ID:?run node scripts/host.ts <host> up}
       MYKEY_SWEEP_SECONDS: ${MYKEY_SWEEP_SECONDS:-300}

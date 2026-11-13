@@ -216,9 +216,13 @@ describe("drift sweep", () => {
     const reviewed = await fx.api.request("GET", `${base}/${a.env1a}/secrets`, { cookie });
     expect(reviewed.status).toBe(503);
     expect((await errorOf(reviewed)).code).toBe("backend_inconsistent");
-    // Listing still passes every check (the terminal 404 of a route without a handler).
+    // Listing still answers (its handler since Run 3.9) and shows the scope in review.
     const listed = await fx.api.request("GET", base, { cookie });
-    expect(listed.status).toBe(404);
+    expect(listed.status).toBe(200);
+    const shown = (
+      (await listed.clone().json()) as { environments: { id: string; state: string }[] }
+    ).environments;
+    expect(shown.find((environment) => environment.id === a.env1a)?.state).toBe("needs_review");
     const auditDenied = await fx.api.superuser.query(
       "SELECT 1 FROM audit.event WHERE action = 'access.denied' AND request_id = $1",
       [listed.headers.get("x-request-id")],
