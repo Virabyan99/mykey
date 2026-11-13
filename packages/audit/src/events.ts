@@ -55,6 +55,11 @@ export const AUDIT_DETAILS = {
       .regex(/^[a-z]+(?:[-:][a-z]+)*$/)
       .optional(),
   }),
+  /** Run 3.9: project and environment metadata; ids in target, the name's length only. */
+  "project.create": z.strictObject({ nameLength: z.int().min(1).max(64) }),
+  "project.rename": z.strictObject({ nameLength: z.int().min(1).max(64) }),
+  "environment.create": z.strictObject({ nameLength: z.int().min(1).max(64) }),
+  "environment.rename": z.strictObject({ nameLength: z.int().min(1).max(64) }),
   /** Run 3.8: the provisioner finished an environment, or sent it to review. */
   "system.environment_provision": z.strictObject({
     outcome: z.enum(["active", "review"]),

@@ -137,7 +137,7 @@ async function deniedReason(requestId: string): Promise<string | null> {
 async function verdict(route: RouteDef, response: Response, reachedBefore: number) {
   const requestId = response.headers.get("x-request-id") ?? "";
   const reached = api.reached.length > reachedBefore;
-  if (response.status === 204 || response.status === 200) {
+  if (response.status >= 200 && response.status < 300) {
     return { outcome: "A" as Outcome, reached, reason: null as string | null };
   }
   const code = (await errorOf(response)).code;
@@ -227,8 +227,16 @@ describe("named cases", () => {
     expect((await send("envEditorA", create, pathIn(create, idsOf("p1/e1a")))).status).toBe(204);
     expect((await send("envEditorA", create, pathIn(create, idsOf("p1/e1b")))).status).toBe(404);
     const list = route("environments.list");
-    expect((await send("envEditorA", list, pathIn(list, idsOf("p1/e1a")))).status).toBe(204);
+    const listed = await send("envEditorA", list, pathIn(list, idsOf("p1/e1a")));
+    expect(listed.status).toBe(200);
+    const environments = ((await listed.json()) as { environments: { id: string }[] }).environments;
+    expect(environments.map((environment) => environment.id)).toEqual([tenants.a.env1a]);
     expect((await send("envEditorA", list, pathIn(list, idsOf("p2/e2a")))).status).toBe(404);
+    const projects = route("projects.list");
+    const seen = await send("envEditorA", projects, pathIn(projects, idsOf("p1/e1a")));
+    const ids = ((await seen.json()) as { projects: { id: string }[] }).projects.map((p) => p.id);
+    expect(ids).toContain(tenants.a.project1);
+    expect(ids).not.toContain(tenants.a.project2);
   });
 
   it("readerA reads values and history in project 1 and gets 403 on every write", async () => {

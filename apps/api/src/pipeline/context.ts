@@ -60,6 +60,8 @@ export interface ApiContext {
   scope: Scope | null;
   /** The caller's authority in that organization, read on this request. */
   authority: Authority | null;
+  /** The request's Idempotency-Key (lower case) on a mutation route (Run 3.9). */
+  idempotencyKey: string | null;
   /** The harness's clock for TOTP codes (AppDeps.test.clock); undefined in production. */
   now?: Date;
 }

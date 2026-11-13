@@ -50,6 +50,14 @@ export function pathIn(route: RouteDef, ids: PathIds): string {
   });
 }
 
+/** Routes whose handler exists since Run 3.9 and whose name must be new on every request. */
+const UNIQUE_NAMES: Record<string, () => unknown> = {
+  "projects.create": () => ({ name: `Project ${randomUUID().slice(0, 8)}` }),
+  "projects.rename": () => ({ name: `Renamed ${randomUUID().slice(0, 8)}` }),
+  "environments.create": () => ({ name: `e${randomUUID().slice(0, 8)}` }),
+  "environments.rename": () => ({ name: `r${randomUUID().slice(0, 8)}` }),
+};
+
 /** Headers and body of a well-formed request to `route`. */
 export function requestOf(route: RouteDef): {
   body?: unknown;
@@ -62,6 +70,6 @@ export function requestOf(route: RouteDef): {
   if (DOTENV_ROUTES.has(route.id)) {
     return { rawBody: "A=1\n", headers: { ...headers, "content-type": "text/plain" } };
   }
-  const body = VALID_BODIES[route.id];
+  const body = UNIQUE_NAMES[route.id]?.() ?? VALID_BODIES[route.id];
   return body === undefined ? { headers } : { body, headers };
 }

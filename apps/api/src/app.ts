@@ -16,6 +16,14 @@ import { requestSource } from "./pipeline/source.ts";
 import { mountRoute, mountRouteDef } from "./pipeline/route.ts";
 import { healthHandler } from "./routes/health.ts";
 import { organizationsListHandler } from "./routes/organizations.ts";
+import {
+  environmentsCreateHandler,
+  environmentsListHandler,
+  environmentsRenameHandler,
+  projectsCreateHandler,
+  projectsListHandler,
+  projectsRenameHandler,
+} from "./routes/resources.ts";
 import { resetCompleteHandler } from "./routes/reset.ts";
 import { sessionActivityHandler } from "./routes/session.ts";
 import { versionHandler } from "./routes/version.ts";
@@ -66,6 +74,12 @@ function handlers(): Partial<Record<string, Handler>> {
     "health.get": healthHandler,
     "version.get": versionHandler,
     "organizations.list": organizationsListHandler,
+    "projects.list": projectsListHandler,
+    "projects.create": projectsCreateHandler,
+    "projects.rename": projectsRenameHandler,
+    "environments.list": environmentsListHandler,
+    "environments.create": environmentsCreateHandler,
+    "environments.rename": environmentsRenameHandler,
     "session.activity": sessionActivityHandler,
     "auth.reset.complete": resetCompleteHandler,
   };

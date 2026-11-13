@@ -99,8 +99,9 @@ async function call(user: FixtureUser, id: string, ids: PathIds = p1e1a()) {
     ...requestOf(def),
     cookie: await tenants.cookie(user),
   });
-  const reached = api.reached.length > before;
-  if (response.status === 204 || response.status === 200) return { answer: OK, reached, response };
+  // A stub records its id; a handler (Run 3.9) is reached when it answers 2xx.
+  const reached = api.reached.length > before || (response.status >= 200 && response.status < 300);
+  if (response.status >= 200 && response.status < 300) return { answer: OK, reached, response };
   const code = (await errorOf(response)).code;
   return { answer: code, reached, response };
 }

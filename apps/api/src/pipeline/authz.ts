@@ -4,7 +4,13 @@
 // Hidden is answered exactly like absent (404); a refusal is audited.
 import { appendAudit } from "@mykey/audit";
 import { decide, type Authority, type ErrorCode, type RouteDef } from "@mykey/contracts";
-import { resolveAccess, type EnvironmentScope, type OrgScope, type ProjectScope } from "@mykey/db";
+import {
+  resolveAccess,
+  type EnvironmentScope,
+  type OrgScope,
+  type ProjectScope,
+  type Resolved,
+} from "@mykey/db";
 import type { Principal } from "./authn.ts";
 import { ApiError, type AppDeps } from "./context.ts";
 import { checkStates } from "./states.ts";
@@ -14,6 +20,8 @@ export type Scope = OrgScope | ProjectScope | EnvironmentScope;
 export interface Access {
   scope: Scope | null;
   authority: Authority | null;
+  /** The rows the decision was made on (Run 3.9: the state check comes after a replay lookup). */
+  resolved: Resolved | null;
 }
 
 export type DenialReason = "hidden" | "action" | "state" | "fresh";
@@ -61,7 +69,7 @@ export async function authorize(
   principal: Principal,
   requestId: string,
 ): Promise<Access> {
-  if (route.scope === "none") return { scope: null, authority: null };
+  if (route.scope === "none") return { scope: null, authority: null, resolved: null };
   const base = { route, principal, requestId };
   const named = [params.env, params.project, params.org, params.operation];
   const deepest = named.find((id) => id !== undefined) ?? null;
@@ -110,21 +118,33 @@ export async function authorize(
       targetId: deepest,
     });
   }
-  const stateCode = checkStates(route, resolved);
-  if (stateCode !== null) {
-    return deny(deps, {
-      ...base,
-      reason: "state",
-      code: stateCode,
-      organizationId: member,
-      targetId: deepest,
-    });
-  }
-
   const scope = {
     organizationId,
     ...(projectId === undefined ? {} : { projectId }),
     ...(environmentId === undefined ? {} : { environmentId }),
   } as Scope;
-  return { scope, authority };
+  return { scope, authority, resolved };
+}
+
+/** The state step (P-53): after visibility, action and — for a mutation — the replay lookup. */
+export async function admitStates(
+  deps: AppDeps,
+  route: RouteDef,
+  params: Record<string, string>,
+  principal: Principal,
+  requestId: string,
+  access: Access,
+): Promise<void> {
+  if (access.resolved === null || access.scope === null) return;
+  const code = checkStates(route, access.resolved);
+  if (code === null) return;
+  await deny(deps, {
+    route,
+    principal,
+    requestId,
+    reason: "state",
+    code,
+    organizationId: access.scope.organizationId,
+    targetId: params.env ?? params.project ?? params.org ?? null,
+  });
 }

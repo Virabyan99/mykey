@@ -14,6 +14,12 @@ const HANDLED = new Set([
   "health.get",
   "version.get",
   "organizations.list",
+  "projects.list",
+  "projects.create",
+  "projects.rename",
+  "environments.list",
+  "environments.create",
+  "environments.rename",
   "session.activity",
   "auth.reset.complete",
 ]);
@@ -109,6 +115,10 @@ describe("mounted routes", () => {
       const response = await api.request(route.method, concretePath(route), {
         ...init,
         ...(human ? { cookie } : {}),
+        headers: {
+          ...("headers" in init ? init.headers : {}),
+          ...(route.idempotent ? { "idempotency-key": randomUUID() } : {}),
+        },
       });
       expect(response.status).toBe(404);
       expect((await errorOf(response)).code).toBe("not_found");

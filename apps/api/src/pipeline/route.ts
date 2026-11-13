@@ -14,7 +14,9 @@ import { LIMITS, ROUTES, type RouteDef } from "@mykey/contracts";
 import type { Context, Hono } from "hono";
 import { now } from "../log.ts";
 import { authenticateHuman } from "./authn.ts";
-import { authorize, deny } from "./authz.ts";
+import { findOperationByKey } from "@mykey/db";
+import { operationResponse, sameIntent } from "@mykey/operations";
+import { admitStates, authorize, deny } from "./authz.ts";
 import { checkOrigin, hasMixedCredentials, needsOriginCheck } from "./origin.ts";
 import { headerBytes, readBody } from "./body.ts";
 import { requestSource } from "./source.ts";
@@ -27,6 +29,8 @@ import {
 } from "./context.ts";
 import { errorResponse, jsonResponse } from "./respond.ts";
 import { validateBody, validateQuery } from "./validate.ts";
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
 /** The end of a route with no handler yet: written directly, since not every route lists not_found. */
 class NoHandler extends Error {}
@@ -136,8 +140,46 @@ async function run(
     const params = c.req.param();
     const access =
       principal === null
-        ? { scope: null, authority: null }
+        ? { scope: null, authority: null, resolved: null }
         : await authorize(deps, route, params, principal, requestId);
+    // A mutation (P-58): its key first; a request already made answers its
+    // stored outcome before the state and freshness checks (Doc 06 §6.2 step 1).
+    let idempotencyKey: string | null = null;
+    if (route.idempotent && principal !== null) {
+      const key = headers.get("idempotency-key")?.toLowerCase() ?? "";
+      if (!UUID.test(key)) throw new ApiError("precondition_required");
+      idempotencyKey = key;
+      const ring = deps.auth?.keys.replayFingerprint;
+      if (ring === undefined) throw new ApiError("dependency_unavailable");
+      const intent = {
+        principalKind: "user",
+        principalId: principal.userId,
+        action: route.id,
+        target: params.env ?? params.project ?? params.org ?? "",
+        body,
+      };
+      const stored = await findOperationByKey(deps.pool, {
+        principalKind: "user",
+        principalId: principal.userId,
+        action: route.id,
+        target: intent.target,
+        idempotencyKey,
+      });
+      if (stored !== null) {
+        if (!sameIntent(ring, stored, intent)) throw new ApiError("idempotency_conflict");
+        const completed = 201 in route.responses ? 201 : 200;
+        return outputResponse(
+          {
+            status: stored.state === "succeeded" ? completed : 202,
+            body: operationResponse(stored),
+          },
+          route,
+          requestId,
+          deps,
+        );
+      }
+    }
+    if (principal !== null) await admitStates(deps, route, params, principal, requestId, access);
     // Freshness (FR-1.77): last before the handler, after visibility, action and state.
     if (route.auth === "human_fresh_totp" && principal !== null && !principal.fresh) {
       await deny(deps, {
@@ -170,6 +212,7 @@ async function run(
         principal,
         scope: access.scope,
         authority: access.authority,
+        idempotencyKey,
         ...(clock === undefined ? {} : { now: clock }),
       },
       deps,

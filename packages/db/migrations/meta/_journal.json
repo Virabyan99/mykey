@@ -64,6 +64,13 @@
       "when": 1794557472799,
       "tag": "0008_provisioner_jobs",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1794563951099,
+      "tag": "0009_resource_generation",
+      "breakpoints": true
     }
   ]
 }

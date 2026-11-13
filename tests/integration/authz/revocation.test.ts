@@ -89,7 +89,8 @@ describe("revocation takes effect on the next request", () => {
   });
 
   it("admin lowered to member → 403 / 404 as the matrix says", async () => {
-    expect(await status("adminA", "projects.create")).toBe(204);
+    // projects.create and projects.list have their handlers since Run 3.9.
+    expect(await status("adminA", "projects.create")).toBe(201);
     expect(await status("adminA", "secrets.list")).toBe(204);
     await api.superuser.query("UPDATE app.membership SET role = 'member' WHERE user_id = $1", [
       tenants.userId("adminA"),
@@ -97,7 +98,7 @@ describe("revocation takes effect on the next request", () => {
     expect(await status("adminA", "projects.create")).toBe(403);
     expect(await status("adminA", "audit.list")).toBe(403);
     expect(await status("adminA", "secrets.list")).toBe(404);
-    expect(await status("adminA", "projects.list")).toBe(204);
+    expect(await status("adminA", "projects.list")).toBe(200);
   });
 
   it("session revoked → 401", async () => {

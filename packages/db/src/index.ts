@@ -11,6 +11,7 @@ export * as schema from "./schema/index.ts";
 export { withTransaction, type Queryable } from "./tx.ts";
 export type { EnvironmentScope, OrgScope, ProjectScope } from "./scope.ts";
 export {
+  completeOperation,
   findOperation,
   findOperationByKey,
   insertOperation,
@@ -35,3 +36,16 @@ export {
   type Resolved,
   type ResourceState,
 } from "./repos/memberships.ts";
+export {
+  bumpResourceGeneration,
+  createEnvironment,
+  createProject,
+  listEnvironments,
+  listProjects,
+  lockParents,
+  renameEnvironment,
+  renameProject,
+  resourceGeneration,
+  type EnvironmentRow,
+  type ProjectRow,
+} from "./repos/resources.ts";

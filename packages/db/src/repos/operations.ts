@@ -130,3 +130,26 @@ export async function findOperation(db: Queryable, id: OperationId): Promise<Ope
   const stored = result.rows[0];
   return stored === undefined ? null : toRow(stored);
 }
+
+/**
+ * Marks the operation succeeded with its result; its outcome replays for the
+ * retention of terminal records (Doc 06 §6.1). Answers the stored row.
+ */
+export async function completeOperation(
+  tx: Queryable,
+  id: OperationId,
+  result: Record<string, unknown>,
+  retentionDays: number,
+): Promise<OperationRow> {
+  const updated = await tx.query<StoredOperation>(
+    `UPDATE app.operation
+        SET state = 'succeeded', result = $2, error_code = NULL, completed_at = now(),
+            replay_expires_at = now() + make_interval(days => $3)
+      WHERE id = $1
+      RETURNING ${COLUMNS}`,
+    [id, JSON.stringify(result), retentionDays],
+  );
+  const stored = updated.rows[0];
+  if (stored === undefined) throw new Error("operation to complete not found");
+  return toRow(stored);
+}

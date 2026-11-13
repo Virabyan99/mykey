@@ -15,7 +15,7 @@ import type { OperationId, OrganizationId } from "@mykey/contracts";
 import { startTestApi, type TestApi } from "../../harness/api.ts";
 import { startProvisionerProcess, type ProvisionerProcess } from "../../harness/api-worker.ts";
 import { provisionTestOrganization } from "../../harness/org-fixture.ts";
-import { startStack, type Stack } from "../../harness/stack.ts";
+import { getSharedStack, startStack, type Stack } from "../../harness/stack.ts";
 import { createTenants, type Tenants } from "../../harness/tenants.ts";
 
 export interface ProvisioningFixture {
@@ -72,9 +72,19 @@ async function startBaoRelay(stack: Stack): Promise<{ url: string; close(): Prom
   };
 }
 
-export async function createProvisioningFixture(): Promise<ProvisioningFixture> {
-  const stack = await startStack();
-  const api = await startTestApi({ stack, relayDatabase: true });
+/**
+ * `shared`: the shared stack (suites that never stop a service); otherwise a
+ * private one. `stubs`: routes without a handler answer through the harness stub.
+ */
+export async function createProvisioningFixture(
+  opts: { shared?: boolean; stubs?: boolean } = {},
+): Promise<ProvisioningFixture> {
+  const stack = opts.shared === true ? await getSharedStack() : await startStack();
+  const api = await startTestApi({
+    stack,
+    relayDatabase: opts.shared !== true,
+    ...(opts.stubs === true ? { stubs: true } : {}),
+  });
   const relay = await startBaoRelay(stack);
   const tenants = await createTenants(api);
   const organizationId = tenants.a.organizationId;
@@ -197,7 +207,7 @@ export async function createProvisioningFixture(): Promise<ProvisioningFixture> 
       await relay.close();
       rmSync(directory, { recursive: true, force: true });
       await api.close();
-      await stack.stop();
+      if (opts.shared !== true) await stack.stop();
     },
   };
   return fixture;

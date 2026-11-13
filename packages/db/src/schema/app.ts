@@ -67,6 +67,10 @@ export const organization = appSchema.table(
     provisioningOperationId: uuid("provisioning_operation_id"),
     createdAt: timestamptz("created_at").notNull().defaultNow(),
     reviewReason: text("review_reason"),
+    /** Raised by every project or environment create: list cursors carry it (Run 3.9, P-59). */
+    resourceGeneration: bigint("resource_generation", { mode: "bigint" })
+      .notNull()
+      .default(sql`0`),
   },
   (t) => [
     check(
@@ -109,6 +113,7 @@ export const project = appSchema.table(
     state: text("state").notNull(),
     archiveOperationId: uuid("archive_operation_id"),
     reviewReason: text("review_reason"),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
   },
   (t) => [
     ...reviewReasonChecks("project", t.state, t.reviewReason),
@@ -146,6 +151,7 @@ export const environment = appSchema.table(
     archiveOrigin: text("archive_origin"),
     archiveOperationId: uuid("archive_operation_id"),
     reviewReason: text("review_reason"),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
   },
   (t) => [
     ...reviewReasonChecks("environment", t.state, t.reviewReason),
