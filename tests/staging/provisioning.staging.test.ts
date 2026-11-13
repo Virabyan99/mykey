@@ -77,13 +77,14 @@ async function waitUntil<T>(
   }
 }
 
+/** The probe's view of staging (`probe.ts state`: `{ now, state: HostState, alerts }`). */
 function probeState(): { open?: Record<string, unknown> } {
   const result = spawnSync(process.execPath, ["scripts/probe.ts", "state", "staging"], {
     encoding: "utf8",
     timeout: 60_000,
   });
   if (result.status !== 0) throw new Error(`probe.ts state: ${result.stderr.slice(-300)}`);
-  return JSON.parse(result.stdout) as { open?: Record<string, unknown> };
+  return (JSON.parse(result.stdout) as { state: { open?: Record<string, unknown> } }).state;
 }
 
 describe("the provisioner on staging", () => {

@@ -1,6 +1,7 @@
 // Run 3.1 Task F: the API image with the service gate on staging, proven
 // through the public name. Leaves the gate open.
 import { spawnSync } from "node:child_process";
+import { randomBytes } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
@@ -10,11 +11,19 @@ import { createPool } from "@mykey/db";
 import { GATE_FILE, gateRecordText, gateWriteCommand } from "../../scripts/host.ts";
 import { httpsGet, type HttpsAnswer } from "../harness/outside.ts";
 import {
+  STAGING_OWNER_EMAIL,
+  publicRequest,
+  sessionPair,
+  stagingOwnerSession,
+} from "../harness/staging-owner.ts";
+import { awaitFreshWindow } from "../harness/windows.ts";
+import {
   REMOTE,
   connectStaging,
   expectSuccess,
   loadHosts,
   parseHostEnv,
+  registerSecret,
   sshExec,
   type HostEntry,
   type StagingStack,
@@ -221,5 +230,87 @@ describe("staging owner and keys (Run 3.2)", () => {
       .map((line) => line.replace("/etc/mykey/secrets/api-keys/", ""));
     expect(files.sort()).toEqual(KEY_RINGS.map((ring) => `${ring}.k1.key 1000:1000 600`).sort());
     expect(lines.at(-1)).toBe("1000:1000 700");
+  });
+});
+
+describe("the staging owner through the public name (Run 3.8)", () => {
+  it("signs in and receives a Secure, HttpOnly, SameSite=Strict, host-only cookie", async () => {
+    const password = readFileSync(
+      join(homedir(), ".mykey", "secrets", "hosts", "staging", "owner-password"),
+      "utf8",
+    ).trim();
+    registerSecret(password);
+    const answer = await publicRequest("POST", "/v1/auth/sign-in/email", {
+      body: { email: STAGING_OWNER_EMAIL, password },
+    });
+    expect(answer.status, answer.body.slice(0, 300)).toBe(200);
+    const cookie = answer.cookies.find((c) => c.startsWith("__Secure-better-auth.session_token="));
+    expect(cookie).toBeDefined();
+    const attributes = (cookie ?? "").split(";").map((part) => part.trim().toLowerCase());
+    expect(attributes).toContain("secure");
+    expect(attributes).toContain("httponly");
+    expect(attributes).toContain("samesite=strict");
+    expect(attributes).toContain("path=/");
+    expect(attributes.some((part) => part.startsWith("domain="))).toBe(false);
+    // A password-only session reaches no product route.
+    const organizations = await publicRequest("GET", "/v1/organizations", {
+      cookie: sessionPair(answer),
+    });
+    expect(organizations.status).toBe(401);
+    expect(errorCode({ status: 401, body: organizations.body } as HttpsAnswer)).toBe(
+      "mfa_incomplete",
+    );
+  });
+
+  it("the completed session lists the active organization", async () => {
+    const { cookie } = await stagingOwnerSession();
+    const answer = await publicRequest("GET", "/v1/organizations", { cookie });
+    expect(answer.status).toBe(200);
+    const body = JSON.parse(answer.body) as { organizations: { state: string }[] };
+    expect(body.organizations.map((organization) => organization.state)).toEqual(["active"]);
+  });
+
+  it("a sign-up attempt through the public name is 404", async () => {
+    const answer = await publicRequest("POST", "/v1/auth/sign-up/email", {
+      body: { email: "someone@mykey-staging.invalid", password: "a-long-password-1", name: "x" },
+    });
+    expect(answer.status, answer.body.slice(0, 300)).toBe(404);
+  });
+
+  it("the sixth sign-in attempt in a minute for an unused synthetic e-mail is 429", async () => {
+    const stack = await connectStaging();
+    const pool = createPool(
+      {
+        host: stack.pg.host,
+        port: stack.pg.port,
+        database: "postgres",
+        user: "postgres",
+        password: stack.pg.superuser.password,
+        caCertPath: stack.pg.caCertPath,
+      },
+      { max: 2 },
+    );
+    try {
+      await awaitFreshWindow(pool, 60, 40);
+      const started = (await pool.query<{ now: Date }>("SELECT now() AS now")).rows[0]!.now;
+      const email = `unused-${randomBytes(4).toString("hex")}@mykey-staging.invalid`;
+      const statuses: number[] = [];
+      for (let attempt = 0; attempt < 6; attempt += 1) {
+        const answer = await publicRequest("POST", "/v1/auth/sign-in/email", {
+          body: { email, password: `wrong-${String(attempt)}-${randomBytes(6).toString("hex")}` },
+        });
+        statuses.push(answer.status);
+      }
+      expect(statuses.slice(0, 5).every((status) => status === 401)).toBe(true);
+      expect(statuses[5]).toBe(429);
+      // Aged away: this test's counters leave no limit behind for the next run.
+      await pool.query(
+        "UPDATE app.rate_limit SET window_start = window_start - interval '1 day' WHERE window_start >= date_trunc('minute', $1::timestamptz) - interval '1 minute'",
+        [started],
+      );
+    } finally {
+      await pool.end();
+      await stack.close();
+    }
   });
 });
