@@ -6,6 +6,7 @@ import { randomBytes, randomUUID } from "node:crypto";
 import {
   codeAt,
   createAuth,
+  createThrottle,
   stepAt,
   type FactorDeps,
   mountAuthRoutes,
@@ -14,6 +15,7 @@ import {
   type AuthKeys,
   type KeyRing,
 } from "@mykey/auth";
+import { checkOrigin, errorResponse, readAuthBody } from "@mykey/api";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { Hono } from "hono";
 import * as OTPAuth from "otpauth";
@@ -37,6 +39,10 @@ export function testKeys(): AuthKeys {
     sessionLookup: keyRing("k1"),
     seedEncryption: keyRing("k1"),
     recoveryVerifier: keyRing("k1"),
+    rateLimit: keyRing("k1"),
+    resetVerifier: keyRing("k1"),
+    replayFingerprint: keyRing("k1"),
+    cursorMac: keyRing("k1"),
   };
 }
 
@@ -100,7 +106,25 @@ export async function authFixture(): Promise<AuthFixture> {
       ...(observeAdapter === undefined ? {} : { observeAdapter }),
     });
     app = new Hono();
-    mountAuthRoutes(app, auth, { pool, keys });
+    mountAuthRoutes(app, auth, {
+      pool,
+      keys,
+      baseUrl: BASE_URL,
+      originAllowed: (headers) => checkOrigin(headers, BASE_URL),
+      respondError: errorResponse,
+      requestId: () => randomUUID(),
+      // A fresh source per request: these suites test the factors, not the
+      // per-source limit (tests/integration/auth/throttle.test.ts does).
+      source: () => randomUUID(),
+      async readBody(c) {
+        try {
+          return { ok: true, value: await readAuthBody(c.req.raw, () => undefined) };
+        } catch {
+          return { ok: false };
+        }
+      },
+      throttle: createThrottle({ pool, ring: keys.rateLimit }),
+    });
   };
   build();
 
@@ -138,17 +162,19 @@ export async function authFixture(): Promise<AuthFixture> {
         password: randomBytes(18).toString("base64url"),
       };
       const hash = await (await auth.$context).password.hash(user.password);
+      // As the operator identity: the API's role cannot create accounts (Run 3.2).
+      const operator = db.pool("maintenance");
       await run(
-        pool,
+        operator,
         'INSERT INTO auth."user" (id, name, email, email_verified) VALUES ($1, $2, $3, true)',
         [user.id, "Synthetic Owner", user.email],
       );
       await run(
-        pool,
+        operator,
         "INSERT INTO auth.account (id, account_id, provider_id, user_id, password) VALUES ($1, $2, 'credential', $3, $4)",
         [randomUUID(), user.id, user.id, hash],
       );
-      await run(pool, "INSERT INTO auth.account_state (user_id, state) VALUES ($1, $2)", [
+      await run(operator, "INSERT INTO auth.account_state (user_id, state) VALUES ($1, $2)", [
         user.id,
         state,
       ]);

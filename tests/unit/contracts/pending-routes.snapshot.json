@@ -1,8 +1,4 @@
 [
-  "version.get",
-  "organizations.list",
-  "projects.list",
-  "environments.list",
   "secrets.list",
   "secrets.history",
   "secrets.reveal",
@@ -15,8 +11,6 @@
   "overview.get",
   "credentials.summary",
   "metrics.get",
-  "session.activity",
-  "auth.reset.complete",
   "reference.get",
   "openapi.get",
   "machine.keys"

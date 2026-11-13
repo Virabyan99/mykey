@@ -50,6 +50,12 @@ const EXPECTED_ALLOWS = [
   "issuer token.revoke_accessor own",
   "issuer token.revoke_self own",
   "provisioner token.revoke_self own",
+  // Run 3.8: reads for verification and drift.
+  "provisioner policy.read_runtime own",
+  "provisioner policy.read_issuer own",
+  "provisioner policy.read_provisioner own",
+  "provisioner mount.read own",
+  "provisioner kv.read_config own",
   "machine kv.read own",
   "machine kv.read_version_1 own",
   "machine kv.list_environment own",

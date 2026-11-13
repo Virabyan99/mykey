@@ -19,7 +19,15 @@ import {
 import { stripTypeScriptTypes } from "node:module";
 import { homedir } from "node:os";
 import { join, resolve } from "node:path";
-import { expectSuccess, loadHosts, registerSecret, sshExec } from "../tests/harness/staging.ts";
+import { expectSuccess, loadHosts, redact, registerSecret, sshExec } from "@mykey/ops/remote";
+
+// M4: everything this script prints goes through the redaction of registered secrets.
+const say = (text: string): void => {
+  console.log(redact(text));
+};
+const warn = (text: string): void => {
+  console.error(redact(text));
+};
 
 const ROOT = resolve(import.meta.dirname, "..");
 const WORKER = join(ROOT, "workers/probe");
@@ -125,7 +133,7 @@ async function d1Database(accountId: string, name: string): Promise<string> {
   const created = await cf<{ uuid: string }>("POST", `/accounts/${accountId}/d1/database`, {
     name,
   });
-  console.log(`d1: created ${name}`);
+  say(`d1: created ${name}`);
   return created.uuid;
 }
 
@@ -140,14 +148,14 @@ async function migrate(accountId: string, databaseId: string, directory: string)
     "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'alert_log'",
   );
   if ((tables[0]?.results.length ?? 0) > 0) {
-    console.log("d1: schema present");
+    say("d1: schema present");
     return;
   }
   for (const file of readdirSync(directory)
     .filter((name) => name.endsWith(".sql"))
     .sort()) {
     await query(readFileSync(join(directory, file), "utf8"));
-    console.log(`d1: applied ${file}`);
+    say(`d1: applied ${file}`);
   }
 }
 
@@ -199,7 +207,7 @@ async function sinkTest(action: string | undefined): Promise<void> {
           { sql },
         )
       )[0]?.results ?? [];
-    console.log(
+    say(
       JSON.stringify({
         state: await query("SELECT host, json, updated_at FROM host_state"),
         alerts: await query(
@@ -209,10 +217,10 @@ async function sinkTest(action: string | undefined): Promise<void> {
     );
   } else if (action === "down") {
     await cf("DELETE", `/accounts/${accountId}/workers/scripts/${config.name}?force=true`);
-    console.log(`worker: removed ${config.name}`);
+    say(`worker: removed ${config.name}`);
     if (databaseId !== undefined) {
       await cf("DELETE", `/accounts/${accountId}/d1/database/${databaseId}`);
-      console.log(`d1: removed ${d1Name}`);
+      say(`d1: removed ${d1Name}`);
     }
   } else throw new Error("sinktest needs up | rows | down");
 }
@@ -241,13 +249,13 @@ async function deploy(config: WorkerConfig = workerConfig()): Promise<void> {
     form.append(name, new Blob([code], { type: "application/javascript+module" }), name);
   }
   await cf("PUT", `/accounts/${accountId}/workers/scripts/${config.name}`, form);
-  console.log(`worker: uploaded ${config.name}`);
+  say(`worker: uploaded ${config.name}`);
   await cf(
     "PUT",
     `/accounts/${accountId}/workers/scripts/${config.name}/schedules`,
     config.triggers.crons.map((cron) => ({ cron })),
   );
-  console.log(`worker: crons ${config.triggers.crons.join(", ")}`);
+  say(`worker: crons ${config.triggers.crons.join(", ")}`);
   for (const route of config.routes.filter((r) => r.custom_domain)) {
     await cf("PUT", `/accounts/${accountId}/workers/domains`, {
       hostname: route.pattern,
@@ -255,7 +263,7 @@ async function deploy(config: WorkerConfig = workerConfig()): Promise<void> {
       zone_id: zoneId,
       environment: "production",
     });
-    console.log(`worker: custom domain ${route.pattern}`);
+    say(`worker: custom domain ${route.pattern}`);
   }
 }
 
@@ -285,7 +293,7 @@ async function putSecret(
     text,
     type: "secret_text",
   });
-  console.log(`worker secret: ${name}`);
+  say(`worker secret: ${name}`);
 }
 
 async function secrets(): Promise<void> {
@@ -325,7 +333,7 @@ async function secrets(): Promise<void> {
       await sshExec(host, units, { sudo: true, timeoutMs: 60_000 }),
       `${host.name}: heartbeat timer`,
     );
-    console.log(`${host.name}: heartbeat installed and sent`);
+    say(`${host.name}: heartbeat installed and sent`);
   }
 }
 
@@ -337,7 +345,7 @@ async function state(host: string): Promise<void> {
     headers: { authorization: `Bearer ${token}` },
   });
   if (!response.ok) throw new Error(`state ${host}: HTTP ${response.status}`);
-  console.log(JSON.stringify(await response.json(), null, 2));
+  say(JSON.stringify(await response.json(), null, 2));
 }
 
 if (import.meta.main) {
@@ -348,13 +356,11 @@ if (import.meta.main) {
     else if (command === "state" && argument !== undefined) await state(argument);
     else if (command === "sinktest") await sinkTest(argument);
     else {
-      console.error(
-        "usage: node scripts/probe.ts deploy | secrets | state <host> | sinktest up|rows|down",
-      );
+      warn("usage: node scripts/probe.ts deploy | secrets | state <host> | sinktest up|rows|down");
       process.exitCode = 2;
     }
   } catch (error) {
-    console.error(`probe.ts: ${(error as Error).message}`);
+    warn(`probe.ts: ${(error as Error).message}`);
     process.exitCode = 1;
   }
 }

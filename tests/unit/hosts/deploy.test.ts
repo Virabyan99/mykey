@@ -6,7 +6,9 @@ import { afterEach, describe, expect, it } from "vitest";
 import { ROLE_NAMES } from "@mykey/db";
 import {
   ACME_DIRECTORIES,
+  HOST_BOUND_CIDRS,
   HOST_SECRETS,
+  credentialFiles,
   ROLE_PASSWORD_PLACE,
   acmeCommands,
   baoInitCommand,
@@ -49,17 +51,45 @@ const hosts: Hosts = {
   },
 };
 
+describe("provisioned credentials on a host (Run 3.8, P-56)", () => {
+  it("runtime and issuer go to the API's directory, the provisioner's to its own, beside the organization id", () => {
+    expect(credentialFiles("runtime")).toEqual({
+      organizationId: "/etc/mykey/secrets/api/organization-id",
+      roleId: "/etc/mykey/secrets/api/runtime-role-id",
+      secretId: "/etc/mykey/secrets/api/runtime-secret-id",
+    });
+    expect(credentialFiles("issuer").secretId).toBe("/etc/mykey/secrets/api/issuer-secret-id");
+    expect(credentialFiles("provisioner")).toEqual({
+      organizationId: "/etc/mykey/secrets/provisioner/organization-id",
+      roleId: "/etc/mykey/secrets/provisioner/provisioner-role-id",
+      secretId: "/etc/mykey/secrets/provisioner/provisioner-secret-id",
+    });
+  });
+
+  it("binds runtime and issuer to the API's bao address and the provisioner to its own", () => {
+    expect(HOST_BOUND_CIDRS).toEqual({
+      runtime: ["10.78.3.3/32"],
+      issuer: ["10.78.3.3/32"],
+      provisioner: ["10.78.3.4/32"],
+    });
+  });
+});
+
 describe("where a host's secrets live", () => {
-  it("keeps on the host only what a service on it reads: the superuser and api_runtime", () => {
+  it("keeps on the host only what a service on it reads: the superuser, api_runtime and provisioner_runtime (Run 3.8)", () => {
     expect(Object.keys(ROLE_PASSWORD_PLACE).sort()).toEqual([...ROLE_NAMES].sort());
     const onHost = ROLE_NAMES.filter((role) => ROLE_PASSWORD_PLACE[role] === "host");
-    expect(onHost).toEqual(["api_runtime"]);
+    expect(onHost).toEqual(["api_runtime", "provisioner_runtime"]);
     expect(HOST_SECRETS).toEqual({
       postgresSuperuser: {
         path: "/etc/mykey/secrets/postgres/superuser-password",
         owner: "999:999",
       },
       apiRuntime: { path: "/etc/mykey/secrets/api/db-password", owner: "1000:1000" },
+      provisionerRuntime: {
+        path: "/etc/mykey/secrets/provisioner/db-password",
+        owner: "1000:1000",
+      },
     });
   });
 
@@ -410,5 +440,18 @@ describe("kms-import and kms-remove", () => {
     );
     expect(command).toContain("shred -u /etc/mykey/secrets/kms/losstest-ops.key");
     expect(command).toContain("rm -f /etc/mykey/secrets/kms/losstest-ops.crt");
+  });
+});
+
+describe("the provisioner service (Run 3.8)", () => {
+  it("reaches OpenBao by the same name as the API (the name in OpenBao's certificate)", () => {
+    const compose = readFileSync(
+      join(import.meta.dirname, "../../../infra/compose/host.compose.yml"),
+      "utf8",
+    );
+    const urls = [...compose.matchAll(/^\s+MYKEY_BAO_URL: (.+)$/gm)].map((match) => match[1]);
+    expect(urls).toHaveLength(2);
+    expect(urls[1]).toBe("${MYKEY_BAO_URL:?set in /etc/mykey/host.env}");
+    expect(urls.every((url) => url?.startsWith("${MYKEY_BAO_URL"))).toBe(true);
   });
 });

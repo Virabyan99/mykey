@@ -1,3 +1,4 @@
+export * from "./authz.ts";
 export * from "./errors.ts";
 export * from "./ids.ts";
 export * from "./dotenv/index.ts";

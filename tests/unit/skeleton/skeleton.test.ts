@@ -1,6 +1,7 @@
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { describe, expect, it } from "vitest";
+import { importGraph, relative } from "./import-graph.ts";
 
 const root = resolve(import.meta.dirname, "../../..");
 
@@ -92,6 +93,49 @@ describe("repository skeleton", () => {
       const text = readFileSync(file, "utf8");
       expect(text, file).not.toMatch(/@mykey\/openbao\/admin|openbao\/src\/admin/);
     }
+  });
+
+  it("apps/api has no import path to operator authority (Run 3.2)", () => {
+    const reached = [...importGraph("apps/api/src/server.ts")].map(relative);
+    // Control: the walk follows workspace packages.
+    expect(reached).toContain("packages/contracts/src/routes.ts");
+    expect(reached).toContain("packages/audit/src/append.ts");
+    const forbidden = reached.filter(
+      (file) =>
+        file.startsWith("packages/auth/src/operator/") ||
+        file === "packages/openbao/src/admin.ts" ||
+        file.startsWith("apps/ops/"),
+    );
+    expect(forbidden).toEqual([]);
+  });
+
+  it("apps/api has no import path to the provisioner's or the operator's OpenBao reach (Run 3.8)", () => {
+    const reached = [...importGraph("apps/api/src/server.ts")].map(relative);
+    expect(reached).toContain("packages/operations/src/gate.ts");
+    const forbidden = reached.filter(
+      (file) =>
+        file === "packages/openbao/src/provisioner.ts" ||
+        file === "packages/openbao/src/admin.ts" ||
+        file === "packages/operations/src/operator.ts" ||
+        file === "packages/operations/src/provisioning/organization.ts",
+    );
+    expect(forbidden).toEqual([]);
+  });
+
+  it("apps/provisioner has no import path to /admin, @mykey/auth or apps/ops (Run 3.8)", () => {
+    const reached = [...importGraph("apps/provisioner/src/main.ts")].map(relative);
+    // Control: it reaches its own client and the job worker.
+    expect(reached).toContain("packages/openbao/src/provisioner.ts");
+    expect(reached).toContain("packages/operations/src/provisioning/environment.ts");
+    const forbidden = reached.filter(
+      (file) =>
+        file === "packages/openbao/src/admin.ts" ||
+        file === "packages/operations/src/provisioning/organization.ts" ||
+        file.startsWith("packages/auth/") ||
+        file.startsWith("apps/ops/") ||
+        file.startsWith("apps/api/"),
+    );
+    expect(forbidden).toEqual([]);
   });
 
   it("spec documents are untouched", () => {

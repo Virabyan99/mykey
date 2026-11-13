@@ -4,6 +4,20 @@
   "private": true,
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./remote": "./src/remote/index.ts"
+  },
+  "dependencies": {
+    "@mykey/audit": "workspace:*",
+    "@mykey/auth": "workspace:*",
+    "@mykey/contracts": "workspace:*",
+    "@mykey/db": "workspace:*",
+    "@mykey/openbao": "workspace:*",
+    "@mykey/operations": "workspace:*",
+    "drizzle-orm": "catalog:",
+    "pg": "catalog:"
+  },
+  "devDependencies": {
+    "@types/pg": "catalog:"
   }
 }

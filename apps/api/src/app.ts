@@ -1,88 +1,143 @@
-// The HTTP surface of the API stub (Run 2.5): GET /health and nothing else.
-// Run 3.1 replaces this piece by piece with the routes of @mykey/contracts.
+// The HTTP surface of the API. Every route is mounted from the contract
+// through `mountRoute` (P-40); nothing else registers a route.
 import { randomUUID } from "node:crypto";
-import type { HttpBindings } from "@hono/node-server";
-import type { ErrorEnvelope } from "@mykey/contracts";
-import { Hono } from "hono";
-import type { HealthCause, HealthReading } from "./health.ts";
+import { appendAudit } from "@mykey/audit";
+import { mountAuthRoutes } from "@mykey/auth";
+import { LIMITS, ROUTES } from "@mykey/contracts";
+import { Hono, type Context } from "hono";
+import { routePath } from "hono/route";
+import { now } from "./log.ts";
+import { headerBytes, readAuthBody } from "./pipeline/body.ts";
+import type { ApiEnv, AppDeps, Handler } from "./pipeline/context.ts";
+import { readGate } from "./pipeline/gate.ts";
+import { checkOrigin } from "./pipeline/origin.ts";
+import { errorResponse } from "./pipeline/respond.ts";
+import { requestSource } from "./pipeline/source.ts";
+import { mountRoute, mountRouteDef } from "./pipeline/route.ts";
+import { healthHandler } from "./routes/health.ts";
+import { organizationsListHandler } from "./routes/organizations.ts";
+import {
+  environmentsCreateHandler,
+  environmentsListHandler,
+  environmentsRenameHandler,
+  projectsCreateHandler,
+  projectsListHandler,
+  projectsRenameHandler,
+} from "./routes/resources.ts";
+import { resetCompleteHandler } from "./routes/reset.ts";
+import { sessionActivityHandler } from "./routes/session.ts";
+import { versionHandler } from "./routes/version.ts";
 
-export type RequestLogEntry =
-  | {
-      event: "request";
-      time: string;
-      requestId: string;
-      method: string;
-      path: string;
-      status: number;
-      durationMs: number;
-      /** The address of the TCP peer: the proxy in production. */
-      peer: string | null;
-      /** The X-Forwarded-For value as received. Informational; nothing trusts it. */
-      forwardedFor: string | null;
-      /** The X-Forwarded-Proto value as received. Informational; nothing trusts it. */
-      forwardedProto: string | null;
-    }
-  | {
-      event: "health_down";
-      time: string;
-      requestId: string;
-      cause: HealthCause;
-      code: string | null;
-    };
-
-export interface AppDependencies {
-  health: () => Promise<HealthReading>;
-  /** One call per line. The entry never holds a request body, a credential or a database setting. */
-  log: (entry: RequestLogEntry) => void;
+/** The auth module on the pipeline: its envelope, request id and body rules are the API's. */
+function mountAuth(app: Hono<ApiEnv>, deps: AppDeps, module: NonNullable<AppDeps["auth"]>): void {
+  mountAuthRoutes(app, module.auth, {
+    pool: deps.pool,
+    keys: module.keys,
+    baseUrl: deps.config.baseUrl,
+    originAllowed: (headers) => checkOrigin(headers, deps.config.baseUrl),
+    respondError: errorResponse,
+    requestId: (c) => (c as Context<ApiEnv>).get("requestId"),
+    source: (c) =>
+      requestSource(
+        (c as Context<ApiEnv>).env.incoming.socket.remoteAddress,
+        c.req.header("x-forwarded-for"),
+        deps.config.trustedProxy,
+      ),
+    async readBody(c) {
+      const context = c as Context<ApiEnv>;
+      context.set("routePattern", routePath(context));
+      try {
+        if (headerBytes(context.env.incoming.rawHeaders) > LIMITS.body.headersMaxBytes) {
+          return { ok: false };
+        }
+        const value = await readAuthBody(context.req.raw, (bytes) => {
+          context.set("bodyBytesRead", context.get("bodyBytesRead") + bytes);
+        });
+        return { ok: true, value };
+      } catch {
+        return { ok: false };
+      }
+    },
+    audit: async (event) => {
+      await appendAudit(deps.pool, event);
+    },
+    throttle: module.throttle,
+    ...(deps.test?.clock === undefined
+      ? {}
+      : { now: (c: Context) => deps.test?.clock?.(c.req.raw.headers) }),
+  });
 }
 
-interface Environment {
-  Bindings: HttpBindings;
-  Variables: { requestId: string };
+/** The handlers that exist; every other contract route ends in the terminal 404. */
+function handlers(): Partial<Record<string, Handler>> {
+  return {
+    "health.get": healthHandler,
+    "version.get": versionHandler,
+    "organizations.list": organizationsListHandler,
+    "projects.list": projectsListHandler,
+    "projects.create": projectsCreateHandler,
+    "projects.rename": projectsRenameHandler,
+    "environments.list": environmentsListHandler,
+    "environments.create": environmentsCreateHandler,
+    "environments.rename": environmentsRenameHandler,
+    "session.activity": sessionActivityHandler,
+    "auth.reset.complete": resetCompleteHandler,
+  };
 }
 
-export function createApp(deps: AppDependencies): Hono<Environment> {
-  const app = new Hono<Environment>();
+export function createApp(deps: AppDeps): Hono<ApiEnv> {
+  const app = new Hono<ApiEnv>();
 
   app.use(async (c, next) => {
     const started = performance.now();
+    // Always the API's own: a client-sent x-request-id is ignored.
     const requestId = randomUUID();
     c.set("requestId", requestId);
-    await next();
-    // Names the log line of this request, so it can be found from outside.
-    c.header("x-request-id", requestId);
+    c.set("routePattern", null);
+    c.set("bodyBytesRead", 0);
+    // The gate is the first step of every request, matched or not (P-43).
+    // GET /health is the one exception: it reports the gate instead of refusing.
+    const isHealth = c.req.method === "GET" && c.req.path === "/health";
+    const gate = isHealth ? null : readGate(deps.config.gatePath, deps.config.hostInstanceId);
+    if (gate !== null && !gate.open) {
+      deps.log({ event: "gate_closed", time: now(), requestId, cause: gate.cause });
+      c.res = errorResponse("quarantined", requestId);
+    } else {
+      await next();
+    }
+    c.res.headers.set("x-request-id", requestId);
+    c.res.headers.set("cache-control", "no-store");
     deps.log({
       event: "request",
-      time: new Date().toISOString(),
+      time: now(),
       requestId,
       method: c.req.method,
-      path: c.req.path,
+      path: c.get("routePattern"),
       status: c.res.status,
       durationMs: Math.round(performance.now() - started),
+      bodyBytesRead: c.get("bodyBytesRead"),
       peer: c.env.incoming.socket.remoteAddress ?? null,
-      forwardedFor: c.req.header("x-forwarded-for") ?? null,
-      forwardedProto: c.req.header("x-forwarded-proto") ?? null,
+      forwardedFor: c.req.header("x-forwarded-for")?.slice(0, 256) ?? null,
+      forwardedProto: c.req.header("x-forwarded-proto")?.slice(0, 16) ?? null,
     });
   });
 
-  app.get("/health", async (c) => {
-    const reading = await deps.health();
-    if (reading.up) return c.json({ status: "up" }, 200);
+  const known = handlers();
+  for (const route of ROUTES) mountRoute(app, deps, route.id, known[route.id] ?? null);
+  for (const entry of deps.test?.routes ?? []) mountRouteDef(app, deps, entry.def, entry.handler);
+  // After the contract routes: the auth module closes the rest of /v1/auth with a 404.
+  if (deps.auth !== undefined) mountAuth(app, deps, deps.auth);
+
+  app.notFound((c) => errorResponse("not_found", c.get("requestId")));
+  app.onError((error, c) => {
     deps.log({
-      event: "health_down",
-      time: new Date().toISOString(),
+      event: "unhandled",
+      time: now(),
       requestId: c.get("requestId"),
-      cause: reading.cause,
-      code: reading.code,
+      routeId: null,
+      errorClass: error.constructor.name,
     });
-    return c.json({ status: "down" }, 503);
-  });
-
-  app.notFound((c) => {
-    const body = {
-      error: { code: "not_found", message: "Not found.", requestId: c.get("requestId") },
-    } as ErrorEnvelope;
-    return c.json(body, 404);
+    return errorResponse("dependency_unavailable", c.get("requestId"));
   });
 
   return app;

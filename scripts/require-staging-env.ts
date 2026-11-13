@@ -4,7 +4,7 @@
 import { existsSync } from "node:fs";
 import net from "node:net";
 import { homedir } from "node:os";
-import { hostsFile, loadHosts, sshPaths } from "../tests/harness/staging.ts";
+import { hostsFile, loadHosts, sshPaths } from "@mykey/ops/remote";
 
 const SSH_PORT = 22;
 const PROBE_TIMEOUT_MS = 5_000;

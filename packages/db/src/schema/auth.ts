@@ -75,6 +75,8 @@ export const session = authSchema.table(
     lastUserActivityAt: timestamptz("last_user_activity_at").notNull().defaultNow(),
     totpVerifiedAt: timestamptz("totp_verified_at"),
     enrollmentId: uuid("enrollment_id"),
+    /** Run 3.6: set on the challenge session of an `mfa` reset, which may only enroll. */
+    resetTokenId: uuid("reset_token_id").references((): AnyPgColumn => resetToken.id),
   },
   (t) => [
     check("session_phase_check", oneOf(t.phase, SESSION_PHASES)),
@@ -204,5 +206,31 @@ export const recoveryCode = authSchema.table(
       columns: [t.enrollmentId],
       foreignColumns: [totpEnrollment.id],
     }).onDelete("cascade"),
+  ],
+);
+
+/**
+ * Run 3.6 (P-51, D-30): an operator-issued reset. The token itself is never
+ * stored: `verifier` is HMAC-SHA-256(reset key, token) under `key_id`, and is
+ * set to NULL when the token is consumed, superseded or expired.
+ */
+export const resetToken = authSchema.table(
+  "reset_token",
+  {
+    id: uuid("id").primaryKey(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    verifier: bytea("verifier").unique("reset_token_verifier_key"),
+    keyId: text("key_id").notNull(),
+    kind: text("kind").notNull(),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
+    expiresAt: timestamptz("expires_at").notNull(),
+    consumedAt: timestamptz("consumed_at"),
+    supersededAt: timestamptz("superseded_at"),
+  },
+  (t) => [
+    check("reset_token_kind_check", oneOf(t.kind, ["password", "mfa"])),
+    index("reset_token_user_id_idx").on(t.userId),
   ],
 );

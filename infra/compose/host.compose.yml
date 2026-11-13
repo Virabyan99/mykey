@@ -102,6 +102,14 @@ services:
       # and then /health checks PostgreSQL only.
       MYKEY_BAO_URL: ${MYKEY_BAO_URL:-}
       MYKEY_BAO_CA_FILE: /run/mykey/tls/ca.crt
+      # Run 3.1: the service gate (P-43) and the API's own settings. host.ts up
+      # writes the host instance id (once) and the base URL into host.env.
+      MYKEY_GATE_PATH: /run/mykey/gate/gate.json
+      MYKEY_HOST_INSTANCE_ID: ${MYKEY_HOST_INSTANCE_ID:?run node scripts/host.ts <host> up}
+      MYKEY_BASE_URL: ${MYKEY_BASE_URL:?run node scripts/host.ts <host> up}
+      MYKEY_TRUSTED_PROXY: 10.78.1.2
+      # Run 3.2: the auth key rings (host.ts <host> keys init), read-only.
+      MYKEY_AUTH_RINGS_DIR: /run/mykey/keys
     pids_limit: 100
     mem_limit: 512m
     tmpfs:
@@ -111,6 +119,8 @@ services:
       - /etc/mykey/pki/api.crt:/run/mykey/tls/api.crt:ro
       - /etc/mykey/pki/api.key:/run/mykey/tls/api.key:ro
       - /etc/mykey/pki/ca.crt:/run/mykey/tls/ca.crt:ro
+      - /etc/mykey/gate:/run/mykey/gate:ro
+      - /etc/mykey/secrets/api-keys:/run/mykey/keys:ro
     networks:
       edge:
         ipv4_address: 10.78.1.3
@@ -155,6 +165,50 @@ services:
         ipv4_address: 10.78.3.2
       kms:
         ipv4_address: 10.78.4.2
+
+  # The provisioner (Run 3.8, P-55): the only writer of machine policies and
+  # token roles, and the drift sweep. Profile `openbao` only. No published
+  # port and no route out: it reaches PostgreSQL and OpenBao on their bridges.
+  # Its credential (provisioner role id and secret id, delivered by
+  # `ops provision-organization`) and its database password are files.
+  provisioner:
+    <<: *hardening
+    profiles: [openbao]
+    image: ${PROVISIONER_IMAGE:?load the image first - node scripts/host.ts <host> image provisioner <tar>}
+    user: "1000:1000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      openbao:
+        condition: service_started
+    environment:
+      MYKEY_DB_HOST: postgres
+      MYKEY_DB_PORT: "5432"
+      MYKEY_DB_NAME: postgres
+      MYKEY_DB_USER: provisioner_runtime
+      MYKEY_DB_PASSWORD_FILE: /run/mykey/secrets/db-password
+      MYKEY_DB_CA_FILE: /run/mykey/tls/ca.crt
+      # The name in OpenBao's certificate, as the API uses it (host.env).
+      MYKEY_BAO_URL: ${MYKEY_BAO_URL:?set in /etc/mykey/host.env}
+      MYKEY_BAO_CA_FILE: /run/mykey/tls/ca.crt
+      MYKEY_PROVISIONER_CREDENTIALS_DIR: /run/mykey/secrets
+      MYKEY_GATE_PATH: /run/mykey/gate/gate.json
+      MYKEY_HOST_INSTANCE_ID: ${MYKEY_HOST_INSTANCE_ID:?run node scripts/host.ts <host> up}
+      MYKEY_SWEEP_SECONDS: ${MYKEY_SWEEP_SECONDS:-300}
+      MYKEY_PROVISIONER_STATE_FILE: /tmp/mykey-provisioner/last-sweep
+    pids_limit: 100
+    mem_limit: 256m
+    tmpfs:
+      - /tmp
+    volumes:
+      - /etc/mykey/secrets/provisioner:/run/mykey/secrets:ro
+      - /etc/mykey/pki/ca.crt:/run/mykey/tls/ca.crt:ro
+      - /etc/mykey/gate:/run/mykey/gate:ro
+    networks:
+      db:
+        ipv4_address: 10.78.2.4
+      bao:
+        ipv4_address: 10.78.3.4
 
   # Traefik. Its static configuration is given as flags because a static file
   # cannot take the ACME directory from host.env, and Traefik does not merge a

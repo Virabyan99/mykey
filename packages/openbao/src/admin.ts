@@ -115,6 +115,13 @@ export class OpenBaoAdmin {
     });
   }
 
+  /** Removes a policy (operator repair and drills; absent is not an error). */
+  async deletePolicy(namespace: string, name: string): Promise<void> {
+    requireNamespace(namespace, true);
+    requireName(name);
+    await this.#request("DELETE", namespace, `sys/policies/acl/${name}`, [200, 204, 404]);
+  }
+
   async readPolicy(namespace: string, name: string): Promise<string | null> {
     requireNamespace(namespace, true);
     requireName(name);
@@ -125,11 +132,16 @@ export class OpenBaoAdmin {
     return policy;
   }
 
-  /** The AppRole `name` whose tokens carry only the policy `name` (P-22). */
+  /**
+   * The AppRole `name` whose tokens carry only the policy `name` (P-22). With
+   * `boundCidrs` (P-56), both its secret ids and its tokens work only from those
+   * addresses; an empty list binds nothing.
+   */
   async putAppRole(
     namespace: string,
     name: AppRoleName,
     ttlSeconds: number,
+    boundCidrs: readonly string[] = [],
   ): Promise<{ roleId: string }> {
     requireNamespace(namespace, true);
     requireName(name);
@@ -140,7 +152,16 @@ export class OpenBaoAdmin {
       token_ttl: ttlSeconds,
       token_max_ttl: ttlSeconds,
       secret_id_num_uses: 0,
+      secret_id_bound_cidrs: [...boundCidrs],
+      token_bound_cidrs: [...boundCidrs],
     });
+    return this.readRoleId(namespace, name);
+  }
+
+  /** The role id of an existing AppRole (not a secret by itself). */
+  async readRoleId(namespace: string, name: AppRoleName): Promise<{ roleId: string }> {
+    requireNamespace(namespace, true);
+    requireName(name);
     const answer = await this.#request(
       "GET",
       namespace,
@@ -152,7 +173,105 @@ export class OpenBaoAdmin {
     return { roleId };
   }
 
-  async newSecretId(namespace: string, name: string): Promise<{ secretId: string }> {
+  /** The AppRole's stored fields as OpenBao reports them, or null when it does not exist. */
+  async readAppRole(namespace: string, name: AppRoleName): Promise<Record<string, unknown> | null> {
+    requireNamespace(namespace, true);
+    requireName(name);
+    const answer = await this.#request("GET", namespace, `auth/approle/role/${name}`, [200, 404]);
+    return answer.status === 404 ? null : record(record(answer.body).data);
+  }
+
+  /** Accessors of every live secret id of the AppRole (never the secret ids). */
+  async listSecretIdAccessors(namespace: string, name: AppRoleName): Promise<string[]> {
+    requireNamespace(namespace, true);
+    requireName(name);
+    const answer = await this.#request(
+      "GET",
+      namespace,
+      `auth/approle/role/${name}/secret-id?list=true`,
+      [200, 404],
+    );
+    if (answer.status === 404) return [];
+    const keys = record(record(answer.body).data).keys;
+    if (!Array.isArray(keys) || !keys.every((k) => typeof k === "string")) {
+      throw new Error("OpenBao secret-id accessor list: malformed answer");
+    }
+    return keys;
+  }
+
+  async destroySecretIdAccessor(
+    namespace: string,
+    name: AppRoleName,
+    accessor: string,
+  ): Promise<void> {
+    requireNamespace(namespace, true);
+    requireName(name);
+    await this.#request(
+      "POST",
+      namespace,
+      `auth/approle/role/${name}/secret-id-accessor/destroy`,
+      [200, 204],
+      { secret_id_accessor: accessor },
+    );
+  }
+
+  /** The type of the auth method mounted at `path/` ("approle"), or null when none is. */
+  async readAuthMount(namespace: string, path: string): Promise<string | null> {
+    requireNamespace(namespace, true);
+    requireName(path);
+    const answer = await this.#request("GET", namespace, "sys/auth", [200]);
+    const body = record(answer.body);
+    const mounts = Object.keys(record(body.data)).length > 0 ? record(body.data) : body;
+    const type = record(mounts[`${path}/`]).type;
+    return typeof type === "string" ? type : null;
+  }
+
+  /** True when the organization namespace exists. */
+  async readNamespace(namespace: string): Promise<boolean> {
+    requireNamespace(namespace, false);
+    const answer = await this.#request("GET", "", `sys/namespaces/${namespace}`, [200, 404]);
+    return answer.status === 200;
+  }
+
+  /** The mount at `kv` (type, options), or null when there is none. */
+  async readKvMount(namespace: string): Promise<Record<string, unknown> | null> {
+    requireNamespace(namespace, false);
+    // OpenBao answers 400 "No secret engine mount at kv/" for an absent mount.
+    const answer = await this.#request("GET", namespace, "sys/mounts/kv", [200, 400, 404]);
+    return answer.status === 200 ? record(record(answer.body).data) : null;
+  }
+
+  /** `kv/config`, or null when there is no KV mount. */
+  async readKvConfig(namespace: string): Promise<Record<string, unknown> | null> {
+    requireNamespace(namespace, false);
+    const answer = await this.#request("GET", namespace, "kv/config", [200, 400, 404]);
+    return answer.status === 200 ? record(record(answer.body).data) : null;
+  }
+
+  /** Writes `kv/config` as given (the plan's values; a test may write others). */
+  async putKvConfig(namespace: string, config: Record<string, unknown>): Promise<void> {
+    requireNamespace(namespace, false);
+    await this.#request("POST", namespace, "kv/config", [200, 204], config);
+  }
+
+  /** `sys/mounts/kv` with type `kv`, version 2, without the config step of `mountKv`. */
+  async mountKvOnly(namespace: string): Promise<void> {
+    requireNamespace(namespace, false);
+    await this.#request("POST", namespace, "sys/mounts/kv", [204], {
+      type: "kv",
+      options: { version: "2" },
+    });
+    const deadline = Date.now() + KV_UPGRADE_TIMEOUT_MS;
+    while ((await this.#request("GET", namespace, "kv/config", [200, 400])).status !== 200) {
+      if (Date.now() > deadline) throw new Error("OpenBao kv/config: mount upgrade timed out");
+      await sleep(200);
+    }
+  }
+
+  async newSecretId(
+    namespace: string,
+    name: string,
+  ): Promise<{ secretId: string; accessor: string }> {
     requireNamespace(namespace, true);
     requireName(name);
     const answer = await this.#request(
@@ -161,9 +280,13 @@ export class OpenBaoAdmin {
       `auth/approle/role/${name}/secret-id`,
       [200],
     );
-    const secretId = record(record(answer.body).data).secret_id;
-    if (typeof secretId !== "string") throw new Error("OpenBao secret-id: malformed answer");
-    return { secretId };
+    const data = record(record(answer.body).data);
+    const secretId = data.secret_id;
+    const accessor = data.secret_id_accessor;
+    if (typeof secretId !== "string" || typeof accessor !== "string") {
+      throw new Error("OpenBao secret-id: malformed answer");
+    }
+    return { secretId, accessor };
   }
 
   async putTokenRole(namespace: string, name: string, role: MachineTokenRole): Promise<void> {

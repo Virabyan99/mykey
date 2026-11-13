@@ -1,12 +1,16 @@
 // The frozen Stage 1 route list (Doc 06 §9, D-15). Later runs implement these
 // routes; none adds, renames or removes one without a `contract:` commit.
 import { z } from "zod";
+import type { Action, RouteScope } from "./authz.ts";
 import type { ErrorCode } from "./errors.ts";
 import { environmentIdSchema } from "./ids.ts";
 import { LIMITS } from "./limits.ts";
 import {
   ENVIRONMENT_NAME_PATTERN,
+  PASSWORD_MAX_CHARACTERS,
+  PASSWORD_MIN_CHARACTERS,
   SECRET_NAME_PATTERN,
+  checkPassword,
   checkProjectName,
   checkSecretName,
   checkSecretValue,
@@ -45,6 +49,10 @@ export interface RouteDef {
   readonly responses: Readonly<Record<number, ResponseBody>>;
   /** Every error code the route may return. */
   readonly errors: readonly ErrorCode[];
+  /** What Doc 04 §1.1 asks of a human caller beyond seeing the target (P-52); null for other classes. */
+  readonly action: Action | null;
+  /** The deepest resource the path names, for human routes; `none` for other classes. */
+  readonly scope: RouteScope;
 }
 
 export const DENIED_ALIASES: readonly { readonly method: HttpMethod; readonly path: string }[] =
@@ -83,6 +91,44 @@ const deleteBody = z.strictObject({ ...expected, confirmed });
 
 const healthBody = z.strictObject({ status: z.enum(["up", "down"]) });
 
+/** session.activity (Run 3.5): when the session ends if nothing else happens, and at the latest. */
+const activityBody = z.strictObject({
+  idleExpiresAt: z.iso.datetime(),
+  absoluteExpiresAt: z.iso.datetime(),
+});
+
+/** auth.reset.complete (Run 3.6, P-51): the token of the link, the new password, and for a password reset a factor code. */
+const password = z
+  .string()
+  .refine((value) => checkPassword(value).ok)
+  .describe(
+    `${String(PASSWORD_MIN_CHARACTERS)} to ${String(PASSWORD_MAX_CHARACTERS)} Unicode code points and at most ${String(LIMITS.body.passwordMaxBytes)} bytes of UTF-8.`,
+  );
+const resetCompleteBody = z.strictObject({
+  token: z.string().length(43),
+  newPassword: password,
+  code: z.string().min(1).max(64).optional(),
+});
+
+/** organizations.list (Run 3.7): the caller's active memberships; no namespace, no digest. */
+const organizationsBody = z.strictObject({
+  organizations: z.array(
+    z.strictObject({
+      id: z.uuid(),
+      role: z.enum(["owner", "admin", "member"]),
+      state: z.enum(["provisioning", "active", "failed", "needs_review"]),
+      /** Why the organization is `needs_review`; null in every other state. */
+      reviewReason: z.string().nullable(),
+    }),
+  ),
+});
+
+const versionBody = z.strictObject({
+  apiMajor: z.literal(1),
+  /** The commit the image was built from. */
+  build: z.string().regex(/^[0-9a-f]{7,40}$/),
+});
+
 const resolveBody = z.strictObject({
   apiMajor: z.int().positive(),
   environmentId: environmentIdSchema,
@@ -96,6 +142,38 @@ const secretsListQuery = z.strictObject({
   prefix: z.string().max(LIMITS.listing.filterMaxLength).optional(),
   limit: z.int().min(1).max(LIMITS.listing.maxLimit).default(LIMITS.listing.defaultLimit),
   cursor: z.string().min(1).optional(),
+});
+
+/** projects.list and environments.list (Run 3.9, P-59): keyset pages in id order. */
+const pageQuery = z.strictObject({
+  limit: z.int().min(1).max(LIMITS.listing.maxLimit).default(LIMITS.listing.defaultLimit),
+  cursor: z.string().min(1).optional(),
+});
+const resourceState = z.enum(["pending", "active", "revoking", "archived", "needs_review"]);
+const projectsBody = z.strictObject({
+  projects: z.array(
+    z.strictObject({
+      id: z.uuid(),
+      name: z.string(),
+      state: resourceState,
+      reviewReason: z.string().nullable(),
+      createdAt: z.iso.datetime(),
+    }),
+  ),
+  nextCursor: z.string().nullable(),
+});
+const environmentsBody = z.strictObject({
+  environments: z.array(
+    z.strictObject({
+      id: z.uuid(),
+      name: z.string(),
+      state: resourceState,
+      reviewReason: z.string().nullable(),
+      kvReady: z.boolean(),
+      createdAt: z.iso.datetime(),
+    }),
+  ),
+  nextCursor: z.string().nullable(),
 });
 
 // ----------------------------------------------------------------- error lists
@@ -143,6 +221,17 @@ interface RouteInput {
   /** HTTP status of a completed mutation (idempotent routes only); the default is 200. */
   completed?: 200 | 201;
   errors?: readonly ErrorCode[];
+  /** Required for a human route (`null` when seeing the target is enough). */
+  action?: Action | null;
+}
+
+function scopeOf(auth: AuthClass, path: string): RouteScope {
+  if (auth !== "human" && auth !== "human_fresh_totp") return "none";
+  if (path.includes("/:env")) return "environment";
+  if (path.includes("/:project")) return "project";
+  if (path.includes("/:org")) return "organization";
+  if (path.includes("/:operation")) return "operation";
+  return "none";
 }
 
 function define(
@@ -176,7 +265,13 @@ function define(
   if (input.body !== undefined || input.query !== undefined) add(["validation_failed"]);
   if (id.endsWith(".list")) add(["listing_changed"]);
   if (idempotent) add(IDEMPOTENT);
+  // Organization, project and environment states (P-53) answer on every scoped route.
+  if (path.startsWith("/v1/organizations/:org")) add(["state_conflict", "backend_inconsistent"]);
   add(input.errors ?? []);
+
+  const human = auth === "human" || auth === "human_fresh_totp";
+  if (human && input.action === undefined) throw new Error(`route ${id} has no action`);
+  if (!human && input.action != null) throw new Error(`route ${id} is not a human route`);
 
   const request: { body?: RequestBody; query?: z.ZodObject } = {};
   if (input.body !== undefined) request.body = input.body;
@@ -195,6 +290,8 @@ function define(
     request: Object.freeze(request),
     responses: Object.freeze(responses),
     errors: Object.freeze([...errors]),
+    action: input.action ?? null,
+    scope: scopeOf(auth, path),
   });
 }
 
@@ -208,84 +305,115 @@ const operation = { 200: operationResponseSchema };
 
 export const ROUTES: readonly RouteDef[] = Object.freeze([
   define("health.get", "GET", "/health", "public", false, "2.5", { responses: health }),
-  define("version.get", "GET", "/v1/version", "public", false, "3.1"),
-  define("organizations.list", "GET", "/v1/organizations", "human", false, "3.7"),
+  define("version.get", "GET", "/v1/version", "public", false, "3.1", {
+    responses: { 200: versionBody },
+  }),
+  define("organizations.list", "GET", "/v1/organizations", "human", false, "3.7", {
+    action: null,
+    responses: { 200: organizationsBody },
+  }),
 
-  define("projects.list", "GET", `${O}/projects`, "human", false, "3.9"),
+  define("projects.list", "GET", `${O}/projects`, "human", false, "3.9", {
+    action: null,
+    query: pageQuery,
+    responses: { 200: projectsBody },
+  }),
   define("projects.create", "POST", `${O}/projects`, "human", true, "3.9", {
+    action: "resources.manage",
     body: nameBody(projectName),
     completed: 201,
     errors: ["already_exists"],
   }),
   define("projects.rename", "PATCH", P, "human", true, "3.9", {
+    action: "resources.manage",
     body: nameBody(projectName),
     errors: ["already_exists", "state_conflict"],
   }),
   define("projects.archive", "POST", `${P}/archive`, "human", true, "5.3", {
+    action: "resources.manage",
     body: confirmedBody,
     errors: ["state_conflict", ...BACKEND],
   }),
   define("projects.reactivate", "POST", `${P}/reactivate`, "human", true, "5.3", {
+    action: "resources.manage",
     body: confirmedBody,
     errors: ["state_conflict", ...BACKEND],
   }),
 
-  define("environments.list", "GET", `${P}/environments`, "human", false, "3.9"),
+  define("environments.list", "GET", `${P}/environments`, "human", false, "3.9", {
+    action: null,
+    query: pageQuery,
+    responses: { 200: environmentsBody },
+  }),
   define("environments.create", "POST", `${P}/environments`, "human", true, "3.9", {
+    action: "resources.manage",
     body: nameBody(environmentName),
     completed: 201,
     errors: ["already_exists", "state_conflict", ...BACKEND],
   }),
   define("environments.rename", "PATCH", E, "human", true, "3.9", {
+    action: "resources.manage",
     body: nameBody(environmentName),
     errors: ["already_exists", "state_conflict"],
   }),
   define("environments.archive", "POST", `${E}/archive`, "human", true, "5.3", {
+    action: "resources.manage",
     body: confirmedBody,
     errors: ["state_conflict", ...BACKEND],
   }),
   define("environments.reactivate", "POST", `${E}/reactivate`, "human", true, "5.3", {
+    action: "resources.manage",
     body: confirmedBody,
     errors: ["state_conflict", ...BACKEND],
   }),
 
   define("secrets.list", "GET", `${E}/secrets`, "human", false, "4.3", {
+    action: "secrets.read",
     query: secretsListQuery,
   }),
   define("secrets.history", "GET", `${E}/secrets/:name/history`, "human", false, "4.3", {
+    action: "secrets.history",
     errors: ["unsupported_history_parameter", "key_under_review", ...BACKEND],
   }),
   define("secrets.reveal", "POST", `${E}/secrets/:name/reveal`, "human", false, "4.3", {
+    action: "secrets.read",
     body: z.strictObject({ version: version.optional() }),
     errors: ["state_conflict", ...VALUE_READ],
   }),
   define("secrets.create", "POST", `${E}/secrets`, "human", true, "4.2", {
+    action: "secrets.write",
     body: z.strictObject({ name: secretName, value: secretValue }),
     completed: 201,
     errors: ["already_exists", "capacity_exceeded", ...KEY_WRITE],
   }),
   define("secrets.update", "PATCH", `${E}/secrets/:name`, "human", true, "4.2", {
+    action: "secrets.write",
     body: z.strictObject({ value: secretValue, ...expected }),
     errors: ["capacity_exceeded", ...VERSIONED],
   }),
   define("secrets.delete", "POST", `${E}/secrets/:name/delete`, "human", true, "4.4", {
+    action: "secrets.write",
     body: deleteBody,
     errors: VERSIONED,
   }),
   define("secrets.undelete", "POST", `${E}/secrets/:name/undelete`, "human", true, "4.4", {
+    action: "secrets.write",
     body: deleteBody,
     errors: ["capacity_exceeded", ...VERSIONED],
   }),
   define("secrets.restore", "POST", `${E}/secrets/:name/restore`, "human", true, "4.4", {
+    action: "secrets.write",
     body: z.strictObject({ sourceVersion: version, ...expected, confirmed }),
     errors: ["capacity_exceeded", ...VERSIONED],
   }),
 
   define("import.preview", "POST", `${E}/import/preview`, "human", false, "4.7", {
+    action: "secrets.write",
     body: "raw-dotenv",
     errors: ["state_conflict", "capacity_exceeded"],
   }),
   define("import.apply", "POST", `${E}/import/:preview/apply`, "human", true, "4.7", {
+    action: "secrets.write",
     body: "raw-dotenv",
     errors: IMPORT_WRITE,
   }),
@@ -297,19 +425,24 @@ export const ROUTES: readonly RouteDef[] = Object.freeze([
     false,
     "4.7",
     {
+      action: "secrets.write",
       body: "raw-dotenv",
       responses: { 200: operationResponseSchema, 202: operationResponseSchema },
       errors: ["outcome_unknown", "audit_unavailable", ...IMPORT_WRITE],
     },
   ),
   define("export.create", "POST", `${E}/export`, "human_fresh_totp", false, "4.9", {
+    action: "secrets.read",
     body: confirmedBody,
     responses: { 200: "dotenv-attachment" },
     errors: ["environment_changed", "state_conflict", ...VALUE_READ],
   }),
 
-  define("credentials.list", "GET", `${E}/credentials`, "human", false, "5.1"),
+  define("credentials.list", "GET", `${E}/credentials`, "human", false, "5.1", {
+    action: "credentials.manage",
+  }),
   define("credentials.issue", "POST", `${E}/credentials`, "human_fresh_totp", true, "5.1", {
+    action: "credentials.manage",
     body: z.strictObject({
       name: projectName,
       ttlSeconds: z
@@ -329,26 +462,36 @@ export const ROUTES: readonly RouteDef[] = Object.freeze([
     "human",
     true,
     "5.2",
-    { body: confirmedBody, errors: ["state_conflict", ...BACKEND] },
+    { action: "credentials.manage", body: confirmedBody, errors: ["state_conflict", ...BACKEND] },
   ),
 
   define("operations.get", "GET", "/v1/operations/:operation", "human", false, "4.1", {
+    action: "secrets.read",
     responses: operation,
   }),
-  define("operations.list", "GET", `${E}/operations`, "human", false, "4.1"),
-
-  define("audit.list", "GET", `${O}/audit`, "human", false, "6.1"),
-  define("activity.list", "GET", `${O}/activity`, "human", false, "6.1"),
-  define("overview.get", "GET", `${O}/overview`, "human", false, "7.3"),
-  define("credentials.summary", "GET", `${O}/credentials/summary`, "human", false, "7.7"),
-  define("metrics.get", "GET", `${O}/metrics`, "human", false, "7.8"),
-
-  define("session.activity", "POST", "/v1/session/activity", "human", false, "3.5"),
-  define("auth.reset.complete", "POST", "/v1/auth/reset/complete", "reset_flow", false, "3.6", {
-    body: PENDING,
+  define("operations.list", "GET", `${E}/operations`, "human", false, "4.1", {
+    action: "secrets.read",
   }),
-  define("reference.get", "GET", "/v1/reference", "human", false, "5.9"),
-  define("openapi.get", "GET", "/v1/openapi.json", "human", false, "5.9"),
+
+  define("audit.list", "GET", `${O}/audit`, "human", false, "6.1", { action: "audit.view" }),
+  define("activity.list", "GET", `${O}/activity`, "human", false, "6.1", { action: "audit.view" }),
+  define("overview.get", "GET", `${O}/overview`, "human", false, "7.3", { action: "audit.view" }),
+  define("credentials.summary", "GET", `${O}/credentials/summary`, "human", false, "7.7", {
+    action: "credentials.manage",
+  }),
+  define("metrics.get", "GET", `${O}/metrics`, "human", false, "7.8", { action: "audit.view" }),
+
+  define("session.activity", "POST", "/v1/session/activity", "human", false, "3.5", {
+    action: null,
+    responses: { 200: activityBody },
+  }),
+  define("auth.reset.complete", "POST", "/v1/auth/reset/complete", "reset_flow", false, "3.6", {
+    body: resetCompleteBody,
+    responses: { 200: z.strictObject({ next: z.enum(["sign_in", "enroll"]) }) },
+    errors: ["audit_unavailable"],
+  }),
+  define("reference.get", "GET", "/v1/reference", "human", false, "5.9", { action: null }),
+  define("openapi.get", "GET", "/v1/openapi.json", "human", false, "5.9", { action: null }),
 
   define("machine.keys", "GET", `${M}/keys`, "machine", false, "5.4", {
     errors: ["environment_changed", ...BACKEND],

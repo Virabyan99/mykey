@@ -4,7 +4,7 @@
 // process with the stack's certificates. It reaches the database through a
 // small TCP relay on a fixed local port: Docker gives a restarted container a
 // new published port, and a real API would keep its configured address.
-import { randomBytes } from "node:crypto";
+import { randomBytes, randomUUID } from "node:crypto";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import https from "node:https";
 import net from "node:net";
@@ -13,7 +13,8 @@ import { join } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 import { rootCertificates } from "node:tls";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { startServer, type ApiServer, type RequestLogEntry } from "@mykey/api";
+import { startServer, type ApiConfig, type ApiServer, type LogEntry } from "@mykey/api";
+import { generateKeyFiles } from "@mykey/auth";
 import { ROUTES, errorEnvelopeSchema } from "@mykey/contracts";
 import { ROLE_NAMES, applyRoles, type DbTarget, type RoleName } from "@mykey/db";
 import type { z } from "zod";
@@ -83,8 +84,30 @@ describe("API health stub", () => {
   let relayPort: number;
   let api: ApiServer;
   let database: DbTarget;
-  const log: RequestLogEntry[] = [];
+  const log: LogEntry[] = [];
   const directory = mkdtempSync(join(tmpdir(), "mykey-api-"));
+  // The production entry loads the auth keys from a directory (Run 3.2).
+  const keysDirectory = mkdtempSync(join(tmpdir(), "mykey-api-keys-"));
+  generateKeyFiles(keysDirectory);
+  // An open gate (Run 3.1): this suite is about health, not the gate.
+  const hostInstanceId = randomUUID();
+  const apiConfig: ApiConfig = {
+    baseUrl: "https://mykey.test",
+    build: "0000000",
+    gatePath: join(directory, "gate.json"),
+    hostInstanceId,
+    trustedProxy: null,
+  };
+  writeFileSync(
+    apiConfig.gatePath,
+    JSON.stringify({
+      version: 1,
+      state: "open",
+      gateEpoch: 1,
+      hostInstanceId,
+      writtenAt: new Date().toISOString(),
+    }),
+  );
   const cleanup: (() => Promise<void>)[] = [];
 
   beforeAll(async () => {
@@ -137,6 +160,8 @@ describe("API health stub", () => {
       port: 0,
       tls: { certPath: stack.api.certPath, keyPath: stack.api.keyPath },
       database,
+      api: apiConfig,
+      keysDirectory,
       log: (entry) => log.push(entry),
     });
     cleanup.push(() => api.close());
@@ -146,6 +171,7 @@ describe("API health stub", () => {
     // In reverse order of creation; a failed beforeAll leaves only what it made.
     for (const release of cleanup.reverse()) await release();
     rmSync(directory, { recursive: true, force: true });
+    rmSync(keysDirectory, { recursive: true, force: true });
   });
 
   it("answers 200 up when a SELECT as api_runtime over verified TLS succeeds", async () => {
@@ -208,12 +234,14 @@ describe("API health stub", () => {
     // A real public root certificate that did not sign the stack's server certificate.
     const otherCa = join(directory, "other-ca.crt");
     writeFileSync(otherCa, rootCertificates[0]!);
-    const lines: RequestLogEntry[] = [];
+    const lines: LogEntry[] = [];
     const distrusting = await startServer({
       hostname: "127.0.0.1",
       port: 0,
       tls: { certPath: stack.api.certPath, keyPath: stack.api.keyPath },
       database: { ...database, caCertPath: otherCa },
+      api: apiConfig,
+      keysDirectory,
       log: (entry) => lines.push(entry),
     });
     try {
@@ -264,7 +292,7 @@ describe("API health stub", () => {
     // A restarted OpenBao is published on another port; the relay follows it,
     // the API keeps its configured address.
     let baoTarget = { host: "", port: 0 };
-    const baoLog: RequestLogEntry[] = [];
+    const baoLog: LogEntry[] = [];
 
     const pointAtBao = (): void => {
       const url = new URL(stack.bao.url);
@@ -303,6 +331,8 @@ describe("API health stub", () => {
           url: `https://127.0.0.1:${(baoRelay.address() as net.AddressInfo).port}`,
           caCertPath: stack.bao.caCertPath,
         },
+        api: apiConfig,
+        keysDirectory,
         log: (entry) => baoLog.push(entry),
       });
       cleanup.push(() => withBao.close());

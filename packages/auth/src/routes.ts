@@ -1,10 +1,11 @@
-// The HTTP surface of the auth module (P-25, D-19). No Better Auth catch-all
-// handler is mounted: each allowed native endpoint has its own route that
-// calls `auth.api.<name>` with a strict body, and every other path under
-// /v1/auth answers the contract's 404 envelope.
-import { randomUUID } from "node:crypto";
-import type { ErrorCode, ErrorEnvelope } from "@mykey/contracts";
-import { ERROR_CODES } from "@mykey/contracts";
+// The HTTP surface of the auth module (P-25, D-19), seated on the API's
+// pipeline in Run 3.2: the pipeline's envelope builder, request id and body
+// reader come in through `AuthRouteEnv`. No Better Auth catch-all handler is
+// mounted: each allowed native endpoint has its own route that calls
+// `auth.api.<name>` with a strict body, and every other path under /v1/auth
+// answers the contract's 404 envelope.
+import { AuditUnavailable, type AuditEvent } from "@mykey/audit";
+import type { ErrorCode } from "@mykey/contracts";
 import type { Context, Hono } from "hono";
 import type pg from "pg";
 import { z } from "zod";
@@ -15,22 +16,47 @@ import {
   elevateWithTotp,
   enrollTotp,
   regenerateRecoveryCodes,
+  stepUpWithTotp,
+  type FactorAudit,
   type FactorDeps,
   type FailureReason,
 } from "./factors/elevate.ts";
+import type { AuthKeys } from "./keys.ts";
+import { changePassword, type ChangeResult } from "./password.ts";
+import {
+  listSessions,
+  nativeSessionResponse,
+  resolveSession,
+  revokeSession,
+  type SessionDeps,
+} from "./sessions.ts";
+import { signInWithPassword } from "./sign-in.ts";
+import { normalizeEmail } from "./email.ts";
+import type { Admission, Throttle, ThrottlePhase } from "./throttle.ts";
 
 export interface NativeRoute {
   method: string;
   path: string;
 }
 
-/** The five native endpoints MyKey serves. None has a path parameter. */
+/**
+ * The four native endpoints MyKey serves (the password change is product-owned
+ * since Run 3.5, P-49). None has a path parameter.
+ */
 export const NATIVE_ALLOWED: readonly NativeRoute[] = Object.freeze([
   { method: "POST", path: "/sign-in/email" },
   { method: "POST", path: "/sign-out" },
   { method: "GET", path: "/get-session" },
-  { method: "POST", path: "/change-password" },
   { method: "POST", path: "/revoke-sessions" },
+]);
+
+/**
+ * Paths of native endpoints that are served by product code instead (the
+ * native handler is never called): they answer, although the native endpoint
+ * is denied.
+ */
+export const PRODUCT_OWNED: readonly NativeRoute[] = Object.freeze([
+  { method: "POST", path: "/change-password" },
 ]);
 
 /**
@@ -38,6 +64,7 @@ export const NATIVE_ALLOWED: readonly NativeRoute[] = Object.freeze([
  * that adds one fails `routes.test.ts` until it is placed in one of the lists.
  */
 export const NATIVE_DENIED: readonly NativeRoute[] = Object.freeze([
+  { method: "POST", path: "/change-password" },
   { method: "POST", path: "/sign-in/social" },
   { method: "GET", path: "/callback/:id" },
   { method: "POST", path: "/callback/:id" },
@@ -85,31 +112,36 @@ export function nativeRoutes(auth: Auth): NativeRoute[] {
   return routes.sort((a, b) => `${a.path} ${a.method}`.localeCompare(`${b.path} ${b.method}`));
 }
 
-// ------------------------------------------------------------------ envelope
+// ------------------------------------------------------------- environment
 
-const MESSAGES: Partial<Record<ErrorCode, string>> = {
-  malformed_request: "The request is not valid.",
-  unauthenticated: "Sign-in is required, or the credentials are not valid.",
-  mfa_incomplete: "The second factor is required.",
-  action_denied: "This action is not allowed.",
-  not_found: "Not found.",
-  state_conflict: "The account or session is not in the state this step needs.",
-  rate_limited: "Too many requests.",
-  dependency_unavailable: "A service this request needs is not available.",
-};
-
-export function errorResponse(code: ErrorCode, requestId: string = randomUUID()): Response {
-  const body: ErrorEnvelope = {
-    error: {
-      code,
-      message: MESSAGES[code] ?? code,
-      requestId: requestId as ErrorEnvelope["error"]["requestId"],
-    },
-  };
-  return new Response(JSON.stringify(body), {
-    status: ERROR_CODES[code].status,
-    headers: { "content-type": "application/json" },
-  });
+/** What the API gives the auth routes (Run 3.2). */
+export interface AuthRouteEnv {
+  /** Logged in as api_runtime. */
+  pool: pg.Pool;
+  keys: AuthKeys;
+  /** The public origin. */
+  baseUrl: string;
+  /**
+   * The API's Origin check (FR-1.76, Run 3.7): every POST under /v1/auth,
+   * sign-in included, is refused with 403 origin_rejected unless it holds.
+   */
+  originAllowed(headers: Headers): boolean;
+  /** The API's one envelope builder. */
+  respondError(code: ErrorCode, requestId: string, headers?: Record<string, string>): Response;
+  /** The pipeline's request id of `c`. */
+  requestId(c: Context): string;
+  /** The request source (Run 3.3: the trusted edge's forwarded address, else the peer). */
+  source(c: Context): string;
+  /** The pipeline's body reader: the body rules of Run 3.1 with the auth limit. */
+  readBody(c: Context): Promise<{ ok: true; value: unknown } | { ok: false }>;
+  audit?: (event: AuditEvent) => Promise<void>;
+  /** Throttling of password and factor attempts (Run 3.3); required. */
+  throttle: Throttle;
+  /**
+   * The time a TOTP code is checked at (the API's clock, ±1 step). Only the
+   * integration harness gives one; otherwise it is the current time.
+   */
+  now?: (c: Context) => Date | undefined;
 }
 
 /** Better Auth's error status → the contract's code. */
@@ -122,17 +154,32 @@ function codeForStatus(status: number): ErrorCode {
   return "malformed_request";
 }
 
-/** Passes a native answer on: errors as the envelope, bodies without any token. */
-async function relay(response: Response): Promise<Response> {
+/**
+ * Passes a native answer on: errors as the envelope, JSON bodies without any
+ * token. A 2xx answer that is not JSON is `dependency_unavailable` (M16).
+ */
+export async function relayNative(
+  response: Response,
+  env: Pick<AuthRouteEnv, "respondError">,
+  requestId: string,
+): Promise<Response> {
   if (!response.ok) {
-    const headers = new Headers();
+    const envelope = env.respondError(codeForStatus(response.status), requestId);
+    const headers = new Headers(envelope.headers);
     for (const cookie of response.headers.getSetCookie()) headers.append("set-cookie", cookie);
-    const envelope = errorResponse(codeForStatus(response.status));
-    for (const [name, value] of envelope.headers) headers.set(name, value);
     return new Response(envelope.body, { status: envelope.status, headers });
   }
+  const type = (response.headers.get("content-type") ?? "").toLowerCase();
+  if (!type.startsWith("application/json")) {
+    return env.respondError("dependency_unavailable", requestId);
+  }
   const text = await response.text();
-  const body: unknown = text === "" ? null : JSON.parse(text);
+  let body: unknown;
+  try {
+    body = text === "" ? null : JSON.parse(text);
+  } catch {
+    return env.respondError("dependency_unavailable", requestId);
+  }
   const headers = new Headers(response.headers);
   headers.delete("content-length");
   return new Response(JSON.stringify(withoutTokens(body)), { status: response.status, headers });
@@ -159,213 +206,443 @@ const signInBody = z.strictObject({
 const changePasswordBody = z.strictObject({
   currentPassword: z.string().min(1).max(MAX_PASSWORD),
   newPassword: z.string().min(1).max(MAX_PASSWORD),
-  revokeOtherSessions: z.boolean().optional(),
 });
+const revokeSessionBody = z.strictObject({ sessionId: z.uuid() });
 const emptyBody = z.strictObject({});
 
-/** The JSON body parsed by `schema`, or undefined when it is missing, not JSON or not valid. */
-export async function strictBody<T>(c: Context, schema: z.ZodType<T>): Promise<T | undefined> {
-  const text = await c.req.text();
-  if (text.trim() === "") {
-    const empty = schema.safeParse({});
-    return empty.success ? empty.data : undefined;
-  }
-  if (!(c.req.header("content-type") ?? "").toLowerCase().startsWith("application/json")) {
-    return undefined;
-  }
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(text);
-  } catch {
-    return undefined;
-  }
-  const result = schema.safeParse(parsed);
+/** The body parsed by the pipeline's reader and by `schema`, or undefined when either refuses it. */
+export async function strictBody<T>(
+  c: Context,
+  schema: z.ZodType<T>,
+  env: Pick<AuthRouteEnv, "readBody">,
+): Promise<T | undefined> {
+  const read = await env.readBody(c);
+  if (!read.ok) return undefined;
+  const result = schema.safeParse(read.value);
   return result.success ? result.data : undefined;
-}
-
-/** The session of the request with its factor phase and auth epoch, or null. */
-export async function currentSession(
-  auth: Auth,
-  headers: Headers,
-): Promise<{ id: string; userId: string; phase: string; authEpoch: number } | null> {
-  const found = await auth.api.getSession({ headers });
-  if (found === null) return null;
-  const session = found.session as unknown as {
-    id: string;
-    userId: string;
-    phase: string;
-    authEpoch?: number | string;
-  };
-  return {
-    id: session.id,
-    userId: session.userId,
-    phase: session.phase,
-    authEpoch: Number(session.authEpoch ?? 0),
-  };
 }
 
 /**
  * A product route's guard (Doc 10 §4.1 rule 5: from current database state on
- * every request): the session completed the second factor, its account is
- * `active` and the session belongs to the account's current auth epoch.
- * Without a pool it refuses. Not yet: the idle limit (Session 3).
+ * every request), decided by `resolveSession`: the refusal's code, or null.
  */
 export async function requireMfaComplete(
-  auth: Auth,
+  deps: SessionDeps,
   headers: Headers,
-  pool: pg.Pool | undefined,
-): Promise<Response | null> {
-  const session = await currentSession(auth, headers);
-  if (session === null) return errorResponse("unauthenticated");
-  if (session.phase !== "mfa_complete") return errorResponse("mfa_incomplete");
-  if (pool === undefined) return errorResponse("unauthenticated");
-  const account = await pool.query<{ state: string; auth_epoch: string }>(
-    "SELECT state, auth_epoch FROM auth.account_state WHERE user_id = $1",
-    [session.userId],
-  );
-  const row = account.rows[0];
-  if (row?.state !== "active") return errorResponse("unauthenticated");
-  if (Number(row.auth_epoch) !== session.authEpoch) return errorResponse("unauthenticated");
+): Promise<ErrorCode | null> {
+  const verdict = await resolveSession(deps, headers);
+  if (!verdict.ok) return "unauthenticated";
+  if (verdict.session.phase !== "mfa_complete") return "mfa_incomplete";
   return null;
 }
 
 // ------------------------------------------------------------------- mount
 
 /** A failed factor step: the same answer for a wrong, a replayed and an expired code. */
-function factorFailure(reason: FailureReason): Response {
-  return errorResponse(reason === "wrong_state" ? "state_conflict" : "unauthenticated");
-}
+const factorFailureCode = (reason: FailureReason): ErrorCode =>
+  reason === "wrong_state"
+    ? "state_conflict"
+    : reason === "not_fresh"
+      ? "fresh_verification_required"
+      : "unauthenticated";
 
 const codeBody = z.strictObject({ code: z.string().min(1).max(64) });
 
-/** The raw token of the request's session (the protected adapter returns it for a lookup by token). */
-async function sessionTokenOf(auth: Auth, headers: Headers): Promise<string | null> {
-  const found = await auth.api.getSession({ headers });
-  const token = (found?.session as { token?: unknown } | undefined)?.token;
-  return typeof token === "string" && token !== "" ? token : null;
+/**
+ * The raw token and the user of the request's session, when `resolveSession`
+ * admits it. A reset challenge is admitted only where `challenge` says so
+ * (enroll and activate, Run 3.6).
+ */
+async function sessionOf(
+  deps: SessionDeps,
+  headers: Headers,
+  challenge: "allowed" | "refused" = "refused",
+): Promise<{ token: string; userId: string } | null> {
+  const verdict = await resolveSession(deps, headers);
+  if (!verdict.ok) return null;
+  if (verdict.session.resetChallenge && challenge === "refused") return null;
+  return { token: verdict.session.token, userId: verdict.session.userId };
 }
 
+/** What a throttled step answers before its credential is looked at, or null to go on. */
+async function throttled(
+  env: AuthRouteEnv,
+  c: Context,
+  phase: ThrottlePhase,
+  account: string | null,
+): Promise<Response | null> {
+  const requestId = env.requestId(c);
+  let admission: Admission;
+  try {
+    admission = await env.throttle.admit(phase, { source: env.source(c), account });
+  } catch {
+    return env.respondError("dependency_unavailable", requestId);
+  }
+  if (admission.allowed) return null;
+  try {
+    // No user id: a refusal must not tell whether the account exists.
+    await env.audit?.({
+      action: "auth.throttled",
+      actor: { kind: "anonymous", id: null },
+      source: "api",
+      organizationId: null,
+      target: null,
+      outcome: "denied",
+      requestId,
+      operationId: null,
+      details: { phase },
+    });
+  } catch {
+    return env.respondError("audit_unavailable", requestId);
+  }
+  return env.respondError("rate_limited", requestId, {
+    "retry-after": String(admission.retryAfterSeconds),
+  });
+}
+
+/** Counts a failed credential; a counter that cannot be written is never answered as a success. */
+async function failed(
+  env: AuthRouteEnv,
+  c: Context,
+  phase: ThrottlePhase,
+  account: string,
+  code: ErrorCode,
+): Promise<Response> {
+  try {
+    await env.throttle.recordFailure(phase, account);
+  } catch {
+    return env.respondError("dependency_unavailable", env.requestId(c));
+  }
+  return env.respondError(code, env.requestId(c));
+}
+
+const FACTOR_PATHS = [
+  "/totp/enroll",
+  "/totp/activate",
+  "/totp/verify",
+  "/totp/step-up",
+  "/recovery/verify",
+  "/recovery/regenerate",
+] as const;
+
+/** Product routes of the auth module that have no native counterpart (P-50). */
+const PRODUCT_ROUTES: readonly NativeRoute[] = [
+  { method: "GET", path: "/sessions" },
+  { method: "POST", path: "/sessions/revoke" },
+];
+
+/** Every route the auth module serves, as the app registers it (full paths). */
+export function servedAuthRoutes(): NativeRoute[] {
+  return [...NATIVE_ALLOWED, ...PRODUCT_OWNED, ...PRODUCT_ROUTES]
+    .map((route) => ({ method: route.method, path: `${AUTH_BASE_PATH}${route.path}` }))
+    .concat(FACTOR_PATHS.map((path) => ({ method: "POST", path: `${AUTH_BASE_PATH}${path}` })));
+}
+
+const json = (body: unknown, setCookie?: string): Response => {
+  const headers = new Headers({ "content-type": "application/json" });
+  if (setCookie !== undefined) headers.append("set-cookie", setCookie);
+  return new Response(JSON.stringify(body), { status: 200, headers });
+};
+
+/** Any Env of the API's Hono app. */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type AnyHono = Hono<any>;
+
 /**
- * Registers the five allowed native routes and, given the factor
- * dependencies, the five factor routes; everything else under /v1/auth is 404.
+ * Registers the allowed native routes and the factor routes; everything else
+ * under /v1/auth is 404. Refuses to mount without throttling (Run 3.3).
  */
-export function mountAuthRoutes(app: Hono, auth: Auth, factors?: Omit<FactorDeps, "auth">): void {
+export function mountAuthRoutes(app: AnyHono, auth: Auth, env: AuthRouteEnv): void {
+  // The type requires it; this guards callers that bypass the type.
+  if ((env.throttle as Throttle | undefined) === undefined) {
+    throw new Error("the auth routes need throttling (Run 3.3); none was given");
+  }
   const base = AUTH_BASE_PATH;
+  const refuse = (c: Context, code: ErrorCode): Response =>
+    env.respondError(code, env.requestId(c));
+  const sessions: SessionDeps = { auth, pool: env.pool, keys: env.keys };
+
+  // Before the body, the session and the throttle: a foreign page changes nothing.
+  app.use(`${base}/*`, async (c: Context, next) => {
+    if (c.req.method === "POST" && !env.originAllowed(c.req.raw.headers)) {
+      return refuse(c, "origin_rejected");
+    }
+    await next();
+    return undefined;
+  });
 
   app.post(`${base}/sign-in/email`, async (c) => {
-    const body = await strictBody(c, signInBody);
-    if (body === undefined) return errorResponse("malformed_request");
-    return relay(
-      await auth.api.signInEmail({ body, headers: c.req.raw.headers, asResponse: true }),
-    );
+    const body = await strictBody(c, signInBody, env);
+    if (body === undefined) return refuse(c, "malformed_request");
+    // The account is the e-mail as submitted, whether or not such a user exists.
+    const account = normalizeEmail(body.email);
+    const refusal = await throttled(env, c, "password", account);
+    if (refusal !== null) return refusal;
+    try {
+      const result = await signInWithPassword(
+        { auth, pool: env.pool, keys: env.keys },
+        { ...body, headers: c.req.raw.headers, requestId: env.requestId(c) },
+      );
+      if (!result.ok) return await failed(env, c, "password", account, "unauthenticated");
+      return json({ phase: result.phase }, result.setCookie);
+    } catch (error) {
+      if (error instanceof AuditUnavailable) return refuse(c, "audit_unavailable");
+      throw error;
+    }
   });
 
   app.post(`${base}/sign-out`, async (c) => {
-    if ((await strictBody(c, emptyBody)) === undefined) return errorResponse("malformed_request");
-    return relay(await auth.api.signOut({ headers: c.req.raw.headers, asResponse: true }));
-  });
-
-  app.get(`${base}/get-session`, async (c) =>
-    relay(await auth.api.getSession({ headers: c.req.raw.headers, asResponse: true })),
-  );
-
-  app.post(`${base}/change-password`, async (c) => {
-    const body = await strictBody(c, changePasswordBody);
-    if (body === undefined) return errorResponse("malformed_request");
-    const denied = await requireMfaComplete(auth, c.req.raw.headers, factors?.pool);
-    if (denied !== null) return denied;
-    return relay(
-      await auth.api.changePassword({ body, headers: c.req.raw.headers, asResponse: true }),
+    if ((await strictBody(c, emptyBody, env)) === undefined) return refuse(c, "malformed_request");
+    return relayNative(
+      await auth.api.signOut({ headers: c.req.raw.headers, asResponse: true }),
+      env,
+      env.requestId(c),
     );
   });
 
-  app.post(`${base}/revoke-sessions`, async (c) => {
-    if ((await strictBody(c, emptyBody)) === undefined) return errorResponse("malformed_request");
-    const denied = await requireMfaComplete(auth, c.req.raw.headers, factors?.pool);
-    if (denied !== null) return denied;
-    return relay(await auth.api.revokeSessions({ headers: c.req.raw.headers, asResponse: true }));
+  app.get(`${base}/get-session`, async (c) => {
+    if (!(await env.readBody(c)).ok) return refuse(c, "malformed_request");
+    // The same decision as every product route: a session it refuses does not exist here either.
+    const verdict = await resolveSession(sessions, c.req.raw.headers);
+    if (!verdict.ok) return json(null);
+    // A reset challenge is not a session to show (Run 3.6).
+    if (verdict.session.resetChallenge) return refuse(c, "unauthenticated");
+    return relayNative(await nativeSessionResponse(auth, c.req.raw.headers), env, env.requestId(c));
   });
 
-  if (factors !== undefined) mountFactorRoutes(app, { ...factors, auth });
-  closeAuthPaths(app);
+  // The product-owned password change (P-49): see password.ts.
+  app.post(`${base}/change-password`, async (c) => {
+    const body = await strictBody(c, changePasswordBody, env);
+    if (body === undefined) return refuse(c, "malformed_request");
+    const verdict = await resolveSession(sessions, c.req.raw.headers);
+    if (!verdict.ok) return refuse(c, "unauthenticated");
+    if (verdict.session.phase !== "mfa_complete") return refuse(c, "mfa_incomplete");
+    const email = await env.pool.query<{ email: string }>(
+      'SELECT email FROM auth."user" WHERE id = $1',
+      [verdict.session.userId],
+    );
+    const account = email.rows[0]?.email ?? verdict.session.userId;
+    const refusal = await throttled(env, c, "password", account);
+    if (refusal !== null) return refusal;
+    let result: ChangeResult;
+    try {
+      result = await changePassword(
+        { auth, pool: env.pool },
+        { ...body, sessionId: verdict.session.id, requestId: env.requestId(c) },
+      );
+    } catch (error) {
+      if (error instanceof AuditUnavailable) return refuse(c, "audit_unavailable");
+      throw error;
+    }
+    if (result.ok) return json({ revokedSessions: result.revoked });
+    if (result.reason === "wrong_password") {
+      return failed(env, c, "password", account, "unauthenticated");
+    }
+    return refuse(
+      c,
+      result.reason === "not_fresh"
+        ? "fresh_verification_required"
+        : result.reason === "password_rejected"
+          ? "validation_failed"
+          : "unauthenticated",
+    );
+  });
+
+  // P-50: the user's sessions and the revocation of one of them. No token leaves.
+  app.get(`${base}/sessions`, async (c) => {
+    if (!(await env.readBody(c)).ok) return refuse(c, "malformed_request");
+    const verdict = await resolveSession(sessions, c.req.raw.headers);
+    if (!verdict.ok) return refuse(c, "unauthenticated");
+    if (verdict.session.phase !== "mfa_complete") return refuse(c, "mfa_incomplete");
+    return json({
+      sessions: await listSessions(env.pool, verdict.session.userId, verdict.session.id),
+    });
+  });
+
+  app.post(`${base}/sessions/revoke`, async (c) => {
+    const body = await strictBody(c, revokeSessionBody, env);
+    if (body === undefined) return refuse(c, "malformed_request");
+    const verdict = await resolveSession(sessions, c.req.raw.headers);
+    if (!verdict.ok) return refuse(c, "unauthenticated");
+    if (verdict.session.phase !== "mfa_complete") return refuse(c, "mfa_incomplete");
+    // Another user's session is the same 404 as an absent one.
+    if (!(await revokeSession(env.pool, verdict.session.userId, body.sessionId))) {
+      return refuse(c, "not_found");
+    }
+    return json({});
+  });
+
+  app.post(`${base}/revoke-sessions`, async (c) => {
+    if ((await strictBody(c, emptyBody, env)) === undefined) return refuse(c, "malformed_request");
+    const denied = await requireMfaComplete(sessions, c.req.raw.headers);
+    if (denied !== null) return refuse(c, denied);
+    return relayNative(
+      await auth.api.revokeSessions({ headers: c.req.raw.headers, asResponse: true }),
+      env,
+      env.requestId(c),
+    );
+  });
+
+  mountFactorRoutes(app, { pool: env.pool, keys: env.keys, auth }, env, refuse);
+  // Everything else under the auth base path: the contract's 404, registered last.
+  app.all(base, (c) => refuse(c, "not_found"));
+  app.all(`${base}/*`, (c) => refuse(c, "not_found"));
 }
 
-function mountFactorRoutes(app: Hono, deps: FactorDeps): void {
+function mountFactorRoutes(
+  app: AnyHono,
+  deps: FactorDeps,
+  env: AuthRouteEnv,
+  refuse: (c: Context, code: ErrorCode) => Response,
+): void {
   const base = AUTH_BASE_PATH;
-  const json = (body: unknown, setCookie?: string): Response => {
-    const headers = new Headers({ "content-type": "application/json" });
-    if (setCookie !== undefined) headers.append("set-cookie", setCookie);
-    return new Response(JSON.stringify(body), { status: 200, headers });
-  };
-  /** Body and session token of a factor request, or the error to answer. */
+  /** Body, session token and user of a factor request, or the error to answer. */
   const prepare = async <T>(
     c: Context,
     schema: z.ZodType<T>,
-  ): Promise<{ body: T; token: string } | Response> => {
-    const body = await strictBody(c, schema);
-    if (body === undefined) return errorResponse("malformed_request");
-    const token = await sessionTokenOf(deps.auth, c.req.raw.headers);
-    if (token === null) return errorResponse("unauthenticated");
-    return { body, token };
+  ): Promise<{ body: T; token: string; userId: string } | Response> => {
+    const body = await strictBody(c, schema, env);
+    if (body === undefined) return refuse(c, "malformed_request");
+    // Only enrollment and activation serve the challenge session of an mfa reset.
+    const path = c.req.path;
+    const challenge =
+      path.endsWith("/totp/enroll") || path.endsWith("/totp/activate") ? "allowed" : "refused";
+    const session = await sessionOf(deps, c.req.raw.headers, challenge);
+    if (session === null) return refuse(c, "unauthenticated");
+    return { body, ...session };
+  };
+  /**
+   * A factor step under the `factor` throttle of the session's user: admitted
+   * first, a failure counted (TOTP, activation and recovery codes share it).
+   */
+  /** What every factor function is given besides its own input: the clock and the audit. */
+  const context = (c: Context): { now?: Date; audit: FactorAudit } => {
+    const now = env.now?.(c);
+    return { ...(now === undefined ? {} : { now }), audit: { requestId: env.requestId(c) } };
+  };
+  const factorStep = async <T>(
+    c: Context,
+    schema: z.ZodType<T>,
+    step: (ready: {
+      body: T;
+      token: string;
+    }) => Promise<
+      { ok: true; body: unknown; setCookie?: string } | { ok: false; reason: FailureReason }
+    >,
+    opts: { throttled: boolean } = { throttled: true },
+  ): Promise<Response> => {
+    const ready = await prepare(c, schema);
+    if (ready instanceof Response) return ready;
+    if (opts.throttled) {
+      const refusal = await throttled(env, c, "factor", ready.userId);
+      if (refusal !== null) return refusal;
+    }
+    let result: Awaited<ReturnType<typeof step>>;
+    try {
+      result = await step(ready);
+    } catch (error) {
+      if (error instanceof AuditUnavailable) return refuse(c, "audit_unavailable");
+      throw error;
+    }
+    if (result.ok) return json(result.body, result.setCookie);
+    // A refused state or a stale session is not a wrong credential: not counted.
+    if (!opts.throttled || result.reason === "wrong_state" || result.reason === "not_fresh") {
+      return refuse(c, factorFailureCode(result.reason));
+    }
+    return failed(env, c, "factor", ready.userId, factorFailureCode(result.reason));
   };
 
-  app.post(`${base}/totp/enroll`, async (c) => {
-    const ready = await prepare(c, emptyBody);
-    if (ready instanceof Response) return ready;
-    const result = await enrollTotp(deps, { sessionToken: ready.token });
-    if (!result.ok) return factorFailure(result.reason);
-    return json({ enrollmentId: result.enrollmentId, secret: result.secret, uri: result.uri });
-  });
+  app.post(`${base}/totp/enroll`, (c) =>
+    factorStep(
+      c,
+      emptyBody,
+      async (ready) => {
+        const result = await enrollTotp(deps, { sessionToken: ready.token, ...context(c) });
+        return result.ok
+          ? {
+              ok: true,
+              body: { enrollmentId: result.enrollmentId, secret: result.secret, uri: result.uri },
+            }
+          : result;
+      },
+      { throttled: false },
+    ),
+  );
 
-  app.post(`${base}/totp/activate`, async (c) => {
-    const ready = await prepare(c, codeBody);
-    if (ready instanceof Response) return ready;
-    const result = await activateTotp(deps, { sessionToken: ready.token, code: ready.body.code });
-    if (!result.ok) return factorFailure(result.reason);
-    return json({ recoveryCodes: result.recoveryCodes }, result.setCookie);
-  });
+  app.post(`${base}/totp/activate`, (c) =>
+    factorStep(c, codeBody, async (ready) => {
+      const result = await activateTotp(deps, {
+        sessionToken: ready.token,
+        code: ready.body.code,
+        ...context(c),
+      });
+      if (!result.ok) return result;
+      // After an mfa reset's activation there is no session to set: the user signs in afresh.
+      return result.setCookie === undefined
+        ? { ok: true, body: { recoveryCodes: result.recoveryCodes } }
+        : { ok: true, body: { recoveryCodes: result.recoveryCodes }, setCookie: result.setCookie };
+    }),
+  );
 
-  app.post(`${base}/totp/verify`, async (c) => {
-    const ready = await prepare(c, codeBody);
-    if (ready instanceof Response) return ready;
-    const result = await elevateWithTotp(deps, {
-      sessionToken: ready.token,
-      code: ready.body.code,
-    });
-    if (!result.ok) return factorFailure(result.reason);
-    return json({ phase: "mfa_complete" }, result.setCookie);
-  });
+  app.post(`${base}/totp/verify`, (c) =>
+    factorStep(c, codeBody, async (ready) => {
+      const result = await elevateWithTotp(deps, {
+        sessionToken: ready.token,
+        code: ready.body.code,
+        ...context(c),
+      });
+      return result.ok
+        ? { ok: true, body: { phase: "mfa_complete" }, setCookie: result.setCookie }
+        : result;
+    }),
+  );
 
-  app.post(`${base}/recovery/verify`, async (c) => {
-    const ready = await prepare(c, codeBody);
-    if (ready instanceof Response) return ready;
-    const result = await elevateWithRecoveryCode(deps, {
-      sessionToken: ready.token,
-      code: ready.body.code,
-    });
-    if (!result.ok) return factorFailure(result.reason);
-    return json({ phase: "mfa_complete" }, result.setCookie);
-  });
+  app.post(`${base}/recovery/verify`, (c) =>
+    factorStep(c, codeBody, async (ready) => {
+      const result = await elevateWithRecoveryCode(deps, {
+        sessionToken: ready.token,
+        code: ready.body.code,
+        ...context(c),
+      });
+      return result.ok
+        ? { ok: true, body: { phase: "mfa_complete" }, setCookie: result.setCookie }
+        : result;
+    }),
+  );
 
-  app.post(`${base}/recovery/regenerate`, async (c) => {
-    const ready = await prepare(c, emptyBody);
-    if (ready instanceof Response) return ready;
-    const result = await regenerateRecoveryCodes(deps, { sessionToken: ready.token });
-    if (!result.ok) return factorFailure(result.reason);
-    return json({ recoveryCodes: result.recoveryCodes });
-  });
-}
+  // Run 3.4: a fresh TOTP verification for an mfa_complete session; no new token.
+  app.post(`${base}/totp/step-up`, (c) =>
+    factorStep(c, codeBody, async (ready) => {
+      const result = await stepUpWithTotp(deps, {
+        sessionToken: ready.token,
+        code: ready.body.code,
+        ...context(c),
+      });
+      return result.ok ? { ok: true, body: { fresh: true } } : result;
+    }),
+  );
 
-/** Everything else under the auth base path: the contract's 404, registered after every auth route. */
-function closeAuthPaths(app: Hono): void {
-  app.all(AUTH_BASE_PATH, () => errorResponse("not_found"));
-  app.all(`${AUTH_BASE_PATH}/*`, () => errorResponse("not_found"));
+  app.post(`${base}/recovery/regenerate`, (c) =>
+    factorStep(
+      c,
+      emptyBody,
+      async (ready) => {
+        const result = await regenerateRecoveryCodes(deps, {
+          sessionToken: ready.token,
+          ...context(c),
+        });
+        return result.ok ? { ok: true, body: { recoveryCodes: result.recoveryCodes } } : result;
+      },
+      { throttled: false },
+    ),
+  );
 }
 
 /** The strict request bodies, for the route contract (scripts/auth-route-contract.ts). */
 export const AUTH_BODIES = {
   signIn: signInBody,
   changePassword: changePasswordBody,
+  revokeSession: revokeSessionBody,
   empty: emptyBody,
   code: codeBody,
 } as const;

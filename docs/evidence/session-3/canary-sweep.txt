@@ -1,0 +1,4 @@
+# Canary sweep (Run 3.10), 2026-11-13T12:37:15.373Z
+values: 95 (passwords, TOTP seeds and codes, recovery codes, reset tokens and links, session cookie values, AppRole secret ids)
+places: 9 (docker logs api, docker logs provisioner, docker logs postgres, docker logs edge, docker logs openbao, openbao audit device, audit.event, jobs.job, pg_dump)
+hits: 0

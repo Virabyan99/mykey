@@ -22,7 +22,7 @@ const CONTRACT_FILE = resolve(ROOT, "docs/auth-route-contract.md");
 interface RouteContract {
   method: "GET" | "POST";
   path: string;
-  kind: "native" | "factor";
+  kind: "native" | "factor" | "product";
   body: keyof typeof AUTH_BODIES | null;
   success: string;
   errors: string[];
@@ -31,6 +31,8 @@ interface RouteContract {
   phases: string;
 }
 
+// Run 3.3: the password phase throttles sign-in; the factor phase is shared by
+// TOTP activation and verification and recovery codes.
 const COMMON_ERRORS = [
   "400 `malformed_request` (body not JSON, a field missing, an unknown field)",
 ];
@@ -41,10 +43,17 @@ const ROUTES: RouteContract[] = [
     path: "/sign-in/email",
     kind: "native",
     body: "signIn",
-    success: "200, `{ redirect, user }` as Better Auth returns it, without `token`",
-    errors: [...COMMON_ERRORS, "401 `unauthenticated` (unknown e-mail or wrong password)"],
-    cookies: "sets the session cookie of a new `password_verified` session",
-    accountStates: "not checked yet (Run 3.4 refuses `disabled` and `recovery_pending`)",
+    success: '200, exactly `{"phase":"password_verified"}` (Run 3.2)',
+    errors: [
+      ...COMMON_ERRORS,
+      "401 `unauthenticated`, byte-identical but for the request id, for an unknown e-mail, a wrong password, an account that is `disabled` or `recovery_pending`, and an epoch that moved during the sign-in; no cookie, no session row",
+      "503 `audit_unavailable` (the audit row could not be written; no session remains)",
+      "429 `rate_limited` with `Retry-After` (P-48, Run 3.3: more than 5 attempts a minute from the source, or the account locked for 900 s after 5 failures in the current and previous 15-minute window; checked before any credential, alike for known and unknown accounts)",
+      "503 `dependency_unavailable` (the rate counter could not be written: nothing is checked)",
+    ],
+    cookies:
+      "sets the session cookie of a new `password_verified` session bound to the account's current auth epoch; `Max-Age=43200`",
+    accountStates: "`enrollment_pending` or `active`",
     phases: "none needed; creates `password_verified`",
   },
   {
@@ -72,17 +81,50 @@ const ROUTES: RouteContract[] = [
   {
     method: "POST",
     path: "/change-password",
-    kind: "native",
+    kind: "product",
     body: "changePassword",
-    success: "200, `{ user }` without `token`",
+    success:
+      "200, `{ revokedSessions }`: one transaction stores the new hash, raises the credential epoch, deletes every other session of the user and writes `auth.password_change` (P-49, Run 3.5; the native endpoint is never called)",
     errors: [
       ...COMMON_ERRORS,
-      "401 `unauthenticated` (no session, or wrong current password)",
+      "401 `unauthenticated` (no valid session, or a wrong current password — counted against the `password` phase)",
       "401 `mfa_incomplete` (session not `mfa_complete`)",
+      "403 `fresh_verification_required` (no TOTP verification of this session in the last 600 s)",
+      "422 `validation_failed` (the new password breaks the rule of P-46)",
+      "429 `rate_limited` with `Retry-After` (the `password` phase of P-48, for the account's e-mail)",
+      "503 `dependency_unavailable` (the rate counter could not be written)",
     ],
-    cookies:
-      "with `revokeOtherSessions: true`: every session of the user is removed and a new `password_verified` session cookie is set (observed on 1.7.19, D-19); the owner passes the factor again",
-    accountStates: "any (Run 3.5 adds fresh verification)",
+    cookies: "none: this session keeps its token and its phase",
+    accountStates: "`active`",
+    phases: "`mfa_complete`",
+  },
+  {
+    method: "GET",
+    path: "/sessions",
+    kind: "product",
+    body: null,
+    success:
+      "200, `{ sessions: [{ id, createdAt, lastActivityAt, client, current }] }` — the user's sessions; `client` is the user agent cut to 120 printable ASCII characters; no token or verifier (P-50)",
+    errors: ["401 `unauthenticated`", "401 `mfa_incomplete`"],
+    cookies: "none",
+    accountStates: "`active`",
+    phases: "`mfa_complete`",
+  },
+  {
+    method: "POST",
+    path: "/sessions/revoke",
+    kind: "product",
+    body: "revokeSession",
+    success:
+      "200, `{}`: that session ends for its next request; the current one may be revoked (= sign-out)",
+    errors: [
+      ...COMMON_ERRORS,
+      "401 `unauthenticated`",
+      "401 `mfa_incomplete`",
+      "404 `not_found` (the id is not one of this user's sessions — the same answer as an absent id)",
+    ],
+    cookies: "none",
+    accountStates: "`active`",
     phases: "`mfa_complete`",
   },
   {
@@ -119,6 +161,8 @@ const ROUTES: RouteContract[] = [
       ...COMMON_ERRORS,
       "401 `unauthenticated` (wrong, replayed or expired code, or no session)",
       "409 `state_conflict`",
+      "429 `rate_limited` with `Retry-After` (P-48, Run 3.3: more than 5 attempts a minute from the source, or the account locked for 900 s after 5 failures in the current and previous 15-minute window; checked before any credential, alike for known and unknown accounts)",
+      "503 `dependency_unavailable` (the rate counter could not be written: nothing is checked)",
     ],
     cookies: "sets the cookie of a new `mfa_complete` session; the old cookie stops working",
     accountStates: "`enrollment_pending`",
@@ -134,6 +178,8 @@ const ROUTES: RouteContract[] = [
       ...COMMON_ERRORS,
       "401 `unauthenticated` (wrong, replayed or expired code, or no session)",
       "409 `state_conflict`",
+      "429 `rate_limited` with `Retry-After` (P-48, Run 3.3: more than 5 attempts a minute from the source, or the account locked for 900 s after 5 failures in the current and previous 15-minute window; checked before any credential, alike for known and unknown accounts)",
+      "503 `dependency_unavailable` (the rate counter could not be written: nothing is checked)",
     ],
     cookies: "sets the cookie of a new `mfa_complete` session; the old cookie stops working",
     accountStates: "`active`",
@@ -150,6 +196,8 @@ const ROUTES: RouteContract[] = [
       ...COMMON_ERRORS,
       "401 `unauthenticated` (unknown or used code, or no session)",
       "409 `state_conflict`",
+      "429 `rate_limited` with `Retry-After` (P-48, Run 3.3: more than 5 attempts a minute from the source, or the account locked for 900 s after 5 failures in the current and previous 15-minute window; checked before any credential, alike for known and unknown accounts)",
+      "503 `dependency_unavailable` (the rate counter could not be written: nothing is checked)",
     ],
     cookies: "sets the cookie of a new `mfa_complete` session; the old cookie stops working",
     accountStates: "`active`",
@@ -162,7 +210,30 @@ const ROUTES: RouteContract[] = [
     body: "empty",
     success:
       "200, `{ recoveryCodes }`: every unused code is invalid before the ten new ones are returned",
-    errors: [...COMMON_ERRORS, "401 `unauthenticated`", "409 `state_conflict`"],
+    errors: [
+      ...COMMON_ERRORS,
+      "401 `unauthenticated`",
+      "403 `fresh_verification_required` (no TOTP verification of this session in the last 600 s, on database time; a session completed with a recovery code has none — step up first)",
+      "409 `state_conflict`",
+    ],
+    cookies: "none",
+    accountStates: "`active`",
+    phases: "`mfa_complete`",
+  },
+  {
+    method: "POST",
+    path: "/totp/step-up",
+    kind: "factor",
+    body: "code",
+    success:
+      "200, `{ fresh: true }`: the session's TOTP verification is now (database time); the step is used once; the token does not change (Run 3.4)",
+    errors: [
+      ...COMMON_ERRORS,
+      "401 `unauthenticated` (a wrong, replayed or expired code, alike; the session goes on)",
+      "409 `state_conflict` (not an `mfa_complete` session of an `active` account)",
+      "429 `rate_limited` with `Retry-After` (the `factor` phase of P-48)",
+      "503 `dependency_unavailable` (the rate counter could not be written)",
+    ],
     cookies: "none",
     accountStates: "`active`",
     phases: "`mfa_complete`",

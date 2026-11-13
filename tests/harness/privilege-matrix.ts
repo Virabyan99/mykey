@@ -39,7 +39,33 @@ export interface Expected {
   provisionerColumns?: string[];
   /** Columns `api_runtime` may update in schema auth without table-level UPDATE. */
   apiColumns?: string[];
+  /** Columns of schema app the API may not update although they are no key (migration 0010). */
+  apiNoColumns?: string[];
+  /** Table privileges of `maintenance` where they differ from the schema default (Run 3.1, P-45). */
+  maintenance?: string[];
+  /** Columns `maintenance` may update without table-level UPDATE. */
+  maintenanceColumns?: string[];
 }
+
+/**
+ * The job queue (pg-boss, migration 0004). The tables are pg-boss's own; the
+ * runtime roles get exactly the rights their statements were seen to need
+ * (Run 3.1 Task A), and nothing by column.
+ */
+const JOB_TABLES: Record<string, Expected> = {
+  // Run 3.8 (migration 0008): what the provisioner's worker and supervisor use.
+  "jobs.version": { api: [S], provisioner: [S, U] },
+  "jobs.queue": { api: [S], provisioner: [S, U] },
+  "jobs.schedule": { api: [], provisioner: [] },
+  "jobs.subscription": { api: [], provisioner: [] },
+  "jobs.bam": { api: [], provisioner: [S, U] },
+  "jobs.job": { api: [S, I], provisioner: [S, I, U, D] },
+  "jobs.job_common": { api: [S, I], provisioner: [S, I, U, D] },
+  "jobs.warning": { api: [], provisioner: [S, I, D] },
+  "jobs.queue_stats": { api: [], provisioner: [] },
+  "jobs.job_dependency": { api: [], provisioner: [S, D] },
+  "jobs.instance": { api: [], provisioner: [S, U, D] },
+};
 
 /**
  * The expected-grants matrix. Every table in the database must be listed here;
@@ -47,16 +73,23 @@ export interface Expected {
  */
 export const TABLES: Record<string, Expected> = {
   "app.organization": {
-    api: [S, I],
+    api: [S],
+    apiNoColumns: ["config_digest", "provisioning_operation_id", "review_reason"],
     provisioner: [S],
-    provisionerColumns: ["state", "config_digest", "provisioning_operation_id"],
+    provisionerColumns: ["state", "config_digest", "provisioning_operation_id", "review_reason"],
   },
-  "app.membership": { api: [S, I], provisioner: [] },
-  "app.project": { api: [S, I], provisioner: [S] },
+  "app.membership": { api: [S], provisioner: [] },
+  "app.project": {
+    api: [S, I],
+    apiNoColumns: ["review_reason"],
+    provisioner: [S],
+    provisionerColumns: ["state", "review_reason"],
+  },
   "app.environment": {
     api: [S, I],
+    apiNoColumns: ["kv_ready", "policy_digest", "review_reason"],
     provisioner: [S],
-    provisionerColumns: ["state", "kv_ready", "policy_digest"],
+    provisionerColumns: ["state", "kv_ready", "policy_digest", "review_reason"],
   },
   "app.access_grant": { api: [S, I], provisioner: [] },
   "app.secret_index": { api: [S, I], provisioner: [] },
@@ -72,19 +105,23 @@ export const TABLES: Record<string, Expected> = {
   "app.service_control": { api: [S, I], provisioner: [] },
   "app.backup_pair": { api: [S, I], provisioner: [] },
   "app.rate_limit": { api: [S, I, D], provisioner: [] },
-  "audit.event": { api: [S, I], provisioner: [I] },
+  "audit.event": { api: [S, I], provisioner: [I], maintenance: [S, I, D] },
   "meta.schema_migration": { api: [], provisioner: [] },
   // Schema auth (Run 2.3): the session library's tables and the second factor.
   // UPDATE by column as in app; never id, user_id, created_at, a stored verifier
   // or a session's authenticated_at.
+  // maintenance (Run 3.1, P-45): the owner bootstrap and the operator reset.
+  // Run 3.2 (migration 0005): only maintenance creates users and credential accounts.
   "auth.user": {
-    api: [S, I, D],
+    api: [S, D],
     provisioner: [],
     apiColumns: ["name", "email", "email_verified", "image", "updated_at"],
+    maintenance: [S, I],
   },
   "auth.session": {
     api: [S, I, D],
     provisioner: [],
+    maintenance: [S, D],
     apiColumns: [
       "expires_at",
       "ip_address",
@@ -97,7 +134,12 @@ export const TABLES: Record<string, Expected> = {
       "enrollment_id",
     ],
   },
-  "auth.account": { api: [S, I, D], provisioner: [], apiColumns: ["password", "updated_at"] },
+  "auth.account": {
+    api: [S, D],
+    provisioner: [],
+    apiColumns: ["password", "updated_at"],
+    maintenance: [S, I],
+  },
   "auth.verification": {
     api: [S, I, D],
     provisioner: [],
@@ -107,23 +149,48 @@ export const TABLES: Record<string, Expected> = {
     api: [S, I, D],
     provisioner: [],
     apiColumns: ["state", "auth_epoch", "credential_epoch", "updated_at"],
+    maintenance: [S, I],
+    maintenanceColumns: ["state", "auth_epoch", "credential_epoch", "updated_at"],
   },
   "auth.totp_enrollment": {
     api: [S, I, D],
     provisioner: [],
     apiColumns: ["seed_jwe", "key_id", "state", "activated_at"],
   },
-  // Written once: a used step is never changed or removed by the API.
-  "auth.totp_step_used": { api: [S, I], provisioner: [] },
+  // Written once: a used step is never changed or removed by the API; the
+  // operator's clean-up removes old ones (Run 3.5, migration 0006).
+  "auth.totp_step_used": { api: [S, I], provisioner: [], maintenance: [S, D] },
   "auth.recovery_code": {
     api: [S, I],
     provisioner: [],
     apiColumns: ["consumed_at", "consumed_by_session"],
+    maintenance: [S, D],
   },
+  // Run 3.6 (D-30): the operator issues and supersedes, the API consumes.
+  "auth.reset_token": {
+    api: [S],
+    provisioner: [],
+    apiColumns: ["verifier", "consumed_at"],
+    maintenance: [S, I],
+    maintenanceColumns: ["verifier", "superseded_at"],
+  },
+  ...JOB_TABLES,
 };
 
+/**
+ * pg-boss keeps queue statistics in one partition per day, named
+ * `queue_stats_YYYYMMDD`; migration 0004 creates today's and tomorrow's. Each
+ * such partition has the rights of its parent.
+ */
+const DAILY_PARTITION = /^jobs\.queue_stats_[0-9]{8}$/;
+
+/** The matrix entry a table is checked against. */
+export function matrixName(table: string): string {
+  return DAILY_PARTITION.test(table) ? "jobs.queue_stats" : table;
+}
+
 export function expectedTablePrivileges(table: string, grantee: string): string[] {
-  const expected = TABLES[table];
+  const expected = TABLES[matrixName(table)];
   if (expected === undefined) throw new Error(`table ${table} is not in the matrix`);
   const schema = table.split(".")[0];
   switch (grantee) {
@@ -134,6 +201,7 @@ export function expectedTablePrivileges(table: string, grantee: string): string[
     case "backup_reader":
       return [S];
     case "maintenance":
+      if (expected.maintenance !== undefined) return expected.maintenance;
       if (schema === "app") return [S, I, U, D];
       if (table === "audit.event") return [S, D];
       return [S];
@@ -151,22 +219,26 @@ export interface ColumnRow {
 export function expectedColumnUpdate(row: ColumnRow, grantee: string): boolean {
   if (expectedTablePrivileges(row.table, grantee).includes(U)) return true;
   if (grantee === "provisioner_runtime") {
-    return TABLES[row.table]?.provisionerColumns?.includes(row.column) ?? false;
+    return TABLES[matrixName(row.table)]?.provisionerColumns?.includes(row.column) ?? false;
+  }
+  if (grantee === "maintenance") {
+    return TABLES[matrixName(row.table)]?.maintenanceColumns?.includes(row.column) ?? false;
   }
   if (grantee === "api_runtime" && row.table.startsWith("auth.")) {
-    return TABLES[row.table]?.apiColumns?.includes(row.column) ?? false;
+    return TABLES[matrixName(row.table)]?.apiColumns?.includes(row.column) ?? false;
   }
   if (grantee === "api_runtime" && row.table.startsWith("app.")) {
     if (row.primary_key || IDENTITY_COLUMNS.includes(row.column)) return false;
+    if (TABLES[matrixName(row.table)]?.apiNoColumns?.includes(row.column)) return false;
     if (row.table === "app.operation" && OPERATION_KEY_COLUMNS.includes(row.column)) return false;
     return true;
   }
   return false;
 }
 
-const SCHEMA_USAGE: Record<string, string[]> = {
-  api_runtime: ["app", "audit", "auth"],
-  provisioner_runtime: ["app", "audit"],
+export const SCHEMA_USAGE: Record<string, string[]> = {
+  api_runtime: ["app", "audit", "auth", "jobs"],
+  provisioner_runtime: ["app", "audit", "jobs"],
   backup_reader: SCHEMAS,
   maintenance: SCHEMAS,
   public: [],
@@ -192,7 +264,8 @@ export async function matrixProblems(pool: pg.Pool): Promise<string[]> {
   );
   const listed = new Set(Object.keys(TABLES));
   for (const table of tables) {
-    if (!listed.has(table.name)) problems.push(`table not in the matrix: ${table.name}`);
+    if (!listed.has(matrixName(table.name)))
+      problems.push(`table not in the matrix: ${table.name}`);
     if (table.owner !== "migration_owner") problems.push(`owner of ${table.name}: ${table.owner}`);
   }
   for (const name of listed) {
@@ -208,7 +281,7 @@ export async function matrixProblems(pool: pg.Pool): Promise<string[]> {
     `SELECT t AS "table", g AS grantee, p AS privilege, has_table_privilege(g, t, p) AS granted
        FROM unnest($1::text[]) AS t, unnest($2::text[]) AS g, unnest($3::text[]) AS p`,
     [
-      [...listed].filter((name) => tables.some((table) => table.name === name)),
+      tables.map((table) => table.name).filter((name) => listed.has(matrixName(name))),
       GRANTEES,
       TABLE_PRIVILEGES,
     ],
@@ -242,7 +315,7 @@ export async function matrixProblems(pool: pg.Pool): Promise<string[]> {
   );
   const primaryKey = new Map(columns.map((row) => [`${row.table}.${row.column}`, row.primary_key]));
   for (const row of columnRows) {
-    if (!listed.has(row.table)) continue;
+    if (!listed.has(matrixName(row.table))) continue;
     const expected = expectedColumnUpdate(
       {
         table: row.table,

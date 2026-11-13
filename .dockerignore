@@ -11,3 +11,15 @@
 !packages/contracts/src
 !packages/db/package.json
 !packages/db/src
+!packages/audit/package.json
+!packages/audit/src
+!packages/operations/package.json
+!packages/operations/src
+!packages/openbao/package.json
+!packages/openbao/src
+!packages/auth/package.json
+!packages/auth/src
+!apps/provisioner/package.json
+!apps/provisioner/src
+# The policy templates the provisioner renders (Run 3.8); text, no secret.
+!infra/openbao/policies

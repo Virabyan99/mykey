@@ -59,7 +59,8 @@ beforeAll(async () => {
     body: { code: codeAt(seed, stepAt(new Date()) + 1) },
   });
   expect(verified.status).toBe(200);
-  keep("session token", tokenOf(cookieOf(verified) ?? ""));
+  const verifiedCookie = cookieOf(verified) ?? "";
+  keep("session token", tokenOf(verifiedCookie));
 
   const third = await fixture.signIn(user);
   keep("session token", tokenOf(third));
@@ -71,8 +72,9 @@ beforeAll(async () => {
   const recoveredCookie = cookieOf(recovered) ?? "";
   keep("session token", tokenOf(recoveredCookie));
 
+  // Regeneration needs a fresh TOTP verification (Run 3.4): the TOTP session, not the recovery one.
   const regenerated = await fixture.request("POST", "/v1/auth/recovery/regenerate", {
-    cookie: recoveredCookie,
+    cookie: verifiedCookie,
     body: {},
   });
   expect(regenerated.status).toBe(200);
@@ -80,14 +82,13 @@ beforeAll(async () => {
     keep("recovery code", code);
   }
 
-  // Last: Better Auth replaces the caller's session by a new one here.
+  // Last: the product-owned password change (Run 3.5) from the fresh TOTP session.
   const newPassword = keep("password", `${user.password}-changed`);
   const changed = await fixture.request("POST", "/v1/auth/change-password", {
-    cookie: recoveredCookie,
-    body: { currentPassword: user.password, newPassword, revokeOtherSessions: true },
+    cookie: verifiedCookie,
+    body: { currentPassword: user.password, newPassword },
   });
   expect(changed.status).toBe(200);
-  keep("session token", tokenOf(cookieOf(changed) ?? ""));
 
   // One failing statement with a raw token as its bind parameter.
   const failing = fixture.pool.query(

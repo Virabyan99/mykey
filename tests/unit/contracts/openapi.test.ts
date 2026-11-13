@@ -107,6 +107,10 @@ describe("generated OpenAPI document", () => {
       "machineBearer",
       "sessionCookie",
     ]);
+    // P-39: the real name of Better Auth's session cookie.
+    expect(JSON.stringify(document.components.securitySchemes)).toContain(
+      '"name":"__Secure-better-auth.session_token"',
+    );
   });
 
   it("marks pending response bodies and nothing else", () => {

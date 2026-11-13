@@ -72,7 +72,21 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "x-mykey-pending": true
+                  "properties": {
+                    "apiMajor": {
+                      "type": "number",
+                      "const": 1
+                    },
+                    "build": {
+                      "type": "string",
+                      "pattern": "^[0-9a-f]{7,40}$"
+                    }
+                  },
+                  "required": [
+                    "apiMajor",
+                    "build"
+                  ],
+                  "additionalProperties": false
                 }
               }
             }
@@ -126,7 +140,55 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "x-mykey-pending": true
+                  "properties": {
+                    "organizations": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                          },
+                          "role": {
+                            "type": "string",
+                            "enum": [
+                              "owner",
+                              "admin",
+                              "member"
+                            ]
+                          },
+                          "state": {
+                            "type": "string",
+                            "enum": [
+                              "provisioning",
+                              "active",
+                              "failed",
+                              "needs_review"
+                            ]
+                          },
+                          "reviewReason": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "role",
+                          "state",
+                          "reviewReason"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "organizations"
+                  ],
+                  "additionalProperties": false
                 }
               }
             }
@@ -211,6 +273,26 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
           }
         ],
         "responses": {
@@ -220,7 +302,64 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "x-mykey-pending": true
+                  "properties": {
+                    "projects": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "state": {
+                            "type": "string",
+                            "enum": [
+                              "pending",
+                              "active",
+                              "revoking",
+                              "archived",
+                              "needs_review"
+                            ]
+                          },
+                          "reviewReason": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "createdAt": {
+                            "type": "string",
+                            "format": "date-time",
+                            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "name",
+                          "state",
+                          "reviewReason",
+                          "createdAt"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "nextCursor": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "projects",
+                    "nextCursor"
+                  ],
+                  "additionalProperties": false
                 }
               }
             }
@@ -266,7 +405,17 @@
             }
           },
           "409": {
-            "description": "Conflict. Codes: listing_changed.",
+            "description": "Conflict. Codes: listing_changed, state_conflict.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable content. Codes: validation_failed.",
             "content": {
               "application/json": {
                 "schema": {
@@ -286,7 +435,7 @@
             }
           },
           "503": {
-            "description": "Service unavailable. Codes: busy, quarantined, dependency_unavailable.",
+            "description": "Service unavailable. Codes: busy, quarantined, dependency_unavailable, backend_inconsistent.",
             "content": {
               "application/json": {
                 "schema": {
@@ -406,7 +555,7 @@
             }
           },
           "409": {
-            "description": "Conflict. Codes: idempotency_conflict, replay_expired, already_exists.",
+            "description": "Conflict. Codes: idempotency_conflict, replay_expired, state_conflict, already_exists.",
             "content": {
               "application/json": {
                 "schema": {
@@ -436,7 +585,7 @@
             }
           },
           "503": {
-            "description": "Service unavailable. Codes: busy, quarantined, dependency_unavailable, outcome_unknown, audit_unavailable.",
+            "description": "Service unavailable. Codes: busy, quarantined, dependency_unavailable, outcome_unknown, audit_unavailable, backend_inconsistent.",
             "content": {
               "application/json": {
                 "schema": {
@@ -566,7 +715,7 @@
             }
           },
           "409": {
-            "description": "Conflict. Codes: idempotency_conflict, replay_expired, already_exists, state_conflict.",
+            "description": "Conflict. Codes: idempotency_conflict, replay_expired, state_conflict, already_exists.",
             "content": {
               "application/json": {
                 "schema": {
@@ -596,7 +745,7 @@
             }
           },
           "503": {
-            "description": "Service unavailable. Codes: busy, quarantined, dependency_unavailable, outcome_unknown, audit_unavailable.",
+            "description": "Service unavailable. Codes: busy, quarantined, dependency_unavailable, outcome_unknown, audit_unavailable, backend_inconsistent.",
             "content": {
               "application/json": {
                 "schema": {
@@ -756,7 +905,7 @@
             }
           },
           "503": {
-            "description": "Service unavailable. Codes: busy, quarantined, dependency_unavailable, outcome_unknown, audit_unavailable, backend_sealed, backend_inconsistent.",
+            "description": "Service unavailable. Codes: busy, quarantined, dependency_unavailable, outcome_unknown, audit_unavailable, backend_inconsistent, backend_sealed.",
             "content": {
               "application/json": {
                 "schema": {
@@ -916,7 +1065,7 @@
             }
           },
           "503": {
-            "description": "Service unavailable. Codes: busy, quarantined, dependency_unavailable, outcome_unknown, audit_unavailable, backend_sealed, backend_inconsistent.",
+            "description": "Service unavailable. Codes: busy, quarantined, dependency_unavailable, outcome_unknown, audit_unavailable, backend_inconsistent, backend_sealed.",
             "content": {
               "application/json": {
                 "schema": {
@@ -953,6 +1102,26 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
           }
         ],
         "responses": {
@@ -962,7 +1131,68 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "x-mykey-pending": true
+                  "properties": {
+                    "environments": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "state": {
+                            "type": "string",
+                            "enum": [
+                              "pending",
+                              "active",
+                              "revoking",
+                              "archived",
+                              "needs_review"
+                            ]
+                          },
+                          "reviewReason": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "kvReady": {
+                            "type": "boolean"
+                          },
+                          "createdAt": {
+                            "type": "string",
+                            "format": "date-time",
+                            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "name",
+                          "state",
+                          "reviewReason",
+                          "kvReady",
+                          "createdAt"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "nextCursor": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "environments",
+                    "nextCursor"
+                  ],
+                  "additionalProperties": false
                 }
               }
             }
@@ -1008,7 +1238,17 @@
             }
           },
           "409": {
-            "description": "Conflict. Codes: listing_changed.",
+            "description": "Conflict. Codes: listing_changed, state_conflict.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable content. Codes: validation_failed.",
             "content": {
               "application/json": {
                 "schema": {
@@ -1028,7 +1268,7 @@
             }
           },
           "503": {
-            "description": "Service unavailable. Codes: busy, quarantined, dependency_unavailable.",
+            "description": "Service unavailable. Codes: busy, quarantined, dependency_unavailable, backend_inconsistent.",
             "content": {
               "application/json": {
                 "schema": {
@@ -1156,7 +1396,7 @@
             }
           },
           "409": {
-            "description": "Conflict. Codes: idempotency_conflict, replay_expired, already_exists, state_conflict.",
+            "description": "Conflict. Codes: idempotency_conflict, replay_expired, state_conflict, already_exists.",
             "content": {
               "application/json": {
                 "schema": {
@@ -1186,7 +1426,7 @@
             }
           },
           "503": {
-            "description": "Service unavailable. Codes: busy, quarantined, dependency_unavailable, outcome_unknown, audit_unavailable, backend_sealed, backend_inconsistent.",
+            "description": "Service unavailable. Codes: busy, quarantined, dependency_unavailable, outcome_unknown, audit_unavailable, backend_inconsistent, backend_sealed.",
             "content": {
               "application/json": {
                 "schema": {
@@ -1324,7 +1564,7 @@
             }
           },
           "409": {
-            "description": "Conflict. Codes: idempotency_conflict, replay_expired, already_exists, state_conflict.",
+            "description": "Conflict. Codes: idempotency_conflict, replay_expired, state_conflict, already_exists.",
             "content": {
               "application/json": {
                 "schema": {
@@ -1354,7 +1594,7 @@
             }
           },
           "503": {
-            "description": "Service unavailable. Codes: busy, quarantined, dependency_unavailable, outcome_unknown, audit_unavailable.",
+            "description": "Service unavailable. Codes: busy, quarantined, dependency_unavailable, outcome_unknown, audit_unavailable, backend_inconsistent.",
             "content": {
               "application/json": {
                 "schema": {
@@ -1522,7 +1762,7 @@
             }
           },
           "503": {
-            "description": "Service unavailable. Codes: busy, quarantined, dependency_unavailable, outcome_unknown, audit_unavailable, backend_sealed, backend_inconsistent.",
+            "description": "Service unavailable. Codes: busy, quarantined, dependency_unavailable, outcome_unknown, audit_unavailable, backend_inconsistent, backend_sealed.",
             "content": {
               "application/json": {
                 "schema": {
@@ -1690,7 +1930,7 @@
             }
           },
           "503": {
-            "description": "Service unavailable. Codes: busy, quarantined, dependency_unavailable, outcome_unknown, audit_unavailable, backend_sealed, backend_inconsistent.",
+            "description": "Service unavailable. Codes: busy, quarantined, dependency_unavailable, outcome_unknown, audit_unavailable, backend_inconsistent, backend_sealed.",
             "content": {
               "application/json": {
                 "schema": {
@@ -1819,7 +2059,7 @@
             }
           },
           "409": {
-            "description": "Conflict. Codes: listing_changed.",
+            "description": "Conflict. Codes: listing_changed, state_conflict.",
             "content": {
               "application/json": {
                 "schema": {
@@ -1849,7 +2089,7 @@
             }
           },
           "503": {
-            "description": "Service unavailable. Codes: busy, quarantined, dependency_unavailable.",
+            "description": "Service unavailable. Codes: busy, quarantined, dependency_unavailable, backend_inconsistent.",
             "content": {
               "application/json": {
                 "schema": {
@@ -1991,7 +2231,7 @@
             }
           },
           "409": {
-            "description": "Conflict. Codes: idempotency_conflict, replay_expired, already_exists, state_conflict, key_under_review.",
+            "description": "Conflict. Codes: idempotency_conflict, replay_expired, state_conflict, already_exists, key_under_review.",
             "content": {
               "application/json": {
                 "schema": {
@@ -2021,7 +2261,7 @@
             }
           },
           "503": {
-            "description": "Service unavailable. Codes: busy, quarantined, dependency_unavailable, outcome_unknown, audit_unavailable, backend_sealed, backend_inconsistent.",
+            "description": "Service unavailable. Codes: busy, quarantined, dependency_unavailable, outcome_unknown, audit_unavailable, backend_inconsistent, backend_sealed.",
             "content": {
               "application/json": {
                 "schema": {
@@ -2140,7 +2380,7 @@
             }
           },
           "409": {
-            "description": "Conflict. Codes: key_under_review.",
+            "description": "Conflict. Codes: state_conflict, key_under_review.",
             "content": {
               "application/json": {
                 "schema": {
@@ -2160,7 +2400,7 @@
             }
           },
           "503": {
-            "description": "Service unavailable. Codes: busy, quarantined, dependency_unavailable, backend_sealed, backend_inconsistent.",
+            "description": "Service unavailable. Codes: busy, quarantined, dependency_unavailable, backend_inconsistent, backend_sealed.",
             "content": {
               "application/json": {
                 "schema": {
@@ -2317,7 +2557,7 @@
             }
           },
           "503": {
-            "description": "Service unavailable. Codes: busy, quarantined, dependency_unavailable, audit_unavailable, backend_sealed, backend_inconsistent.",
+            "description": "Service unavailable. Codes: busy, quarantined, dependency_unavailable, backend_inconsistent, audit_unavailable, backend_sealed.",
             "content": {
               "application/json": {
                 "schema": {
@@ -2475,7 +2715,7 @@
             }
           },
           "409": {
-            "description": "Conflict. Codes: idempotency_conflict, replay_expired, version_conflict, state_conflict, key_under_review.",
+            "description": "Conflict. Codes: idempotency_conflict, replay_expired, state_conflict, version_conflict, key_under_review.",
             "content": {
               "application/json": {
                 "schema": {
@@ -2505,7 +2745,7 @@
             }
           },
           "503": {
-            "description": "Service unavailable. Codes: busy, quarantined, dependency_unavailable, outcome_unknown, audit_unavailable, backend_sealed, backend_inconsistent.",
+            "description": "Service unavailable. Codes: busy, quarantined, dependency_unavailable, outcome_unknown, audit_unavailable, backend_inconsistent, backend_sealed.",
             "content": {
               "application/json": {
                 "schema": {
@@ -2673,7 +2913,7 @@
             }
           },
           "409": {
-            "description": "Conflict. Codes: idempotency_conflict, replay_expired, version_conflict, state_conflict, key_under_review.",
+            "description": "Conflict. Codes: idempotency_conflict, replay_expired, state_conflict, version_conflict, key_under_review.",
             "content": {
               "application/json": {
                 "schema": {
@@ -2703,7 +2943,7 @@
             }
           },
           "503": {
-            "description": "Service unavailable. Codes: busy, quarantined, dependency_unavailable, outcome_unknown, audit_unavailable, backend_sealed, backend_inconsistent.",
+            "description": "Service unavailable. Codes: busy, quarantined, dependency_unavailable, outcome_unknown, audit_unavailable, backend_inconsistent, backend_sealed.",
             "content": {
               "application/json": {
                 "schema": {
@@ -2861,7 +3101,7 @@
             }
           },
           "409": {
-            "description": "Conflict. Codes: idempotency_conflict, replay_expired, version_conflict, state_conflict, key_under_review.",
+            "description": "Conflict. Codes: idempotency_conflict, replay_expired, state_conflict, version_conflict, key_under_review.",
             "content": {
               "application/json": {
                 "schema": {
@@ -2891,7 +3131,7 @@
             }
           },
           "503": {
-            "description": "Service unavailable. Codes: busy, quarantined, dependency_unavailable, outcome_unknown, audit_unavailable, backend_sealed, backend_inconsistent.",
+            "description": "Service unavailable. Codes: busy, quarantined, dependency_unavailable, outcome_unknown, audit_unavailable, backend_inconsistent, backend_sealed.",
             "content": {
               "application/json": {
                 "schema": {
@@ -3065,7 +3305,7 @@
             }
           },
           "409": {
-            "description": "Conflict. Codes: idempotency_conflict, replay_expired, version_conflict, state_conflict, key_under_review.",
+            "description": "Conflict. Codes: idempotency_conflict, replay_expired, state_conflict, version_conflict, key_under_review.",
             "content": {
               "application/json": {
                 "schema": {
@@ -3095,7 +3335,7 @@
             }
           },
           "503": {
-            "description": "Service unavailable. Codes: busy, quarantined, dependency_unavailable, outcome_unknown, audit_unavailable, backend_sealed, backend_inconsistent.",
+            "description": "Service unavailable. Codes: busy, quarantined, dependency_unavailable, outcome_unknown, audit_unavailable, backend_inconsistent, backend_sealed.",
             "content": {
               "application/json": {
                 "schema": {
@@ -3246,7 +3486,7 @@
             }
           },
           "503": {
-            "description": "Service unavailable. Codes: busy, quarantined, dependency_unavailable.",
+            "description": "Service unavailable. Codes: busy, quarantined, dependency_unavailable, backend_inconsistent.",
             "content": {
               "application/json": {
                 "schema": {
@@ -3393,7 +3633,7 @@
             }
           },
           "409": {
-            "description": "Conflict. Codes: idempotency_conflict, replay_expired, environment_changed, state_conflict, key_under_review.",
+            "description": "Conflict. Codes: idempotency_conflict, replay_expired, state_conflict, environment_changed, key_under_review.",
             "content": {
               "application/json": {
                 "schema": {
@@ -3423,7 +3663,7 @@
             }
           },
           "503": {
-            "description": "Service unavailable. Codes: busy, quarantined, dependency_unavailable, outcome_unknown, audit_unavailable, backend_sealed, backend_inconsistent.",
+            "description": "Service unavailable. Codes: busy, quarantined, dependency_unavailable, outcome_unknown, audit_unavailable, backend_inconsistent, backend_sealed.",
             "content": {
               "application/json": {
                 "schema": {
@@ -3561,7 +3801,7 @@
             }
           },
           "409": {
-            "description": "Conflict. Codes: environment_changed, state_conflict, key_under_review.",
+            "description": "Conflict. Codes: state_conflict, environment_changed, key_under_review.",
             "content": {
               "application/json": {
                 "schema": {
@@ -3591,7 +3831,7 @@
             }
           },
           "503": {
-            "description": "Service unavailable. Codes: busy, quarantined, dependency_unavailable, outcome_unknown, audit_unavailable, backend_sealed, backend_inconsistent.",
+            "description": "Service unavailable. Codes: busy, quarantined, dependency_unavailable, backend_inconsistent, outcome_unknown, audit_unavailable, backend_sealed.",
             "content": {
               "application/json": {
                 "schema": {
@@ -3727,7 +3967,7 @@
             }
           },
           "409": {
-            "description": "Conflict. Codes: environment_changed, state_conflict, key_under_review.",
+            "description": "Conflict. Codes: state_conflict, environment_changed, key_under_review.",
             "content": {
               "application/json": {
                 "schema": {
@@ -3757,7 +3997,7 @@
             }
           },
           "503": {
-            "description": "Service unavailable. Codes: busy, quarantined, dependency_unavailable, audit_unavailable, backend_sealed, backend_inconsistent.",
+            "description": "Service unavailable. Codes: busy, quarantined, dependency_unavailable, backend_inconsistent, audit_unavailable, backend_sealed.",
             "content": {
               "application/json": {
                 "schema": {
@@ -3857,7 +4097,7 @@
             }
           },
           "409": {
-            "description": "Conflict. Codes: listing_changed.",
+            "description": "Conflict. Codes: listing_changed, state_conflict.",
             "content": {
               "application/json": {
                 "schema": {
@@ -3877,7 +4117,7 @@
             }
           },
           "503": {
-            "description": "Service unavailable. Codes: busy, quarantined, dependency_unavailable.",
+            "description": "Service unavailable. Codes: busy, quarantined, dependency_unavailable, backend_inconsistent.",
             "content": {
               "application/json": {
                 "schema": {
@@ -4020,7 +4260,7 @@
             }
           },
           "409": {
-            "description": "Conflict. Codes: idempotency_conflict, replay_expired, credential_not_replayable, state_conflict.",
+            "description": "Conflict. Codes: idempotency_conflict, replay_expired, state_conflict, credential_not_replayable.",
             "content": {
               "application/json": {
                 "schema": {
@@ -4050,7 +4290,7 @@
             }
           },
           "503": {
-            "description": "Service unavailable. Codes: busy, quarantined, dependency_unavailable, outcome_unknown, audit_unavailable, backend_sealed, backend_inconsistent.",
+            "description": "Service unavailable. Codes: busy, quarantined, dependency_unavailable, outcome_unknown, audit_unavailable, backend_inconsistent, backend_sealed.",
             "content": {
               "application/json": {
                 "schema": {
@@ -4226,7 +4466,7 @@
             }
           },
           "503": {
-            "description": "Service unavailable. Codes: busy, quarantined, dependency_unavailable, outcome_unknown, audit_unavailable, backend_sealed, backend_inconsistent.",
+            "description": "Service unavailable. Codes: busy, quarantined, dependency_unavailable, outcome_unknown, audit_unavailable, backend_inconsistent, backend_sealed.",
             "content": {
               "application/json": {
                 "schema": {
@@ -4419,7 +4659,7 @@
             }
           },
           "409": {
-            "description": "Conflict. Codes: listing_changed.",
+            "description": "Conflict. Codes: listing_changed, state_conflict.",
             "content": {
               "application/json": {
                 "schema": {
@@ -4439,7 +4679,7 @@
             }
           },
           "503": {
-            "description": "Service unavailable. Codes: busy, quarantined, dependency_unavailable.",
+            "description": "Service unavailable. Codes: busy, quarantined, dependency_unavailable, backend_inconsistent.",
             "content": {
               "application/json": {
                 "schema": {
@@ -4523,7 +4763,7 @@
             }
           },
           "409": {
-            "description": "Conflict. Codes: listing_changed.",
+            "description": "Conflict. Codes: listing_changed, state_conflict.",
             "content": {
               "application/json": {
                 "schema": {
@@ -4543,7 +4783,7 @@
             }
           },
           "503": {
-            "description": "Service unavailable. Codes: busy, quarantined, dependency_unavailable.",
+            "description": "Service unavailable. Codes: busy, quarantined, dependency_unavailable, backend_inconsistent.",
             "content": {
               "application/json": {
                 "schema": {
@@ -4627,7 +4867,7 @@
             }
           },
           "409": {
-            "description": "Conflict. Codes: listing_changed.",
+            "description": "Conflict. Codes: listing_changed, state_conflict.",
             "content": {
               "application/json": {
                 "schema": {
@@ -4647,7 +4887,7 @@
             }
           },
           "503": {
-            "description": "Service unavailable. Codes: busy, quarantined, dependency_unavailable.",
+            "description": "Service unavailable. Codes: busy, quarantined, dependency_unavailable, backend_inconsistent.",
             "content": {
               "application/json": {
                 "schema": {
@@ -4730,6 +4970,16 @@
               }
             }
           },
+          "409": {
+            "description": "Conflict. Codes: state_conflict.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
           "429": {
             "description": "Too many requests. Codes: rate_limited.",
             "content": {
@@ -4741,7 +4991,7 @@
             }
           },
           "503": {
-            "description": "Service unavailable. Codes: busy, quarantined, dependency_unavailable.",
+            "description": "Service unavailable. Codes: busy, quarantined, dependency_unavailable, backend_inconsistent.",
             "content": {
               "application/json": {
                 "schema": {
@@ -4824,6 +5074,16 @@
               }
             }
           },
+          "409": {
+            "description": "Conflict. Codes: state_conflict.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
           "429": {
             "description": "Too many requests. Codes: rate_limited.",
             "content": {
@@ -4835,7 +5095,7 @@
             }
           },
           "503": {
-            "description": "Service unavailable. Codes: busy, quarantined, dependency_unavailable.",
+            "description": "Service unavailable. Codes: busy, quarantined, dependency_unavailable, backend_inconsistent.",
             "content": {
               "application/json": {
                 "schema": {
@@ -4918,6 +5178,16 @@
               }
             }
           },
+          "409": {
+            "description": "Conflict. Codes: state_conflict.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
           "429": {
             "description": "Too many requests. Codes: rate_limited.",
             "content": {
@@ -4929,7 +5199,7 @@
             }
           },
           "503": {
-            "description": "Service unavailable. Codes: busy, quarantined, dependency_unavailable.",
+            "description": "Service unavailable. Codes: busy, quarantined, dependency_unavailable, backend_inconsistent.",
             "content": {
               "application/json": {
                 "schema": {
@@ -4957,7 +5227,23 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "x-mykey-pending": true
+                  "properties": {
+                    "idleExpiresAt": {
+                      "type": "string",
+                      "format": "date-time",
+                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                    },
+                    "absoluteExpiresAt": {
+                      "type": "string",
+                      "format": "date-time",
+                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                    }
+                  },
+                  "required": [
+                    "idleExpiresAt",
+                    "absoluteExpiresAt"
+                  ],
+                  "additionalProperties": false
                 }
               }
             }
@@ -5026,7 +5312,27 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "x-mykey-pending": true
+                "properties": {
+                  "token": {
+                    "type": "string",
+                    "minLength": 43,
+                    "maxLength": 43
+                  },
+                  "newPassword": {
+                    "type": "string",
+                    "description": "12 to 1024 Unicode code points and at most 1024 bytes of UTF-8."
+                  },
+                  "code": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 64
+                  }
+                },
+                "required": [
+                  "token",
+                  "newPassword"
+                ],
+                "additionalProperties": false
               }
             }
           }
@@ -5038,7 +5344,19 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "x-mykey-pending": true
+                  "properties": {
+                    "next": {
+                      "type": "string",
+                      "enum": [
+                        "sign_in",
+                        "enroll"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "next"
+                  ],
+                  "additionalProperties": false
                 }
               }
             }
@@ -5094,7 +5412,7 @@
             }
           },
           "503": {
-            "description": "Service unavailable. Codes: busy, quarantined, dependency_unavailable.",
+            "description": "Service unavailable. Codes: busy, quarantined, dependency_unavailable, audit_unavailable.",
             "content": {
               "application/json": {
                 "schema": {
@@ -5669,8 +5987,8 @@
       "sessionCookie": {
         "type": "apiKey",
         "in": "cookie",
-        "name": "__Host-session",
-        "description": "Human session cookie. The final cookie name is fixed when the session library is configured."
+        "name": "__Secure-better-auth.session_token",
+        "description": "Human session cookie: Secure, HttpOnly, SameSite=Strict, Path=/, host-only (no Domain attribute). D-27."
       },
       "machineBearer": {
         "type": "http",

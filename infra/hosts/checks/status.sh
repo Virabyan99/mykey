@@ -81,12 +81,46 @@ if [ -n "${MYKEY_KMS_HOST:-}" ] && [ -e /etc/mykey/secrets/kms/seal.crt ] &&
 	fi
 fi
 
+# The service gate (Run 3.1, P-43): what the record says, not whether it is valid
+# for this host (the API decides that per request).
+gate=absent
+if [ -e /etc/mykey/gate/gate.json ]; then
+	gate=$(jq -r 'if (.state == "open" or .state == "closed") and .version == 1 then .state else "invalid" end' \
+		/etc/mykey/gate/gate.json 2>/dev/null || echo invalid)
+fi
+
+# Scopes in review (Run 3.8, P-57): one read-only statement through the
+# PostgreSQL container's local socket; null when it cannot be read. The
+# superuser password goes through the environment (`-e PGPASSWORD` without a
+# value), never onto a command line.
+review_open=null
+PGPASSWORD=$(cat /etc/mykey/secrets/postgres/superuser-password 2>/dev/null || true)
+export PGPASSWORD
+count=$(docker exec -e PGPASSWORD -u postgres mykey-postgres-1 psql -U postgres -d postgres -Atq -c \
+	"BEGIN READ ONLY; SELECT (SELECT count(*) FROM app.organization WHERE state = 'needs_review') + (SELECT count(*) FROM app.project WHERE state = 'needs_review') + (SELECT count(*) FROM app.environment WHERE state = 'needs_review'); COMMIT;" \
+	2>/dev/null | head -n 1 || true)
+unset PGPASSWORD
+case "$count" in
+'' | *[!0-9]*) ;;
+*) review_open=$count ;;
+esac
+
+# The provisioner container's health (Run 3.8): healthy, unhealthy, or absent.
+provisioner=absent
+if health=$(docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{end}}' mykey-provisioner-1 2>/dev/null); then
+	case "$health" in
+	healthy) provisioner=healthy ;;
+	*) provisioner=unhealthy ;;
+	esac
+fi
+
 jq -n \
-	--arg host "$host" --arg bootId "$boot_id" --arg time "$time" \
+	--arg host "$host" --arg bootId "$boot_id" --arg time "$time" --arg gate "$gate" --arg provisioner "$provisioner" --argjson reviewOpen "$review_open" \
 	--argjson chronyOffsetMs "$chrony_offset_ms" --argjson clockSynced "$clock_synced" \
 	--argjson containers "$containers" --argjson pendingRevert "$pending" \
 	--argjson firewallLoaded "$firewall_loaded" --argjson sets "$sets" --argjson sshListen "$ssh_listen" \
 	--argjson sealed "$sealed" --argjson sealType "$seal_type" --argjson kmsReachable "$kms_reachable" \
 	'{ host: $host, bootId: $bootId, time: $time, chronyOffsetMs: $chronyOffsetMs, clockSynced: $clockSynced,
 	   containers: $containers, sealed: $sealed, sealType: $sealType, kmsReachable: $kmsReachable, pendingRevert: $pendingRevert,
-	   firewall: { loaded: $firewallLoaded, sets: $sets }, sshListen: $sshListen }'
+	   firewall: { loaded: $firewallLoaded, sets: $sets }, sshListen: $sshListen, gate: $gate,
+	   reviewOpen: $reviewOpen, provisioner: $provisioner }'

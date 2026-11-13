@@ -71,6 +71,11 @@ describe("loadAuthKeys", () => {
       "session-lookup.k2.key",
       "seed-encryption.k1.key",
       "recovery-verifier.k1.key",
+      // The four rings added in Run 3.2.
+      "rate-limit.k1.key",
+      "reset-verifier.k1.key",
+      "replay-fingerprint.k1.key",
+      "cursor-mac.k1.key",
     ])
       write(directory, name);
     const keys = loadAuthKeys(directory);

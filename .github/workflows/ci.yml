@@ -29,7 +29,11 @@ jobs:
           node-version-file: .node-version
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      # The typed lint of the whole repository outgrew Node's default heap
+      # (about 2 GB) in Session 3; the runner has 16 GB.
       - run: pnpm run check
+        env:
+          NODE_OPTIONS: --max-old-space-size=6144
 
   unit:
     runs-on: ubuntu-24.04

@@ -2,14 +2,15 @@
 // only. No sign-up, no reset, no social provider, no plugin; the second factor
 // is product-owned (factors/). Session tokens reach the database only through
 // the protected adapter.
-import { randomBytes, randomUUID } from "node:crypto";
+import { randomUUID } from "node:crypto";
 import { LIMITS } from "@mykey/contracts";
 import { schema } from "@mykey/db";
 import { betterAuth, type BetterAuthOptions } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { drizzle, type NodePgDatabase } from "drizzle-orm/node-postgres";
 import pg from "pg";
-import type { AuthKeys } from "./keys.ts";
+import { ephemeralKeys, type AuthKeys } from "./keys.ts";
+import { PASSWORD_MAX_CHARACTERS, PASSWORD_MIN_CHARACTERS } from "./password-rule.ts";
 import { protectedAdapter } from "./protected-adapter.ts";
 
 export interface AuthDeps {
@@ -46,7 +47,13 @@ export function authOptions(deps: AuthDeps) {
     basePath: AUTH_BASE_PATH,
     secret: deps.keys.cookieSecret,
     database: protectedAdapter(observed, deps.keys.sessionLookup),
-    emailAndPassword: { enabled: true, disableSignUp: true },
+    // P-46: Better Auth's default maximum (128) would refuse passwords the product allows.
+    emailAndPassword: {
+      enabled: true,
+      disableSignUp: true,
+      minPasswordLength: PASSWORD_MIN_CHARACTERS,
+      maxPasswordLength: PASSWORD_MAX_CHARACTERS,
+    },
     session: {
       expiresIn: LIMITS.session.absoluteSeconds,
       disableSessionRefresh: true,
@@ -55,18 +62,9 @@ export function authOptions(deps: AuthDeps) {
       additionalFields: {
         phase: { type: "string", input: false, required: false, defaultValue: "password_verified" },
         authEpoch: { type: "number", input: false, required: false, defaultValue: 0 },
-        authenticatedAt: {
-          type: "date",
-          input: false,
-          required: false,
-          defaultValue: () => new Date(),
-        },
-        lastUserActivityAt: {
-          type: "date",
-          input: false,
-          required: false,
-          defaultValue: () => new Date(),
-        },
+        // No default here: the database's now() fills both (Run 3.2, database time).
+        authenticatedAt: { type: "date", input: false, required: false },
+        lastUserActivityAt: { type: "date", input: false, required: false },
         totpVerifiedAt: { type: "date", input: false, required: false },
         enrollmentId: { type: "string", input: false, required: false },
       },
@@ -80,6 +78,12 @@ export function authOptions(deps: AuthDeps) {
       disableOriginCheck: false,
       disableCSRFCheck: false,
       useSecureCookies: true,
+      // P-39 (D-27): SameSite=Strict, host-only (no Domain), Secure, HttpOnly.
+      cookies: {
+        session_token: {
+          attributes: { sameSite: "strict", secure: true, httpOnly: true, path: "/" },
+        },
+      },
     },
     telemetry: { enabled: false },
   } satisfies BetterAuthOptions;
@@ -95,16 +99,10 @@ export function createAuth(deps: AuthDeps) {
  * (scripts/auth-route-contract.ts, unit tests).
  */
 export function offlineAuth(baseURL = "https://mykey.example") {
-  const ring = () => ({ current: "k1", keys: { k1: new Uint8Array(randomBytes(32)) } });
   return createAuth({
     // Port 1 on loopback: any query would fail at once; none is made.
     db: drizzle(new pg.Pool({ host: "127.0.0.1", port: 1, max: 1 })),
-    keys: {
-      cookieSecret: randomBytes(32).toString("base64url"),
-      sessionLookup: ring(),
-      seedEncryption: ring(),
-      recoveryVerifier: ring(),
-    },
+    keys: ephemeralKeys(),
     baseURL,
   });
 }

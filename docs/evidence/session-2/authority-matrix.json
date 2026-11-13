@@ -303,7 +303,7 @@
     "backup kv.write_config other_organization_path": 403,
     "runtime mount.read own": 403,
     "issuer mount.read own": 403,
-    "provisioner mount.read own": 403,
+    "provisioner mount.read own": 200,
     "machine mount.read own": 403,
     "backup mount.read own": 403,
     "runtime mount.read other_organization": 403,
@@ -316,6 +316,21 @@
     "provisioner mount.read other_organization_path": 403,
     "machine mount.read other_organization_path": 403,
     "backup mount.read other_organization_path": 403,
+    "runtime kv.read_config own": 403,
+    "issuer kv.read_config own": 403,
+    "provisioner kv.read_config own": 200,
+    "machine kv.read_config own": 403,
+    "backup kv.read_config own": 403,
+    "runtime kv.read_config other_organization": 403,
+    "issuer kv.read_config other_organization": 403,
+    "provisioner kv.read_config other_organization": 403,
+    "machine kv.read_config other_organization": 403,
+    "backup kv.read_config other_organization": 403,
+    "runtime kv.read_config other_organization_path": 403,
+    "issuer kv.read_config other_organization_path": 403,
+    "provisioner kv.read_config other_organization_path": 403,
+    "machine kv.read_config other_organization_path": 403,
+    "backup kv.read_config other_organization_path": 403,
     "runtime mount.tune own": 403,
     "issuer mount.tune own": 403,
     "provisioner mount.tune own": 403,
@@ -631,6 +646,51 @@
     "provisioner policy.write_runtime root": 403,
     "machine policy.write_runtime root": 403,
     "backup policy.write_runtime root": 403,
+    "runtime policy.read_runtime own": 403,
+    "issuer policy.read_runtime own": 403,
+    "provisioner policy.read_runtime own": 200,
+    "machine policy.read_runtime own": 403,
+    "backup policy.read_runtime own": 403,
+    "runtime policy.read_runtime other_organization": 403,
+    "issuer policy.read_runtime other_organization": 403,
+    "provisioner policy.read_runtime other_organization": 403,
+    "machine policy.read_runtime other_organization": 403,
+    "backup policy.read_runtime other_organization": 403,
+    "runtime policy.read_runtime other_organization_path": 403,
+    "issuer policy.read_runtime other_organization_path": 403,
+    "provisioner policy.read_runtime other_organization_path": 403,
+    "machine policy.read_runtime other_organization_path": 403,
+    "backup policy.read_runtime other_organization_path": 403,
+    "runtime policy.read_issuer own": 403,
+    "issuer policy.read_issuer own": 403,
+    "provisioner policy.read_issuer own": 200,
+    "machine policy.read_issuer own": 403,
+    "backup policy.read_issuer own": 403,
+    "runtime policy.read_issuer other_organization": 403,
+    "issuer policy.read_issuer other_organization": 403,
+    "provisioner policy.read_issuer other_organization": 403,
+    "machine policy.read_issuer other_organization": 403,
+    "backup policy.read_issuer other_organization": 403,
+    "runtime policy.read_issuer other_organization_path": 403,
+    "issuer policy.read_issuer other_organization_path": 403,
+    "provisioner policy.read_issuer other_organization_path": 403,
+    "machine policy.read_issuer other_organization_path": 403,
+    "backup policy.read_issuer other_organization_path": 403,
+    "runtime policy.read_provisioner own": 403,
+    "issuer policy.read_provisioner own": 403,
+    "provisioner policy.read_provisioner own": 200,
+    "machine policy.read_provisioner own": 403,
+    "backup policy.read_provisioner own": 403,
+    "runtime policy.read_provisioner other_organization": 403,
+    "issuer policy.read_provisioner other_organization": 403,
+    "provisioner policy.read_provisioner other_organization": 403,
+    "machine policy.read_provisioner other_organization": 403,
+    "backup policy.read_provisioner other_organization": 403,
+    "runtime policy.read_provisioner other_organization_path": 403,
+    "issuer policy.read_provisioner other_organization_path": 403,
+    "provisioner policy.read_provisioner other_organization_path": 403,
+    "machine policy.read_provisioner other_organization_path": 403,
+    "backup policy.read_provisioner other_organization_path": 403,
     "runtime policy.list own": 403,
     "issuer policy.list own": 403,
     "provisioner policy.list own": 403,
@@ -721,6 +781,21 @@
     "provisioner approle.secret_id other_organization_path": 403,
     "machine approle.secret_id other_organization_path": 403,
     "backup approle.secret_id other_organization_path": 403,
+    "runtime approle.read own": 403,
+    "issuer approle.read own": 403,
+    "provisioner approle.read own": 403,
+    "machine approle.read own": 403,
+    "backup approle.read own": 403,
+    "runtime approle.read other_organization": 403,
+    "issuer approle.read other_organization": 403,
+    "provisioner approle.read other_organization": 403,
+    "machine approle.read other_organization": 403,
+    "backup approle.read other_organization": 403,
+    "runtime approle.read other_organization_path": 403,
+    "issuer approle.read other_organization_path": 403,
+    "provisioner approle.read other_organization_path": 403,
+    "machine approle.read other_organization_path": 403,
+    "backup approle.read other_organization_path": 403,
     "runtime namespace.list own": 403,
     "issuer namespace.list own": 403,
     "provisioner namespace.list own": 403,
@@ -926,6 +1001,9 @@
     "runtime mount.read own": 403,
     "runtime mount.read other_organization": 403,
     "runtime mount.read other_organization_path": 403,
+    "runtime kv.read_config own": 403,
+    "runtime kv.read_config other_organization": 403,
+    "runtime kv.read_config other_organization_path": 403,
     "runtime mount.tune own": 403,
     "runtime mount.tune other_organization": 403,
     "runtime mount.tune other_organization_path": 403,
@@ -989,6 +1067,15 @@
     "runtime policy.write_runtime other_organization": 403,
     "runtime policy.write_runtime other_organization_path": 403,
     "runtime policy.write_runtime root": 403,
+    "runtime policy.read_runtime own": 403,
+    "runtime policy.read_runtime other_organization": 403,
+    "runtime policy.read_runtime other_organization_path": 403,
+    "runtime policy.read_issuer own": 403,
+    "runtime policy.read_issuer other_organization": 403,
+    "runtime policy.read_issuer other_organization_path": 403,
+    "runtime policy.read_provisioner own": 403,
+    "runtime policy.read_provisioner other_organization": 403,
+    "runtime policy.read_provisioner other_organization_path": 403,
     "runtime policy.list own": 403,
     "runtime policy.list other_organization": 403,
     "runtime policy.list other_organization_path": 403,
@@ -1007,6 +1094,9 @@
     "runtime approle.secret_id own": 403,
     "runtime approle.secret_id other_organization": 403,
     "runtime approle.secret_id other_organization_path": 403,
+    "runtime approle.read own": 403,
+    "runtime approle.read other_organization": 403,
+    "runtime approle.read other_organization_path": 403,
     "runtime namespace.list own": 403,
     "runtime namespace.list other_organization": 403,
     "runtime namespace.list other_organization_path": 403,
@@ -1037,6 +1127,18 @@
     "runtime raw.read root": 403
   },
   "controls": {
+    "approle.read other_organization": {
+      "by": "root",
+      "status": 200
+    },
+    "approle.read other_organization_path": {
+      "by": "root",
+      "status": 200
+    },
+    "approle.read own": {
+      "by": "root",
+      "status": 200
+    },
     "approle.secret_id other_organization": {
       "by": "root",
       "status": 200
@@ -1257,6 +1359,18 @@
       "by": "runtime",
       "status": 200
     },
+    "kv.read_config other_organization": {
+      "by": "root",
+      "status": 200
+    },
+    "kv.read_config other_organization_path": {
+      "by": "root",
+      "status": 200
+    },
+    "kv.read_config own": {
+      "by": "provisioner",
+      "status": 200
+    },
     "kv.read_metadata other_environment": {
       "by": "runtime",
       "status": 200
@@ -1374,7 +1488,7 @@
       "status": 200
     },
     "mount.read own": {
-      "by": "root",
+      "by": "provisioner",
       "status": 200
     },
     "mount.tune other_organization": {
@@ -1437,6 +1551,18 @@
       "by": "root",
       "status": 200
     },
+    "policy.read_issuer other_organization": {
+      "by": "root",
+      "status": 200
+    },
+    "policy.read_issuer other_organization_path": {
+      "by": "root",
+      "status": 200
+    },
+    "policy.read_issuer own": {
+      "by": "provisioner",
+      "status": 200
+    },
     "policy.read_machine other_environment": {
       "by": "issuer",
       "status": 200
@@ -1451,6 +1577,30 @@
     },
     "policy.read_machine own": {
       "by": "issuer",
+      "status": 200
+    },
+    "policy.read_provisioner other_organization": {
+      "by": "root",
+      "status": 200
+    },
+    "policy.read_provisioner other_organization_path": {
+      "by": "root",
+      "status": 200
+    },
+    "policy.read_provisioner own": {
+      "by": "provisioner",
+      "status": 200
+    },
+    "policy.read_runtime other_organization": {
+      "by": "root",
+      "status": 200
+    },
+    "policy.read_runtime other_organization_path": {
+      "by": "root",
+      "status": 200
+    },
+    "policy.read_runtime own": {
+      "by": "provisioner",
       "status": 200
     },
     "policy.write_machine other_environment": {

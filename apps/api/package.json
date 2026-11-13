@@ -8,10 +8,16 @@
   },
   "dependencies": {
     "@hono/node-server": "catalog:",
+    "@mykey/audit": "workspace:*",
+    "@mykey/auth": "workspace:*",
     "@mykey/contracts": "workspace:*",
     "@mykey/db": "workspace:*",
+    "@mykey/openbao": "workspace:*",
+    "@mykey/operations": "workspace:*",
+    "drizzle-orm": "catalog:",
     "hono": "catalog:",
-    "pg": "catalog:"
+    "pg": "catalog:",
+    "zod": "catalog:"
   },
   "devDependencies": {
     "@types/pg": "catalog:"

@@ -4,9 +4,11 @@
   "private": true,
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./operator": "./src/operator/index.ts"
   },
   "dependencies": {
+    "@mykey/audit": "workspace:*",
     "@mykey/contracts": "workspace:*",
     "@mykey/db": "workspace:*",
     "better-auth": "catalog:",

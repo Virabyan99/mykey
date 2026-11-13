@@ -59,7 +59,7 @@ describe("scanner commands", () => {
     expect(args).toContain("--skip-dirs /usr/local/lib/node_modules");
     expect(args).toContain("--ignorefile /repo/.trivyignore");
     expect(args).not.toContain(".trivyignore.images");
-    expect(OWN_SCANNED_IMAGES).toEqual(["api"]);
+    expect(OWN_SCANNED_IMAGES).toEqual(["api", "provisioner"]);
   });
 
   it("self-test commands point at the seeded fixtures and do not skip them", () => {

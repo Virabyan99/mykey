@@ -27,6 +27,10 @@ Written in Run 1.7 (2026-11-10) against PostgreSQL 18.6.
 - **Object ownership and grants.** The dump restores them by role name, so the five roles must exist before the restore starts.
 - **Default privileges** (`ALTER DEFAULT PRIVILEGES`, set in `0001_grants.sql`). `pg_dump` writes them unless it is run with `--no-privileges`. They also name roles. Run 2.9 must confirm they are present after a restore.
 - **The migration history** (`meta.schema_migration`). After a restore, `migrate()` must report nothing to apply and no checksum mismatch.
+- **The job queue (Run 3.1, migration `0004`).** Schema `jobs` holds pg-boss 12.38.1's tables and functions, owned by `migration_owner`, and the queue rows `ensureQueues` creates. Grants: `USAGE` on `jobs` and `EXECUTE` on `jobs.job_now()` for `api_runtime` and `provisioner_runtime`; `SELECT` on `jobs.version` and `jobs.queue` for both; `SELECT, INSERT` on `jobs.job` / `jobs.job_common` for `api_runtime`; `SELECT, UPDATE, DELETE` on them for `provisioner_runtime`; `SELECT` on every `jobs` table for `maintenance` and (default privileges) `backup_reader`. pg-boss also creates one `jobs.queue_stats_YYYYMMDD` partition per day it is installed and the next; the matrix treats them as `jobs.queue_stats`.
+- **The operator's rights (Run 3.1, P-45).** `maintenance` holds `INSERT` on `audit.event`, `auth.user`, `auth.account`, `auth.account_state`; `UPDATE (state, auth_epoch, credential_epoch, updated_at)` on `auth.account_state`; `DELETE` on `auth.session`.
+- **Accounts are created by the operator only (Run 3.2, migration `0005`).** `api_runtime` no longer holds `INSERT` on `auth.user` and `auth.account`.
+- **Resets (Run 3.6, migration `0006`).** Table `auth.reset_token` and column `auth.session.reset_token_id`. `api_runtime`: `SELECT` and `UPDATE (verifier, consumed_at)` on `reset_token`. `maintenance`: `SELECT, INSERT` and `UPDATE (verifier, superseded_at)` on `reset_token`; `DELETE` on `auth.totp_step_used` and `auth.recovery_code` (the factor clean-up of Run 3.5).
 
 ## Reconstruction order
 

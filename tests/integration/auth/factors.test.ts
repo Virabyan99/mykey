@@ -50,9 +50,8 @@ describe("elevation with TOTP", () => {
   it("is required by a product route, and rotates the bearer when it succeeds", async () => {
     const { cookie, token } = await passwordSession();
     const headers = new Headers({ cookie });
-    const refused = await requireMfaComplete(fixture.auth, headers, fixture.pool);
-    expect(refused?.status).toBe(401);
-    expect(errorEnvelopeSchema.parse(await refused?.json()).error.code).toBe("mfa_incomplete");
+    const refused = await requireMfaComplete(factorDeps(fixture), headers);
+    expect(refused).toBe("mfa_incomplete");
 
     const before = await run<{ authenticated_at: Date }>(
       fixture.pool,
@@ -73,7 +72,7 @@ describe("elevation with TOTP", () => {
     expect(await resolves(cookie)).toBe(false);
     expect(await resolves(elevated)).toBe(true);
     expect(
-      await requireMfaComplete(fixture.auth, new Headers({ cookie: elevated }), fixture.pool),
+      await requireMfaComplete(factorDeps(fixture), new Headers({ cookie: elevated })),
     ).toBeNull();
     const after = await run<{
       authenticated_at: Date;
@@ -86,7 +85,10 @@ describe("elevation with TOTP", () => {
     );
     expect(after[0]?.phase).toBe("mfa_complete");
     expect(after[0]?.authenticated_at).toEqual(before[0]?.authenticated_at);
-    expect(after[0]?.totp_verified_at).toEqual(now);
+    // Database time (Run 3.4), not the clock the code was checked at.
+    const verifiedAt = after[0]?.totp_verified_at?.getTime() ?? 0;
+    expect(Math.abs(verifiedAt - Date.now())).toBeLessThan(10_000);
+    expect(Math.abs(verifiedAt - now.getTime())).toBeGreaterThan(60_000);
   });
 
   // Run 2.10 review finding I4 (Doc 10 §4.1 rule 5: checked on every request, from current
@@ -102,7 +104,7 @@ describe("elevation with TOTP", () => {
     if (!result.ok) throw new Error(`elevation: ${result.reason}`);
     const headers = new Headers({ cookie: pairOf(result.setCookie) });
     // Control: elevated and active.
-    expect(await requireMfaComplete(fixture.auth, headers, fixture.pool)).toBeNull();
+    expect(await requireMfaComplete(factorDeps(fixture), headers)).toBeNull();
     const [original] = await run<{ auth_epoch: string }>(
       fixture.pool,
       "SELECT auth_epoch FROM auth.account_state WHERE user_id = $1",
@@ -114,19 +116,19 @@ describe("elevation with TOTP", () => {
         "UPDATE auth.account_state SET state = 'disabled' WHERE user_id = $1",
         [owner.id],
       );
-      const disabled = await requireMfaComplete(fixture.auth, headers, fixture.pool);
-      expect(disabled?.status).toBe(401);
+      const disabled = await requireMfaComplete(factorDeps(fixture), headers);
+      expect(disabled).toBe("unauthenticated");
       await run(fixture.pool, "UPDATE auth.account_state SET state = 'active' WHERE user_id = $1", [
         owner.id,
       ]);
-      expect(await requireMfaComplete(fixture.auth, headers, fixture.pool)).toBeNull();
+      expect(await requireMfaComplete(factorDeps(fixture), headers)).toBeNull();
       await run(
         fixture.pool,
         "UPDATE auth.account_state SET auth_epoch = auth_epoch + 1 WHERE user_id = $1",
         [owner.id],
       );
-      const older = await requireMfaComplete(fixture.auth, headers, fixture.pool);
-      expect(older?.status).toBe(401);
+      const older = await requireMfaComplete(factorDeps(fixture), headers);
+      expect(older).toBe("unauthenticated");
     } finally {
       await run(
         fixture.pool,

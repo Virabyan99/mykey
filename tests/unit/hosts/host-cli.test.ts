@@ -7,7 +7,10 @@ import {
   applyCommand,
   bootstrapCommands,
   confirmPlan,
+  gateRecordText,
+  gateWriteCommand,
   hostEnvSetCommand,
+  keyInstallCommand,
   imageEnvKey,
   imageIdFromLoadOutput,
   loadedImageReference,
@@ -253,5 +256,95 @@ describe("confirm", () => {
       /mykey-revert-ssh/,
     );
     expect(calls).toHaveLength(1);
+  });
+});
+
+describe("gate (Run 3.1, P-43)", () => {
+  const hostId = "6f1c4c4e-2a52-4c4b-9a39-2c1f3a1d4e5f";
+
+  it("parses gate open, close and status, and nothing else", () => {
+    expect(parseHostArgs(["staging", "gate", "open"])).toMatchObject({
+      command: "gate",
+      action: "open",
+    });
+    expect(parseHostArgs(["prod", "gate", "close"])).toMatchObject({
+      command: "gate",
+      action: "close",
+    });
+    expect(parseHostArgs(["staging", "gate", "status"])).toMatchObject({
+      command: "gate",
+      action: "status",
+    });
+    expect(() => parseHostArgs(["staging", "gate"])).toThrow(/gate/);
+    expect(() => parseHostArgs(["staging", "gate", "ajar"])).toThrow(/gate/);
+  });
+
+  it("writes a v1 record whose epoch follows the previous one", () => {
+    const first: unknown = JSON.parse(
+      gateRecordText("open", null, hostId, "2026-11-12T10:00:00.000Z"),
+    );
+    expect(first).toEqual({
+      version: 1,
+      state: "open",
+      gateEpoch: 1,
+      hostInstanceId: hostId,
+      writtenAt: "2026-11-12T10:00:00.000Z",
+    });
+    const second: unknown = JSON.parse(
+      gateRecordText("closed", JSON.stringify(first), hostId, "2026-11-12T10:01:00.000Z"),
+    );
+    expect(second).toMatchObject({ state: "closed", gateEpoch: 2 });
+    // An unreadable previous record restarts nothing silently: the epoch still rises above 0.
+    expect(
+      JSON.parse(gateRecordText("open", "garbage", hostId, "2026-11-12T10:02:00.000Z")),
+    ).toMatchObject({ gateEpoch: 1 });
+  });
+
+  it("refuses a host instance id that is not a uuid", () => {
+    expect(() => gateRecordText("open", null, "not-a-uuid", "2026-11-12T10:00:00.000Z")).toThrow();
+  });
+
+  it("replaces the record atomically: a temporary file, fsync, rename, fsync of the directory", () => {
+    const command = gateWriteCommand();
+    const steps = ["cat >", "sync /etc/mykey/gate/gate.json.tmp", "mv -f", "sync /etc/mykey/gate"];
+    let at = -1;
+    for (const step of steps) {
+      const next = command.indexOf(step, at + 1);
+      expect(next, step).toBeGreaterThan(at);
+      at = next;
+    }
+    expect(command).toContain("chmod 0644");
+  });
+});
+
+describe("auth keys and operator commands (Run 3.2)", () => {
+  it("installs a key file of a known ring under api-keys, 0600 for the API's uid", () => {
+    const command = keyInstallCommand("cookie.k1.key");
+    expect(command).toContain("/etc/mykey/secrets/api-keys/cookie.k1.key");
+    expect(command).toContain("install -m 0600 -o 1000 -g 1000 /dev/stdin");
+    // An existing key on the host is never replaced.
+    expect(command.indexOf("test -e")).toBeLessThan(command.indexOf("install -m 0600"));
+  });
+
+  it.each([["evil.k1.key"], ["cookie.k01.key"], ["cookie.k1.key/../x"], ["../cookie.k1.key"]])(
+    "refuses the key file name %s",
+    (name) => {
+      expect(() => keyInstallCommand(name)).toThrow();
+    },
+  );
+
+  it("passes everything after `ops` to the operator tool, flags included", () => {
+    expect(parseHostArgs(["staging", "ops", "bootstrap-owner", "--email", "a@b.invalid"])).toEqual({
+      host: "staging",
+      via: "vpn",
+      command: "ops",
+      argv: ["bootstrap-owner", "--email", "a@b.invalid"],
+    });
+    expect(() => parseHostArgs(["staging", "ops"])).toThrow(/ops/);
+  });
+
+  it("parses keys init", () => {
+    expect(parseHostArgs(["staging", "keys", "init"])).toMatchObject({ command: "keys" });
+    expect(() => parseHostArgs(["staging", "keys", "rotate"])).toThrow(/keys/);
   });
 });

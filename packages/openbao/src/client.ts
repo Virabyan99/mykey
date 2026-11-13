@@ -369,7 +369,11 @@ export class OpenBaoClient {
     version?: number,
   ): Promise<BaoResult<{ envelope: SecretEnvelope; version: number }>> {
     requireSecretPath(path);
-    if (version !== undefined) requireVersion(version);
+    // 0 is a check-and-set value, never a version (M13).
+    if (version !== undefined) {
+      requireVersion(version);
+      if (version === 0) throw new Error("invalid version");
+    }
     const query = version === undefined ? "" : `?version=${version}`;
     const outcome = await this.#call("GET", `kv/data/${path}${query}`);
     return resultOf(outcome, (body) => {
@@ -470,7 +474,10 @@ export class OpenBaoClient {
   }
 
   async tokenRevokeSelf(): Promise<BaoResult<null>> {
-    return toNull(resultOf(await this.#call("POST", "auth/token/revoke-self"), noContent));
+    // A change: a 5xx other than 503 does not say whether the token is gone (M13).
+    return toNull(
+      resultOf(await this.#call("POST", "auth/token/revoke-self"), noContent, "change"),
+    );
   }
 }
 
