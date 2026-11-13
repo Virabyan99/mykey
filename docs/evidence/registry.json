@@ -1066,9 +1066,11 @@
       "ownerRun": "4.1",
       "contributingRuns": [],
       "oldSession": "D08-S18",
-      "status": "OPEN",
-      "evidence": [],
-      "note": ""
+      "status": "SPIKE_PASS",
+      "evidence": [
+        "docs/evidence/session-4/run-4.6.md"
+      ],
+      "note": "Durable operation lifecycle under crashes: accepted rows swept to rejected, executing rows to uncertain, settled by the operator; replays tell the truth at every stage (product code, real stores)."
     },
     {
       "id": "FR-1.83",
@@ -1078,9 +1080,11 @@
       "ownerRun": "4.1",
       "contributingRuns": [],
       "oldSession": "D08-S18",
-      "status": "OPEN",
-      "evidence": [],
-      "note": ""
+      "status": "SPIKE_PASS",
+      "evidence": [
+        "docs/evidence/session-4/run-4.6.md"
+      ],
+      "note": "Replay contract under faults: the original key answers 202, then 503 outcome_unknown or the stored error, then the settled result; eight repeats during a held request change nothing (product code, real stores)."
     },
     {
       "id": "FR-1.84",
@@ -1804,9 +1808,11 @@
         "8.3"
       ],
       "oldSession": "D08-S21",
-      "status": "OPEN",
-      "evidence": [],
-      "note": ""
+      "status": "SPIKE_PASS",
+      "evidence": [
+        "docs/evidence/session-4/run-4.6.md"
+      ],
+      "note": "Real API processes killed (SIGKILL) at each of the six protocol points for each of the five secret actions: truthful answers and replays at every stage, at most one backend change, the index equal to the backend after settlement (product code, real stores)."
     },
     {
       "id": "AC-1.39",
@@ -2315,9 +2321,10 @@
       "oldSession": "D08-S44",
       "status": "SPIKE_PASS",
       "evidence": [
-        "docs/evidence/session-2/run-2.4.md"
+        "docs/evidence/session-2/run-2.4.md",
+        "docs/evidence/session-4/run-4.6.md"
       ],
-      "note": "G-EFFECT: delayed effects, replay and exclusion with real process death and sockets (spike executor, not the protocol)."
+      "note": "G-EFFECT: delayed effects, replay and exclusion with real process death and sockets (spike executor, Run 2.4); the product's KV actions under the same faults, at most one backend change each (Run 4.6). Soft delete and undelete: no backend marker, settled under exclusion (D-38). Session 5 effects (issuance, revocation, archive) owed."
     },
     {
       "id": "PO-17",
