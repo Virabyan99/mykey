@@ -494,6 +494,8 @@ export const ROUTES: readonly RouteDef[] = Object.freeze([
   define("operations.get", "GET", "/v1/operations/:operation", "human", false, "4.1", {
     action: null,
     responses: operation,
+    // The operation's organization state answers as on every scoped route (P-53).
+    errors: ["state_conflict", "backend_inconsistent"],
   }),
   define("operations.list", "GET", `${E}/operations`, "human", false, "4.1", {
     action: null,

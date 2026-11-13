@@ -4548,6 +4548,16 @@
               }
             }
           },
+          "409": {
+            "description": "Conflict. Codes: state_conflict.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
           "429": {
             "description": "Too many requests. Codes: rate_limited.",
             "content": {
@@ -4559,7 +4569,7 @@
             }
           },
           "503": {
-            "description": "Service unavailable. Codes: busy, quarantined, dependency_unavailable.",
+            "description": "Service unavailable. Codes: busy, quarantined, dependency_unavailable, backend_inconsistent.",
             "content": {
               "application/json": {
                 "schema": {
