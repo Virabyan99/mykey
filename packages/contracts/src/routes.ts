@@ -144,6 +144,38 @@ const secretsListQuery = z.strictObject({
   cursor: z.string().min(1).optional(),
 });
 
+/** projects.list and environments.list (Run 3.9, P-59): keyset pages in id order. */
+const pageQuery = z.strictObject({
+  limit: z.int().min(1).max(LIMITS.listing.maxLimit).default(LIMITS.listing.defaultLimit),
+  cursor: z.string().min(1).optional(),
+});
+const resourceState = z.enum(["pending", "active", "revoking", "archived", "needs_review"]);
+const projectsBody = z.strictObject({
+  projects: z.array(
+    z.strictObject({
+      id: z.uuid(),
+      name: z.string(),
+      state: resourceState,
+      reviewReason: z.string().nullable(),
+      createdAt: z.iso.datetime(),
+    }),
+  ),
+  nextCursor: z.string().nullable(),
+});
+const environmentsBody = z.strictObject({
+  environments: z.array(
+    z.strictObject({
+      id: z.uuid(),
+      name: z.string(),
+      state: resourceState,
+      reviewReason: z.string().nullable(),
+      kvReady: z.boolean(),
+      createdAt: z.iso.datetime(),
+    }),
+  ),
+  nextCursor: z.string().nullable(),
+});
+
 // ----------------------------------------------------------------- error lists
 
 // The quarantine gate is the first step of every request (Doc 06 §9: even /v1/version).
@@ -281,7 +313,11 @@ export const ROUTES: readonly RouteDef[] = Object.freeze([
     responses: { 200: organizationsBody },
   }),
 
-  define("projects.list", "GET", `${O}/projects`, "human", false, "3.9", { action: null }),
+  define("projects.list", "GET", `${O}/projects`, "human", false, "3.9", {
+    action: null,
+    query: pageQuery,
+    responses: { 200: projectsBody },
+  }),
   define("projects.create", "POST", `${O}/projects`, "human", true, "3.9", {
     action: "resources.manage",
     body: nameBody(projectName),
@@ -304,7 +340,11 @@ export const ROUTES: readonly RouteDef[] = Object.freeze([
     errors: ["state_conflict", ...BACKEND],
   }),
 
-  define("environments.list", "GET", `${P}/environments`, "human", false, "3.9", { action: null }),
+  define("environments.list", "GET", `${P}/environments`, "human", false, "3.9", {
+    action: null,
+    query: pageQuery,
+    responses: { 200: environmentsBody },
+  }),
   define("environments.create", "POST", `${P}/environments`, "human", true, "3.9", {
     action: "resources.manage",
     body: nameBody(environmentName),

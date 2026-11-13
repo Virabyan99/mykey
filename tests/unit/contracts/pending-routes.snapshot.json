@@ -1,6 +1,4 @@
 [
-  "projects.list",
-  "environments.list",
   "secrets.list",
   "secrets.history",
   "secrets.reveal",
