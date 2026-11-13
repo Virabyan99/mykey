@@ -50,8 +50,27 @@ describe("parseHostStatus", () => {
     expect(status.clockSynced).toBe(false);
   });
 
+  it("reads the review count and the provisioner's health (Run 3.8)", () => {
+    const status = parseHostStatus(
+      JSON.stringify({ ...base, reviewOpen: 2, provisioner: "healthy" }),
+      at,
+      at,
+    );
+    expect(status.reviewOpen).toBe(2);
+    expect(status.provisioner).toBe("healthy");
+    const odd = parseHostStatus(
+      JSON.stringify({ ...base, reviewOpen: -1, provisioner: "sleepy" }),
+      at,
+      at,
+    );
+    expect(odd.reviewOpen).toBeNull();
+    expect(odd.provisioner).toBeNull();
+  });
+
   it("says unknown for everything an older status.sh does not print", () => {
     const status = parseHostStatus(JSON.stringify(base), at, at);
+    expect(status.reviewOpen).toBeNull();
+    expect(status.provisioner).toBeNull();
     expect(status.chronyOffsetMs).toBeNull();
     expect(status.clockSynced).toBeNull();
     expect(status.firewall).toBeNull();

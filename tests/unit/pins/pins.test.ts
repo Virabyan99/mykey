@@ -135,7 +135,7 @@ describe("dependency pins", () => {
   });
 
   it("accepts an image we build ourselves only as a required variable of the own-image list", () => {
-    expect(OWN_IMAGES).toEqual(["api"]);
+    expect(OWN_IMAGES).toEqual(["api", "provisioner"]);
     const own =
       "services:\n  api:\n    image: ${API_IMAGE:?load it with host.ts image api <tar>}\n";
     expect(composeImageProblems(own, lock, "own.yml")).toEqual([]);

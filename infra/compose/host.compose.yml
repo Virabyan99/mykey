@@ -166,6 +166,49 @@ services:
       kms:
         ipv4_address: 10.78.4.2
 
+  # The provisioner (Run 3.8, P-55): the only writer of machine policies and
+  # token roles, and the drift sweep. Profile `openbao` only. No published
+  # port and no route out: it reaches PostgreSQL and OpenBao on their bridges.
+  # Its credential (provisioner role id and secret id, delivered by
+  # `ops provision-organization`) and its database password are files.
+  provisioner:
+    <<: *hardening
+    profiles: [openbao]
+    image: ${PROVISIONER_IMAGE:?load the image first - node scripts/host.ts <host> image provisioner <tar>}
+    user: "1000:1000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      openbao:
+        condition: service_started
+    environment:
+      MYKEY_DB_HOST: postgres
+      MYKEY_DB_PORT: "5432"
+      MYKEY_DB_NAME: postgres
+      MYKEY_DB_USER: provisioner_runtime
+      MYKEY_DB_PASSWORD_FILE: /run/mykey/secrets/db-password
+      MYKEY_DB_CA_FILE: /run/mykey/tls/ca.crt
+      MYKEY_BAO_URL: https://10.78.3.2:8200
+      MYKEY_BAO_CA_FILE: /run/mykey/tls/ca.crt
+      MYKEY_PROVISIONER_SECRETS_DIR: /run/mykey/secrets
+      MYKEY_GATE_PATH: /run/mykey/gate/gate.json
+      MYKEY_HOST_INSTANCE_ID: ${MYKEY_HOST_INSTANCE_ID:?run node scripts/host.ts <host> up}
+      MYKEY_SWEEP_SECONDS: ${MYKEY_SWEEP_SECONDS:-300}
+      MYKEY_PROVISIONER_STATE_FILE: /tmp/mykey-provisioner/last-sweep
+    pids_limit: 100
+    mem_limit: 256m
+    tmpfs:
+      - /tmp
+    volumes:
+      - /etc/mykey/secrets/provisioner:/run/mykey/secrets:ro
+      - /etc/mykey/pki/ca.crt:/run/mykey/tls/ca.crt:ro
+      - /etc/mykey/gate:/run/mykey/gate:ro
+    networks:
+      db:
+        ipv4_address: 10.78.2.4
+      bao:
+        ipv4_address: 10.78.3.4
+
   # Traefik. Its static configuration is given as flags because a static file
   # cannot take the ACME directory from host.env, and Traefik does not merge a
   # file with flags. Routers, TLS options and the upstream are in the dynamic

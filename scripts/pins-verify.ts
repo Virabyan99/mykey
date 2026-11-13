@@ -47,7 +47,7 @@ export const REQUIRED_IMAGES = [
  * Images built from this repository. A Compose file names one as the required
  * variable `${<NAME>_IMAGE:?…}`, which `host.ts image` sets to an image ID.
  */
-export const OWN_IMAGES = ["api"];
+export const OWN_IMAGES = ["api", "provisioner"];
 export const REQUIRED_NPM = [
   "typescript",
   "vitest",

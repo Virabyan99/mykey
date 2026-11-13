@@ -6,6 +6,6 @@
 set -eu
 CONFIG=/etc/mykey/secrets/heartbeat/curl.conf
 status=$(/opt/mykey/hosts/checks/status.sh)
-body=$(printf '%s' "$status" | jq -c '{bootId: .bootId, sealed: .sealed, kmsReachable: .kmsReachable}')
+body=$(printf '%s' "$status" | jq -c '{bootId: .bootId, sealed: .sealed, kmsReachable: .kmsReachable, reviewOpen: .reviewOpen}')
 curl --silent --show-error --fail --max-time 10 --config "$CONFIG" \
   --request POST --header 'content-type: application/json' --data "$body" --output /dev/null

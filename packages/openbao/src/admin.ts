@@ -115,6 +115,13 @@ export class OpenBaoAdmin {
     });
   }
 
+  /** Removes a policy (operator repair and drills; absent is not an error). */
+  async deletePolicy(namespace: string, name: string): Promise<void> {
+    requireNamespace(namespace, true);
+    requireName(name);
+    await this.#request("DELETE", namespace, `sys/policies/acl/${name}`, [200, 204, 404]);
+  }
+
   async readPolicy(namespace: string, name: string): Promise<string | null> {
     requireNamespace(namespace, true);
     requireName(name);

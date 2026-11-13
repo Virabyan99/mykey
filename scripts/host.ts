@@ -855,7 +855,15 @@ export function acmeCommands(directory: AcmeDirectory): string[] {
 export const HOST_SECRETS = {
   postgresSuperuser: { path: REMOTE.pgSuperuserPassword, owner: "999:999" },
   apiRuntime: { path: `${REMOTE.secretsDir}/api/db-password`, owner: "1000:1000" },
+  // Run 3.8: the provisioner container logs in as provisioner_runtime.
+  provisionerRuntime: { path: `${REMOTE.secretsDir}/provisioner/db-password`, owner: "1000:1000" },
 } as const;
+
+/** The host secret that holds the password of a role kept on the host. */
+const ROLE_HOST_SECRET: Partial<Record<RoleName, { path: string; owner: string }>> = {
+  api_runtime: HOST_SECRETS.apiRuntime,
+  provisioner_runtime: HOST_SECRETS.provisionerRuntime,
+};
 
 /**
  * Where the password of each database role is kept. Only a role that a
@@ -865,9 +873,38 @@ export const HOST_SECRETS = {
 export const ROLE_PASSWORD_PLACE: Record<RoleName, "host" | "workstation"> = {
   migration_owner: "workstation",
   api_runtime: "host",
-  provisioner_runtime: "workstation",
+  provisioner_runtime: "host",
   backup_reader: "workstation",
   maintenance: "workstation",
+};
+
+// ------------------------------------------------------- provisioned credentials
+
+type AppRoleName = "runtime" | "issuer" | "provisioner";
+
+/**
+ * Where `ops provision-organization` installs each AppRole's credential on a
+ * host (Run 3.8): runtime and issuer for the API, the provisioner's for its
+ * container, each beside the id of the organization the host serves.
+ */
+export function credentialFiles(name: AppRoleName): {
+  organizationId: string;
+  roleId: string;
+  secretId: string;
+} {
+  const directory = `${REMOTE.secretsDir}/${name === "provisioner" ? "provisioner" : "api"}`;
+  return {
+    organizationId: `${directory}/organization-id`,
+    roleId: `${directory}/${name}-role-id`,
+    secretId: `${directory}/${name}-secret-id`,
+  };
+}
+
+/** The bao-bridge addresses each AppRole is bound to on a host (P-56; compose fixes them). */
+export const HOST_BOUND_CIDRS: Readonly<Record<AppRoleName, readonly string[]>> = {
+  runtime: ["10.78.3.3/32"],
+  issuer: ["10.78.3.3/32"],
+  provisioner: ["10.78.3.4/32"],
 };
 
 /** Where the API's auth key files live on a host (mounted read-only at /run/mykey/keys). */
@@ -1346,9 +1383,10 @@ async function runDbInit(host: HostEntry, address: Address, log: Logger): Promis
   const { ROLE_NAMES, applyRoles, migrate } = await import("@mykey/db");
   const passwords = {} as Record<RoleName, string>;
   for (const role of ROLE_NAMES) {
+    const onHost = ROLE_HOST_SECRET[role];
     passwords[role] =
-      ROLE_PASSWORD_PLACE[role] === "host"
-        ? await hostSecret(host, HOST_SECRETS.apiRuntime, address)
+      ROLE_PASSWORD_PLACE[role] === "host" && onHost !== undefined
+        ? await hostSecret(host, onHost, address)
         : localSecret(workstationRoleSecretFile(host.name, role));
   }
   const superuserPassword = await hostSecret(host, HOST_SECRETS.postgresSuperuser, address);
@@ -1677,6 +1715,7 @@ async function runOpsOnHost(host: HostEntry, argv: string[], address: Address): 
   const password = localSecret(workstationRoleSecretFile(host.name, "maintenance"));
   const dir = mkdtempSync(join(tmpdir(), "mykey-ops-"));
   const tunnel = await openTunnel(host, REMOTE.postgres);
+  let baoTunnel: Awaited<ReturnType<typeof openTunnel>> | null = null;
   try {
     const caCertPath = join(dir, "ca.crt");
     writeFileSync(
@@ -1684,6 +1723,50 @@ async function runOpsOnHost(host: HostEntry, argv: string[], address: Address): 
       expectSuccess(await sshExec(host, `cat ${REMOTE.caCert}`, { address }), "reading the host CA")
         .stdout,
     );
+    // Run 3.8: on a host with OpenBao, the operator token (workstation custody)
+    // through a tunnel, and delivery of provisioned credentials over SSH on stdin.
+    const env = parseHostEnv(
+      expectSuccess(await sshExec(host, `cat ${REMOTE.hostEnv}`, { address }), "reading host.env")
+        .stdout,
+    );
+    let openBao: { target: { url: string; caCertPath: string }; rootToken: string } | undefined;
+    const custody = custodyCopyPath(host.name);
+    if (env.MYKEY_OPENBAO === "1" && existsSync(custody)) {
+      const token = (JSON.parse(readFileSync(custody, "utf8")) as { root_token?: unknown })
+        .root_token;
+      if (typeof token === "string" && token !== "") {
+        registerSecret(token);
+        baoTunnel = await openTunnel(host, REMOTE.openbao);
+        openBao = {
+          target: { url: `https://127.0.0.1:${String(baoTunnel.localPort)}`, caCertPath },
+          rootToken: token,
+        };
+      }
+    }
+    const flagAt = argv.indexOf("--organization");
+    const organizationId = flagAt === -1 ? undefined : argv[flagAt + 1];
+    const install = async (path: string, value: string): Promise<void> => {
+      expectSuccess(
+        await sshExec(host, secretInstallCommand(path, "1000:1000"), {
+          sudo: true,
+          address,
+          secretOutput: true,
+          stdin: value,
+        }),
+        `installing ${path}`,
+      );
+    };
+    const deliver = async (
+      name: AppRoleName,
+      credential: { roleId: string; secretId: string },
+    ): Promise<void> => {
+      if (organizationId === undefined) throw new Error("no --organization to deliver for");
+      registerSecret(credential.secretId);
+      const files = credentialFiles(name);
+      await install(files.roleId, credential.roleId);
+      await install(files.secretId, credential.secretId);
+      await install(files.organizationId, organizationId);
+    };
     return await runOps(argv, {
       stdin: process.stdin,
       stdout: process.stdout,
@@ -1699,9 +1782,11 @@ async function runOpsOnHost(host: HostEntry, argv: string[], address: Address): 
         },
         keysDirectory: workstationKeysDirectory(host.name),
         baseUrl: `https://${host.hostname}`,
+        ...(openBao === undefined ? {} : { openBao, deliver, boundCidrs: HOST_BOUND_CIDRS }),
       },
     });
   } finally {
+    await baoTunnel?.close();
     await tunnel.close();
     rmSync(dir, { recursive: true, force: true });
   }

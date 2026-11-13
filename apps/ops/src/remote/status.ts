@@ -29,6 +29,10 @@ export interface HostStatus {
   sshListen: string[] | null;
   /** The service gate record as the host reads it (Run 3.1); null when not reported. */
   gate: "open" | "closed" | "absent" | "invalid" | null;
+  /** Organizations, projects and environments in needs_review (Run 3.8); null when unread. */
+  reviewOpen: number | null;
+  /** The provisioner container's health (Run 3.8); null when not reported. */
+  provisioner: "healthy" | "unhealthy" | "absent" | null;
 }
 
 /** The remote check; prints one JSON object (everything but `clockOffsetMs`). */
@@ -96,6 +100,16 @@ export function parseHostStatus(text: string, sentAt: number, receivedAt: number
       raw.gate === "absent" ||
       raw.gate === "invalid"
         ? raw.gate
+        : null,
+    reviewOpen:
+      typeof raw.reviewOpen === "number" && Number.isInteger(raw.reviewOpen) && raw.reviewOpen >= 0
+        ? raw.reviewOpen
+        : null,
+    provisioner:
+      raw.provisioner === "healthy" ||
+      raw.provisioner === "unhealthy" ||
+      raw.provisioner === "absent"
+        ? raw.provisioner
         : null,
   };
 }
