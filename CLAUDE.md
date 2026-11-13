@@ -16,18 +16,18 @@ The project is in **Stage 1**, a 14-day plan of nine sessions.
 
 ## Where we stand
 
-_Last updated: 13 Nov 2026, at the Session 3 gate (PR `session-3` → `main` open, not merged)._
+_Last updated: 13 Nov 2026, after Session 3 was merged (PR #6)._
 
-| Session | Topic                                                       | State                                               |
-| ------- | ----------------------------------------------------------- | --------------------------------------------------- |
-| 1       | Foundation                                                  | **Done** (PASS WITH ISSUES), merged                 |
-| 2       | Infrastructure and make-or-break proofs                     | **Done** (GO, no fallback), merged                  |
-| 3       | Identity, access and resources                              | **Done** (PASS WITH ISSUES), PR open — owner merges |
-| 4       | Operations engine and secret lifecycle                      | Not started — **no plan yet**                       |
-| 5       | Machine access, CLI and API reference                       | Not started                                         |
-| 6 ∥ 7   | Audit, limits, backup, recovery, deployment ∥ Web workspace | Not started                                         |
-| 8       | Security review and controlled-use release                  | Not started                                         |
-| 9       | Real use, agent experiment, stage exit                      | Not started                                         |
+| Session | Topic                                                       | State                               |
+| ------- | ----------------------------------------------------------- | ----------------------------------- |
+| 1       | Foundation                                                  | **Done** (PASS WITH ISSUES), merged |
+| 2       | Infrastructure and make-or-break proofs                     | **Done** (GO, no fallback), merged  |
+| 3       | Identity, access and resources                              | **Done** (PASS WITH ISSUES), merged |
+| 4       | Operations engine and secret lifecycle                      | Not started — **no plan yet**       |
+| 5       | Machine access, CLI and API reference                       | Not started                         |
+| 6 ∥ 7   | Audit, limits, backup, recovery, deployment ∥ Web workspace | Not started                         |
+| 8       | Security review and controlled-use release                  | Not started                         |
+| 9       | Real use, agent experiment, stage exit                      | Not started                         |
 
 What exists after Session 3 (details: `docs/evidence/session-3/report.md`, run notes `run-3.1.md` … `run-3.9.md`, D-26 … D-33):
 
