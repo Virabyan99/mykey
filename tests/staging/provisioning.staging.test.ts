@@ -202,9 +202,14 @@ describe("the provisioner on staging", () => {
     expect((JSON.parse(secrets.body) as { error: { code: string } }).error.code).toBe(
       "backend_inconsistent",
     );
-    // Listing passes every check (no handler yet in Session 3: the terminal 404).
+    // Listing still answers (its handler since Run 3.9) and shows the environment in review.
     const listed = await publicRequest("GET", base, { cookie });
-    expect(listed.status).toBe(404);
+    expect(listed.status).toBe(200);
+    const shown = (JSON.parse(listed.body) as { environments: { id: string; state: string }[] })
+      .environments;
+    expect(shown.find((environment) => environment.id === environmentId)?.state).toBe(
+      "needs_review",
+    );
 
     expect((await hostStatus(host)).reviewOpen).toBe(baseline + 1);
     await waitUntil(

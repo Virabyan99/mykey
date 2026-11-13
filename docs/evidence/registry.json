@@ -14,9 +14,11 @@
       "ownerRun": "3.2",
       "contributingRuns": [],
       "oldSession": "D08-S12",
-      "status": "OPEN",
-      "evidence": [],
-      "note": ""
+      "status": "SPIKE_PASS",
+      "evidence": [
+        "docs/evidence/session-3/run-3.2.md"
+      ],
+      "note": "Owner bootstrap only through the operator command; repeat-safe; staging owner (product code, real stores; staging)."
     },
     {
       "id": "FR-1.02",
@@ -26,9 +28,11 @@
       "ownerRun": "3.4",
       "contributingRuns": [],
       "oldSession": "D08-S13",
-      "status": "OPEN",
-      "evidence": [],
-      "note": ""
+      "status": "SPIKE_PASS",
+      "evidence": [
+        "docs/evidence/session-3/run-3.4.md"
+      ],
+      "note": "Mandatory TOTP, one-use steps, recovery codes, product routes closed to incomplete sessions (product code, real stores)."
     },
     {
       "id": "FR-1.03",
@@ -38,9 +42,11 @@
       "ownerRun": "3.4",
       "contributingRuns": [],
       "oldSession": "D08-S13",
-      "status": "OPEN",
-      "evidence": [],
-      "note": ""
+      "status": "SPIKE_PASS",
+      "evidence": [
+        "docs/evidence/session-3/run-3.4.md"
+      ],
+      "note": "Mandatory TOTP, one-use steps, recovery codes, product routes closed to incomplete sessions (product code, real stores)."
     },
     {
       "id": "FR-1.04",
@@ -50,9 +56,11 @@
       "ownerRun": "3.6",
       "contributingRuns": [],
       "oldSession": "D08-S14",
-      "status": "OPEN",
-      "evidence": [],
-      "note": ""
+      "status": "SPIKE_PASS",
+      "evidence": [
+        "docs/evidence/session-3/run-3.6.md"
+      ],
+      "note": "Operator-initiated reset for a lost password or factor; one redemption across processes (product code, real stores)."
     },
     {
       "id": "FR-1.05",
@@ -62,9 +70,11 @@
       "ownerRun": "3.5",
       "contributingRuns": [],
       "oldSession": "D08-S14",
-      "status": "OPEN",
-      "evidence": [],
-      "note": ""
+      "status": "SPIKE_PASS",
+      "evidence": [
+        "docs/evidence/session-3/run-3.5.md"
+      ],
+      "note": "One validity decision for sessions, atomic password change, fresh TOTP for the sensitive starts; AC-1.35 for export and issuance on stub handlers (product code, real stores)."
     },
     {
       "id": "FR-1.06",
@@ -74,9 +84,11 @@
       "ownerRun": "3.5",
       "contributingRuns": [],
       "oldSession": "D08-S14",
-      "status": "OPEN",
-      "evidence": [],
-      "note": ""
+      "status": "SPIKE_PASS",
+      "evidence": [
+        "docs/evidence/session-3/run-3.5.md"
+      ],
+      "note": "One validity decision for sessions, atomic password change, fresh TOTP for the sensitive starts; AC-1.35 for export and issuance on stub handlers (product code, real stores)."
     },
     {
       "id": "FR-1.07",
@@ -86,9 +98,11 @@
       "ownerRun": "3.3",
       "contributingRuns": [],
       "oldSession": "D08-S12",
-      "status": "OPEN",
-      "evidence": [],
-      "note": ""
+      "status": "SPIKE_PASS",
+      "evidence": [
+        "docs/evidence/session-3/run-3.3.md"
+      ],
+      "note": "Throttling across two API processes on database time (product code, real stores)."
     },
     {
       "id": "FR-1.08",
@@ -98,9 +112,11 @@
       "ownerRun": "3.8",
       "contributingRuns": [],
       "oldSession": "D08-S16",
-      "status": "OPEN",
-      "evidence": [],
-      "note": ""
+      "status": "SPIKE_PASS",
+      "evidence": [
+        "docs/evidence/session-3/run-3.8.md"
+      ],
+      "note": "Durable organization provisioning, provisioner process, drift sweep and review alert; AC-1.09 drill on staging (product code, real stores; staging)."
     },
     {
       "id": "FR-1.09",
@@ -110,9 +126,11 @@
       "ownerRun": "3.7",
       "contributingRuns": [],
       "oldSession": "D08-S15",
-      "status": "OPEN",
-      "evidence": [],
-      "note": ""
+      "status": "SPIKE_PASS",
+      "evidence": [
+        "docs/evidence/session-3/run-3.7.md"
+      ],
+      "note": "Authorization pipeline from current rows; every matrix cell tested; hidden equals absent; secret, credential and audit routes on stub handlers until their owner runs (product code, real stores)."
     },
     {
       "id": "FR-1.10",
@@ -122,9 +140,11 @@
       "ownerRun": "3.7",
       "contributingRuns": [],
       "oldSession": "D08-S15",
-      "status": "OPEN",
-      "evidence": [],
-      "note": ""
+      "status": "SPIKE_PASS",
+      "evidence": [
+        "docs/evidence/session-3/run-3.7.md"
+      ],
+      "note": "Authorization pipeline from current rows; every matrix cell tested; hidden equals absent; secret, credential and audit routes on stub handlers until their owner runs (product code, real stores)."
     },
     {
       "id": "FR-1.11",
@@ -134,9 +154,11 @@
       "ownerRun": "3.7",
       "contributingRuns": [],
       "oldSession": "D08-S15",
-      "status": "OPEN",
-      "evidence": [],
-      "note": ""
+      "status": "SPIKE_PASS",
+      "evidence": [
+        "docs/evidence/session-3/run-3.7.md"
+      ],
+      "note": "Authorization pipeline from current rows; every matrix cell tested; hidden equals absent; secret, credential and audit routes on stub handlers until their owner runs (product code, real stores)."
     },
     {
       "id": "FR-1.12",
@@ -146,9 +168,11 @@
       "ownerRun": "3.8",
       "contributingRuns": [],
       "oldSession": "D08-S16",
-      "status": "OPEN",
-      "evidence": [],
-      "note": ""
+      "status": "SPIKE_PASS",
+      "evidence": [
+        "docs/evidence/session-3/run-3.8.md"
+      ],
+      "note": "Durable organization provisioning, provisioner process, drift sweep and review alert; AC-1.09 drill on staging (product code, real stores; staging)."
     },
     {
       "id": "FR-1.13",
@@ -172,9 +196,11 @@
       "ownerRun": "3.9",
       "contributingRuns": [],
       "oldSession": "D08-S17",
-      "status": "OPEN",
-      "evidence": [],
-      "note": ""
+      "status": "SPIKE_PASS",
+      "evidence": [
+        "docs/evidence/session-3/run-3.9.md"
+      ],
+      "note": "Projects and environments as replayable operations, keyset lists, readiness; a pending environment cannot issue credentials is proven at the state gate and again on the real route by Run 5.1 (product code, real stores)."
     },
     {
       "id": "FR-1.15",
@@ -184,9 +210,11 @@
       "ownerRun": "3.9",
       "contributingRuns": [],
       "oldSession": "D08-S17",
-      "status": "OPEN",
-      "evidence": [],
-      "note": ""
+      "status": "SPIKE_PASS",
+      "evidence": [
+        "docs/evidence/session-3/run-3.9.md"
+      ],
+      "note": "Projects and environments as replayable operations, keyset lists, readiness; a pending environment cannot issue credentials is proven at the state gate and again on the real route by Run 5.1 (product code, real stores)."
     },
     {
       "id": "FR-1.16",
@@ -196,9 +224,11 @@
       "ownerRun": "3.9",
       "contributingRuns": [],
       "oldSession": "D08-S17",
-      "status": "OPEN",
-      "evidence": [],
-      "note": ""
+      "status": "SPIKE_PASS",
+      "evidence": [
+        "docs/evidence/session-3/run-3.9.md"
+      ],
+      "note": "Projects and environments as replayable operations, keyset lists, readiness; a pending environment cannot issue credentials is proven at the state gate and again on the real route by Run 5.1 (product code, real stores)."
     },
     {
       "id": "FR-1.17",
@@ -232,9 +262,11 @@
       "ownerRun": "3.9",
       "contributingRuns": [],
       "oldSession": "D08-S17",
-      "status": "OPEN",
-      "evidence": [],
-      "note": ""
+      "status": "SPIKE_PASS",
+      "evidence": [
+        "docs/evidence/session-3/run-3.9.md"
+      ],
+      "note": "Projects and environments as replayable operations, keyset lists, readiness; a pending environment cannot issue credentials is proven at the state gate and again on the real route by Run 5.1 (product code, real stores)."
     },
     {
       "id": "FR-1.20",
@@ -672,9 +704,11 @@
       "ownerRun": "3.8",
       "contributingRuns": [],
       "oldSession": "D08-S16",
-      "status": "OPEN",
-      "evidence": [],
-      "note": ""
+      "status": "SPIKE_PASS",
+      "evidence": [
+        "docs/evidence/session-3/run-3.8.md"
+      ],
+      "note": "Durable organization provisioning, provisioner process, drift sweep and review alert; AC-1.09 drill on staging (product code, real stores; staging)."
     },
     {
       "id": "FR-1.56",
@@ -948,9 +982,11 @@
       "ownerRun": "3.5",
       "contributingRuns": [],
       "oldSession": "D08-S14",
-      "status": "OPEN",
-      "evidence": [],
-      "note": ""
+      "status": "SPIKE_PASS",
+      "evidence": [
+        "docs/evidence/session-3/run-3.5.md"
+      ],
+      "note": "One validity decision for sessions, atomic password change, fresh TOTP for the sensitive starts; AC-1.35 for export and issuance on stub handlers (product code, real stores)."
     },
     {
       "id": "FR-1.78",
@@ -1260,9 +1296,11 @@
       "ownerRun": "3.2",
       "contributingRuns": [],
       "oldSession": "D08-S12",
-      "status": "OPEN",
-      "evidence": [],
-      "note": ""
+      "status": "SPIKE_PASS",
+      "evidence": [
+        "docs/evidence/session-3/run-3.2.md"
+      ],
+      "note": "Owner bootstrap only through the operator command; repeat-safe; staging owner (product code, real stores; staging)."
     },
     {
       "id": "AC-1.02",
@@ -1272,9 +1310,11 @@
       "ownerRun": "3.4",
       "contributingRuns": [],
       "oldSession": "D08-S13",
-      "status": "OPEN",
-      "evidence": [],
-      "note": ""
+      "status": "SPIKE_PASS",
+      "evidence": [
+        "docs/evidence/session-3/run-3.4.md"
+      ],
+      "note": "Mandatory TOTP, one-use steps, recovery codes, product routes closed to incomplete sessions (product code, real stores)."
     },
     {
       "id": "AC-1.03",
@@ -1284,9 +1324,11 @@
       "ownerRun": "3.6",
       "contributingRuns": [],
       "oldSession": "D08-S14",
-      "status": "OPEN",
-      "evidence": [],
-      "note": ""
+      "status": "SPIKE_PASS",
+      "evidence": [
+        "docs/evidence/session-3/run-3.6.md"
+      ],
+      "note": "Operator-initiated reset for a lost password or factor; one redemption across processes (product code, real stores)."
     },
     {
       "id": "AC-1.04",
@@ -1296,9 +1338,11 @@
       "ownerRun": "3.5",
       "contributingRuns": [],
       "oldSession": "D08-S14",
-      "status": "OPEN",
-      "evidence": [],
-      "note": ""
+      "status": "SPIKE_PASS",
+      "evidence": [
+        "docs/evidence/session-3/run-3.5.md"
+      ],
+      "note": "One validity decision for sessions, atomic password change, fresh TOTP for the sensitive starts; AC-1.35 for export and issuance on stub handlers (product code, real stores)."
     },
     {
       "id": "AC-1.05",
@@ -1308,9 +1352,11 @@
       "ownerRun": "3.3",
       "contributingRuns": [],
       "oldSession": "D08-S12",
-      "status": "OPEN",
-      "evidence": [],
-      "note": ""
+      "status": "SPIKE_PASS",
+      "evidence": [
+        "docs/evidence/session-3/run-3.3.md"
+      ],
+      "note": "Throttling across two API processes on database time (product code, real stores)."
     },
     {
       "id": "AC-1.06",
@@ -1320,9 +1366,11 @@
       "ownerRun": "3.8",
       "contributingRuns": [],
       "oldSession": "D08-S16",
-      "status": "OPEN",
-      "evidence": [],
-      "note": ""
+      "status": "SPIKE_PASS",
+      "evidence": [
+        "docs/evidence/session-3/run-3.8.md"
+      ],
+      "note": "Durable organization provisioning, provisioner process, drift sweep and review alert; AC-1.09 drill on staging (product code, real stores; staging)."
     },
     {
       "id": "AC-1.07",
@@ -1344,9 +1392,11 @@
       "ownerRun": "3.7",
       "contributingRuns": [],
       "oldSession": "D08-S15",
-      "status": "OPEN",
-      "evidence": [],
-      "note": ""
+      "status": "SPIKE_PASS",
+      "evidence": [
+        "docs/evidence/session-3/run-3.7.md"
+      ],
+      "note": "Authorization pipeline from current rows; every matrix cell tested; hidden equals absent; secret, credential and audit routes on stub handlers until their owner runs (product code, real stores)."
     },
     {
       "id": "AC-1.09",
@@ -1356,9 +1406,11 @@
       "ownerRun": "3.8",
       "contributingRuns": [],
       "oldSession": "D08-S16",
-      "status": "OPEN",
-      "evidence": [],
-      "note": ""
+      "status": "SPIKE_PASS",
+      "evidence": [
+        "docs/evidence/session-3/run-3.8.md"
+      ],
+      "note": "Durable organization provisioning, provisioner process, drift sweep and review alert; AC-1.09 drill on staging (product code, real stores; staging)."
     },
     {
       "id": "AC-1.10",
@@ -1368,9 +1420,11 @@
       "ownerRun": "3.9",
       "contributingRuns": [],
       "oldSession": "D08-S17",
-      "status": "OPEN",
-      "evidence": [],
-      "note": ""
+      "status": "SPIKE_PASS",
+      "evidence": [
+        "docs/evidence/session-3/run-3.9.md"
+      ],
+      "note": "Projects and environments as replayable operations, keyset lists, readiness; a pending environment cannot issue credentials is proven at the state gate and again on the real route by Run 5.1 (product code, real stores)."
     },
     {
       "id": "AC-1.11",
@@ -1678,9 +1732,11 @@
       "ownerRun": "3.5",
       "contributingRuns": [],
       "oldSession": "D08-S14",
-      "status": "OPEN",
-      "evidence": [],
-      "note": ""
+      "status": "SPIKE_PASS",
+      "evidence": [
+        "docs/evidence/session-3/run-3.5.md"
+      ],
+      "note": "One validity decision for sessions, atomic password change, fresh TOTP for the sensitive starts; AC-1.35 for export and issuance on stub handlers (product code, real stores)."
     },
     {
       "id": "AC-1.36",
@@ -2046,9 +2102,11 @@
         "2.1"
       ],
       "oldSession": "D08-S16",
-      "status": "OPEN",
-      "evidence": [],
-      "note": ""
+      "status": "SPIKE_PASS",
+      "evidence": [
+        "docs/evidence/session-3/run-3.8.md"
+      ],
+      "note": "Durable organization provisioning, provisioner process, drift sweep and review alert; AC-1.09 drill on staging (product code, real stores; staging)."
     },
     {
       "id": "PO-5",
@@ -2062,9 +2120,10 @@
       "oldSession": "D08-S12",
       "status": "SPIKE_PASS",
       "evidence": [
-        "docs/evidence/session-2/run-2.3.md"
+        "docs/evidence/session-2/run-2.3.md",
+        "docs/evidence/session-3/run-3.2.md"
       ],
-      "note": "G-AUTH: bootstrap-only auth on Better Auth 1.7.19 (local stack); sign-up refused; operator path creates the account."
+      "note": "G-AUTH: bootstrap-only auth on Better Auth 1.7.19 (local stack); sign-up refused; operator path creates the account. Session 3: Owner bootstrap only through the operator command; repeat-safe; staging owner (product code, real stores; staging)."
     },
     {
       "id": "PO-6",
@@ -2076,9 +2135,11 @@
         "2.3"
       ],
       "oldSession": "D08-S14",
-      "status": "OPEN",
-      "evidence": [],
-      "note": ""
+      "status": "SPIKE_PASS",
+      "evidence": [
+        "docs/evidence/session-3/run-3.6.md"
+      ],
+      "note": "Operator-initiated reset for a lost password or factor; one redemption across processes (product code, real stores)."
     },
     {
       "id": "PO-7",
@@ -2203,9 +2264,10 @@
       "oldSession": "D08-S13",
       "status": "SPIKE_PASS",
       "evidence": [
-        "docs/evidence/session-2/run-2.3.md"
+        "docs/evidence/session-2/run-2.3.md",
+        "docs/evidence/session-3/run-3.4.md"
       ],
-      "note": "G-AUTH: protected session and factor storage proven on the local stack."
+      "note": "G-AUTH: protected session and factor storage proven on the local stack. Session 3: Mandatory TOTP, one-use steps, recovery codes, product routes closed to incomplete sessions (product code, real stores)."
     },
     {
       "id": "PO-16",

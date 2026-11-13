@@ -8,3 +8,8 @@ c6f52f4956e2b39f86c8f37e169151b186f011c4:docs/doc_02_mykey_project_stage_breakdo
 # The KMS key *id* of the staging seal key (an identifier the console and okms print; the key
 # material cannot leave the KMS: Never Extractable). No credential.
 ebd03634b9a217641010e7718745f5b2292ed884:docs/runbooks/kms-and-unseal.md:generic-api-key:7
+
+# Run 3.1 (found at the Session 3 gate): MYKEY_HOST_INSTANCE_ID in the compose test is a fixed,
+# synthetic UUID that compose interpolates; it is no credential. Reviewed false positive.
+7fb5c39380c1d6e4c15276e56e637b7c0c71a77e:tests/integration/hosts/compose.test.ts:generic-api-key:55
+7fb5c39380c1d6e4c15276e56e637b7c0c71a77e:tests/integration/hosts/compose.test.ts:generic-api-key:232

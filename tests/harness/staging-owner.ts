@@ -62,7 +62,9 @@ export function sessionPair(answer: PublicAnswer): string {
       return pair;
     }
   }
-  throw new Error(`no session cookie (HTTP ${String(answer.status)})`);
+  // The error code only: an answer without a cookie holds no secret.
+  const code = /"code":"([a-z_]+)"/.exec(answer.body)?.[1] ?? "none";
+  throw new Error(`no session cookie (HTTP ${String(answer.status)} ${code})`);
 }
 
 export function readCustody(name: string): string | null {

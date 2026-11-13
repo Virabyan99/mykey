@@ -65,6 +65,7 @@ beforeAll(async () => {
     },
     { max: 3 },
   );
+  await removeLeftovers();
   // The time check before any TOTP step.
   const status = await hostStatus(host);
   expect(Math.abs(status.chronyOffsetMs ?? 99_999)).toBeLessThan(1000);
@@ -76,12 +77,49 @@ afterAll(async () => {
   await staging.close();
 });
 
-/** Ages this suite's rate-limit rows (staging is synthetic): the per-source limit counts every sign-in. */
+/**
+ * Removes this suite's rate-limit rows (staging is synthetic): the per-source
+ * limit counts every sign-in, and the suite signs in many times. (Shifting the
+ * rows back in time collides with rows shifted before: same key, same window.)
+ */
 async function ageThrottle(): Promise<void> {
   await superuser.query(
-    "UPDATE app.rate_limit SET window_start = window_start - interval '1 day' WHERE window_start >= $1::timestamptz - interval '1 minute'",
+    "DELETE FROM app.rate_limit WHERE window_start >= $1::timestamptz - interval '1 minute'",
     [startedAt],
   );
+}
+
+/** Synthetic users and organizations an earlier, interrupted run of this suite left behind. */
+async function removeLeftovers(): Promise<void> {
+  const users = await superuser.query<{ id: string }>(
+    `SELECT id FROM auth."user" WHERE email LIKE 'gate-%@mykey-staging.invalid'`,
+  );
+  const organizations = await superuser.query<{ id: string }>(
+    "SELECT DISTINCT organization_id AS id FROM app.project WHERE name = 'B project'",
+  );
+  await removeUsers(users.rows.map((row) => row.id));
+  for (const { id } of organizations.rows) {
+    await superuser.query("DELETE FROM app.membership WHERE organization_id = $1", [id]);
+    await superuser.query("DELETE FROM app.project WHERE organization_id = $1", [id]);
+    await superuser.query("DELETE FROM app.organization WHERE id = $1", [id]);
+  }
+}
+
+async function removeUsers(ids: string[]): Promise<void> {
+  for (const statement of [
+    "DELETE FROM app.access_grant WHERE user_id = ANY($1)",
+    "DELETE FROM app.membership WHERE user_id = ANY($1)",
+    "DELETE FROM auth.recovery_code WHERE enrollment_id IN (SELECT id FROM auth.totp_enrollment WHERE user_id = ANY($1))",
+    "DELETE FROM auth.totp_step_used WHERE enrollment_id IN (SELECT id FROM auth.totp_enrollment WHERE user_id = ANY($1))",
+    "DELETE FROM auth.totp_enrollment WHERE user_id = ANY($1)",
+    "DELETE FROM auth.session WHERE user_id = ANY($1)",
+    "DELETE FROM auth.reset_token WHERE user_id = ANY($1)",
+    "DELETE FROM auth.account WHERE user_id = ANY($1)",
+    "DELETE FROM auth.account_state WHERE user_id = ANY($1)",
+    `DELETE FROM auth."user" WHERE id = ANY($1)`,
+  ]) {
+    await superuser.query(statement, [ids]);
+  }
 }
 
 const codeOf = (answer: PublicAnswer): string | undefined => {
@@ -347,7 +385,8 @@ async function makeUser(
   membership: { organization: string; role: "owner" | "admin" | "member" },
 ): Promise<Synthetic> {
   const id = randomUUID();
-  const email = `gate-${name}-${id.slice(0, 6)}@mykey-staging.invalid`;
+  // Lower case: sign-in compares the normalized e-mail (the operator path stores it so too).
+  const email = `gate-${name.toLowerCase()}-${id.slice(0, 6)}@mykey-staging.invalid`;
   const password = canary(randomBytes(18).toString("base64url"));
   const auth = createAuth({
     db: drizzle(superuser),
@@ -641,21 +680,7 @@ describe("8–9. canary sweep and clean-up", () => {
   }, 600_000);
 
   it("clean-up: the synthetic users and organization B are gone; reviewOpen is 0", async () => {
-    const ids = [...synthetic.values()].map((user) => user.id);
-    for (const statement of [
-      "DELETE FROM app.access_grant WHERE user_id = ANY($1)",
-      "DELETE FROM app.membership WHERE user_id = ANY($1)",
-      "DELETE FROM auth.recovery_code WHERE enrollment_id IN (SELECT id FROM auth.totp_enrollment WHERE user_id = ANY($1))",
-      "DELETE FROM auth.totp_step_used WHERE enrollment_id IN (SELECT id FROM auth.totp_enrollment WHERE user_id = ANY($1))",
-      "DELETE FROM auth.totp_enrollment WHERE user_id = ANY($1)",
-      "DELETE FROM auth.session WHERE user_id = ANY($1)",
-      "DELETE FROM auth.reset_token WHERE user_id = ANY($1)",
-      "DELETE FROM auth.account WHERE user_id = ANY($1)",
-      "DELETE FROM auth.account_state WHERE user_id = ANY($1)",
-      `DELETE FROM auth."user" WHERE id = ANY($1)`,
-    ]) {
-      await superuser.query(statement, [ids]);
-    }
+    await removeUsers([...synthetic.values()].map((user) => user.id));
     await superuser.query("DELETE FROM app.project WHERE organization_id = $1", [organizationB]);
     await superuser.query("DELETE FROM app.organization WHERE id = $1", [organizationB]);
     expect((await hostStatus(host)).reviewOpen).toBe(0);

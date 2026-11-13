@@ -21,6 +21,13 @@ COPY packages/openbao/package.json packages/openbao/
 COPY packages/auth/package.json packages/auth/
 COPY apps/api/package.json apps/api/
 RUN pnpm install --frozen-lockfile --prod --filter "@mykey/api..."
+# better-auth's optional peers drizzle-kit and vitest are linked from the
+# workspace root (a dev dependency there), so a production install carries them
+# and their esbuild and vite. Nothing the API runs imports them (its start-up
+# refusal loads every module first); they go, with the Go binaries Trivy flags.
+RUN rm -rf node_modules/.pnpm/esbuild@* node_modules/.pnpm/@esbuild+* \
+      node_modules/.pnpm/@esbuild-kit+* node_modules/.pnpm/drizzle-kit@* \
+      node_modules/.pnpm/vite@* node_modules/.pnpm/vitest@* node_modules/.pnpm/@vitest+*
 COPY packages/contracts/src packages/contracts/src
 COPY packages/db/src packages/db/src
 COPY packages/audit/src packages/audit/src
