@@ -138,6 +138,43 @@ describe("secrets.delete", () => {
     await expectIndexMatchesBackend(f, "env1a");
   });
 
+  it("lifecycle races across two processes (AC-1.15): delete × update, undelete × restore — one wins, one version change", async () => {
+    for (let round = 0; round < 5; round += 1) {
+      const name = unique();
+      const current = await created("env1a", name);
+      const [del, upd] = await Promise.all([
+        f.act("env1a", name, "delete", current, { to: "first" }),
+        f.update("env1a", name, synthetic(), current, { to: "second" }),
+      ]);
+      expect([del.status, upd.status].sort(), `delete × update ${String(round)}`).toEqual([
+        200, 409,
+      ]);
+      const backend = await f.backend("env1a", name);
+      // Exactly one effect: either version 1 deleted, or version 2 written — never both.
+      const deletedOne = backend?.versions[0]?.deleted === true;
+      const wroteTwo = backend?.currentVersion === 2;
+      expect(deletedOne !== wroteTwo).toBe(true);
+    }
+    for (let round = 0; round < 5; round += 1) {
+      const name = unique();
+      const first = await created("env1a", name);
+      const second = await f.update("env1a", name, synthetic(), first);
+      const deleted = currentOf(await f.act("env1a", name, "delete", currentOf(second)));
+      const [und, res] = await Promise.all([
+        f.act("env1a", name, "undelete", deleted, { to: "first" }),
+        f.act("env1a", name, "restore", deleted, { to: "second", sourceVersion: 1 }),
+      ]);
+      expect([und.status, res.status].sort(), `undelete × restore ${String(round)}`).toEqual([
+        200, 409,
+      ]);
+      const backend = await f.backend("env1a", name);
+      const undeleted = backend?.currentVersion === 2 && backend.versions[1]?.deleted === false;
+      const restored = backend?.currentVersion === 3;
+      expect(undeleted !== restored).toBe(true);
+    }
+    await expectIndexMatchesBackend(f, "env1a");
+  }, 120_000);
+
   it("a delayed answer is 503 outcome_unknown, the key in review, the slot held", async () => {
     const name = unique();
     const current = await created("env2a", name);
