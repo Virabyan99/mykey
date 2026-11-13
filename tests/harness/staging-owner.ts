@@ -65,17 +65,17 @@ export function sessionPair(answer: PublicAnswer): string {
   throw new Error(`no session cookie (HTTP ${String(answer.status)})`);
 }
 
-function readCustody(name: string): string | null {
+export function readCustody(name: string): string | null {
   const path = custody(name);
   return existsSync(path) ? readFileSync(path, "utf8").trim() : null;
 }
 
-function writeCustody(name: string, value: string): void {
+export function writeCustody(name: string, value: string): void {
   writeFileSync(custody(name), `${value}\n`, { mode: 0o600 });
 }
 
 /** A code of a step not used before by this workstation (each step verifies once). */
-async function freshCode(seed: Uint8Array): Promise<string> {
+export async function freshCode(seed: Uint8Array): Promise<string> {
   const last = Number(readCustody("owner-totp-last-step") ?? "0");
   while (stepAt(new Date()) <= last) await sleep(1000);
   const step = stepAt(new Date());
