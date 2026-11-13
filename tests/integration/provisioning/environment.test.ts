@@ -256,6 +256,70 @@ describe("environment provisioning", () => {
     }
   }, 240_000);
 
+  it("kv-scope compares all three fields: delete_version_after changed → the new environment is needs_review / backend_inconsistent", async () => {
+    const plan = await fx.admin.readKvConfig(fx.namespace);
+    await fx.admin.putKvConfig(fx.namespace, {
+      cas_required: true,
+      max_versions: 20,
+      delete_version_after: "1h",
+    });
+    const provisioner = await fx.start();
+    try {
+      const { environmentId } = await fx.newEnvironment();
+      await fx.waitFor(environmentId, "needs_review");
+      expect((await fx.environment(environmentId)).review_reason).toBe("backend_inconsistent");
+    } finally {
+      await provisioner.stop();
+      await fx.admin.putKvConfig(fx.namespace, {
+        cas_required: plan?.cas_required,
+        max_versions: plan?.max_versions,
+        delete_version_after: plan?.delete_version_after,
+      });
+      // The start-up sweep sent the organization to review for the same change.
+      await fx.api.superuser.query(
+        "UPDATE app.organization SET state = 'active', review_reason = NULL WHERE id = $1",
+        [fx.tenants.a.organizationId],
+      );
+    }
+  });
+
+  it("a step answered denied ends the job at once: one attempt, the environment in review, no retry", async () => {
+    const original = await fx.admin.readPolicy(fx.namespace, "provisioner");
+    expect(original).not.toBeNull();
+    // Narrowed for one path: the machine policies.
+    await fx.admin.putPolicy(
+      fx.namespace,
+      "provisioner",
+      `${original ?? ""}\npath "sys/policies/acl/machine-env-*" { capabilities = ["deny"] }\n`,
+    );
+    const provisioner = await fx.start();
+    try {
+      const { environmentId, operationId } = await fx.newEnvironment();
+      await fx.waitFor(environmentId, "needs_review");
+      expect((await fx.environment(environmentId)).review_reason).toBe("provisioning_failed");
+      const steps = await fx.api.superuser.query<{ target: string }>(
+        "SELECT target FROM app.operation_step WHERE operation_id = $1 ORDER BY ordinal",
+        [operationId],
+      );
+      expect(steps.rows.map((row) => row.target)).toEqual(["kv-scope", "machine-policy"]);
+      // The queue's own record: the job completed on its first attempt.
+      let job: { state: string; retry_count: number } | undefined;
+      for (let i = 0; i < 50 && job?.state !== "completed"; i += 1) {
+        job = (
+          await fx.api.superuser.query<{ state: string; retry_count: number }>(
+            "SELECT state, retry_count FROM jobs.job WHERE data->>'operationId' = $1",
+            [operationId],
+          )
+        ).rows[0];
+        if (job?.state !== "completed") await sleep(200);
+      }
+      expect(job).toEqual({ state: "completed", retry_count: 0 });
+    } finally {
+      await provisioner.stop();
+      await fx.admin.putPolicy(fx.namespace, "provisioner", original ?? "");
+    }
+  });
+
   it("provisioner credential destroyed → the environment is needs_review / provisioning_failed", async () => {
     for (const accessor of await fx.admin.listSecretIdAccessors(fx.namespace, "provisioner")) {
       await fx.admin.destroySecretIdAccessor(fx.namespace, "provisioner", accessor);

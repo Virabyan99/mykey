@@ -158,6 +158,17 @@ describe("drift sweep", () => {
       "kv_config",
     ],
     [
+      "a mount whose delete_version_after was changed",
+      async () => {
+        await fx.admin.putKvConfig(fx.namespace, {
+          cas_required: true,
+          max_versions: 20,
+          delete_version_after: "1h",
+        });
+      },
+      "kv_config",
+    ],
+    [
       "policy provisioner deleted",
       async () => {
         await baoFetch(fx.stack, "/v1/sys/policies/acl/provisioner", {

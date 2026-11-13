@@ -17,6 +17,7 @@ import { machineName, machineTokenRole, renderMachinePolicy } from "@mykey/openb
 import type { ProvisionerClient, ReadableTokenRole } from "@mykey/openbao/provisioner";
 import type pg from "pg";
 import { isDeepStrictEqual } from "node:util";
+import { kvConfigOf } from "./plan.ts";
 
 export const ENVIRONMENT_STEPS = ["kv-scope", "machine-policy", "token-role"] as const;
 
@@ -145,8 +146,12 @@ export async function provisionEnvironment(
       const config = await client.readKvConfig();
       if (!config.ok) return { cause: config.cause };
       if (config.value === null) return "mismatch";
-      return config.value.cas_required === true &&
-        config.value.max_versions === LIMITS.secret.versionsKept
+      // All three fields of the plan (Run 4.5): an automatic deletion is drift too.
+      return isDeepStrictEqual(kvConfigOf(config.value), {
+        cas_required: true,
+        max_versions: LIMITS.secret.versionsKept,
+        delete_version_after: "0s",
+      })
         ? "verified"
         : "mismatch";
     },
