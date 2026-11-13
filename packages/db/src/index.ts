@@ -33,6 +33,9 @@ export {
 export {
   applyCounters,
   environmentCounters,
+  listIndex,
+  versionEvents,
+  type VersionEvent,
   lockIndexRow,
   markEnvironmentReview,
   markKeyReview,

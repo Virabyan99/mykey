@@ -22,6 +22,8 @@ const HANDLED = new Set([
   "environments.rename",
   "operations.get",
   "operations.list",
+  "secrets.list",
+  "secrets.history",
   "secrets.create",
   "secrets.update",
   "session.activity",

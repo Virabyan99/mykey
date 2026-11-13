@@ -1,7 +1,9 @@
-// Secret mutations (Run 4.2, D-36): each handler builds a SecretRequest and
-// hands it to the protocol of @mykey/operations, which owns the lock, the
-// operation record, the one change and its proof. A handler only maps the
-// outcome to an answer. Values never reach a log line or an error.
+// Secret routes. Mutations (Run 4.2, D-36): each handler builds a
+// SecretRequest and hands it to the protocol of @mykey/operations, which owns
+// the lock, the operation record, the one change and its proof. Reads (Run
+// 4.3, D-37): the list from the index, history from metadata and events, a
+// reveal under the lock and audited before the value leaves. A handler only
+// maps the outcome to an answer. Values never reach a log line or an error.
 import {
   checkSecretName,
   decide,
@@ -9,18 +11,22 @@ import {
   type OperationId,
   type UserId,
 } from "@mykey/contracts";
-import { lockParents, resolveAccess, type EnvironmentScope } from "@mykey/db";
+import { listIndex, lockParents, resolveAccess, type EnvironmentScope } from "@mykey/db";
 import {
   operationResponse,
   readGate,
+  readHistory,
   replayAnswer,
   runSecretAction,
   type EffectDeps,
+  type ReadDeps,
+  type Refused,
   type SecretAction,
   type SecretOutcome,
   type SecretRequest,
 } from "@mykey/operations";
 import type pg from "pg";
+import { readCursor, signCursor } from "../pipeline/cursor.ts";
 import {
   ApiError,
   type ApiContext,
@@ -143,6 +149,89 @@ export function nameParam(ctx: ApiContext): string {
   if (!checkSecretName(name).ok) throw new ApiError("not_found");
   return name;
 }
+
+// -------------------------------------------------------------------- reads
+
+function readDeps(deps: AppDeps): ReadDeps {
+  if (deps.bao === undefined || deps.lockPool === undefined) {
+    throw new ApiError("dependency_unavailable");
+  }
+  const faults = deps.test?.faults;
+  return {
+    pool: deps.pool,
+    lockPool: deps.lockPool,
+    bao: deps.bao,
+    ...(faults === undefined ? {} : { faults: (point: string) => faults(point, "") }),
+  };
+}
+
+function refusedOf(outcome: Refused): never {
+  throw new ApiError(outcome.code, undefined, undefined, {
+    ...(outcome.operationId === undefined ? {} : { operationId: outcome.operationId }),
+    ...(outcome.details === undefined ? {} : { details: outcome.details }),
+  });
+}
+
+/**
+ * secrets.list (P-73): a page of the index, never OpenBao, no lock. The
+ * cursor carries the first page's metadata generation; a write in between is
+ * 409 listing_changed.
+ */
+export const secretsListHandler: Handler = async (ctx, deps) => {
+  const scope = ctx.scope as EnvironmentScope | null;
+  const ring = deps.auth?.keys.cursorMac;
+  if (scope === null || ring === undefined) throw new ApiError("dependency_unavailable");
+  const { prefix, limit, cursor } = ctx.query as {
+    prefix?: string;
+    limit: number;
+    cursor?: string;
+  };
+  const scopeText = `${scope.organizationId}/${scope.projectId}/${scope.environmentId}`;
+  const expect = { routeId: ctx.route.id, scope: scopeText, filter: prefix ?? "" };
+  const read = cursor === undefined ? null : readCursor(ring, cursor, expect);
+  if (cursor !== undefined && read === null) throw new ApiError("malformed_request");
+  const page = await listIndex(deps.pool, scope, {
+    prefix: prefix ?? null,
+    after: read?.lastKey ?? null,
+    limit: limit + 1,
+  });
+  if (read !== null && read.generation !== page.generation.toString()) {
+    throw new ApiError("listing_changed");
+  }
+  const rows = page.rows.slice(0, limit);
+  const last = rows.at(-1);
+  return {
+    status: 200,
+    body: {
+      secrets: rows.map((row) => ({
+        name: row.name,
+        version: row.currentVersion,
+        stateTag: row.stateTag,
+        state: row.state,
+        changedAt: row.lastChangedAt.toISOString(),
+      })),
+      nextCursor:
+        page.rows.length > limit && last !== undefined
+          ? signCursor(ring, {
+              ...expect,
+              lastKey: last.name,
+              generation: page.generation.toString(),
+            })
+          : null,
+    },
+  };
+};
+
+export const secretsHistoryHandler: Handler = async (ctx, deps) => {
+  const scope = ctx.scope as EnvironmentScope | null;
+  if (scope === null) throw new ApiError("dependency_unavailable");
+  const name = nameParam(ctx);
+  const outcome = await readHistory(readDeps(deps), scope, name, ctx.requestId);
+  if (outcome.kind === "refused") refusedOf(outcome);
+  return { status: 200, body: outcome.history };
+};
+
+// ---------------------------------------------------------------- mutations
 
 export const secretsUpdateHandler: Handler = (ctx, deps) => {
   const name = nameParam(ctx);

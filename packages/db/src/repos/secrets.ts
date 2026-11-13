@@ -76,6 +76,79 @@ export async function readIndexRow(
   return stored === undefined ? null : toIndexRow(stored);
 }
 
+/**
+ * One page of the index in bytewise name order, and the environment's
+ * metadata generation — from one statement, so both come from one snapshot
+ * (Run 4.3). `prefix` is literal; `after` is the last name of the page before.
+ */
+export async function listIndex(
+  db: Queryable,
+  scope: EnvironmentScope,
+  page: { prefix: string | null; after: string | null; limit: number },
+): Promise<{ rows: IndexRow[]; generation: bigint }> {
+  const result = await db.query<{ generation: string } & Partial<StoredIndexRow>>(
+    `SELECT e.metadata_generation::text AS generation, i.name, i.current_version, i.state_tag,
+            i.state, i.live_value_bytes, i.last_changed_at, i.last_operation_id
+       FROM app.environment e
+       LEFT JOIN LATERAL (
+         SELECT s.* FROM app.secret_index s
+          WHERE s.organization_id = e.organization_id AND s.environment_id = e.id
+            AND ($3::text IS NULL OR starts_with(s.name, $3::text))
+            AND ($4::text IS NULL OR s.name COLLATE "C" > $4::text COLLATE "C")
+          ORDER BY s.name COLLATE "C"
+          LIMIT $5
+       ) i ON true
+      WHERE e.organization_id = $1 AND e.id = $2
+      ORDER BY i.name COLLATE "C"`,
+    [scope.organizationId, scope.environmentId, page.prefix, page.after, page.limit],
+  );
+  const first = result.rows[0];
+  if (first === undefined) throw new Error("environment not found");
+  const rows = result.rows
+    .filter((row): row is { generation: string } & StoredIndexRow => row.name != null)
+    .map(toIndexRow);
+  return { rows, generation: BigInt(first.generation) };
+}
+
+export interface VersionEvent {
+  version: number;
+  action: string;
+  actorKind: "user" | "operator" | "system" | "unknown";
+  actorId: string | null;
+  operationId: OperationId | null;
+  occurredAt: Date;
+}
+
+/** Every version event of a name, oldest first. */
+export async function versionEvents(
+  db: Queryable,
+  scope: EnvironmentScope,
+  name: string,
+): Promise<VersionEvent[]> {
+  const result = await db.query<{
+    version: number;
+    action: string;
+    actor_kind: VersionEvent["actorKind"];
+    actor_id: string | null;
+    operation_id: OperationId | null;
+    occurred_at: Date;
+  }>(
+    `SELECT version, action, actor_kind, actor_id, operation_id, occurred_at
+       FROM app.secret_version_event
+      WHERE organization_id = $1 AND environment_id = $2 AND name = $3
+      ORDER BY occurred_at, id`,
+    [scope.organizationId, scope.environmentId, name],
+  );
+  return result.rows.map((row) => ({
+    version: row.version,
+    action: row.action,
+    actorKind: row.actor_kind,
+    actorId: row.actor_id,
+    operationId: row.operation_id,
+    occurredAt: row.occurred_at,
+  }));
+}
+
 /** Names (any state), live bytes, the metadata generation and the advisory lock key. */
 export async function environmentCounters(
   db: Queryable,

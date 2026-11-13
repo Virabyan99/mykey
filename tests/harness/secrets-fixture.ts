@@ -95,6 +95,17 @@ export interface SecretsFixture {
   /** Requests the audit device recorded that change KV and carry this operation id. */
   auditedChanges(operationId: string): Promise<number>;
   indexRow(env: EnvName, name: string): Promise<IndexRowView | null>;
+  /**
+   * Index rows only, through the superuser (Run 4.3): for cases that never
+   * touch the backend. Version 1, no live bytes, counters unchanged.
+   */
+  seedIndex(
+    env: EnvName,
+    names: readonly string[],
+    state?: "live" | "deleted" | "needs_review",
+  ): Promise<void>;
+  /** Removes rows seedIndex wrote. */
+  unseedIndex(env: EnvName, names: readonly string[]): Promise<void>;
   close(): Promise<void>;
 }
 
@@ -310,6 +321,21 @@ export async function createSecretsFixture(
           (entry.operation === "create" || entry.operation === "update") &&
           entry.headers["x-mykey-operation-id"]?.[0] === operationId,
       ).length;
+    },
+    async seedIndex(env, names, state = "live") {
+      await api.superuser.query(
+        `INSERT INTO app.secret_index (environment_id, name, organization_id, current_version,
+           state_tag, state, live_value_bytes, last_changed_at)
+         SELECT $1, n, $2, 1, md5(random()::text || n), $4, 0, now()
+           FROM unnest($3::text[]) AS n`,
+        [ids(env).environmentId, tenants.a.organizationId, names, state],
+      );
+    },
+    async unseedIndex(env, names) {
+      await api.superuser.query(
+        "DELETE FROM app.secret_index WHERE environment_id = $1 AND name = ANY($2::text[])",
+        [ids(env).environmentId, names],
+      );
     },
     async indexRow(env, name) {
       const result = await api.superuser.query<IndexRowView>(

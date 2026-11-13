@@ -51,3 +51,13 @@ export {
   type SecretOutcome,
   type SecretRequest,
 } from "./secrets/protocol.ts";
+export { backendRefusal } from "./secrets/protocol.ts";
+export {
+  READ_FAULT_POINTS,
+  readHistory,
+  type HistoryVersion,
+  type ReadDeps,
+  type ReadFaultPoint,
+  type Refused,
+  type SecretHistory,
+} from "./secrets/history.ts";

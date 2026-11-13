@@ -286,19 +286,33 @@ export async function runSecretAction(
   }
 }
 
-async function driftDetected(deps: EffectDeps, request: SecretRequest): Promise<void> {
-  await markEnvironmentReview(deps.pool, request.scope);
-  await appendAudit(deps.pool, {
+/**
+ * A backend read that failed, before anything was changed (P-68, P-72):
+ * `sealed` → backend_sealed; `denied` → the environment goes to review and
+ * `system.drift_detected` (kv_data) is audited → backend_inconsistent;
+ * anything else → dependency_unavailable.
+ */
+export async function backendRefusal(
+  db: Queryable,
+  scope: EnvironmentScope,
+  failure: BaoFailure,
+  requestId: string,
+): Promise<ErrorCode> {
+  if (failure.kind === "sealed") return "backend_sealed";
+  if (failure.kind !== "denied") return "dependency_unavailable";
+  await markEnvironmentReview(db, scope);
+  await appendAudit(db, {
     action: "system.drift_detected",
     actor: { kind: "system", id: null },
     source: "api",
-    organizationId: request.scope.organizationId,
-    target: { kind: "environment", id: request.scope.environmentId },
+    organizationId: scope.organizationId,
+    target: { kind: "environment", id: scope.environmentId },
     outcome: "failure",
-    requestId: request.requestId,
+    requestId,
     operationId: null,
     details: { scope: "environment", object: "kv_data" },
   });
+  return "backend_inconsistent";
 }
 
 async function underLock(
@@ -322,13 +336,8 @@ async function underLock(
       currentVersion: pre.data.currentVersion,
       deleted: current === undefined || current.deleted || current.destroyed,
     };
-  } else if (pre.kind === "sealed") {
-    return refused("backend_sealed");
-  } else if (pre.kind === "denied") {
-    await driftDetected(deps, request);
-    return refused("backend_inconsistent");
   } else if (pre.kind !== "not_found") {
-    return refused("dependency_unavailable");
+    return refused(await backendRefusal(deps.pool, scope, pre, request.requestId));
   }
 
   // (b) Admission.
