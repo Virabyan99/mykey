@@ -359,6 +359,30 @@
       "status": "SPIKE_PASS",
       "evidence": ["docs/evidence/session-3/run-3.9.md"],
       "note": "Projects and environments as replayable operations, keyset lists, readiness; a pending environment cannot issue credentials is proven at the state gate and again on the real route by Run 5.1 (product code, real stores)."
+    },
+    {
+      "id": "FR-1.20",
+      "status": "SPIKE_PASS",
+      "evidence": ["docs/evidence/session-4/run-4.2.md"],
+      "note": "Values: empty, 64 KiB of multibyte text, CR/LF/tab, four-byte characters stored exactly; oversize, NUL and lone surrogates refused before any effect and never echoed (product code, real stores; staging create)."
+    },
+    {
+      "id": "FR-1.24",
+      "status": "SPIKE_PASS",
+      "evidence": ["docs/evidence/session-4/run-4.2.md"],
+      "note": "Create through the six-step protocol: one version carrying the operation id, index, version event, audit intent and success; replay, races on two processes, authorization and state refusals (product code, real stores; staging through the public name)."
+    },
+    {
+      "id": "FR-1.25",
+      "status": "SPIKE_PASS",
+      "evidence": ["docs/evidence/session-4/run-4.2.md"],
+      "note": "Update with expected version and state tag: version_conflict with details, backend moved underneath goes to review, capacity 507, admission recheck (product code, real stores; staging through the public name)."
+    },
+    {
+      "id": "AC-1.14",
+      "status": "SPIKE_PASS",
+      "evidence": ["docs/evidence/session-4/run-4.2.md"],
+      "note": "Two concurrent updates with one version and tag: exactly one 200 and one 409 version_conflict, one new version and one audited change, twenty rounds on two API processes (local stack)."
     }
   ]
 }

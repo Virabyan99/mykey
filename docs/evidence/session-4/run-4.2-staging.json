@@ -1,0 +1,12 @@
+{
+  "project": {
+    "name": "s4-de32dad1",
+    "id": "cfe51a6c-9603-4ecb-9597-cd86d36ab536",
+    "environmentId": "51600ac8-9717-480d-af68-a70538e7c377"
+  },
+  "fiftyUpdatesMs": {
+    "median": 677,
+    "slowest": 1150,
+    "fastest": 570
+  }
+}
