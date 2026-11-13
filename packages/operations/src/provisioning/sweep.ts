@@ -152,7 +152,7 @@ async function review(
 export async function sweepOrganization(
   deps: SweepDeps,
   organizationId: OrganizationId,
-): Promise<{ reviewed: Reviewed[] }> {
+): Promise<{ reviewed: Reviewed[]; unread: boolean }> {
   const { pool } = deps;
   const reviewed: Reviewed[] = [];
   const organization = await pool.query<{ config_digest: string | null }>(
@@ -160,18 +160,18 @@ export async function sweepOrganization(
     [organizationId],
   );
   const row = organization.rows[0];
-  if (row === undefined) return { reviewed };
+  if (row === undefined) return { reviewed, unread: false };
   const client = await deps.clientFor(organizationId);
-  if (client === null) return { reviewed };
+  if (client === null) return { reviewed, unread: false };
   try {
     const org = await checkOrganization(client, organizationId, row.config_digest);
     if (org.ok === false) {
       if (await review(pool, organizationId, "organization", organizationId, org.object)) {
         reviewed.push({ scope: "organization", id: organizationId, object: org.object });
       }
-      return { reviewed };
+      return { reviewed, unread: false };
     }
-    if (org.ok === "skip") return { reviewed };
+    if (org.ok === "skip") return { reviewed, unread: true };
     const environments = await pool.query<{
       id: EnvironmentId;
       project_id: ProjectId;
@@ -187,30 +187,37 @@ export async function sweepOrganization(
         projectId: environment.project_id,
         digest: environment.policy_digest,
       });
-      if (check.ok === "skip") return { reviewed };
+      if (check.ok === "skip") return { reviewed, unread: true };
       if (!check.ok) {
         const scope = check.object === "provisioner_login" ? "organization" : "environment";
         const id = scope === "organization" ? organizationId : environment.id;
         if (await review(pool, organizationId, scope, id, check.object)) {
           reviewed.push({ scope, id, object: check.object });
         }
-        if (scope === "organization") return { reviewed };
+        if (scope === "organization") return { reviewed, unread: false };
       }
     }
-    return { reviewed };
+    return { reviewed, unread: false };
   } finally {
     await client.close();
   }
 }
 
-/** Sweeps every active organization this process serves. */
-export async function sweepAll(deps: SweepDeps): Promise<Reviewed[]> {
+/**
+ * Sweeps every active organization this process serves. `unread` counts the
+ * organizations whose objects could not be read (OpenBao away, sealed or
+ * unclear): nothing changes for them, but the log must not look like "equal".
+ */
+export async function sweepAll(deps: SweepDeps): Promise<{ reviewed: Reviewed[]; unread: number }> {
   const organizations = await deps.pool.query<{ id: OrganizationId }>(
     "SELECT id FROM app.organization WHERE state = 'active' ORDER BY id",
   );
   const reviewed: Reviewed[] = [];
+  let unread = 0;
   for (const { id } of organizations.rows) {
-    reviewed.push(...(await sweepOrganization(deps, id)).reviewed);
+    const result = await sweepOrganization(deps, id);
+    reviewed.push(...result.reviewed);
+    if (result.unread) unread += 1;
   }
-  return reviewed;
+  return { reviewed, unread };
 }

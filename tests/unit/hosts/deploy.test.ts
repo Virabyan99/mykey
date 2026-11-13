@@ -442,3 +442,16 @@ describe("kms-import and kms-remove", () => {
     expect(command).toContain("rm -f /etc/mykey/secrets/kms/losstest-ops.crt");
   });
 });
+
+describe("the provisioner service (Run 3.8)", () => {
+  it("reaches OpenBao by the same name as the API (the name in OpenBao's certificate)", () => {
+    const compose = readFileSync(
+      join(import.meta.dirname, "../../../infra/compose/host.compose.yml"),
+      "utf8",
+    );
+    const urls = [...compose.matchAll(/^\s+MYKEY_BAO_URL: (.+)$/gm)].map((match) => match[1]);
+    expect(urls).toHaveLength(2);
+    expect(urls[1]).toBe("${MYKEY_BAO_URL:?set in /etc/mykey/host.env}");
+    expect(urls.every((url) => url?.startsWith("${MYKEY_BAO_URL"))).toBe(true);
+  });
+});

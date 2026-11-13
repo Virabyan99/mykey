@@ -20,7 +20,7 @@ export type ProvisionerLog =
   | { event: "provisioner_start"; bootId: string; sweepSeconds: number }
   | { event: "job"; operationId: string; outcome: string }
   | { event: "job_deferred"; operationId: string; cause: string }
-  | { event: "sweep"; reviewed: number }
+  | { event: "sweep"; reviewed: number; unread: number }
   | { event: "sweep_skipped"; cause: string }
   | { event: "error"; where: string; errorClass: string };
 
@@ -86,8 +86,8 @@ export async function startProvisioner(
       opts.log({ event: "sweep_skipped", cause: "gate_closed" });
     } else {
       try {
-        const reviewed = await sweepAll({ pool, clientFor });
-        opts.log({ event: "sweep", reviewed: reviewed.length });
+        const result = await sweepAll({ pool, clientFor });
+        opts.log({ event: "sweep", reviewed: result.reviewed.length, unread: result.unread });
       } catch (error) {
         opts.log({
           event: "error",

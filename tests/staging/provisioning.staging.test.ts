@@ -97,11 +97,16 @@ describe("the provisioner on staging", () => {
   });
 
   it("the API mounts no provisioner secret, holds no root or provisioner credential, and its self-check logged runtimeLogin ok", async () => {
-    const mounts = JSON.parse(await run(`docker inspect --format '{{json .Mounts}}' ${API}`)) as {
+    const mounts = JSON.parse(
+      await run(`docker inspect --format '{{json .Mounts}}' ${API}`, true),
+    ) as {
       Source: string;
     }[];
     expect(mounts.some((mount) => mount.Source.includes("/secrets/provisioner"))).toBe(false);
-    const files = (await run(`docker exec ${API} ls /run/mykey/secrets`)).trim().split("\n").sort();
+    const files = (await run(`docker exec ${API} ls /run/mykey/secrets`, true))
+      .trim()
+      .split("\n")
+      .sort();
     expect(files.filter((name) => /provisioner|root|unseal|recovery/.test(name))).toEqual([]);
     expect(files).toEqual(
       expect.arrayContaining([

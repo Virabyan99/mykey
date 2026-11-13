@@ -188,7 +188,8 @@ services:
       MYKEY_DB_USER: provisioner_runtime
       MYKEY_DB_PASSWORD_FILE: /run/mykey/secrets/db-password
       MYKEY_DB_CA_FILE: /run/mykey/tls/ca.crt
-      MYKEY_BAO_URL: https://10.78.3.2:8200
+      # The name in OpenBao's certificate, as the API uses it (host.env).
+      MYKEY_BAO_URL: ${MYKEY_BAO_URL:?set in /etc/mykey/host.env}
       MYKEY_BAO_CA_FILE: /run/mykey/tls/ca.crt
       MYKEY_PROVISIONER_SECRETS_DIR: /run/mykey/secrets
       MYKEY_GATE_PATH: /run/mykey/gate/gate.json

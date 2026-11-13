@@ -188,6 +188,11 @@ describe("drift sweep", () => {
     await stopService(fx.stack, "openbao");
     try {
       await provisioner.sweep();
+      // The log says the organization could not be read — not that it is equal.
+      expect(provisioner.logs.filter((entry) => entry.event === "sweep").at(-1)).toMatchObject({
+        reviewed: 0,
+        unread: 1,
+      });
       expect(await states()).toEqual({
         organization: "active",
         env1a: "active",
