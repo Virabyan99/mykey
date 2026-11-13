@@ -65,7 +65,16 @@ export interface IssuedToken {
   ttlSeconds: number;
 }
 
-type Failure = Exclude<BaoResult<never>, { ok: true }>;
+/** A secret's metadata (Run 4.2): every kept version with its time and state. */
+export interface KvMetadata {
+  currentVersion: number;
+  /** 0 until a version has been trimmed (max_versions), then the oldest kept version. */
+  oldestVersion: number;
+  versions: Record<string, { createdAt: string; deleted: boolean; destroyed: boolean }>;
+}
+
+export type BaoFailure = Exclude<BaoResult<never>, { ok: true }>;
+type Failure = BaoFailure;
 
 // ---------------------------------------------------------------------------
 // Transport (shared with admin.ts; not exported from the package root)
@@ -77,10 +86,23 @@ export interface BaoCall {
   /** "" is the root namespace. */
   namespace: string;
   token?: string;
+  /** Inline AppRole authentication instead of a token (D-17, Run 4.2). */
+  inline?: InlineAppRole;
   body?: unknown;
   correlation?: Correlation;
   deadlineMs: number;
 }
+
+/** An AppRole credential sent with every request (`X-Vault-Inline-Auth-*`); no token is stored. */
+export interface InlineAppRole {
+  roleId: string;
+  secretId: string;
+}
+
+export type BaoAuth = { token: string } | { inline: InlineAppRole };
+
+const inlineParameter = (key: string, value: string): string =>
+  Buffer.from(JSON.stringify({ key, value })).toString("base64url");
 
 export type BaoOutcome =
   | { kind: "response"; status: number; body: unknown }
@@ -112,6 +134,17 @@ export function baoCall(target: ResolvedTarget, call: BaoCall): Promise<BaoOutco
   const headers: Record<string, string> = {};
   if (call.token !== undefined) headers["X-Vault-Token"] = call.token;
   if (call.namespace !== "") headers["X-Vault-Namespace"] = call.namespace;
+  if (call.inline !== undefined) {
+    if (call.token !== undefined)
+      throw new Error("a call carries a token or inline authentication");
+    headers["X-Vault-Inline-Auth-Path"] = "auth/approle/login";
+    headers["X-Vault-Inline-Auth-Namespace"] = call.namespace;
+    headers["X-Vault-Inline-Auth-Parameter-role"] = inlineParameter("role_id", call.inline.roleId);
+    headers["X-Vault-Inline-Auth-Parameter-secret"] = inlineParameter(
+      "secret_id",
+      call.inline.secretId,
+    );
+  }
   if (call.correlation !== undefined) Object.assign(headers, correlationHeaders(call.correlation));
   if (payload !== undefined) {
     headers["Content-Type"] = "application/json";
@@ -306,19 +339,19 @@ function requireNamespace(namespace: string): void {
 export class OpenBaoClient {
   readonly #target: ResolvedTarget;
   readonly #namespace: string;
-  readonly #token: string;
+  readonly #auth: { token: string } | { inline: InlineAppRole };
   readonly #deadlineMs: number;
 
   constructor(
     target: OpenBaoTarget,
-    opts: { namespace: string; token: string; deadlineMs?: number },
+    opts: { namespace: string; deadlineMs?: number } & ({ token: string } | { auth: BaoAuth }),
   ) {
     requireNamespace(opts.namespace);
     const deadlineMs = opts.deadlineMs ?? LIMITS.deadlines.backendCallMs;
     if (!Number.isSafeInteger(deadlineMs) || deadlineMs <= 0) throw new Error("invalid deadline");
     this.#target = resolveTarget(target);
     this.#namespace = opts.namespace;
-    this.#token = opts.token;
+    this.#auth = "auth" in opts ? opts.auth : { token: opts.token };
     this.#deadlineMs = deadlineMs;
   }
 
@@ -331,7 +364,7 @@ export class OpenBaoClient {
       method,
       path,
       namespace: this.#namespace,
-      token: this.#token,
+      ...("token" in this.#auth ? { token: this.#auth.token } : { inline: this.#auth.inline }),
       deadlineMs: this.#deadlineMs,
       ...extra,
     });
@@ -384,26 +417,29 @@ export class OpenBaoClient {
     });
   }
 
-  async kvMetadata(path: string): Promise<
-    BaoResult<{
-      currentVersion: number;
-      versions: Record<string, { deleted: boolean; destroyed: boolean }>;
-    }>
-  > {
+  async kvMetadata(path: string): Promise<BaoResult<KvMetadata>> {
     requireSecretPath(path);
     const outcome = await this.#call("GET", `kv/metadata/${path}`);
     return resultOf(outcome, (body) => {
       const data = record(record(body).data);
       const currentVersion = data.current_version;
-      if (!isNumber(currentVersion)) return null;
-      const versions: Record<string, { deleted: boolean; destroyed: boolean }> = {};
+      const oldestVersion = data.oldest_version;
+      if (!isNumber(currentVersion) || !isNumber(oldestVersion)) return null;
+      const versions: KvMetadata["versions"] = {};
       for (const [key, entry] of Object.entries(record(data.versions))) {
         const deletionTime = record(entry).deletion_time;
         const destroyed = record(entry).destroyed;
-        if (typeof deletionTime !== "string" || typeof destroyed !== "boolean") return null;
-        versions[key] = { deleted: deletionTime !== "", destroyed };
+        const createdAt = record(entry).created_time;
+        if (
+          typeof deletionTime !== "string" ||
+          typeof destroyed !== "boolean" ||
+          typeof createdAt !== "string"
+        ) {
+          return null;
+        }
+        versions[key] = { createdAt, deleted: deletionTime !== "", destroyed };
       }
-      return { currentVersion, versions };
+      return { currentVersion, oldestVersion, versions };
     });
   }
 

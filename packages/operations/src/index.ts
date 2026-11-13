@@ -39,3 +39,4 @@ export {
   type Intent,
   type ReplayAnswer,
 } from "./replay.ts";
+export type { RuntimeBao } from "./runtime.ts";
