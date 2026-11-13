@@ -34,7 +34,7 @@ import { secretPath, type BaoFailure, type OpenBaoClient } from "@mykey/openbao"
 import type pg from "pg";
 import { intentFingerprint, sameIntent, type HmacRing, type Intent } from "../replay.ts";
 import type { RuntimeBao } from "../runtime.ts";
-import { Busy, isLockTimeout, withEnvironmentLock, type Locked } from "./lock.ts";
+import { Busy, inTransaction, isLockTimeout, withEnvironmentLock, type Locked } from "./lock.ts";
 
 export type SecretAction = "create" | "update" | "delete" | "undelete" | "restore";
 
@@ -116,23 +116,6 @@ const refused = (
   code: ErrorCode,
   extra: { operationId?: OperationId; details?: Record<string, unknown> } = {},
 ): Refused => ({ kind: "refused", code, ...extra });
-
-/** One transaction on the lock's connection. */
-async function inTransaction<T>(
-  client: pg.PoolClient,
-  fn: (tx: pg.PoolClient) => Promise<T>,
-): Promise<T> {
-  await client.query("BEGIN ISOLATION LEVEL READ COMMITTED");
-  try {
-    const result = await fn(client);
-    await client.query("COMMIT");
-    return result;
-  } catch (error) {
-    // A connection that cannot roll back is destroyed by the lock's release.
-    await client.query("ROLLBACK").catch(() => undefined);
-    throw error;
-  }
-}
 
 async function onMainPool<T>(pool: pg.Pool, fn: (tx: pg.PoolClient) => Promise<T>): Promise<T> {
   const client = await pool.connect();

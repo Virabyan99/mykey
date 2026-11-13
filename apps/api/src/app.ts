@@ -30,6 +30,7 @@ import {
   secretsCreateHandler,
   secretsHistoryHandler,
   secretsListHandler,
+  secretsRevealHandler,
   secretsUpdateHandler,
 } from "./routes/secrets.ts";
 import { sessionActivityHandler } from "./routes/session.ts";
@@ -91,6 +92,7 @@ function handlers(): Partial<Record<string, Handler>> {
     "operations.list": operationsListHandler,
     "secrets.list": secretsListHandler,
     "secrets.history": secretsHistoryHandler,
+    "secrets.reveal": secretsRevealHandler,
     "secrets.create": secretsCreateHandler,
     "secrets.update": secretsUpdateHandler,
     "session.activity": sessionActivityHandler,

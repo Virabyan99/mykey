@@ -101,3 +101,20 @@ export async function withEnvironmentLock<T>(
     }
   }
 }
+
+/** One transaction on a held connection (the lock's): BEGIN, `fn`, COMMIT; ROLLBACK on a throw. */
+export async function inTransaction<T>(
+  client: pg.PoolClient,
+  fn: (tx: pg.PoolClient) => Promise<T>,
+): Promise<T> {
+  await client.query("BEGIN ISOLATION LEVEL READ COMMITTED");
+  try {
+    const result = await fn(client);
+    await client.query("COMMIT");
+    return result;
+  } catch (error) {
+    // A connection that cannot roll back is destroyed by the lock's release.
+    await client.query("ROLLBACK").catch(() => undefined);
+    throw error;
+  }
+}

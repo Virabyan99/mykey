@@ -16,6 +16,7 @@ import {
   operationResponse,
   readGate,
   readHistory,
+  revealSecret,
   replayAnswer,
   runSecretAction,
   type EffectDeps,
@@ -229,6 +230,31 @@ export const secretsHistoryHandler: Handler = async (ctx, deps) => {
   const outcome = await readHistory(readDeps(deps), scope, name, ctx.requestId);
   if (outcome.kind === "refused") refusedOf(outcome);
   return { status: 200, body: outcome.history };
+};
+
+/**
+ * secrets.reveal (P-73): the value leaves only after its `secret.reveal` row
+ * is committed. Every answer carries cache-control: no-store (app.ts).
+ */
+export const secretsRevealHandler: Handler = async (ctx, deps) => {
+  const scope = ctx.scope as EnvironmentScope | null;
+  const principal = ctx.principal;
+  if (scope === null || principal === null) throw new ApiError("dependency_unavailable");
+  const name = nameParam(ctx);
+  const { version } = ctx.body as { version?: number };
+  const outcome = await revealSecret(readDeps(deps), {
+    scope,
+    userId: principal.userId,
+    name,
+    ...(version === undefined ? {} : { version }),
+    requestId: ctx.requestId,
+    recheck: recheckOf(ctx, principal.userId, scope),
+  });
+  if (outcome.kind === "refused") refusedOf(outcome);
+  return {
+    status: 200,
+    body: { name, version: outcome.version, value: outcome.value, stateTag: outcome.stateTag },
+  };
 };
 
 // ---------------------------------------------------------------- mutations

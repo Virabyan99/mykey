@@ -35,6 +35,7 @@ export interface Answer {
   details: Record<string, unknown> | undefined;
   /** The raw body text (for searching it for a canary). */
   text: string;
+  headers: Headers;
 }
 
 export type EnvName = "env1a" | "env1b" | "env2a";
@@ -273,6 +274,7 @@ export async function createSecretsFixture(
         operationId: error?.operationId ?? (body.operationId as string | undefined),
         details: error?.details,
         text,
+        headers: response.headers,
       };
     },
     create(env, name, value, init = {}) {

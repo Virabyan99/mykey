@@ -24,6 +24,7 @@ const HANDLED = new Set([
   "operations.list",
   "secrets.list",
   "secrets.history",
+  "secrets.reveal",
   "secrets.create",
   "secrets.update",
   "session.activity",
