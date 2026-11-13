@@ -32,8 +32,10 @@ export {
   beginOperation,
   intentFingerprint,
   operationResponse,
+  replayAnswer,
   sameIntent,
   type Begin,
   type HmacRing,
   type Intent,
+  type ReplayAnswer,
 } from "./replay.ts";

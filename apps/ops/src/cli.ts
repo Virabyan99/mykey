@@ -11,6 +11,7 @@ import type { DbTarget } from "@mykey/db";
 import type { AppRoleName, OpenBaoTarget } from "@mykey/openbao";
 import { authCleanupCommand } from "./commands/auth-cleanup.ts";
 import { bootstrapOwnerCommand } from "./commands/bootstrap-owner.ts";
+import { operationsExpireCommand } from "./commands/operations-expire.ts";
 import { provisionOrganizationCommand } from "./commands/provision-organization.ts";
 import { resetAccountCommand } from "./commands/reset-account.ts";
 import { verifyOrganizationCommand } from "./commands/verify-organization.ts";
@@ -53,6 +54,7 @@ export const COMMANDS: Readonly<Record<string, OpsCommand>> = {
   "reset-account": resetAccountCommand,
   "provision-organization": provisionOrganizationCommand,
   "verify-organization": verifyOrganizationCommand,
+  "operations-expire": operationsExpireCommand,
 };
 
 export const OPS_COMMANDS = Object.freeze(Object.keys(COMMANDS));

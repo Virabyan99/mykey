@@ -81,13 +81,21 @@ export class ApiError extends Error {
   readonly reason: string | undefined;
   /** Headers of the error answer (Retry-After of a 429). */
   readonly headers: Record<string, string> | undefined;
+  /** The operation the answer is about, and allowlisted details (Run 4.1, respond.ts). */
+  readonly extra: { operationId?: string; details?: Record<string, unknown> };
 
-  constructor(code: ErrorCode, reason?: string, headers?: Record<string, string>) {
+  constructor(
+    code: ErrorCode,
+    reason?: string,
+    headers?: Record<string, string>,
+    extra: { operationId?: string; details?: Record<string, unknown> } = {},
+  ) {
     super(code);
     this.name = "ApiError";
     this.code = code;
     this.reason = reason;
     this.headers = headers;
+    this.extra = extra;
   }
 }
 

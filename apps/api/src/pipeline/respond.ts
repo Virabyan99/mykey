@@ -2,6 +2,7 @@
 // table below, keyed by code — never from an exception — so no internal text
 // can reach a client. Every response carries Cache-Control: no-store.
 import { ERROR_CODES, type ErrorCode } from "@mykey/contracts";
+import { z } from "zod";
 
 export const ERROR_MESSAGES: Readonly<Record<ErrorCode, string>> = Object.freeze({
   malformed_request: "The request is malformed.",
@@ -49,14 +50,57 @@ export function jsonResponse(
   return new Response(JSON.stringify(body), { status, headers: merged });
 }
 
+/**
+ * The details an error may carry, by code (Run 4.1): an allowlist. A key
+ * outside a schema is stripped; details that fail their schema, or details on
+ * a code that takes none, are dropped.
+ */
+const DETAILS: Partial<Record<ErrorCode, z.ZodType<Record<string, unknown>>>> = {
+  version_conflict: z.object({
+    currentVersion: z.int().positive(),
+    currentStateTag: z.string().min(1).max(64),
+    state: z.enum(["live", "deleted"]),
+  }),
+  capacity_exceeded: z.object({ limit: z.enum(["names", "bytes", "response"]) }),
+};
+
+/** The details of `code` as they may be sent; `valid` is false when some were dropped as invalid. */
+export function checkDetails(
+  code: ErrorCode,
+  details: Record<string, unknown> | undefined,
+): { valid: boolean; details: Record<string, unknown> | undefined } {
+  if (details === undefined) return { valid: true, details: undefined };
+  const schema = DETAILS[code];
+  if (schema === undefined) return { valid: false, details: undefined };
+  const parsed = schema.safeParse(details);
+  return parsed.success
+    ? { valid: true, details: parsed.data }
+    : { valid: false, details: undefined };
+}
+
+export interface ErrorExtra {
+  operationId?: string;
+  details?: Record<string, unknown>;
+}
+
 export function errorResponse(
   code: ErrorCode,
   requestId: string,
   headers?: Record<string, string>,
+  extra: ErrorExtra = {},
 ): Response {
+  const { details } = checkDetails(code, extra.details);
   return jsonResponse(
     ERROR_CODES[code].status,
-    { error: { code, message: ERROR_MESSAGES[code], requestId } },
+    {
+      error: {
+        code,
+        message: ERROR_MESSAGES[code],
+        requestId,
+        ...(extra.operationId === undefined ? {} : { operationId: extra.operationId }),
+        ...(details === undefined ? {} : { details }),
+      },
+    },
     headers,
   );
 }

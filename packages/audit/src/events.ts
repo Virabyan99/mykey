@@ -79,6 +79,8 @@ export const AUDIT_DETAILS = {
       "machine_token_role",
     ]),
   }),
+  /** Run 4.1: the operator expired terminal operation records (P-65). */
+  "operator.operations_expire": z.strictObject({ expired: z.int().nonnegative() }),
 } as const;
 
 export type AuditAction = keyof typeof AUDIT_DETAILS;

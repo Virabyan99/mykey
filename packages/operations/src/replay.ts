@@ -3,7 +3,13 @@
 // Idempotency-Key; its fingerprint is an HMAC of the whole intent, body
 // included, so the same key with another body is a conflict, never a replay.
 import { createHmac, randomUUID, timingSafeEqual } from "node:crypto";
-import type { OperationId, OperationResponse, OrganizationId } from "@mykey/contracts";
+import type {
+  ErrorCode,
+  OperationId,
+  OperationResponse,
+  OrganizationId,
+  RouteDef,
+} from "@mykey/contracts";
 import {
   findOperationByKey,
   insertOperation,
@@ -23,6 +29,12 @@ export interface Intent {
   principalId: string;
   action: string;
   target: string;
+  /**
+   * The path parameters other than org, project and env (P-64): `name`,
+   * `preview`, `operation`, `credential`. In the canonical text only when there
+   * is at least one, so fingerprints stored before Run 4.1 still match.
+   */
+  params?: Record<string, string>;
   body: unknown;
 }
 
@@ -48,11 +60,16 @@ export function intentFingerprint(
 ): { digest: Buffer; keyId: string } {
   const key = ring.keys[keyId];
   if (key === undefined) throw new Error(`unknown fingerprint key id ${keyId}`);
+  const params =
+    intent.params !== undefined && Object.keys(intent.params).length > 0
+      ? intent.params
+      : undefined;
   const text = canonical({
     principalKind: intent.principalKind,
     principalId: intent.principalId,
     action: intent.action,
     target: intent.target,
+    params,
     body: intent.body,
   });
   return { digest: createHmac("sha256", Buffer.from(key)).update(text).digest(), keyId };
@@ -79,10 +96,14 @@ export type Begin =
 export async function beginOperation(
   tx: pg.PoolClient,
   ring: HmacRing,
-  input: OperationKey & { organizationId: OrganizationId; body: unknown },
+  input: OperationKey & {
+    organizationId: OrganizationId;
+    body: unknown;
+    params?: Record<string, string>;
+  },
 ): Promise<Begin> {
-  const { body, organizationId, ...key } = input;
-  const intent = { ...key, body };
+  const { body, organizationId, params, ...key } = input;
+  const intent = { ...key, body, ...(params === undefined ? {} : { params }) };
   const { digest, keyId } = intentFingerprint(ring, intent);
   const id = randomUUID() as OperationId;
   const inserted = await insertOperation(tx, {
@@ -102,13 +123,57 @@ export async function beginOperation(
     : { kind: "conflict" };
 }
 
-/** The operation envelope of the contract; never the fingerprint. */
+/**
+ * The operation envelope of the contract; never the fingerprint. A rejected
+ * operation carries its error code as its result; an uncertain one none.
+ */
 export function operationResponse(row: OperationRow): OperationResponse {
+  const result =
+    row.state === "rejected"
+      ? { errorCode: row.errorCode }
+      : row.state === "uncertain"
+        ? null
+        : row.result;
   return {
     operationId: row.id,
     state: row.state,
     statusUrl: `/v1/operations/${row.id}`,
     replayExpiresAt: row.replayExpiresAt === null ? null : row.replayExpiresAt.toISOString(),
-    ...(row.result === null ? {} : { result: row.result }),
+    ...(result === null ? {} : { result }),
   };
+}
+
+export type ReplayAnswer =
+  | { status: 200 | 201 | 202; body: OperationResponse }
+  | { error: ErrorCode; operationId?: OperationId };
+
+const TERMINAL: ReadonlySet<string> = new Set(["succeeded", "partial", "rejected"]);
+
+/**
+ * The answer to a request whose operation already exists (P-65): unfinished →
+ * 202 with the envelope; succeeded → the route's completed status; partial →
+ * 200; rejected → its stored error; uncertain → outcome_unknown; a terminal
+ * row past its replay expiry → replay_expired. Unfinished rows never expire.
+ */
+export function replayAnswer(route: RouteDef, row: OperationRow): ReplayAnswer {
+  if (TERMINAL.has(row.state) && row.expired) {
+    return { error: "replay_expired", operationId: row.id };
+  }
+  switch (row.state) {
+    case "accepted":
+    case "executing":
+    case "awaiting_input":
+      return { status: 202, body: operationResponse(row) };
+    case "succeeded":
+      return { status: 201 in route.responses ? 201 : 200, body: operationResponse(row) };
+    case "partial":
+      return { status: 200, body: operationResponse(row) };
+    case "rejected":
+      return {
+        error: (row.errorCode ?? "dependency_unavailable") as ErrorCode,
+        operationId: row.id,
+      };
+    case "uncertain":
+      return { error: "outcome_unknown", operationId: row.id };
+  }
 }
