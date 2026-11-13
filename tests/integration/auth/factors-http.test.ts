@@ -26,7 +26,12 @@ const from = (): Record<string, string> => {
 };
 
 beforeAll(async () => {
-  api = await startTestApi({ stubs: true, config: { trustedProxy: "127.0.0.1" } });
+  api = await startTestApi({
+    stubs: true,
+    // Secret routes answer through the stub even once handled: this API has no runtime identity (Run 4.2).
+    stubRoutes: ROUTES.filter((route) => route.id.startsWith("secrets.")).map((route) => route.id),
+    config: { trustedProxy: "127.0.0.1" },
+  });
 });
 
 afterAll(async () => {
@@ -134,8 +139,9 @@ describe("product routes are closed to incomplete sessions (Task A)", () => {
     }
     // Every route without a real handler (session.activity since Run 3.5,
     // organizations.list since Run 3.7, projects and environments since Run 3.9);
-    // operations.get is 404 until Run 4.1.
+    // operations.list since Run 4.1; the secret routes stay stubbed here (stubRoutes).
     const handled = [
+      "operations.list",
       "session.activity",
       "organizations.list",
       "projects.list",
