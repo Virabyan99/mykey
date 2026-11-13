@@ -33,6 +33,14 @@ export interface TlsRelay {
   delayResponses(ms: number): void;
   /** Requests never reach the server while on (a change that did not land). */
   swallowRequests(on: boolean): void;
+  /**
+   * Run 4.6: while on, request records wait in the relay; off releases every
+   * waiting record to its server connection — lost if that connection has
+   * closed meanwhile (an OpenBao restarted), delivered if it is still open.
+   */
+  holdRequests(on: boolean): void;
+  /** Run 4.6: the mode for connections' next records. */
+  setMode(mode: RelayMode): void;
   clear(): void;
   close(): Promise<void>;
 }
@@ -44,9 +52,13 @@ const later = (ms: number): Promise<void> =>
   new Promise((resolveLater) => setTimeout(resolveLater, Math.max(0, ms)));
 
 export async function startTlsRelay(
-  target: { host: string; port: number },
-  mode: RelayMode = "pass",
+  /** A function is asked again for every connection (a restarted server may move). */
+  target: { host: string; port: number } | (() => { host: string; port: number }),
+  initialMode: RelayMode = "pass",
 ): Promise<TlsRelay> {
+  let mode = initialMode;
+  let holding = false;
+  const releases = new Set<() => void>();
   const sockets = new Set<net.Socket>();
   const forwardedAt: number[] = [];
   let requestDelay = 0;
@@ -59,7 +71,8 @@ export async function startTlsRelay(
   });
 
   const server = net.createServer((client) => {
-    const upstream = net.connect(target);
+    const upstream = net.connect(typeof target === "function" ? target() : target);
+    const held: Buffer[] = [];
     sockets.add(client).add(upstream);
     let pending = Buffer.alloc(0);
     // 0: before the client's ChangeCipherSpec; 1: its Finished is next; 2: request records.
@@ -116,6 +129,18 @@ export async function startTlsRelay(
           swallowed = true;
           continue;
         }
+        if (holding) {
+          if (held.length === 0) {
+            const release = (): void => {
+              releases.delete(release);
+              for (const waiting of held.splice(0)) forward(waiting, 0);
+            };
+            releases.add(release);
+          }
+          held.push(record);
+          requestSeen = true;
+          continue;
+        }
         // The first request record carries the HTTP headers; a large body follows in more records.
         forward(record, requestSeen ? requestDelay + tailDelay : requestDelay);
         requestSeen = true;
@@ -169,8 +194,18 @@ export async function startTlsRelay(
     swallowRequests: (on) => {
       swallow = on;
     },
+    holdRequests: (on) => {
+      holding = on;
+      if (!on) for (const release of [...releases]) release();
+    },
+    setMode: (next) => {
+      mode = next;
+    },
     clear: () => {
       swallow = false;
+      mode = initialMode;
+      holding = false;
+      for (const release of [...releases]) release();
       requestDelay = 0;
       tailDelay = 0;
       responseDelay = 0;

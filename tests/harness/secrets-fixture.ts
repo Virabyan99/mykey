@@ -187,8 +187,11 @@ export async function createSecretsFixture(
     },
   });
   const { api, stack, tenants } = fx;
-  const baoUrl = new URL(stack.bao.url);
-  const relay = await startTlsRelay({ host: baoUrl.hostname, port: Number(baoUrl.port) }, "pass");
+  // Asked per connection: OpenBao restarted by a fault test may come back on another port.
+  const relay = await startTlsRelay(() => {
+    const baoUrl = new URL(stack.bao.url);
+    return { host: baoUrl.hostname, port: Number(baoUrl.port) };
+  }, "pass");
   const relayTarget: OpenBaoTarget = {
     url: `https://127.0.0.1:${String(relay.port)}`,
     caCertPath: stack.bao.caCertPath,
