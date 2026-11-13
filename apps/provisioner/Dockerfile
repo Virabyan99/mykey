@@ -37,4 +37,4 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
   CMD ["node", "apps/provisioner/src/healthcheck.ts"]
 # Node's permission model (PO-11): read its code and the mounted settings,
 # write only its sweep state under /tmp/mykey-provisioner.
-ENTRYPOINT ["node", "--permission", "--allow-fs-read=/app", "--allow-fs-read=/run/mykey", "--allow-fs-read=/tmp/mykey-provisioner", "--allow-fs-write=/tmp/mykey-provisioner", "apps/provisioner/src/main.ts"]
+ENTRYPOINT ["node", "--permission", "--allow-fs-read=/app", "--allow-fs-read=/run/mykey", "--allow-fs-read=/tmp/mykey-provisioner/*", "--allow-fs-write=/tmp/mykey-provisioner/*", "apps/provisioner/src/main.ts"]

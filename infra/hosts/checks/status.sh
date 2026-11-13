@@ -90,11 +90,16 @@ if [ -e /etc/mykey/gate/gate.json ]; then
 fi
 
 # Scopes in review (Run 3.8, P-57): one read-only statement through the
-# PostgreSQL container's local socket; null when it cannot be read.
+# PostgreSQL container's local socket; null when it cannot be read. The
+# superuser password goes through the environment (`-e PGPASSWORD` without a
+# value), never onto a command line.
 review_open=null
-count=$(docker exec -u postgres mykey-postgres-1 psql -d postgres -Atq -c \
+PGPASSWORD=$(cat /etc/mykey/secrets/postgres/superuser-password 2>/dev/null || true)
+export PGPASSWORD
+count=$(docker exec -e PGPASSWORD -u postgres mykey-postgres-1 psql -U postgres -d postgres -Atq -c \
 	"BEGIN READ ONLY; SELECT (SELECT count(*) FROM app.organization WHERE state = 'needs_review') + (SELECT count(*) FROM app.project WHERE state = 'needs_review') + (SELECT count(*) FROM app.environment WHERE state = 'needs_review'); COMMIT;" \
 	2>/dev/null | head -n 1 || true)
+unset PGPASSWORD
 case "$count" in
 '' | *[!0-9]*) ;;
 *) review_open=$count ;;

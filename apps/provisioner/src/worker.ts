@@ -97,8 +97,17 @@ export async function startProvisioner(
         return;
       }
     }
-    mkdirSync(dirname(config.stateFile), { recursive: true });
-    writeFileSync(config.stateFile, new Date().toISOString());
+    try {
+      mkdirSync(dirname(config.stateFile), { recursive: true });
+      writeFileSync(config.stateFile, new Date().toISOString());
+    } catch (error) {
+      // The health check then reports unhealthy; the process keeps working.
+      opts.log({
+        event: "error",
+        where: "sweep_state",
+        errorClass: error instanceof Error ? error.constructor.name : "error",
+      });
+    }
   };
 
   let running: Promise<void> = sweep();

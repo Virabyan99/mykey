@@ -1029,6 +1029,8 @@ async function runUp(host: HostEntry, address: Address, log: Logger): Promise<vo
   for (const step of [
     hostEnvDefaultCommand("MYKEY_HOST_INSTANCE_ID", randomUUID()),
     hostEnvSetCommand("MYKEY_BASE_URL", `https://${host.hostname}`),
+    // Run 3.8: the provisioner's drift sweep interval (staging sweeps every minute).
+    hostEnvSetCommand("MYKEY_SWEEP_SECONDS", host.name === "staging" ? "60" : "300"),
     `install -d -m 0755 -o root -g root ${GATE_DIRECTORY}`,
   ]) {
     expectSuccess(await sshExec(host, step, { sudo: true, address }), "API settings");
