@@ -39,6 +39,8 @@ export interface Expected {
   provisionerColumns?: string[];
   /** Columns `api_runtime` may update in schema auth without table-level UPDATE. */
   apiColumns?: string[];
+  /** Columns of schema app the API may not update although they are no key (migration 0010). */
+  apiNoColumns?: string[];
   /** Table privileges of `maintenance` where they differ from the schema default (Run 3.1, P-45). */
   maintenance?: string[];
   /** Columns `maintenance` may update without table-level UPDATE. */
@@ -71,14 +73,21 @@ const JOB_TABLES: Record<string, Expected> = {
  */
 export const TABLES: Record<string, Expected> = {
   "app.organization": {
-    api: [S, I],
+    api: [S],
+    apiNoColumns: ["config_digest", "provisioning_operation_id", "review_reason"],
     provisioner: [S],
     provisionerColumns: ["state", "config_digest", "provisioning_operation_id", "review_reason"],
   },
-  "app.membership": { api: [S, I], provisioner: [] },
-  "app.project": { api: [S, I], provisioner: [S], provisionerColumns: ["state", "review_reason"] },
+  "app.membership": { api: [S], provisioner: [] },
+  "app.project": {
+    api: [S, I],
+    apiNoColumns: ["review_reason"],
+    provisioner: [S],
+    provisionerColumns: ["state", "review_reason"],
+  },
   "app.environment": {
     api: [S, I],
+    apiNoColumns: ["kv_ready", "policy_digest", "review_reason"],
     provisioner: [S],
     provisionerColumns: ["state", "kv_ready", "policy_digest", "review_reason"],
   },
@@ -220,6 +229,7 @@ export function expectedColumnUpdate(row: ColumnRow, grantee: string): boolean {
   }
   if (grantee === "api_runtime" && row.table.startsWith("app.")) {
     if (row.primary_key || IDENTITY_COLUMNS.includes(row.column)) return false;
+    if (TABLES[matrixName(row.table)]?.apiNoColumns?.includes(row.column)) return false;
     if (row.table === "app.operation" && OPERATION_KEY_COLUMNS.includes(row.column)) return false;
     return true;
   }

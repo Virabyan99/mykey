@@ -233,13 +233,16 @@ function stepEffects(
       return "verified";
     },
     "secret-ids": async () => {
+      // The new one first, delivered, then every other destroyed: a process
+      // that runs while the operator reconciles always holds a working one
+      // (Session 3 gate review). Interrupted anywhere, the next run ends with one.
       for (const name of APPROLE_NAMES) {
-        for (const accessor of await admin.listSecretIdAccessors(namespace, name)) {
-          await admin.destroySecretIdAccessor(namespace, name, accessor);
-        }
-        const { secretId } = await admin.newSecretId(namespace, name);
+        const { secretId, accessor: kept } = await admin.newSecretId(namespace, name);
         const { roleId } = await admin.readRoleId(namespace, name);
         await deps.deliver(name, { roleId, secretId });
+        for (const accessor of await admin.listSecretIdAccessors(namespace, name)) {
+          if (accessor !== kept) await admin.destroySecretIdAccessor(namespace, name, accessor);
+        }
       }
       return "written";
     },

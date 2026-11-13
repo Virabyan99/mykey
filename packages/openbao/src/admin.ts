@@ -268,7 +268,10 @@ export class OpenBaoAdmin {
     }
   }
 
-  async newSecretId(namespace: string, name: string): Promise<{ secretId: string }> {
+  async newSecretId(
+    namespace: string,
+    name: string,
+  ): Promise<{ secretId: string; accessor: string }> {
     requireNamespace(namespace, true);
     requireName(name);
     const answer = await this.#request(
@@ -277,9 +280,13 @@ export class OpenBaoAdmin {
       `auth/approle/role/${name}/secret-id`,
       [200],
     );
-    const secretId = record(record(answer.body).data).secret_id;
-    if (typeof secretId !== "string") throw new Error("OpenBao secret-id: malformed answer");
-    return { secretId };
+    const data = record(record(answer.body).data);
+    const secretId = data.secret_id;
+    const accessor = data.secret_id_accessor;
+    if (typeof secretId !== "string" || typeof accessor !== "string") {
+      throw new Error("OpenBao secret-id: malformed answer");
+    }
+    return { secretId, accessor };
   }
 
   async putTokenRole(namespace: string, name: string, role: MachineTokenRole): Promise<void> {

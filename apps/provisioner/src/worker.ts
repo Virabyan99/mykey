@@ -8,7 +8,7 @@ import type { OrganizationId } from "@mykey/contracts";
 import { createPool } from "@mykey/db";
 import { namespaceFor } from "@mykey/openbao";
 import { ProvisionerClient } from "@mykey/openbao/provisioner";
-import { createWorker, readGate } from "@mykey/operations";
+import { createSender, createWorker, readGate } from "@mykey/operations";
 import {
   provisionEnvironment,
   sweepAll,
@@ -23,6 +23,9 @@ export type ProvisionerLog =
   | { event: "sweep"; reviewed: number; unread: number }
   | { event: "sweep_skipped"; cause: string }
   | { event: "error"; where: string; errorClass: string };
+
+/** How long a job waits before it looks at a closed gate again. */
+const GATE_RETRY_SECONDS = 30;
 
 export interface StartOptions {
   log: (entry: ProvisionerLog) => void;
@@ -50,13 +53,18 @@ export async function startProvisioner(
     );
   };
   const gateOpen = () => readGate(config.gatePath, config.hostInstanceId).open;
+  const sender = await createSender(pool);
 
   const worker = await createWorker(pool, {
     "environment.provision": async (operationId, meta) => {
       if (!gateOpen()) {
         opts.log({ event: "job_deferred", operationId, cause: "gate_closed" });
-        // Thrown: the queue retries the job; nothing was done.
-        throw new Error("the service gate is closed");
+        // Nothing was done. The job comes back in 30 s without using a retry, so
+        // a long closure (a deploy, a quarantine) never ends the job (gate review).
+        await sender.send("environment.provision", operationId, {
+          startAfterSeconds: GATE_RETRY_SECONDS,
+        });
+        return;
       }
       try {
         const outcome = await provisionEnvironment(
@@ -122,6 +130,7 @@ export async function startProvisioner(
       clearInterval(timer);
       await running;
       await worker.stop();
+      await sender.stop();
       await pool.end();
     },
   };

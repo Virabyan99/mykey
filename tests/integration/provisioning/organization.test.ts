@@ -334,6 +334,37 @@ describe("organization provisioning", () => {
     expect(await operations(organizationId)).toHaveLength(1);
   });
 
+  it("a re-run never leaves a role without a working credential: at each delivery the one delivered before still logs in", async () => {
+    const organizationId = await seedOrganization();
+    const namespace = namespaceFor(organizationId);
+    const first: Delivered[] = [];
+    expect((await run(organizationId, { delivered: first })).outcome).toBe("active");
+    const stillWorking: Record<string, boolean> = {};
+    const result = await provisionOrganization(
+      {
+        pool: api.database.pool("maintenance"),
+        admin,
+        boundCidrs: NO_CIDRS,
+        deliver: async (name) => {
+          const previous = first.find((d) => d.name === name)!;
+          const login = await appRoleLogin(
+            stack.bao,
+            namespace,
+            previous.roleId,
+            previous.secretId,
+          );
+          stillWorking[name] = login.ok;
+        },
+      },
+      organizationId,
+    );
+    expect(result.outcome).toBe("active");
+    expect(stillWorking).toEqual({ runtime: true, issuer: true, provisioner: true });
+    for (const name of ROLES) {
+      expect(await admin.listSecretIdAccessors(namespace, name)).toHaveLength(1);
+    }
+  });
+
   it("a late duplicate of each write is harmless", async () => {
     const organizationId = await seedOrganization();
     expect((await run(organizationId)).outcome).toBe("active");

@@ -161,6 +161,21 @@ describe("environment provisioning", () => {
     }
   }, 180_000);
 
+  it("gate closed longer than the queue's retries (200 s) → still runs once it opens", async () => {
+    fx.setGate("closed");
+    const provisioner = await fx.start();
+    try {
+      const { environmentId } = await fx.newEnvironment();
+      await sleep(200_000);
+      expect((await fx.environment(environmentId)).state).toBe("pending");
+      fx.setGate("open");
+      await fx.waitFor(environmentId, "active", 90_000);
+    } finally {
+      fx.setGate("open");
+      await provisioner.stop();
+    }
+  }, 360_000);
+
   it("OpenBao stopped → the environment stays pending and becomes active after it returns", async () => {
     const provisioner = await fx.start();
     try {

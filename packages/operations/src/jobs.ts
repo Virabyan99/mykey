@@ -98,7 +98,11 @@ export async function ensureQueues(pool: pg.Pool): Promise<void> {
 
 export interface JobSender {
   /** Sends one job. With `tx`, the job is part of that transaction and exists only if it commits. */
-  send(kind: JobKind, operationId: OperationId, opts?: { tx?: pg.PoolClient }): Promise<void>;
+  send(
+    kind: JobKind,
+    operationId: OperationId,
+    opts?: { tx?: pg.PoolClient; startAfterSeconds?: number },
+  ): Promise<void>;
   stop(): Promise<void>;
 }
 
@@ -107,7 +111,10 @@ export async function createSender(pool: pg.Pool): Promise<JobSender> {
   return {
     async send(kind, operationId, opts = {}) {
       const data = jobPayloadSchema.parse({ operationId });
-      const id = await boss.send(kind, data, opts.tx === undefined ? {} : { db: adapter(opts.tx) });
+      const id = await boss.send(kind, data, {
+        ...(opts.tx === undefined ? {} : { db: adapter(opts.tx) }),
+        ...(opts.startAfterSeconds === undefined ? {} : { startAfter: opts.startAfterSeconds }),
+      });
       if (id === null) throw new Error(`job ${kind} was not created`);
     },
     stop: () => boss.stop({ graceful: false }),

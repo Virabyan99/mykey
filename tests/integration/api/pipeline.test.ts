@@ -50,9 +50,10 @@ const echo: Handler = async (ctx, deps) => {
     case "audit": {
       const id = body.text ?? randomUUID();
       await withTransaction(deps.pool, async (tx) => {
+        // An effect the API may write (since migration 0010 it creates no organization).
         await tx.query(
-          "INSERT INTO app.organization (id, namespace, state) VALUES ($1, $2, 'provisioning')",
-          [id, `org-${id}`],
+          "INSERT INTO app.rate_limit (scope, key_digest, window_start, count) VALUES ('test:audit', sha256(convert_to($1, 'UTF8')), now(), 1)",
+          [id],
         );
         await appendAudit(tx, {
           action: "operator.bootstrap",
@@ -330,12 +331,18 @@ describe("handler failures", () => {
     } finally {
       await api.superuser.query("GRANT INSERT ON audit.event TO api_runtime");
     }
-    const rows = await api.superuser.query("SELECT 1 FROM app.organization WHERE id = $1", [id]);
+    const rows = await api.superuser.query(
+      "SELECT 1 FROM app.rate_limit WHERE scope = 'test:audit' AND key_digest = sha256(convert_to($1, 'UTF8'))",
+      [id],
+    );
     expect(rows.rowCount).toBe(0);
     // Control: with the grant back, the same request has its effect.
     const ok = await api.request("POST", "/v1/_test/echo", { body: { mode: "audit", text: id } });
     expect(ok.status).toBe(200);
-    const after = await api.superuser.query("SELECT 1 FROM app.organization WHERE id = $1", [id]);
+    const after = await api.superuser.query(
+      "SELECT 1 FROM app.rate_limit WHERE scope = 'test:audit' AND key_digest = sha256(convert_to($1, 'UTF8'))",
+      [id],
+    );
     expect(after.rowCount).toBe(1);
   });
 });

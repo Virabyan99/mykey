@@ -206,6 +206,37 @@ const CASES: Case[] = [
     "INSERT INTO auth.user (id, name, email) VALUES (gen_random_uuid(), 'n', 'api-case@example.invalid')",
     DENIED,
   ],
+  // Session 3 gate review: what only the operator or the provisioner may write.
+  [
+    "api_runtime",
+    "cannot mark an environment ready",
+    "UPDATE app.environment SET kv_ready = true, policy_digest = 'x'",
+    DENIED,
+  ],
+  [
+    "api_runtime",
+    "cannot set an organization's digest or provisioning operation",
+    "UPDATE app.organization SET config_digest = 'x', provisioning_operation_id = NULL",
+    DENIED,
+  ],
+  [
+    "api_runtime",
+    "cannot clear a review",
+    "UPDATE app.environment SET review_reason = NULL",
+    DENIED,
+  ],
+  [
+    "api_runtime",
+    "cannot create an organization",
+    "INSERT INTO app.organization (id, namespace, state) VALUES (gen_random_uuid(), 'org-x', 'active')",
+    DENIED,
+  ],
+  [
+    "api_runtime",
+    "cannot create a membership",
+    "INSERT INTO app.membership (id, organization_id, user_id, role, state) SELECT gen_random_uuid(), id, gen_random_uuid(), 'owner', 'active' FROM app.organization LIMIT 1",
+    DENIED,
+  ],
   ["api_runtime", "cannot create a table in jobs", "CREATE TABLE jobs.x ()", DENIED],
   ["provisioner_runtime", "cannot create a table in jobs", "CREATE TABLE jobs.x ()", DENIED],
   ["api_runtime", "cannot remove a queue", "DELETE FROM jobs.queue", DENIED],
