@@ -139,9 +139,67 @@ const resolveBody = z.strictObject({
 });
 
 const secretsListQuery = z.strictObject({
-  prefix: z.string().max(LIMITS.listing.filterMaxLength).optional(),
+  // A name prefix (Run 4.3): the name pattern, so `_` and `%` are never wildcards.
+  prefix: z.string().regex(SECRET_NAME_PATTERN).optional(),
   limit: z.int().min(1).max(LIMITS.listing.maxLimit).default(LIMITS.listing.defaultLimit),
   cursor: z.string().min(1).optional(),
+});
+
+/** Run 4.3 (P-73): the index's view of a name. Never a value. */
+const indexState = z.enum(["live", "deleted", "needs_review"]);
+const secretsListBody = z.strictObject({
+  secrets: z.array(
+    z.strictObject({
+      name: z.string(),
+      version: z.int().positive().nullable(),
+      stateTag: z.string(),
+      state: indexState,
+      changedAt: z.iso.datetime(),
+    }),
+  ),
+  nextCursor: z.string().nullable(),
+});
+const historyActor = z.strictObject({
+  kind: z.enum(["user", "operator", "system", "unknown"]),
+  id: z.string().nullable(),
+});
+/** secrets.history: newest version first, at most the twenty OpenBao keeps. */
+const secretsHistoryBody = z.strictObject({
+  name: z.string(),
+  currentVersion: z.int().positive().nullable(),
+  state: indexState,
+  stateTag: z.string(),
+  versions: z
+    .array(
+      z.strictObject({
+        version: z.int().positive(),
+        createdAt: z.iso.datetime(),
+        deleted: z.boolean(),
+        destroyed: z.boolean(),
+        current: z.boolean(),
+        written: z.strictObject({
+          action: z.enum(["create", "update", "restore"]).nullable(),
+          actor: historyActor,
+          operationId: z.uuid().nullable(),
+        }),
+        lastChange: z
+          .strictObject({
+            action: z.enum(["delete", "undelete"]),
+            actor: historyActor,
+            occurredAt: z.iso.datetime(),
+            operationId: z.uuid().nullable(),
+          })
+          .nullable(),
+      }),
+    )
+    .max(LIMITS.secret.versionsKept),
+});
+/** secrets.reveal: one value, after its audit row is committed (Run 4.3). */
+const secretsRevealBody = z.strictObject({
+  name: z.string(),
+  version: z.int().positive(),
+  value: z.string(),
+  stateTag: z.string(),
 });
 
 /** projects.list and environments.list (Run 3.9, P-59): keyset pages in id order. */
@@ -393,14 +451,17 @@ export const ROUTES: readonly RouteDef[] = Object.freeze([
   define("secrets.list", "GET", `${E}/secrets`, "human", false, "4.3", {
     action: "secrets.read",
     query: secretsListQuery,
+    responses: { 200: secretsListBody },
   }),
   define("secrets.history", "GET", `${E}/secrets/:name/history`, "human", false, "4.3", {
     action: "secrets.history",
+    responses: { 200: secretsHistoryBody },
     errors: ["unsupported_history_parameter", "key_under_review", ...BACKEND],
   }),
   define("secrets.reveal", "POST", `${E}/secrets/:name/reveal`, "human", false, "4.3", {
     action: "secrets.read",
     body: z.strictObject({ version: version.optional() }),
+    responses: { 200: secretsRevealBody },
     errors: ["state_conflict", ...VALUE_READ],
   }),
   define("secrets.create", "POST", `${E}/secrets`, "human", true, "4.2", {

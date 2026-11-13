@@ -1,7 +1,4 @@
 [
-  "secrets.list",
-  "secrets.history",
-  "secrets.reveal",
   "import.preview",
   "credentials.list",
   "credentials.issue",
