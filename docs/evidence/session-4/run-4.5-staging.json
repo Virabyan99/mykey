@@ -1,0 +1,17 @@
+{
+  "project": {
+    "name": "s4-8af88c06",
+    "id": "650c0e22-9e6b-44b6-95ba-ce677dd28a12",
+    "environmentId": "e84a6e50-d76a-4630-9084-30d5af53cda2"
+  },
+  "lifecycle": {
+    "name": "S4_LIFE_4F895B29",
+    "operationId": "8f47a39d-e0da-4241-a73e-d8d902ce7c66",
+    "versions": 3
+  },
+  "fiftyUpdatesMs": {
+    "median": 261,
+    "slowest": 654,
+    "fastest": 230
+  }
+}

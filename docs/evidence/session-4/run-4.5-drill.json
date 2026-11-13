@@ -1,0 +1,27 @@
+{
+  "project": {
+    "name": "s4-drill-3fe496",
+    "id": "1d55c1b0-3451-4ea2-8a6a-64dde1a04c13",
+    "environmentId": "6a620f19-d1ee-4e40-acd1-1971313ed1e3"
+  },
+  "attempt1": {
+    "pausedAt": "2026-11-13T21:17:29.685Z",
+    "answers": {
+      "200": 83,
+      "503 busy": 11,
+      "503 outcome_unknown": 1
+    }
+  },
+  "uncertain": {
+    "operationId": "4e612eff-6477-468b-97b2-97a942c71c23",
+    "name": "S4_DRILL_94ADB7D7",
+    "at": "2026-11-13T21:17:40.400Z"
+  },
+  "alert": {
+    "delivered": "2026-11-13T21:18:27.076Z"
+  },
+  "quiesced": "2026-11-13T21:19:16.288Z",
+  "verdict": "rejected",
+  "resumed": "2026-11-13T21:20:09.825Z",
+  "cleared": "2026-11-13T21:20:30.459Z"
+}

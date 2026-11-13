@@ -437,6 +437,30 @@
       "status": "SPIKE_PASS",
       "evidence": ["docs/evidence/session-4/run-4.4.md"],
       "note": "State tags and cas under the protocol: stale tags change nothing, the backend is checked against the index before any effect, delayed answers become uncertain with the key in review, replays write nothing twice (product code, real stores)."
+    },
+    {
+      "id": "FR-1.30",
+      "status": "SPIKE_PASS",
+      "evidence": ["docs/evidence/session-4/run-4.5.md"],
+      "note": "Concurrency with uncertain outcomes: the stale-work sweep moves executing operations to uncertain and accepted ones to rejected, one audit row each under two sweepers; a swept executor can neither finalize nor dispatch; the slot blocks the environment until settled (product code, real stores)."
+    },
+    {
+      "id": "FR-1.31",
+      "status": "SPIKE_PASS",
+      "evidence": ["docs/evidence/session-4/run-4.5.md"],
+      "note": "Unknown result: a landed write is reconciled as success without exclusion; a not-landed write is rejected only after executor exclusion; deletes and undeletes always need exclusion; evidence conflicts can be closed as unknown (product code, real stores; staging drill)."
+    },
+    {
+      "id": "FR-1.88",
+      "status": "SPIKE_PASS",
+      "evidence": ["docs/evidence/session-4/run-4.5.md"],
+      "note": "Reconciliation: ops operations, reconcile-operation and reconcile-environment; an environment's index rebuilt from OpenBao (300 names within 60 s), a review ended, refused while an operation is unresolved or the lock is held (product code, real stores)."
+    },
+    {
+      "id": "AC-1.16",
+      "status": "SPIKE_PASS",
+      "evidence": ["docs/evidence/session-4/run-4.5.md"],
+      "note": "A timeout after a real backend change gives uncertain with its operation id, the key under review and the slot held, an operations_unresolved alert, and a settlement by the operator (local stack; staging drill with OpenBao paused)."
     }
   ]
 }
