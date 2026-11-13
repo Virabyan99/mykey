@@ -3,9 +3,19 @@
 // (`resolveAccess`, one statement) and decided by `decide` from the contract.
 // Hidden is answered exactly like absent (404); a refusal is audited.
 import { appendAudit } from "@mykey/audit";
-import { decide, type Authority, type ErrorCode, type RouteDef } from "@mykey/contracts";
 import {
+  ROUTES,
+  decide,
+  type Action,
+  type Authority,
+  type ErrorCode,
+  type OperationId,
+  type RouteDef,
+} from "@mykey/contracts";
+import {
+  findOperation,
   resolveAccess,
+  type OperationRow,
   type EnvironmentScope,
   type OrgScope,
   type ProjectScope,
@@ -22,6 +32,8 @@ export interface Access {
   authority: Authority | null;
   /** The rows the decision was made on (Run 3.9: the state check comes after a replay lookup). */
   resolved: Resolved | null;
+  /** The operation a route of scope `operation` names (Run 4.1). */
+  operation?: OperationRow;
 }
 
 export type DenialReason = "hidden" | "action" | "state" | "fresh";
@@ -76,8 +88,7 @@ export async function authorize(
   const hidden = (organizationId: string | null) =>
     deny(deps, { ...base, reason: "hidden", code: "not_found", organizationId, targetId: deepest });
 
-  // Operations are resolved by Run 4.1; until then every id is unknown.
-  if (route.scope === "operation") return hidden(null);
+  if (route.scope === "operation") return authorizeOperation(deps, params, principal, hidden);
 
   const organizationId = params.org;
   const projectId = params.project;
@@ -124,6 +135,55 @@ export async function authorize(
     ...(environmentId === undefined ? {} : { environmentId }),
   } as Scope;
   return { scope, authority, resolved };
+}
+
+/** The action of the route that made an operation; `resources.manage` when no route has its id. */
+function actionOfOperation(deps: AppDeps, action: string): Action | null {
+  const route =
+    ROUTES.find((candidate) => candidate.id === action) ??
+    deps.test?.routes?.find((entry) => entry.def.id === action)?.def;
+  return route === undefined ? "resources.manage" : route.action;
+}
+
+/**
+ * Scope `operation` (P-63, D-35): the operation's own organization, project
+ * and environment, read on this request. An owner or admin of the organization
+ * sees it; a member sees its own operation while `decide` still allows that
+ * member the operation's action on its scope. Everyone else: hidden, exactly
+ * like an absent id.
+ */
+async function authorizeOperation(
+  deps: AppDeps,
+  params: Record<string, string>,
+  principal: Principal,
+  hidden: (organizationId: string | null) => Promise<never>,
+): Promise<Access> {
+  const id = params.operation ?? "";
+  if (!UUID.test(id)) return hidden(null);
+  const operation = await findOperation(deps.pool, id as OperationId);
+  if (operation?.organizationId == null) return hidden(null);
+  const { organizationId, projectId, environmentId } = operation;
+  const resolved = await resolveAccess(deps.pool, principal.userId, {
+    organizationId,
+    ...(projectId === null ? {} : { projectId }),
+    ...(environmentId === null ? {} : { environmentId }),
+  });
+  const { authority } = resolved;
+  if (authority === null || resolved.organization === null) return hidden(null);
+  if (projectId !== null && resolved.project === null) return hidden(organizationId);
+  if (environmentId !== null && resolved.environment === null) return hidden(organizationId);
+  const target = {
+    ...(projectId === null ? {} : { projectId }),
+    ...(environmentId === null ? {} : { environmentId }),
+  };
+  const manager = authority.role === "owner" || authority.role === "admin";
+  const author =
+    operation.principalKind === "user" &&
+    operation.principalId === principal.userId &&
+    decide(authority, target, actionOfOperation(deps, operation.action)) === "allow";
+  if (!manager && !author) return hidden(organizationId);
+  const scope = { organizationId, ...target } as Scope;
+  return { scope, authority, resolved, operation };
 }
 
 /** The state step (P-53): after visibility, action and — for a mutation — the replay lookup. */

@@ -4,10 +4,12 @@
 // included, so the same key with another body is a conflict, never a replay.
 import { createHmac, randomUUID, timingSafeEqual } from "node:crypto";
 import type {
+  EnvironmentId,
   ErrorCode,
   OperationId,
   OperationResponse,
   OrganizationId,
+  ProjectId,
   RouteDef,
 } from "@mykey/contracts";
 import {
@@ -98,11 +100,14 @@ export async function beginOperation(
   ring: HmacRing,
   input: OperationKey & {
     organizationId: OrganizationId;
+    /** The scope the operation acts in (P-63): who may read its status follows from it. */
+    projectId?: ProjectId;
+    environmentId?: EnvironmentId;
     body: unknown;
     params?: Record<string, string>;
   },
 ): Promise<Begin> {
-  const { body, organizationId, params, ...key } = input;
+  const { body, organizationId, params, projectId, environmentId, ...key } = input;
   const intent = { ...key, body, ...(params === undefined ? {} : { params }) };
   const { digest, keyId } = intentFingerprint(ring, intent);
   const id = randomUUID() as OperationId;
@@ -110,6 +115,8 @@ export async function beginOperation(
     ...key,
     id,
     organizationId,
+    ...(projectId === undefined ? {} : { projectId }),
+    ...(environmentId === undefined ? {} : { environmentId }),
     state: "executing",
     fingerprint: digest,
     fingerprintKeyId: keyId,

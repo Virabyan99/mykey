@@ -2,6 +2,7 @@
 import type { HttpBindings } from "@hono/node-server";
 import type { Auth, AuthKeys, Throttle } from "@mykey/auth";
 import type { Authority, ErrorCode, RouteDef } from "@mykey/contracts";
+import type { OperationRow } from "@mykey/db";
 import type pg from "pg";
 import type { HealthReading } from "../health.ts";
 import type { LogEntry } from "../log.ts";
@@ -43,6 +44,8 @@ export interface AppDeps {
     routes?: readonly TestRouteEntry[];
     /** Replaces the terminal 404 of a route without a handler: records the id, answers 204. */
     stubs?: (routeId: string) => void | Promise<void>;
+    /** The stub replaces every contract route's handler but health and version (P-80). */
+    stubAll?: boolean;
     /** The time TOTP codes are checked at, from a request header. */
     clock?: (headers: Headers) => Date | undefined;
   };
@@ -60,6 +63,8 @@ export interface ApiContext {
   scope: Scope | null;
   /** The caller's authority in that organization, read on this request. */
   authority: Authority | null;
+  /** The operation a route of scope `operation` names, read on this request (Run 4.1). */
+  operation: OperationRow | null;
   /** The request's Idempotency-Key (lower case) on a mutation route (Run 3.9). */
   idempotencyKey: string | null;
   /** The harness's clock for TOTP codes (AppDeps.test.clock); undefined in production. */

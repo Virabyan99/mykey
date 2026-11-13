@@ -20,6 +20,7 @@ export {
   finishOperation,
   hasTombstone,
   insertOperation,
+  listOperations,
   toOperationRow,
   touchOperation,
   type Finish,

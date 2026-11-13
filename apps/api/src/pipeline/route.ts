@@ -223,7 +223,13 @@ async function run(
         targetId: params.env ?? params.project ?? params.org ?? null,
       });
     }
-    if (handler === terminal && deps.test?.stubs !== undefined) {
+    const stubbed =
+      handler === terminal ||
+      (deps.test?.stubAll === true &&
+        route.id !== "health.get" &&
+        route.id !== "version.get" &&
+        ROUTES.some((contract) => contract.id === route.id));
+    if (stubbed && deps.test?.stubs !== undefined) {
       // The harness's stub: every check of the pipeline has passed.
       await deps.test.stubs(route.id);
       return new Response(null, { status: 204 });
@@ -243,6 +249,7 @@ async function run(
         principal,
         scope: access.scope,
         authority: access.authority,
+        operation: access.operation ?? null,
         idempotencyKey,
         ...(clock === undefined ? {} : { now: clock }),
       },

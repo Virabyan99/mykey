@@ -79,6 +79,9 @@ export const testOpsHandler: Handler = async (ctx, deps) => {
       ...(intent.params === undefined ? {} : { params: intent.params }),
       idempotencyKey: ctx.idempotencyKey ?? "",
       organizationId: ctx.scope!.organizationId,
+      ...("environmentId" in ctx.scope!
+        ? { projectId: ctx.scope.projectId, environmentId: ctx.scope.environmentId }
+        : {}),
       body: ctx.body,
     });
     if (started.kind !== "fresh") return started;

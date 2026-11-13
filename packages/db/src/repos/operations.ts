@@ -10,6 +10,7 @@ import type {
   ProjectId,
 } from "@mykey/contracts";
 import type pg from "pg";
+import type { EnvironmentScope } from "../scope.ts";
 import type { Queryable } from "../tx.ts";
 
 export type PrincipalKind = "user" | "machine" | "operator" | "system";
@@ -317,4 +318,47 @@ export async function expireOperations(tx: pg.PoolClient): Promise<number> {
       WHERE ${expiring}`,
   );
   return updated.rowCount ?? 0;
+}
+
+/**
+ * The operations of one environment, newest first (P-63). Children of an
+ * import are not listed. `principalId` limits the list to that user's rows.
+ * `anchor` (microseconds since the epoch of the first page's first row)
+ * bounds every later page, so operations made while paging never appear;
+ * `after` is the sort key of the previous page's last row. Each row carries
+ * its sort key "<created_at in microseconds>|<id>".
+ */
+export async function listOperations(
+  db: Queryable,
+  scope: EnvironmentScope,
+  filter: { principalId: string | null; unfinishedOnly: boolean },
+  page: { anchor: string | null; after: string | null; limit: number },
+): Promise<(OperationRow & { sortKey: string })[]> {
+  const [afterMicros, afterId] = page.after === null ? [null, null] : page.after.split("|");
+  const result = await db.query<StoredOperation & { sort_key: string }>(
+    `SELECT ${COLUMNS},
+            (extract(epoch FROM created_at) * 1000000)::bigint::text || '|' || id AS sort_key
+       FROM app.operation
+      WHERE organization_id = $1 AND environment_id = $2 AND parent_operation_id IS NULL
+        AND ($3::text IS NULL OR (principal_kind = 'user' AND principal_id = $3))
+        AND (NOT $4 OR state IN ('accepted', 'executing', 'awaiting_input', 'uncertain'))
+        AND ($5::bigint IS NULL
+             OR created_at <= 'epoch'::timestamptz + $5::bigint * interval '1 microsecond')
+        AND ($6::bigint IS NULL
+             OR (created_at, id) < ('epoch'::timestamptz + $6::bigint * interval '1 microsecond',
+                                    $7::uuid))
+      ORDER BY created_at DESC, id DESC
+      LIMIT $8`,
+    [
+      scope.organizationId,
+      scope.environmentId,
+      filter.principalId,
+      filter.unfinishedOnly,
+      page.anchor,
+      afterMicros ?? null,
+      afterId ?? null,
+      page.limit,
+    ],
+  );
+  return result.rows.map((stored) => ({ ...toRow(stored), sortKey: stored.sort_key }));
 }

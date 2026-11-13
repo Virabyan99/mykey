@@ -1,9 +1,10 @@
 // Run 3.7 Task C (FR-1.09, FR-1.10, FR-1.11, AC-1.08): every human route ×
 // the seven fixture users × four targets, each cell checked against a literal
-// table written from Doc 04 §1.1 — the table does not call `decide`. Routes
-// without a handler answer through the harness's stub, so a cell is "reached"
-// exactly when every check of the pipeline passed. The suite writes
-// docs/evidence/session-3/authorization-matrix.md.
+// table written from Doc 04 §1.1 — the table does not call `decide`. Every
+// contract route answers through the harness's stub (P-80, Run 4.1: real
+// handlers are covered by matrix-live.test.ts), so a cell is "reached"
+// exactly when every check of the pipeline passed. Run 4.1 adds the
+// operation rows. The suite writes docs/evidence/session-4/authorization-matrix.md.
 import { randomUUID } from "node:crypto";
 import { writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -92,7 +93,7 @@ const TARGETS: readonly TargetName[] = ["p1/e1a", "p1/e1b", "p2/e2a", "B"];
 
 function expected(user: FixtureUser, target: TargetName, route: RouteDef): Outcome {
   if (route.scope === "none") return "A";
-  // Operations are resolved by Run 4.1: until then every id is unknown.
+  // The path holds a random operation id: absent, so hidden (the operation rows are below).
   if (route.scope === "operation") return "H";
   const row = MATRIX[user][target][route.scope];
   const column = ACTION_ORDER.indexOf(route.action);
@@ -152,7 +153,7 @@ async function verdict(route: RouteDef, response: Response, reachedBefore: numbe
 }
 
 beforeAll(async () => {
-  api = await startTestApi({ stubs: true });
+  api = await startTestApi({ stubs: "all" });
   tenants = await createTenants(api);
   for (const user of FIXTURE_USERS) cookies.set(user, await tenants.cookie(user));
 }, 300_000);
@@ -192,20 +193,20 @@ describe("the authorization matrix", () => {
         }
       }
     }
-    // Every route has a cell that reaches it — except operations.get until Run 4.1.
+    // Every route has a cell that reaches it — operations.get through its own rows below.
     const unreachable = HUMAN.filter(
       (route) => route.scope !== "operation" && !allowedRoutes.has(route.id),
     ).map((route) => route.id);
     expect(unreachable).toEqual([]);
     writeFileSync(
-      join(import.meta.dirname, "../../../docs/evidence/session-3/authorization-matrix.md"),
+      join(import.meta.dirname, "../../../docs/evidence/session-4/authorization-matrix.md"),
       [
-        "# Authorization matrix (Run 3.7)",
+        "# Authorization matrix (Run 3.7, Run 4.1)",
         "",
         "Written by `tests/integration/authz/matrix.test.ts`. A = the request passed every check",
-        "(stub or handler reached), D = `403 action_denied`, H = `404 not_found`. Every D and H cell",
-        "also has its `access.denied` audit row with the reason checked. `operations.get` is H for",
-        "everyone until Run 4.1 resolves operations.",
+        "(the harness stub was reached), D = `403 action_denied`, H = `404 not_found`. Every D and H",
+        "cell also has its `access.denied` audit row with the reason checked. `operations.get` here",
+        "names a random id (H for everyone); its own rows are in the test's operation table.",
         "",
         `Cells: ${String(lines.length)} — A ${String(totals.A)}, D ${String(totals.D)}, H ${String(totals.H)}. Mismatches: ${String(failures.length)}.`,
         "",
@@ -219,24 +220,83 @@ describe("the authorization matrix", () => {
   }, 600_000);
 });
 
+// Run 4.1 (P-63): operations.get by the operation's own scope and author. The
+// operations are of action secrets.create in environment 1a (B: its env 1a).
+// own: made by the caller; member: made by editorA (adminA for editorA);
+// foreign: made in the other organization; absent: a random id.
+const OPERATION_ROWS: Record<
+  FixtureUser,
+  Record<"own" | "member" | "foreign" | "absent", Outcome>
+> = {
+  ownerA: { own: "A", member: "A", foreign: "H", absent: "H" },
+  adminA: { own: "A", member: "A", foreign: "H", absent: "H" },
+  editorA: { own: "A", member: "H", foreign: "H", absent: "H" },
+  // A reader may not write: its own write operation is hidden from it.
+  readerA: { own: "H", member: "H", foreign: "H", absent: "H" },
+  envEditorA: { own: "A", member: "H", foreign: "H", absent: "H" },
+  ungrantedA: { own: "H", member: "H", foreign: "H", absent: "H" },
+  ownerB: { own: "A", member: "H", foreign: "H", absent: "H" },
+};
+
+describe("operations.get rows", () => {
+  async function operationBy(user: FixtureUser, inB = false): Promise<string> {
+    const id = randomUUID();
+    const scope = inB
+      ? [tenants.b.organizationId, tenants.b.project1, tenants.b.env1a]
+      : [tenants.a.organizationId, tenants.a.project1, tenants.a.env1a];
+    await api.superuser.query(
+      `INSERT INTO app.operation (id, organization_id, project_id, environment_id, principal_kind,
+         principal_id, action, target, idempotency_key, state)
+       VALUES ($1::uuid, $2, $3, $4::uuid, 'user', $5, 'secrets.create', $4::text, $1::text, 'succeeded')`,
+      [id, ...scope, tenants.userId(user)],
+    );
+    return id;
+  }
+
+  it("own, another member's, another organization's and an absent operation, for the seven users", async () => {
+    const def = ROUTES.find((candidate) => candidate.id === "operations.get")!;
+    const failures: string[] = [];
+    for (const user of FIXTURE_USERS) {
+      const inB = user === "ownerB";
+      const ids = {
+        own: await operationBy(user, inB),
+        member: inB
+          ? await operationBy("ownerA")
+          : await operationBy(user === "editorA" ? "adminA" : "editorA"),
+        foreign: inB ? await operationBy("ownerA") : await operationBy("ownerB", true),
+        absent: randomUUID(),
+      };
+      for (const [column, id] of Object.entries(ids) as [keyof typeof ids, string][]) {
+        const before = api.reached.length;
+        const response = await send(user, def, `/v1/operations/${id}`);
+        const got = await verdict(def, response, before);
+        const want = OPERATION_ROWS[user][column];
+        if (got.outcome !== want)
+          failures.push(`${user} ${column}: expected ${want}, got ${got.outcome}`);
+        if (want === "A" && !got.reached) failures.push(`${user} ${column}: stub not reached`);
+        if (want === "H" && got.reason !== "hidden")
+          failures.push(`${user} ${column}: reason ${String(got.reason)}`);
+      }
+    }
+    expect(failures).toEqual([]);
+  });
+});
+
 describe("named cases", () => {
   const route = (id: string): RouteDef => ROUTES.find((candidate) => candidate.id === id)!;
 
-  it("envEditorA writes in environment 1a, gets 404 for 1b, sees project 1 in projects.list and not project 2", async () => {
+  // What the lists contain is the handlers' business: tests/integration/resources/listing.test.ts.
+  it("envEditorA writes in environment 1a, gets 404 for 1b, lists in project 1 and not project 2", async () => {
     const create = route("secrets.create");
     expect((await send("envEditorA", create, pathIn(create, idsOf("p1/e1a")))).status).toBe(204);
     expect((await send("envEditorA", create, pathIn(create, idsOf("p1/e1b")))).status).toBe(404);
     const list = route("environments.list");
-    const listed = await send("envEditorA", list, pathIn(list, idsOf("p1/e1a")));
-    expect(listed.status).toBe(200);
-    const environments = ((await listed.json()) as { environments: { id: string }[] }).environments;
-    expect(environments.map((environment) => environment.id)).toEqual([tenants.a.env1a]);
+    expect((await send("envEditorA", list, pathIn(list, idsOf("p1/e1a")))).status).toBe(204);
     expect((await send("envEditorA", list, pathIn(list, idsOf("p2/e2a")))).status).toBe(404);
     const projects = route("projects.list");
-    const seen = await send("envEditorA", projects, pathIn(projects, idsOf("p1/e1a")));
-    const ids = ((await seen.json()) as { projects: { id: string }[] }).projects.map((p) => p.id);
-    expect(ids).toContain(tenants.a.project1);
-    expect(ids).not.toContain(tenants.a.project2);
+    expect((await send("envEditorA", projects, pathIn(projects, idsOf("p1/e1a")))).status).toBe(
+      204,
+    );
   });
 
   it("readerA reads values and history in project 1 and gets 403 on every write", async () => {
