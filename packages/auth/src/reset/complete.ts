@@ -141,6 +141,16 @@ export async function completeReset(
   try {
     if (!checkPassword(input.newPassword).ok) throw new Failed("password", null);
     const result = await withTransaction(deps.pool, async (tx): Promise<CompleteResult> => {
+      // Locks in the order the operator's initiation takes them — the account,
+      // then its tokens — or the two deadlock (seen in Run 3.8's full suite).
+      const owner = await tx.query<{ user_id: string }>(
+        "SELECT user_id FROM auth.reset_token WHERE verifier = ANY ($1::bytea[])",
+        [candidates],
+      );
+      const ownerId = owner.rows[0]?.user_id;
+      if (ownerId !== undefined) {
+        await tx.query("SELECT 1 FROM auth.account_state WHERE user_id = $1 FOR UPDATE", [ownerId]);
+      }
       const found = await tx.query<TokenRow>(
         `SELECT t.id, t.user_id, t.kind, t.expires_at,
                 (t.consumed_at IS NULL AND t.superseded_at IS NULL AND t.expires_at > now()) AS usable,
