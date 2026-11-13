@@ -401,6 +401,42 @@
       "status": "SPIKE_PASS",
       "evidence": ["docs/evidence/session-4/run-4.3.md"],
       "note": "Boundary names (1 and 128 characters) and values (empty, 65,536 bytes of multibyte text, CR/LF/tab, four-byte characters) are written and read back with equal digests through create and reveal (product code, real stores)."
+    },
+    {
+      "id": "FR-1.27",
+      "status": "SPIKE_PASS",
+      "evidence": ["docs/evidence/session-4/run-4.4.md"],
+      "note": "Soft delete of the current version under the protocol: state deleted, new tag, byte count kept, counters reduced; reveal, update and create refused after it; replay, races and a delayed answer (product code, real stores; staging with Run 4.5)."
+    },
+    {
+      "id": "FR-1.28",
+      "status": "SPIKE_PASS",
+      "evidence": ["docs/evidence/session-4/run-4.4.md"],
+      "note": "Undelete brings the same version back with a new tag and equal digest; capacity from the kept byte count before any effect (product code, real stores)."
+    },
+    {
+      "id": "FR-1.29",
+      "status": "SPIKE_PASS",
+      "evidence": ["docs/evidence/session-4/run-4.4.md"],
+      "note": "Restore writes an older version as a new one with cas = current, also over a deleted current; deleted or trimmed sources are 409; the source value appears in no database row (product code, real stores)."
+    },
+    {
+      "id": "FR-1.32",
+      "status": "SPIKE_PASS",
+      "evidence": ["docs/evidence/session-4/run-4.4.md"],
+      "note": "No route and no runtime client method destroys a version or deletes metadata (unit); the runtime policy is denied kv/destroy and metadata deletion on real OpenBao (authority matrix, Run 2.1)."
+    },
+    {
+      "id": "AC-1.15",
+      "status": "SPIKE_PASS",
+      "evidence": ["docs/evidence/session-4/run-4.4.md"],
+      "note": "Lifecycle mutations raced across two API processes: delete × delete, delete × update, undelete × restore — exactly one 200 and one 409, exactly one backend change (local stack)."
+    },
+    {
+      "id": "PO-7",
+      "status": "SPIKE_PASS",
+      "evidence": ["docs/evidence/session-4/run-4.4.md"],
+      "note": "State tags and cas under the protocol: stale tags change nothing, the backend is checked against the index before any effect, delayed answers become uncertain with the key in review, replays write nothing twice (product code, real stores)."
     }
   ]
 }
