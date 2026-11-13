@@ -286,3 +286,47 @@ export async function markEnvironmentReview(db: Queryable, scope: EnvironmentSco
     scope.environmentId,
   ]);
 }
+
+/** Removes the name's row (reconciliation: the backend has no such key). */
+export async function deleteIndexRow(
+  tx: pg.PoolClient,
+  scope: EnvironmentScope,
+  name: string,
+): Promise<void> {
+  await tx.query(
+    "DELETE FROM app.secret_index WHERE organization_id = $1 AND environment_id = $2 AND name = $3",
+    [scope.organizationId, scope.environmentId, name],
+  );
+}
+
+/** The names of the environment's index rows. */
+export async function indexNames(db: Queryable, scope: EnvironmentScope): Promise<string[]> {
+  const result = await db.query<{ name: string }>(
+    "SELECT name FROM app.secret_index WHERE organization_id = $1 AND environment_id = $2",
+    [scope.organizationId, scope.environmentId],
+  );
+  return result.rows.map((row) => row.name);
+}
+
+/**
+ * Reconciliation (Run 4.5): live_value_bytes becomes the sum of the live rows
+ * and metadata_generation rises by one; answers the new generation.
+ */
+export async function recomputeCounters(
+  tx: pg.PoolClient,
+  scope: EnvironmentScope,
+): Promise<bigint> {
+  const result = await tx.query<{ metadata_generation: string }>(
+    `UPDATE app.environment e
+        SET live_value_bytes = (SELECT coalesce(sum(i.live_value_bytes), 0) FROM app.secret_index i
+                                 WHERE i.organization_id = e.organization_id
+                                   AND i.environment_id = e.id AND i.state = 'live'),
+            metadata_generation = e.metadata_generation + 1
+      WHERE e.organization_id = $1 AND e.id = $2
+      RETURNING e.metadata_generation`,
+    [scope.organizationId, scope.environmentId],
+  );
+  const row = result.rows[0];
+  if (row === undefined) throw new Error("environment not found");
+  return BigInt(row.metadata_generation);
+}

@@ -17,6 +17,8 @@ import {
   maintCommands,
   parseConfirmProbe,
   parseHostArgs,
+  quiesceCommands,
+  resumeCommand,
   runConfirm,
   runMaint,
 } from "../../../scripts/host.ts";
@@ -256,6 +258,23 @@ describe("confirm", () => {
       /mykey-revert-ssh/,
     );
     expect(calls).toHaveLength(1);
+  });
+});
+
+describe("quiesce and resume (Run 4.5, P-75)", () => {
+  it("parse without arguments; staging only (production holds no OpenBao)", () => {
+    expect(parseHostArgs(["staging", "quiesce"])).toMatchObject({ command: "quiesce" });
+    expect(parseHostArgs(["staging", "resume"])).toMatchObject({ command: "resume" });
+    expect(() => parseHostArgs(["staging", "quiesce", "now"])).toThrow();
+    expect(() => parseHostArgs(["prod", "quiesce"])).toThrow(/production/);
+  });
+
+  it("stop both executors, restart OpenBao; resume starts both and leaves the gate alone", () => {
+    const steps = quiesceCommands();
+    expect(steps.stop).toMatch(/docker compose .* stop api provisioner$/);
+    expect(steps.restartOpenBao).toMatch(/docker compose .* restart openbao$/);
+    expect(resumeCommand()).toMatch(/docker compose .* start api provisioner$/);
+    expect(resumeCommand()).not.toMatch(/gate/);
   });
 });
 

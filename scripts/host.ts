@@ -112,10 +112,23 @@ export const USAGE = `usage: node scripts/host.ts <staging|prod> <command> [--pu
   gate <open|close|status>       the service gate record (P-43); every deploy starts closed
   keys init                      the auth key rings: new files on the workstation, installed on the host
   ops <command> [--flag value]   an operator command (apps/ops) as maintenance, through a tunnel
+  quiesce                        gate close, stop api and provisioner, restart OpenBao (staging only)
+  resume                         start api and provisioner; the gate stays closed until gate open
 --public uses the public address instead of the VPN (bootstrap always does).`;
 
 export type HostCommand = { host: HostName; via: Address } & (
-  | { command: "bootstrap" | "push" | "confirm" | "up" | "db-init" | "status" | "bao-init" }
+  | {
+      command:
+        | "bootstrap"
+        | "push"
+        | "confirm"
+        | "up"
+        | "db-init"
+        | "status"
+        | "bao-init"
+        | "quiesce"
+        | "resume";
+    }
   | { command: "apply"; target: "firewall" | "ssh" }
   | { command: "image"; name: string; tar: string }
   | { command: "acme"; directory: AcmeDirectory }
@@ -154,6 +167,8 @@ const STAGING_ONLY = new Set([
   "kms",
   "env",
   "bao-init",
+  "quiesce",
+  "resume",
 ]);
 const CERT_NAME = /^[a-z][a-z0-9-]{0,39}$/;
 
@@ -194,6 +209,8 @@ export function parseHostArgs(argv: string[]): HostCommand {
     case "db-init":
     case "status":
     case "bao-init":
+    case "quiesce":
+    case "resume":
       if (positional.length !== 0) throw new Error(USAGE);
       return { ...base, command };
     case "apply": {
@@ -670,6 +687,27 @@ export function gateWriteCommand(): string {
     `mv -f ${tmp} ${GATE_FILE}`,
     `sync ${GATE_DIRECTORY}`,
   ].join(" && ");
+}
+
+// ---------------------------------------------------------- quiesce, resume
+
+/**
+ * Executor exclusion before a delete or undelete is reconciled (Run 4.5,
+ * P-75, runbook reconciliation.md): with the gate closed no request starts;
+ * with api and provisioner stopped no executor runs; restarting OpenBao ends
+ * any request it still holds (D-20). Plain container commands: no firewall
+ * change, no revert timer.
+ */
+export function quiesceCommands(): { stop: string; restartOpenBao: string } {
+  return {
+    stop: `${COMPOSE} stop api provisioner`,
+    restartOpenBao: `${COMPOSE} restart openbao`,
+  };
+}
+
+/** Starts both executors again; the gate is left as quiesce left it (closed). */
+export function resumeCommand(): string {
+  return `${COMPOSE} start api provisioner`;
 }
 
 /**
@@ -1671,6 +1709,12 @@ async function main(argv: string[], log: Logger): Promise<number> {
       return 0;
     case "gate":
       return runGate(host, command.action, address, log);
+    case "quiesce":
+      return runQuiesce(host, address, log);
+    case "resume":
+      expectSuccess(await sshExec(host, resumeCommand(), { sudo: true, address }), "resume");
+      log.info(`${host.name}: executors: started; the gate stays closed until gate open`);
+      return 0;
     case "keys":
       await runKeysInit(host, address, log);
       return 0;
@@ -1827,6 +1871,19 @@ async function runGate(
     `gate ${action}`,
   );
   log.info(`${host.name}: ${record}`);
+  return 0;
+}
+
+async function runQuiesce(host: HostEntry, address: Address, log: Logger): Promise<number> {
+  await runGate(host, "close", address, log);
+  const steps = quiesceCommands();
+  expectSuccess(await sshExec(host, steps.stop, { sudo: true, address }), "stopping the executors");
+  expectSuccess(
+    await sshExec(host, steps.restartOpenBao, { sudo: true, address, timeoutMs: 180_000 }),
+    "restarting OpenBao",
+  );
+  await waitForOpenBao(host, address, 300);
+  log.info(`${host.name}: executors: stopped`);
   return 0;
 }
 

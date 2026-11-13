@@ -22,6 +22,7 @@ export {
   insertOperation,
   listOperations,
   listUnresolved,
+  settleOperation,
   toOperationRow,
   touchOperation,
   type Finish,
@@ -30,11 +31,15 @@ export {
   type OperationKey,
   type OperationRow,
   type PrincipalKind,
+  type Settlement,
   type Unresolved,
 } from "./repos/operations.ts";
 export {
   applyCounters,
+  deleteIndexRow,
   environmentCounters,
+  indexNames,
+  recomputeCounters,
   listIndex,
   versionEvents,
   type VersionEvent,

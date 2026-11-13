@@ -424,3 +424,42 @@ export async function listUnresolved(
     ageSeconds: row.age_seconds,
   }));
 }
+
+export type Settlement =
+  | { state: "succeeded"; result: Record<string, unknown> }
+  | { state: "rejected"; errorCode: ErrorCode }
+  /** Closed as unknown: stays uncertain for ever, no longer unresolved (rule 11). */
+  | { state: "uncertain" };
+
+/**
+ * The operator's settlement of an unresolved operation (Run 4.5): only from
+ * uncertain with completed_at NULL. Sets completed_at; a succeeded or rejected
+ * outcome replays for the retention of terminal records, an uncertain one
+ * keeps answering outcome_unknown. False: nothing changed.
+ */
+export async function settleOperation(
+  tx: pg.PoolClient,
+  id: OperationId,
+  verdict: Settlement,
+  retentionDays: number,
+): Promise<boolean> {
+  const result = await tx.query(
+    `UPDATE app.operation
+        SET state = $2,
+            result = $3::jsonb,
+            error_code = $4,
+            completed_at = now(),
+            replay_expires_at = CASE WHEN $2 = 'uncertain' THEN NULL
+                                     ELSE now() + make_interval(days => $5) END,
+            executor_boot_id = NULL
+      WHERE id = $1 AND state = 'uncertain' AND completed_at IS NULL`,
+    [
+      id,
+      verdict.state,
+      verdict.state === "succeeded" ? JSON.stringify(verdict.result) : null,
+      verdict.state === "rejected" ? verdict.errorCode : null,
+      retentionDays,
+    ],
+  );
+  return result.rowCount === 1;
+}

@@ -11,6 +11,10 @@
 //     closed 300 ms after its first record (the server has the request);
 //   - "hold": the first request record passes and nothing ever comes back.
 //
+// In "pass" mode, swallowRequests(true) (Run 4.5) discards every request record
+// after the handshake: the server never sees the request, the client waits for
+// its deadline. Such a connection's server side is closed with the client's.
+//
 // A delayed request whose server connection has closed in the meantime is lost,
 // as it would be on a real network once the receiving process is gone.
 import net from "node:net";
@@ -27,6 +31,8 @@ export interface TlsRelay {
   /** Delays every request record after a connection's first one: the headers arrive, the rest of a large body waits. */
   delayRequestTail(ms: number): void;
   delayResponses(ms: number): void;
+  /** Requests never reach the server while on (a change that did not land). */
+  swallowRequests(on: boolean): void;
   clear(): void;
   close(): Promise<void>;
 }
@@ -46,6 +52,7 @@ export async function startTlsRelay(
   let requestDelay = 0;
   let tailDelay = 0;
   let responseDelay = 0;
+  let swallow = false;
   let markForwarded: () => void = () => undefined;
   const requestForwarded = new Promise<void>((resolveForwarded) => {
     markForwarded = resolveForwarded;
@@ -58,6 +65,7 @@ export async function startTlsRelay(
     // 0: before the client's ChangeCipherSpec; 1: its Finished is next; 2: request records.
     let phase = 0;
     let requestSeen = false;
+    let swallowed = false;
     // Keeps records in order when they are delayed.
     let toServer = Promise.resolve();
     let toClient = Promise.resolve();
@@ -104,6 +112,10 @@ export async function startTlsRelay(
           }
           continue;
         }
+        if (swallow) {
+          swallowed = true;
+          continue;
+        }
         // The first request record carries the HTTP headers; a large body follows in more records.
         forward(record, requestSeen ? requestDelay + tailDelay : requestDelay);
         requestSeen = true;
@@ -129,7 +141,10 @@ export async function startTlsRelay(
     upstream.on("error", end);
     // A frozen client keeps its socket; a dead one closes it. Either way the
     // request already on its way still goes on, as on a real network.
-    client.on("close", () => sockets.delete(client));
+    client.on("close", () => {
+      sockets.delete(client);
+      if (swallowed) upstream.destroy();
+    });
     upstream.on("close", () => {
       sockets.delete(upstream);
       void toClient.then(() => client.destroy());
@@ -151,7 +166,11 @@ export async function startTlsRelay(
     delayResponses: (ms) => {
       responseDelay = ms;
     },
+    swallowRequests: (on) => {
+      swallow = on;
+    },
     clear: () => {
+      swallow = false;
       requestDelay = 0;
       tailDelay = 0;
       responseDelay = 0;
