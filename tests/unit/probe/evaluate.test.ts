@@ -165,3 +165,32 @@ describe("review_open (Run 3.8, P-57)", () => {
     expect(step(state, T + 10 * S, true).alerts).toEqual([]);
   });
 });
+
+describe("operations_unresolved (Run 4.5)", () => {
+  const withUnresolved = (operationsUnresolved: number | null) => ({
+    ...beat,
+    reviewOpen: 0,
+    operationsUnresolved,
+  });
+
+  it("operationsUnresolved: 1 raises it at once; 0 clears it", () => {
+    let state = recordHeartbeat(initialState("staging", T), T, withUnresolved(1));
+    const entered = step(state, T + S, true);
+    expect(entered.alerts).toEqual([
+      { host: "staging", condition: "operations_unresolved", kind: "opened", sinceMs: T },
+    ]);
+    state = recordHeartbeat(entered.state, T + 60 * S, withUnresolved(1));
+    expect(step(state, T + 61 * S, true).alerts).toEqual([]);
+    state = recordHeartbeat(entered.state, T + 120 * S, withUnresolved(0));
+    expect(step(state, T + 121 * S, true).alerts).toEqual([
+      { host: "staging", condition: "operations_unresolved", kind: "resolved", sinceMs: T },
+    ]);
+  });
+
+  it("a heartbeat without the field, or with null, raises nothing", () => {
+    for (const beatHere of [{ ...beat, reviewOpen: 0 }, withUnresolved(null)]) {
+      const state = recordHeartbeat(initialState("staging", T), T, beatHere);
+      expect(step(state, T + 10 * S, true).alerts).toEqual([]);
+    }
+  });
+});

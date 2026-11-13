@@ -99,10 +99,22 @@ export PGPASSWORD
 count=$(docker exec -e PGPASSWORD -u postgres mykey-postgres-1 psql -U postgres -d postgres -Atq -c \
 	"BEGIN READ ONLY; SELECT (SELECT count(*) FROM app.organization WHERE state = 'needs_review') + (SELECT count(*) FROM app.project WHERE state = 'needs_review') + (SELECT count(*) FROM app.environment WHERE state = 'needs_review'); COMMIT;" \
 	2>/dev/null | head -n 1 || true)
-unset PGPASSWORD
 case "$count" in
 '' | *[!0-9]*) ;;
 *) review_open=$count ;;
+esac
+
+# Unresolved secret operations (Run 4.5, P-75): uncertain and not closed, or
+# accepted/executing with a heartbeat older than 120 s — what `ops operations`
+# lists (listUnresolved). Null when it cannot be read.
+operations_unresolved=null
+count=$(docker exec -e PGPASSWORD -u postgres mykey-postgres-1 psql -U postgres -d postgres -Atq -c \
+	"BEGIN READ ONLY; SELECT count(*) FROM app.operation WHERE (state = 'uncertain' AND completed_at IS NULL) OR (state IN ('accepted', 'executing') AND heartbeat_at < now() - interval '120 seconds'); COMMIT;" \
+	2>/dev/null | head -n 1 || true)
+unset PGPASSWORD
+case "$count" in
+'' | *[!0-9]*) ;;
+*) operations_unresolved=$count ;;
 esac
 
 # The provisioner container's health (Run 3.8): healthy, unhealthy, or absent.
@@ -115,7 +127,7 @@ if health=$(docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{end
 fi
 
 jq -n \
-	--arg host "$host" --arg bootId "$boot_id" --arg time "$time" --arg gate "$gate" --arg provisioner "$provisioner" --argjson reviewOpen "$review_open" \
+	--arg host "$host" --arg bootId "$boot_id" --arg time "$time" --arg gate "$gate" --arg provisioner "$provisioner" --argjson reviewOpen "$review_open" --argjson operationsUnresolved "$operations_unresolved" \
 	--argjson chronyOffsetMs "$chrony_offset_ms" --argjson clockSynced "$clock_synced" \
 	--argjson containers "$containers" --argjson pendingRevert "$pending" \
 	--argjson firewallLoaded "$firewall_loaded" --argjson sets "$sets" --argjson sshListen "$ssh_listen" \
@@ -123,4 +135,4 @@ jq -n \
 	'{ host: $host, bootId: $bootId, time: $time, chronyOffsetMs: $chronyOffsetMs, clockSynced: $clockSynced,
 	   containers: $containers, sealed: $sealed, sealType: $sealType, kmsReachable: $kmsReachable, pendingRevert: $pendingRevert,
 	   firewall: { loaded: $firewallLoaded, sets: $sets }, sshListen: $sshListen, gate: $gate,
-	   reviewOpen: $reviewOpen, provisioner: $provisioner }'
+	   reviewOpen: $reviewOpen, operationsUnresolved: $operationsUnresolved, provisioner: $provisioner }'

@@ -15,6 +15,7 @@ import { createHealthCheck, type OpenBaoHealthTarget } from "./health.ts";
 import { runtimeBaoFromDirectory } from "./runtime-bao.ts";
 import { runtimeSelfCheck } from "./selfcheck.ts";
 import { createLogger, type LogEntry } from "./log.ts";
+import { startOperationSweep } from "./operation-sweep.ts";
 import { startOutboxDispatcher } from "./outbox-dispatcher.ts";
 import { startSessionCleanup, startThrottleSweep } from "./throttle-sweep.ts";
 import type { ApiConfig, ApiEnv } from "./pipeline/context.ts";
@@ -119,9 +120,11 @@ export async function startServer(config: ServerConfig): Promise<ApiServer> {
   const dispatcher = startOutboxDispatcher(pool, config.log);
   const sweep = startThrottleSweep(pool, config.log);
   const sessionCleanup = startSessionCleanup(pool, config.log);
+  const operationSweep = startOperationSweep(pool, config.log);
   return {
     port: server.port,
     async close() {
+      operationSweep.stop();
       sweep.stop();
       sessionCleanup.stop();
       await dispatcher.stop();

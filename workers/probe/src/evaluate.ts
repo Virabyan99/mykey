@@ -7,13 +7,20 @@
 //   continuously for the grace; `null` never opens them.
 // - review_open (Run 3.8, P-57): the last heartbeat counted an organization,
 //   project or environment in needs_review; no grace; `null` never opens it.
+// - operations_unresolved (Run 4.5, P-75): the last heartbeat counted an
+//   uncertain or stale secret operation; the same rules as review_open.
 // A condition resolves at the first good observation. An `opened` or
 // `reminder` intent is produced on every evaluation until markDelivered has
 // recorded it: nothing counts as sent that was not sent.
 
 export type Condition =
-  "heartbeat_missing" | "health_failing" | "openbao_sealed" | "kms_unreachable" | "review_open";
-type Reported = "openbao_sealed" | "kms_unreachable" | "review_open";
+  | "heartbeat_missing"
+  | "health_failing"
+  | "openbao_sealed"
+  | "kms_unreachable"
+  | "review_open"
+  | "operations_unresolved";
+type Reported = "openbao_sealed" | "kms_unreachable" | "review_open" | "operations_unresolved";
 
 export interface Heartbeat {
   bootId: string;
@@ -21,6 +28,8 @@ export interface Heartbeat {
   kmsReachable: boolean | null;
   /** Scopes in needs_review (Run 3.8); null when the host could not count them. Absent from older hosts. */
   reviewOpen?: number | null;
+  /** Unresolved secret operations (Run 4.5); null when unread. Absent from older hosts. */
+  operationsUnresolved?: number | null;
 }
 
 export interface HostState {
@@ -57,6 +66,7 @@ const CONDITIONS: readonly Condition[] = [
   "openbao_sealed",
   "kms_unreachable",
   "review_open",
+  "operations_unresolved",
 ];
 
 export function initialState(host: string, nowMs: number): HostState {
@@ -82,6 +92,9 @@ export function recordHeartbeat(state: HostState, nowMs: number, beat: Heartbeat
   if (typeof beat.reviewOpen === "number" && beat.reviewOpen > 0) {
     reportedSince.review_open = state.reportedSince.review_open ?? nowMs;
   }
+  if (typeof beat.operationsUnresolved === "number" && beat.operationsUnresolved > 0) {
+    reportedSince.operations_unresolved = state.reportedSince.operations_unresolved ?? nowMs;
+  }
   return { ...state, lastHeartbeatAt: nowMs, lastHeartbeat: beat, reportedSince };
 }
 
@@ -103,7 +116,8 @@ function bad(
         ? state.failingSince
         : null;
     case "review_open":
-      return state.reportedSince.review_open ?? null;
+    case "operations_unresolved":
+      return state.reportedSince[condition] ?? null;
     case "openbao_sealed":
     case "kms_unreachable": {
       const since = state.reportedSince[condition];

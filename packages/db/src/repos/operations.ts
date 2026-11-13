@@ -362,3 +362,65 @@ export async function listOperations(
   );
   return result.rows.map((stored) => ({ ...toRow(stored), sortKey: stored.sort_key }));
 }
+
+/** An operation an operator must settle (Run 4.5, P-75). */
+export interface Unresolved {
+  id: OperationId;
+  action: string;
+  environmentId: EnvironmentId | null;
+  secretName: string | null;
+  state: OperationState;
+  heartbeatAt: Date | null;
+  /** accepted or executing with a heartbeat older than `staleSeconds`. */
+  stale: boolean;
+  holdsSlot: boolean;
+  /** Seconds since the row was created (database time). */
+  ageSeconds: number;
+}
+
+/** The rule of P-75; infra/hosts/checks/status.sh counts the same rows over all organizations. */
+const UNRESOLVED = `((o.state = 'uncertain' AND o.completed_at IS NULL)
+  OR (o.state IN ('accepted', 'executing') AND o.heartbeat_at < now() - make_interval(secs => $2)))`;
+
+/**
+ * Uncertain operations not closed, and accepted or executing ones whose
+ * heartbeat is older than `staleSeconds` (120 s): the operations the
+ * operator must settle, oldest first.
+ */
+export async function listUnresolved(
+  db: Queryable,
+  organizationId: OrganizationId,
+  staleSeconds = 120,
+): Promise<Unresolved[]> {
+  const result = await db.query<{
+    id: OperationId;
+    action: string;
+    environment_id: EnvironmentId | null;
+    secret_name: string | null;
+    state: OperationState;
+    heartbeat_at: Date | null;
+    stale: boolean;
+    holds_slot: boolean;
+    age_seconds: number;
+  }>(
+    `SELECT o.id, o.action, o.environment_id, o.secret_name, o.state, o.heartbeat_at,
+            o.state IN ('accepted', 'executing') AS stale,
+            EXISTS (SELECT 1 FROM app.effect_slot s WHERE s.operation_id = o.id) AS holds_slot,
+            floor(extract(epoch FROM now() - o.created_at))::int AS age_seconds
+       FROM app.operation o
+      WHERE o.organization_id = $1 AND ${UNRESOLVED}
+      ORDER BY o.created_at, o.id`,
+    [organizationId, staleSeconds],
+  );
+  return result.rows.map((row) => ({
+    id: row.id,
+    action: row.action,
+    environmentId: row.environment_id,
+    secretName: row.secret_name,
+    state: row.state,
+    heartbeatAt: row.heartbeat_at,
+    stale: row.stale,
+    holdsSlot: row.holds_slot,
+    ageSeconds: row.age_seconds,
+  }));
+}

@@ -62,27 +62,32 @@ const bearer = (request: Request): string =>
 function readHeartbeat(value: unknown): Heartbeat | null {
   if (typeof value !== "object" || value === null || Array.isArray(value)) return null;
   const record = value as Record<string, unknown>;
-  // Run 3.8 adds reviewOpen; a host that has not been updated yet still sends the three fields.
+  // Run 3.8 adds reviewOpen and Run 4.5 operationsUnresolved; a host that has
+  // not been updated yet still sends the older fields.
   const keys = Object.keys(record).sort().join(",");
-  if (keys !== "bootId,kmsReachable,sealed" && keys !== "bootId,kmsReachable,reviewOpen,sealed") {
+  if (
+    keys !== "bootId,kmsReachable,sealed" &&
+    keys !== "bootId,kmsReachable,reviewOpen,sealed" &&
+    keys !== "bootId,kmsReachable,operationsUnresolved,reviewOpen,sealed"
+  ) {
     return null;
   }
   const flag = (v: unknown): v is boolean | null => v === null || typeof v === "boolean";
   if (typeof record.bootId !== "string" || record.bootId.length > 64) return null;
   if (!flag(record.sealed) || !flag(record.kmsReachable)) return null;
+  const count = (v: unknown): v is number | null | undefined =>
+    v === undefined ||
+    v === null ||
+    (typeof v === "number" && Number.isInteger(v) && v >= 0 && v < 1_000_000);
   const review = record.reviewOpen;
-  if (
-    review !== undefined &&
-    review !== null &&
-    !(typeof review === "number" && Number.isInteger(review) && review >= 0 && review < 1_000_000)
-  ) {
-    return null;
-  }
+  const unresolved = record.operationsUnresolved;
+  if (!count(review) || !count(unresolved)) return null;
   return {
     bootId: record.bootId,
     sealed: record.sealed,
     kmsReachable: record.kmsReachable,
     ...(review === undefined ? {} : { reviewOpen: review }),
+    ...(unresolved === undefined ? {} : { operationsUnresolved: unresolved }),
   };
 }
 

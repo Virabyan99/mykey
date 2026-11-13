@@ -13,6 +13,7 @@ import {
   applyCounters,
   claimDispatch,
   environmentCounters,
+  findOperation,
   findOperationByKey,
   finishOperation,
   insertOperation,
@@ -111,6 +112,9 @@ class Refusal extends Error {
 
 /** The finalize found the operation no longer this executor's: change nothing. */
 class NotOwner extends Error {}
+
+/** The dispatch claim failed: the sweep closed the operation first (Run 4.5). */
+class Swept extends Error {}
 
 const refused = (
   code: ErrorCode,
@@ -536,9 +540,7 @@ async function underLock(
   try {
     await fault("after_admission", operationId);
     await inTransaction(locked.client, async (tx) => {
-      if (!(await claimDispatch(tx, operationId, deps.bootId))) {
-        throw new Refusal(refused("dependency_unavailable"));
-      }
+      if (!(await claimDispatch(tx, operationId, deps.bootId))) throw new Swept();
       await tx.query("UPDATE app.operation_step SET dispatch_attempt_id = $2 WHERE id = $1", [
         stepId,
         dispatchId,
@@ -550,6 +552,11 @@ async function underLock(
       if (!deps.gateOpen()) throw new Refusal(refused("quarantined"));
     });
   } catch (error) {
+    if (error instanceof Swept) {
+      // The row says what happened (rejected by the sweep): answer it as a replay would.
+      const row = await findOperation(locked.client, operationId).catch(() => null);
+      return row === null ? { kind: "unknown", operationId } : { kind: "replay", operation: row };
+    }
     if (error instanceof Refusal) return reject(error.outcome.code);
     if (error instanceof AuditUnavailable) return reject("audit_unavailable");
     // The marker may or may not have committed; nothing was sent either way.

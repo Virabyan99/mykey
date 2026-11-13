@@ -21,6 +21,7 @@ export {
   hasTombstone,
   insertOperation,
   listOperations,
+  listUnresolved,
   toOperationRow,
   touchOperation,
   type Finish,
@@ -29,6 +30,7 @@ export {
   type OperationKey,
   type OperationRow,
   type PrincipalKind,
+  type Unresolved,
 } from "./repos/operations.ts";
 export {
   applyCounters,

@@ -46,6 +46,8 @@ export type LogEntry =
   | { event: "outbox"; time: string; outcome: "failed"; errorClass: string }
   | { event: "throttle_sweep"; time: string; outcome: "failed"; errorClass: string }
   | { event: "session_cleanup"; time: string; outcome: "failed"; errorClass: string }
+  | { event: "operation_sweep"; time: string; outcome: "failed"; errorClass: string }
+  | { event: "operation_sweep"; time: string; uncertain: string[]; rejected: string[] }
   | { event: "listening"; port: number }
   | { event: "startup_refused"; missing: string }
   | { event: "selfcheck"; runtimeLogin: "ok" | "refused" | "unreachable" | "absent" };

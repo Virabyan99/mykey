@@ -43,6 +43,7 @@ export {
 } from "./pipeline/respond.ts";
 export { requestSource } from "./pipeline/source.ts";
 export { startThrottleSweep } from "./throttle-sweep.ts";
+export { startOperationSweep } from "./operation-sweep.ts";
 export { intentOf, mountRoute, mountRouteDef } from "./pipeline/route.ts";
 export {
   MissingSetting,

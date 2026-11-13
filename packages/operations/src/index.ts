@@ -63,3 +63,4 @@ export {
 } from "./secrets/history.ts";
 export { revealSecret, type RevealOutcome, type RevealRequest } from "./secrets/reveal.ts";
 export { inTransaction } from "./secrets/lock.ts";
+export { SWEPT_ACTIONS, sweepStaleOperations, type SweepResult } from "./secrets/sweep.ts";
