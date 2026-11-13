@@ -187,44 +187,47 @@ describe("the provisioner on staging", () => {
     const namespace = namespaceFor(ORGANIZATION);
     const name = machineName(environmentId);
     await admin.deletePolicy(namespace, name);
-    const detected = await waitUntil(
-      "drift detection",
-      environmentState,
-      (row) => row.state === "needs_review",
-      150_000,
-    );
-    expect(detected.review_reason).toBe("backend_inconsistent");
+    // Undone in `finally`: a drill that stops early must not leave a review open.
+    try {
+      const detected = await waitUntil(
+        "drift detection",
+        environmentState,
+        (row) => row.state === "needs_review",
+        150_000,
+      );
+      expect(detected.review_reason).toBe("backend_inconsistent");
 
-    const { cookie } = await stagingOwnerSession();
-    const base = `/v1/organizations/${ORGANIZATION}/projects/${projectId}/environments`;
-    const secrets = await publicRequest("GET", `${base}/${environmentId}/secrets`, { cookie });
-    expect(secrets.status).toBe(503);
-    expect((JSON.parse(secrets.body) as { error: { code: string } }).error.code).toBe(
-      "backend_inconsistent",
-    );
-    // Listing still answers (its handler since Run 3.9) and shows the environment in review.
-    const listed = await publicRequest("GET", base, { cookie });
-    expect(listed.status).toBe(200);
-    const shown = (JSON.parse(listed.body) as { environments: { id: string; state: string }[] })
-      .environments;
-    expect(shown.find((environment) => environment.id === environmentId)?.state).toBe(
-      "needs_review",
-    );
+      const { cookie } = await stagingOwnerSession();
+      const base = `/v1/organizations/${ORGANIZATION}/projects/${projectId}/environments`;
+      const secrets = await publicRequest("GET", `${base}/${environmentId}/secrets`, { cookie });
+      expect(secrets.status).toBe(503);
+      expect((JSON.parse(secrets.body) as { error: { code: string } }).error.code).toBe(
+        "backend_inconsistent",
+      );
+      // Listing still answers (its handler since Run 3.9) and shows the environment in review.
+      const listed = await publicRequest("GET", base, { cookie });
+      expect(listed.status).toBe(200);
+      const shown = (JSON.parse(listed.body) as { environments: { id: string; state: string }[] })
+        .environments;
+      expect(shown.find((environment) => environment.id === environmentId)?.state).toBe(
+        "needs_review",
+      );
 
-    expect((await hostStatus(host)).reviewOpen).toBe(baseline + 1);
-    await waitUntil(
-      "review_open at the probe",
-      () => Promise.resolve(probeState()),
-      (s) => s.open?.review_open !== undefined,
-      240_000,
-    );
-
-    // Undo: the policy back, the environment active (the reconciliation command is Run 4.5).
-    await admin.putPolicy(namespace, name, renderMachinePolicy(projectId, environmentId));
-    await superuser.query(
-      "UPDATE app.environment SET state = 'active', review_reason = NULL WHERE id = $1",
-      [environmentId],
-    );
+      expect((await hostStatus(host)).reviewOpen).toBe(baseline + 1);
+      await waitUntil(
+        "review_open at the probe",
+        () => Promise.resolve(probeState()),
+        (s) => s.open?.review_open !== undefined,
+        240_000,
+      );
+    } finally {
+      // Undo: the policy back, the environment active (the reconciliation command is Run 4.5).
+      await admin.putPolicy(namespace, name, renderMachinePolicy(projectId, environmentId));
+      await superuser.query(
+        "UPDATE app.environment SET state = 'active', review_reason = NULL WHERE id = $1",
+        [environmentId],
+      );
+    }
     await waitUntil(
       "review_open leaves",
       () => Promise.resolve(probeState()),

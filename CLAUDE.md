@@ -16,31 +16,31 @@ The project is in **Stage 1**, a 14-day plan of nine sessions.
 
 ## Where we stand
 
-_Last updated: 12 Nov 2026, after Session 2 was merged (PR #4)._
+_Last updated: 13 Nov 2026, at the Session 3 gate (PR `session-3` → `main` open, not merged)._
 
-| Session | Topic                                                       | State                               |
-| ------- | ----------------------------------------------------------- | ----------------------------------- |
-| 1       | Foundation                                                  | **Done** (PASS WITH ISSUES), merged |
-| 2       | Infrastructure and make-or-break proofs                     | **Done** (GO, no fallback), merged  |
-| 3       | Identity, access and resources                              | Not started — **no plan yet**       |
-| 4       | Operations engine and secret lifecycle                      | Not started                         |
-| 5       | Machine access, CLI and API reference                       | Not started                         |
-| 6 ∥ 7   | Audit, limits, backup, recovery, deployment ∥ Web workspace | Not started                         |
-| 8       | Security review and controlled-use release                  | Not started                         |
-| 9       | Real use, agent experiment, stage exit                      | Not started                         |
+| Session | Topic                                                       | State                                               |
+| ------- | ----------------------------------------------------------- | --------------------------------------------------- |
+| 1       | Foundation                                                  | **Done** (PASS WITH ISSUES), merged                 |
+| 2       | Infrastructure and make-or-break proofs                     | **Done** (GO, no fallback), merged                  |
+| 3       | Identity, access and resources                              | **Done** (PASS WITH ISSUES), PR open — owner merges |
+| 4       | Operations engine and secret lifecycle                      | Not started — **no plan yet**                       |
+| 5       | Machine access, CLI and API reference                       | Not started                                         |
+| 6 ∥ 7   | Audit, limits, backup, recovery, deployment ∥ Web workspace | Not started                                         |
+| 8       | Security review and controlled-use release                  | Not started                                         |
+| 9       | Real use, agent experiment, stage exit                      | Not started                                         |
 
-What exists after Session 2 (details: `docs/evidence/session-2/report.md`, `go-no-go.md`):
+What exists after Session 3 (details: `docs/evidence/session-3/report.md`, run notes `run-3.1.md` … `run-3.9.md`, D-26 … D-33):
 
-- **Packages:** `packages/contracts`, `packages/db` (migrations `0000`–`0003`, `applyRoles`, `applyDatabaseAccess`), `@mykey/openbao` (narrow client, paths, policies, authority matrix; operator calls only via `@mykey/openbao/admin`), `@mykey/auth` (Better Auth 1.7.19 behind five native routes, keyed session verifiers, product-owned TOTP and recovery codes, `requireMfaComplete` checking phase, account state and auth epoch), `@mykey/operations/spike` (throw-away executor, not the protocol). `apps/api` serves `/health` only (PostgreSQL, and OpenBao where `MYKEY_BAO_URL` is set). `apps/web`, `apps/cli`, `apps/provisioner` and `apps/ops` are still skeletons.
-- **Hosts (OVHcloud VPS, US East):** production 40.160.47.48 / VPN 10.77.1.1 / `mykey.nomikey.com`; staging 40.160.47.50 / VPN 10.77.2.1 / `mykey-staging.nomikey.com`. Default-deny nftables with egress address sets, SSH only over WireGuard, Traefik + API + PostgreSQL in Compose; staging also runs OpenBao auto-unsealed from OVHcloud KMS (seal certificate `staging-seal-2`). Production holds no OpenBao or KMS material and is still at migration `0002` with its Run 2.5 API image: the gate's update needs the owner's permission (`host.ts prod push`, `image api`, `db-init`, `up`).
-- **Probe:** Cloudflare Worker `mykey-probe` (D1), heartbeats from both hosts, Telegram alerts.
-- **Backup spike:** `infra/backup/pair-spike/` captured and restored a paired backup of staging via R2 (D-25).
-- **Evidence registry:** 24 `SPIKE_PASS`, nothing `PASS`. Decisions D-17 … D-25.
+- **API (`apps/api`):** one pipeline for every contract route (`mountRoute`; order in the report): gate, body limits, mixed credentials, Origin, authentication (`resolveSession`, database time), validation, authorization from current rows (`resolveAccess`, `decide` in `@mykey/contracts`), replay lookup for mutations, state table, freshness, handler. Handlers: health, version, organizations.list, session.activity, auth.reset.complete, projects and environments (create, rename, list with signed cursors). Every other route ends in the terminal 404. Self-check of the runtime credential at start.
+- **Auth (`@mykey/auth`):** operator-only accounts (`ops bootstrap-owner`), mandatory TOTP with one-use steps and recovery codes, sessions with idle/absolute limits, product password change, fresh TOTP for sensitive starts, throttling across processes, operator reset (`ops reset-account --kind password|mfa`).
+- **Provisioning:** `ops provision-organization` / `verify-organization` (`@mykey/operations/operator`, compare-then-act, never overwrite); `apps/provisioner` (job `environment.provision`, drift sweep; `@mykey/operations/provisioner`, `@mykey/openbao/provisioner`). Migrations up to `0010`.
+- **Staging** runs API and provisioner `acf94e5ac0f1`, gate open, the staging owner (`owner@mykey-staging.invalid`, password, TOTP seed and recovery codes in `~/.mykey/secrets/hosts/staging/`) and its active organization `e2350312-…`. **Production is unchanged since Session 2** (migration `0002`); updating it needs the owner's yes.
+- **Evidence registry:** 54 `SPIKE_PASS`, nothing `PASS`.
 
-Before Session 3 can start:
+Before Session 4 can start:
 
-- `docs/plans/session-3-plan.md` must be written from `docs/evidence/session-2/report.md`, section "What Session 3 must know" (open issues with their owner runs, 18 deferred minors).
-- Dated items: R2 fixture guard 15 Nov 2026 09:42 UTC (`test:cloud` fails on purpose from then until Run 6.6); `.trivyignore.images` 20 Nov 2026; **all KMS certificates expire 12 Dec 2026** (staging seal 10:50 UTC — replace before: runbook `kms-and-unseal.md`); checkpoint `kms-cert-expiry` from 12 Dec 2026 09:57 UTC.
+- `docs/plans/session-4-plan.md` must be written from the report's "What Session 4 must know" (owed: operation status routes, tombstones, `replay_expired`, scope `operation` — Run 4.1; the reconciliation command — Run 4.5; ten deferred minors).
+- Dated items: R2 fixture guard 15 Nov 2026 09:42 UTC (`test:cloud` fails on purpose from then until Run 6.6); checkpoint `pairs-lock-session-gate` from 15 Nov 10:42 UTC (owed by the Session 4 gate); `.trivyignore.images` 20 Nov 2026; **all KMS certificates expire 12 Dec 2026** (staging seal 10:50 UTC — replace before: runbook `kms-and-unseal.md`); checkpoint `kms-cert-expiry` from 12 Dec 2026 09:57 UTC.
 
 ## Commands
 
@@ -72,7 +72,11 @@ pnpm run evidence:build                         # rebuild docs/evidence/registry
 node scripts/host.ts <staging|prod> <command>   # operator tool for the hosts (usage: run it without arguments)
 node scripts/probe.ts deploy | secrets | state <host>   # the probe Worker
 node scripts/ci-scan.ts secrets | dependencies | images | selftest   # the CI scanners, locally
+MSYS_NO_PATHCONV=1 node scripts/host.ts <host> ops <command> [--flag v]   # operator commands (apps/ops) as maintenance over a tunnel
+MSYS_NO_PATHCONV=1 node scripts/host.ts <host> gate open|close|status       # the external service gate
 ```
+
+Operator commands: `bootstrap-owner`, `reset-account`, `auth-cleanup`, `provision-organization`, `verify-organization` (runbooks `operator-accounts.md`, `provisioning.md`). In tests the provisioner runs as a child process (`startProvisionerProcess` in `tests/harness/api-worker.ts`; `tests/integration/provisioning/fixture.ts` sets up tenants with a provisioned organization).
 
 New migration: run `node node_modules/drizzle-kit/bin.cjs generate --name <name>` inside `packages/db` (`pnpm run db:generate -- --name x` is rejected). Read the generated SQL: drizzle-kit can emit a foreign key before the unique key it needs, and it exits 0 when it crashes. `pnpm run db:check` is the proof that schema and migrations agree.
 
@@ -84,6 +88,7 @@ Scripts in `scripts/` and `infra/` are TypeScript run directly by Node (type str
 - **`packages/contracts`** is the single source for limits (Doc 06 §11), name rules, ids, error codes (one HTTP status each), the operation envelope and the route table. `openapi.json` is generated from the route table and `contracts:check` fails when it is stale. The route list is frozen (D-15); 21 routes still have pending bodies, and the run that owns a route fills it in with a commit titled `contract: …`.
 - **`packages/db`**: schemas `app` (18 tables), `audit` (`event`), `meta` (`schema_migration`), `auth` (Better Auth's 8 tables, migration `0003`) and `jobs` (empty, reserved for the job queue). Roles: `migration_owner`, `api_runtime`, `provisioner_runtime`, `backup_reader`, `maintenance`. Tenancy is enforced by composite foreign keys that carry `organization_id`. `migrate()` refuses a changed, missing or out-of-order migration file.
 - **`@mykey/openbao`:** one namespace `org-<organizationId>` per organization, KV v2 at `kv`; policies and AppRole roles `runtime`, `issuer`, `provisioner`; token roles `machine-env-<environmentId>`. Runtime authenticates with inline AppRole (D-17); the provisioner never runs in the API process. A change whose answer is unclear is `unknown`, never a failure.
+- **Request pipeline (D-26, D-31, D-33):** every route goes through `mountRoute` from `ROUTES`; authorization reads current rows on every request; a mutation needs an `Idempotency-Key` and replays a completed request before state and freshness checks. Handlers never decide authority. `@mykey/operations` has three entry points: root (jobs, outbox, gate, replay), `/operator` (organization provisioning, admin authority) and `/provisioner` (environment job, sweep); the API imports only the root (skeleton test).
 - **Shape (Doc 06):** `apps/api` serves the routes, `apps/provisioner` is the only writer to OpenBao, `apps/web` is the owner workspace, `apps/cli` delivers secrets to a process (a thin CLI, not OpenBao Agent: D-24), `apps/ops` holds operator commands; `workers/probe` (built in Session 2) watches from outside.
 - **Tests:** Vitest projects `unit`, `integration` (also `tests/fault`), `cli`, `cloud` (`tests/**/*.cloud.test.ts`), `staging` (`tests/staging/*.staging.test.ts`, one file at a time; a dated checkpoint file stays out until due). Harness: `tests/harness/stack.ts` (local stack: `freshDatabase`, `freshNamespace`, `baoFetch`, `mountKvV2`, `restartService`), `org-fixture.ts` (`createOrgFixture`), `tls-relay.ts` (network faults after the handshake), `staging.ts` (`connectStaging`, `sshExec`), `staging-db.ts`, `kms-spike.ts`. Mocks are not accepted as proof for anything involving the two stores.
 - **Pins:** `infra/dependencies.lock.json` holds every version: npm packages exact, images by `@sha256:` digest, Actions by 40-hex SHA, release binaries (`okms-cli`) by SHA-256. `pins:verify` enforces it. No pre-release dependency, PostgreSQL 19, Redis, second queue, workflow engine, MCP server, or OpenBao Agent as a required component.
@@ -143,4 +148,16 @@ Hosts (Session 2, `docs/runbooks/network.md`, `kms-and-unseal.md`):
 
 Auth (Better Auth 1.7.19, confirmed by test, D-19): sign-up is refused; a first account is created through the operator path; change-password with `revokeOtherSessions` drops the session to `password_verified`; the stock two-factor plugin fails the contract, factors are product-owned.
 
-Open issues carried into Session 3 are listed in `docs/evidence/session-2/report.md` ("What Session 3 must know").
+Session 3 (details in its run notes):
+
+- **Watch CI after every push** (`gh run list --branch <branch>`). It was red for the whole of Session 3 (heap of the typed lint, a gitleaks false positive, dev tooling in the API image) and nobody noticed until the gate.
+- Python on Windows writes CRLF in text mode: open files with `newline=""` in edit scripts (migrations are prettier-ignored and keep the CRLF otherwise).
+- Lock order in a transaction: take an update lock before any share lock on the same row; a share lock later raised to an update deadlocks two concurrent requests.
+- pg-boss needs data rights on more of schema `jobs` than its happy path suggests (failure path, supervisor): with too few, a failing job stays `active` for ever and the error is swallowed. Our adapter must pass multi-statement results through.
+- OpenBao 2.7.2 reads `token_bound_cidrs` with a `/32` back as the bare address; `secret_id_bound_cidrs` as written. A container reaches OpenBao by the name in its certificate (`openbao`), never by address.
+- Node's permission model: a grant for a directory that does not exist at start does not cover files created in it; use `<dir>/*`.
+- An environment variable whose name contains KEY or SECRET fails the compose secret check; name directories `…_DIR` without those words.
+- A staging test that changes state must undo it in `finally`; two drills that stopped early left a review open and kept the probe alert up.
+- Sign-in normalizes e-mail to lower case: synthetic users must be stored lower-case.
+
+Open issues carried into Session 4 are listed in `docs/evidence/session-3/report.md` ("What Session 4 must know").
