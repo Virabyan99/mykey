@@ -290,9 +290,11 @@
       "ownerRun": "4.3",
       "contributingRuns": [],
       "oldSession": "D08-S19",
-      "status": "OPEN",
-      "evidence": [],
-      "note": ""
+      "status": "SPIKE_PASS",
+      "evidence": [
+        "docs/evidence/session-4/run-4.3.md"
+      ],
+      "note": "Metadata from the index: pages under a signed cursor with the metadata generation, bytewise order, literal prefixes, deleted and in-review names with their state; never OpenBao, never a value (product code, real stores)."
     },
     {
       "id": "FR-1.22",
@@ -356,9 +358,11 @@
       "ownerRun": "4.3",
       "contributingRuns": [],
       "oldSession": "D08-S19",
-      "status": "OPEN",
-      "evidence": [],
-      "note": ""
+      "status": "SPIKE_PASS",
+      "evidence": [
+        "docs/evidence/session-4/run-4.3.md"
+      ],
+      "note": "History: OpenBao metadata joined with version events — who wrote each version and its last delete or undelete, twenty at most, no value; delete/undelete/restore made by the fixture until Run 4.4 adds their routes (product code, real stores)."
     },
     {
       "id": "FR-1.27",
@@ -1454,9 +1458,11 @@
       "ownerRun": "4.2",
       "contributingRuns": [],
       "oldSession": "D08-S19",
-      "status": "OPEN",
-      "evidence": [],
-      "note": ""
+      "status": "SPIKE_PASS",
+      "evidence": [
+        "docs/evidence/session-4/run-4.3.md"
+      ],
+      "note": "Boundary names (1 and 128 characters) and values (empty, 65,536 bytes of multibyte text, CR/LF/tab, four-byte characters) are written and read back with equal digests through create and reveal (product code, real stores)."
     },
     {
       "id": "AC-1.13",
