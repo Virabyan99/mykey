@@ -77,13 +77,19 @@ async function startBaoRelay(stack: Stack): Promise<{ url: string; close(): Prom
  * private one. `stubs`: routes without a handler answer through the harness stub.
  */
 export async function createProvisioningFixture(
-  opts: { shared?: boolean; stubs?: boolean } = {},
+  opts: {
+    shared?: boolean;
+    stubs?: boolean;
+    /** Runs after the pipeline's checks and before the handler (startTestApi). */
+    beforeHandler?: (routeId: string) => Promise<void>;
+  } = {},
 ): Promise<ProvisioningFixture> {
   const stack = opts.shared === true ? await getSharedStack() : await startStack();
   const api = await startTestApi({
     stack,
     relayDatabase: opts.shared !== true,
     ...(opts.stubs === true ? { stubs: true } : {}),
+    ...(opts.beforeHandler === undefined ? {} : { beforeHandler: opts.beforeHandler }),
   });
   const relay = await startBaoRelay(stack);
   const tenants = await createTenants(api);

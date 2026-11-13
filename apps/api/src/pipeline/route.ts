@@ -234,6 +234,7 @@ async function run(
       await deps.test.stubs(route.id);
       return new Response(null, { status: 204 });
     }
+    await deps.test?.beforeHandler?.(route.id);
     const result = await handler(
       {
         requestId,

@@ -190,6 +190,72 @@ describe("environment provisioning", () => {
     }
   }, 240_000);
 
+  // Run 4.1 Task D (carried from the Session 3 report).
+  /** No other job is waiting: a crash point is met by this test's job only. */
+  async function settleTenants(): Promise<void> {
+    const provisioner = await fx.start();
+    try {
+      for (const id of [fx.tenants.a.env1a, fx.tenants.a.env1b, fx.tenants.a.env2a]) {
+        await fx.waitFor(id, "active");
+      }
+    } finally {
+      await provisioner.stop();
+    }
+  }
+
+  it("activation requires the environment to be pending and the claim to be current", async () => {
+    await settleTenants();
+    const { environmentId, operationId } = await fx.newEnvironment();
+    const doomed = await fx.start({ crashAt: "token-role:after-record" });
+    expect(await doomed.exited).toBe(137);
+    // Between the last step and activation, someone else sends the environment to review.
+    await fx.api.superuser.query(
+      "UPDATE app.environment SET state = 'needs_review', review_reason = 'backend_inconsistent' WHERE id = $1",
+      [environmentId],
+    );
+    await fx.api.superuser.query(
+      "UPDATE app.operation SET heartbeat_at = now() - interval '2 minutes' WHERE id = $1",
+      [operationId],
+    );
+    await fx.send(operationId);
+    const clean = await fx.start();
+    try {
+      const deadline = Date.now() + 60_000;
+      while ((await operationState(operationId)) === "executing" && Date.now() < deadline) {
+        await sleep(250);
+      }
+      // Give a late activation every chance to happen before asserting it did not.
+      await sleep(2000);
+      expect((await fx.environment(environmentId)).state).toBe("needs_review");
+      // The job ran to its end (not left executing) and did not succeed.
+      expect(await operationState(operationId)).toBe("awaiting_input");
+      expect(
+        clean.logs.some((entry) => entry.event === "job" && entry.operationId === operationId),
+      ).toBe(true);
+      expect(await auditActives(environmentId)).toBe(0);
+    } finally {
+      await clean.stop();
+    }
+  }, 180_000);
+
+  it("a job held by a killed provisioner is taken again within three minutes", async () => {
+    await settleTenants();
+    const { environmentId } = await fx.newEnvironment();
+    const doomed = await fx.start({ crashAt: "machine-policy:before" });
+    expect(await doomed.exited).toBe(137);
+    const started = Date.now();
+    // Nobody sends the job again: the queue's expiry hands it out.
+    const second = await fx.start();
+    try {
+      await fx.waitFor(environmentId, "active", 180_000);
+      expect(Date.now() - started).toBeLessThan(180_000);
+      await objectsEqualPlan(environmentId, fx.tenants.a.project1);
+      expect(await auditActives(environmentId)).toBe(1);
+    } finally {
+      await second.stop();
+    }
+  }, 240_000);
+
   it("provisioner credential destroyed → the environment is needs_review / provisioning_failed", async () => {
     for (const accessor of await fx.admin.listSecretIdAccessors(fx.namespace, "provisioner")) {
       await fx.admin.destroySecretIdAccessor(fx.namespace, "provisioner", accessor);

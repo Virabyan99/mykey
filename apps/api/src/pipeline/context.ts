@@ -46,6 +46,8 @@ export interface AppDeps {
     stubs?: (routeId: string) => void | Promise<void>;
     /** The stub replaces every contract route's handler but health and version (P-80). */
     stubAll?: boolean;
+    /** Runs after freshness, before a real handler (Run 4.1): a state change after the pipeline. */
+    beforeHandler?: (routeId: string) => Promise<void>;
     /** The time TOTP codes are checked at, from a request header. */
     clock?: (headers: Headers) => Date | undefined;
   };

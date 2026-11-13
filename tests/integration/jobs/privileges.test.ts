@@ -67,11 +67,30 @@ describe("job queue", () => {
     try {
       const sender = await createSender(pool);
       try {
-        await expect(
-          sender.send("environment.provision", randomUUID() as OperationId),
-        ).rejects.toThrow();
+        // The send fails because no queue exists (pg-boss's own refusal)…
+        const error = await sender
+          .send("environment.provision", randomUUID() as OperationId)
+          .catch((caught: unknown) => caught);
+        expect((error as { code?: string }).code).toBe("PGBOSS_QUEUE_NOT_FOUND");
       } finally {
         await sender.stop();
+      }
+      // …and api_runtime cannot make one (Run 4.1 Task D): a denial with its SQLSTATE and
+      // object, not any error — pg-boss's createQueue is this function call.
+      const client = await pool.connect();
+      try {
+        const denied = await client
+          .query("SELECT jobs.create_queue('environment.provision', '{}'::jsonb)")
+          .catch((caught: unknown) => caught);
+        expect((denied as { code?: string }).code).toBe("42501");
+        expect((denied as Error).message).toBe("permission denied for function create_queue");
+        const insert = await client
+          .query("INSERT INTO jobs.queue (name) VALUES ('environment.provision')")
+          .catch((caught: unknown) => caught);
+        expect((insert as { code?: string }).code).toBe("42501");
+        expect((insert as Error).message).toBe("permission denied for table queue");
+      } finally {
+        client.release();
       }
       const queues = await run(bare.pool("superuser"), "SELECT name FROM jobs.queue");
       expect(queues).toEqual([]);

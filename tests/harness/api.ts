@@ -71,6 +71,8 @@ export interface StartTestApiOptions {
   stubs?: boolean | "all";
   /** Runs inside the stub after the id is recorded; the stub answers when it settles (Run 3.7). */
   stubHook?: (routeId: string) => Promise<void> | void;
+  /** Runs after freshness and before a real handler (Run 4.1): state changed after the pipeline. */
+  beforeHandler?: (routeId: string) => Promise<void>;
 }
 
 /** A TCP relay to the stack's PostgreSQL, reading its current port for every connection. */
@@ -213,6 +215,7 @@ export async function startTestApi(opts: StartTestApiOptions = {}): Promise<Test
         test: {
           ...(opts.routes === undefined ? {} : { routes: opts.routes }),
           ...(opts.stubs === "all" ? { stubAll: true } : {}),
+          ...(opts.beforeHandler === undefined ? {} : { beforeHandler: opts.beforeHandler }),
           ...(opts.stubs === true || opts.stubs === "all"
             ? {
                 stubs: async (routeId: string) => {
