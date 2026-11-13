@@ -11,9 +11,8 @@ const where = { routeId: "projects.list", scope: "org-a", filter: "" };
 const cursor = { ...where, lastKey: "0b6c1f7e-0000-4000-8000-000000000001", generation: "12" };
 
 function flip(text: string, index: number): string {
-  const chars = [...text];
-  chars[index] = chars[index] === "A" ? "B" : "A";
-  return chars.join("");
+  // Cursors are ASCII (base64url and a dot).
+  return `${text.slice(0, index)}${text[index] === "A" ? "B" : "A"}${text.slice(index + 1)}`;
 }
 
 describe("list cursors", () => {
