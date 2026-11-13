@@ -11,6 +11,7 @@ import { drizzle } from "drizzle-orm/node-postgres";
 import type { Hono } from "hono";
 import { createApp } from "./app.ts";
 import { createHealthCheck, type OpenBaoHealthTarget } from "./health.ts";
+import { runtimeSelfCheck } from "./selfcheck.ts";
 import { createLogger, type LogEntry } from "./log.ts";
 import { startOutboxDispatcher } from "./outbox-dispatcher.ts";
 import { startSessionCleanup, startThrottleSweep } from "./throttle-sweep.ts";
@@ -193,6 +194,14 @@ if (import.meta.main) {
   }
   const server = await startServer({ ...settings, log });
   log({ event: "listening", port: server.port });
+  // Run 3.8: the delivered runtime credential logs in (a log line only).
+  log({
+    event: "selfcheck",
+    runtimeLogin: await runtimeSelfCheck(
+      settings.openbao,
+      process.env.MYKEY_API_SECRETS_DIR ?? "/run/mykey/secrets",
+    ).catch(() => "unreachable" as const),
+  });
   const stop = (): void => {
     server.close().then(
       () => process.exit(0),

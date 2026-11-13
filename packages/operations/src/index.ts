@@ -11,3 +11,20 @@ export {
   type JobSender,
 } from "./jobs.ts";
 export { dispatchOutbox, type DispatchDeps } from "./outbox.ts";
+export {
+  APPROLE_NAMES,
+  appRoleEquals,
+  configDigest,
+  kvConfigOf,
+  kvMountOf,
+  organizationPlan,
+  type OrganizationPlan,
+} from "./provisioning/plan.ts";
+export {
+  GATE_MAX_BYTES,
+  readGate,
+  type GateCause,
+  type GateIo,
+  type GateReading,
+  type GateRecord,
+} from "./gate.ts";

@@ -5,5 +5,15 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@mykey/contracts": "workspace:*",
+    "@mykey/db": "workspace:*",
+    "@mykey/openbao": "workspace:*",
+    "@mykey/operations": "workspace:*",
+    "pg": "catalog:"
+  },
+  "devDependencies": {
+    "@types/pg": "catalog:"
   }
 }

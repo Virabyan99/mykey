@@ -62,11 +62,28 @@ const bearer = (request: Request): string =>
 function readHeartbeat(value: unknown): Heartbeat | null {
   if (typeof value !== "object" || value === null || Array.isArray(value)) return null;
   const record = value as Record<string, unknown>;
-  if (Object.keys(record).sort().join(",") !== "bootId,kmsReachable,sealed") return null;
+  // Run 3.8 adds reviewOpen; a host that has not been updated yet still sends the three fields.
+  const keys = Object.keys(record).sort().join(",");
+  if (keys !== "bootId,kmsReachable,sealed" && keys !== "bootId,kmsReachable,reviewOpen,sealed") {
+    return null;
+  }
   const flag = (v: unknown): v is boolean | null => v === null || typeof v === "boolean";
   if (typeof record.bootId !== "string" || record.bootId.length > 64) return null;
   if (!flag(record.sealed) || !flag(record.kmsReachable)) return null;
-  return { bootId: record.bootId, sealed: record.sealed, kmsReachable: record.kmsReachable };
+  const review = record.reviewOpen;
+  if (
+    review !== undefined &&
+    review !== null &&
+    !(typeof review === "number" && Number.isInteger(review) && review >= 0 && review < 1_000_000)
+  ) {
+    return null;
+  }
+  return {
+    bootId: record.bootId,
+    sealed: record.sealed,
+    kmsReachable: record.kmsReachable,
+    ...(review === undefined ? {} : { reviewOpen: review }),
+  };
 }
 
 export async function handleRequest(

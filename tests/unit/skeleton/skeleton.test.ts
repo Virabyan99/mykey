@@ -109,6 +109,35 @@ describe("repository skeleton", () => {
     expect(forbidden).toEqual([]);
   });
 
+  it("apps/api has no import path to the provisioner's or the operator's OpenBao reach (Run 3.8)", () => {
+    const reached = [...importGraph("apps/api/src/server.ts")].map(relative);
+    expect(reached).toContain("packages/operations/src/gate.ts");
+    const forbidden = reached.filter(
+      (file) =>
+        file === "packages/openbao/src/provisioner.ts" ||
+        file === "packages/openbao/src/admin.ts" ||
+        file === "packages/operations/src/operator.ts" ||
+        file === "packages/operations/src/provisioning/organization.ts",
+    );
+    expect(forbidden).toEqual([]);
+  });
+
+  it("apps/provisioner has no import path to /admin, @mykey/auth or apps/ops (Run 3.8)", () => {
+    const reached = [...importGraph("apps/provisioner/src/main.ts")].map(relative);
+    // Control: it reaches its own client and the job worker.
+    expect(reached).toContain("packages/openbao/src/provisioner.ts");
+    expect(reached).toContain("packages/operations/src/provisioning/environment.ts");
+    const forbidden = reached.filter(
+      (file) =>
+        file === "packages/openbao/src/admin.ts" ||
+        file === "packages/operations/src/provisioning/organization.ts" ||
+        file.startsWith("packages/auth/") ||
+        file.startsWith("apps/ops/") ||
+        file.startsWith("apps/api/"),
+    );
+    expect(forbidden).toEqual([]);
+  });
+
   it("spec documents are untouched", () => {
     const docs = readdirSync(join(root, "docs")).filter((f) => /^doc_\d\d_.*\.md$/.test(f));
     const numbers = docs.map((f) => f.slice(4, 6)).sort();

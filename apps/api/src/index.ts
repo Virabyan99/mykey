@@ -47,3 +47,4 @@ export {
   type ListenOptions,
   type ServerConfig,
 } from "./server.ts";
+export { runtimeSelfCheck, type SelfCheck } from "./selfcheck.ts";

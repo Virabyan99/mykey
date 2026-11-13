@@ -142,3 +142,26 @@ describe("evaluate", () => {
     ]);
   });
 });
+
+describe("review_open (Run 3.8, P-57)", () => {
+  const withReview = (reviewOpen: number | null) => ({ ...beat, reviewOpen });
+
+  it("enters on reviewOpen: 1, stays without a second alert, leaves on 0", () => {
+    let state = recordHeartbeat(initialState("staging", T), T, withReview(1));
+    const entered = step(state, T + S, true);
+    expect(entered.alerts).toEqual([
+      { host: "staging", condition: "review_open", kind: "opened", sinceMs: T },
+    ]);
+    state = recordHeartbeat(entered.state, T + 60 * S, withReview(1));
+    expect(step(state, T + 61 * S, true).alerts).toEqual([]);
+    state = recordHeartbeat(entered.state, T + 120 * S, withReview(0));
+    expect(step(state, T + 121 * S, true).alerts).toEqual([
+      { host: "staging", condition: "review_open", kind: "resolved", sinceMs: T },
+    ]);
+  });
+
+  it("reviewOpen: null is not an alert of this condition", () => {
+    const state = recordHeartbeat(initialState("staging", T), T, withReview(null));
+    expect(step(state, T + 10 * S, true).alerts).toEqual([]);
+  });
+});

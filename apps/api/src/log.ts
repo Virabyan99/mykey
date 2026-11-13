@@ -47,7 +47,8 @@ export type LogEntry =
   | { event: "throttle_sweep"; time: string; outcome: "failed"; errorClass: string }
   | { event: "session_cleanup"; time: string; outcome: "failed"; errorClass: string }
   | { event: "listening"; port: number }
-  | { event: "startup_refused"; missing: string };
+  | { event: "startup_refused"; missing: string }
+  | { event: "selfcheck"; runtimeLogin: "ok" | "refused" | "unreachable" | "absent" };
 
 const DENIED_KEYS = new Set([
   "authorization",

@@ -48,8 +48,15 @@ const QUEUE_OPTIONS = { retryLimit: 5, retryDelay: 2, retryBackoff: true, retryD
 function adapter(db: Queryable): Db {
   return {
     executeSql: async (text: string, values?: unknown[]) => {
-      const result = await db.query(text, values);
-      return { rows: result.rows };
+      // A text of several statements answers one result per statement; pg-boss
+      // unwraps that array itself (its supervisor sends such texts, Run 3.8).
+      const result = (await db.query(text, values)) as unknown;
+      if (Array.isArray(result)) {
+        return result.map((one: { rows: unknown[] }) => ({ rows: one.rows })) as unknown as {
+          rows: unknown[];
+        };
+      }
+      return { rows: (result as { rows: unknown[] }).rows };
     },
   };
 }
@@ -107,7 +114,11 @@ export async function createSender(pool: pg.Pool): Promise<JobSender> {
   };
 }
 
-export type JobHandlers = Record<JobKind, (operationId: OperationId) => Promise<void>>;
+/** `lastAttempt`: the queue will not retry this job if the handler throws (Run 3.8). */
+export type JobHandlers = Record<
+  JobKind,
+  (operationId: OperationId, meta: { lastAttempt: boolean }) => Promise<void>
+>;
 
 export async function createWorker(
   pool: pg.Pool,
@@ -119,12 +130,18 @@ export async function createWorker(
     const handler = handlers[kind];
     await boss.work<unknown>(
       kind,
-      { batchSize: 1, pollingIntervalSeconds: opts.pollingIntervalSeconds ?? 1 },
+      {
+        batchSize: 1,
+        pollingIntervalSeconds: opts.pollingIntervalSeconds ?? 1,
+        includeMetadata: true,
+      },
       async (jobs) => {
         for (const job of jobs) {
           // A job that is not exactly an operation id is refused (and fails), never interpreted.
           const payload = jobPayloadSchema.parse(job.data);
-          await handler(payload.operationId);
+          await handler(payload.operationId, {
+            lastAttempt: job.retryCount >= QUEUE_OPTIONS.retryLimit,
+          });
         }
       },
     );

@@ -51,17 +51,18 @@ export interface Expected {
  * (Run 3.1 Task A), and nothing by column.
  */
 const JOB_TABLES: Record<string, Expected> = {
-  "jobs.version": { api: [S], provisioner: [S] },
-  "jobs.queue": { api: [S], provisioner: [S] },
+  // Run 3.8 (migration 0008): what the provisioner's worker and supervisor use.
+  "jobs.version": { api: [S], provisioner: [S, U] },
+  "jobs.queue": { api: [S], provisioner: [S, U] },
   "jobs.schedule": { api: [], provisioner: [] },
   "jobs.subscription": { api: [], provisioner: [] },
-  "jobs.bam": { api: [], provisioner: [] },
-  "jobs.job": { api: [S, I], provisioner: [S, U, D] },
-  "jobs.job_common": { api: [S, I], provisioner: [S, U, D] },
-  "jobs.warning": { api: [], provisioner: [] },
+  "jobs.bam": { api: [], provisioner: [S, U] },
+  "jobs.job": { api: [S, I], provisioner: [S, I, U, D] },
+  "jobs.job_common": { api: [S, I], provisioner: [S, I, U, D] },
+  "jobs.warning": { api: [], provisioner: [S, I, D] },
   "jobs.queue_stats": { api: [], provisioner: [] },
-  "jobs.job_dependency": { api: [], provisioner: [] },
-  "jobs.instance": { api: [], provisioner: [] },
+  "jobs.job_dependency": { api: [], provisioner: [S, D] },
+  "jobs.instance": { api: [], provisioner: [S, U, D] },
 };
 
 /**
