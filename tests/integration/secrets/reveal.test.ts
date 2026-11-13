@@ -282,6 +282,26 @@ describe("secrets.reveal", () => {
     }
   });
 
+  it("boundary values come back exactly through reveal (AC-1.12)", async () => {
+    const values = [
+      "",
+      `${"€".repeat(21_845)}x`,
+      "line one\r\nline two\n\tindented\r",
+      "four bytes: \u{1F600}\u{1D11E}\u{10FFFF}",
+    ];
+    for (const [index, value] of values.entries()) {
+      const name = index === 0 ? `A${randomBytes(3).toString("hex").toUpperCase()}` : unique("B");
+      await created("env1a", name, value);
+      const answer = await reveal("env1a", name);
+      expect(answer.status, `value ${String(index)}`).toBe(200);
+      expect(digestOf(answer)).toBe(sha256(value));
+    }
+    const longest = `Z${"Y".repeat(127)}`;
+    await created("env1a", longest, valueOf("long-name"));
+    expect((await reveal("env1a", longest)).status).toBe(200);
+    await expectIndexMatchesBackend(f, "env1a");
+  });
+
   it("after ten reveals no log entry of the API contains the canary", async () => {
     const name = unique();
     await created("env1a", name, valueOf("logs"));
