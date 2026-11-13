@@ -3,12 +3,29 @@
 // pattern and a maximum under 64 — so no free text, value, name or credential
 // can be written into the log. The list grows only in this file, one action at
 // a time, by the run that first records it.
+import { SECRET_NAME_PATTERN } from "@mykey/contracts";
 import { z } from "zod";
 
 const routeId = z
   .string()
   .max(48)
   .regex(/^[a-z]+(?:\.[a-z]+)+$/);
+
+/** A secret's name (P-71): the one string up to 128 characters, under the name pattern. */
+const secretName = z.string().max(128).regex(SECRET_NAME_PATTERN);
+const version = z.int().positive();
+/** One audit row per secret action; never a value, a value's length or a digest. */
+const secretDetails = z.strictObject({ name: secretName, version: version.optional() });
+const importCounts = z.strictObject({
+  entries: z.int().nonnegative().optional(),
+  created: z.int().nonnegative().optional(),
+  updated: z.int().nonnegative().optional(),
+  unchanged: z.int().nonnegative().optional(),
+  conflict: z.int().nonnegative().optional(),
+  rejected: z.int().nonnegative().optional(),
+  uncertain: z.int().nonnegative().optional(),
+  not_attempted: z.int().nonnegative().optional(),
+});
 
 const factorReason = z.enum(["invalid", "replayed", "expired", "wrong_state", "not_fresh"]);
 
@@ -77,7 +94,41 @@ export const AUDIT_DETAILS = {
       "provisioner_login",
       "machine_policy",
       "machine_token_role",
+      // Run 4.2 (P-71): a runtime request was refused, or the index and KV disagree.
+      "kv_data",
     ]),
+  }),
+  /** Run 4.2 (P-71): the secret actions. Target is the environment; the name is in details. */
+  "secret.create": secretDetails,
+  "secret.update": secretDetails,
+  "secret.delete": secretDetails,
+  "secret.undelete": secretDetails,
+  "secret.restore": z.strictObject({
+    name: secretName,
+    version: version.optional(),
+    sourceVersion: version.optional(),
+  }),
+  "secret.reveal": secretDetails,
+  /** Run 4.9: the complete read behind an export; the number of names only. */
+  "secret.export": z.strictObject({ names: z.int().nonnegative() }),
+  /** Run 4.7: import preview, apply and resume. */
+  "import.preview": importCounts,
+  "import.apply": importCounts,
+  "import.resume": importCounts,
+  /** Run 4.5: the stale-work sweep made an executing operation uncertain. */
+  "system.operation_stuck": z.strictObject({
+    action: routeId,
+    name: secretName.optional(),
+  }),
+  /** Run 4.5: the operator settled an operation or rebuilt an environment. */
+  "operator.reconcile_operation": z.strictObject({
+    name: secretName.optional(),
+    verdict: z.enum(["succeeded", "rejected", "closed_unknown"]),
+    executorsExcluded: z.boolean(),
+  }),
+  "operator.reconcile_environment": z.strictObject({
+    names: z.int().nonnegative(),
+    changed: z.int().nonnegative(),
   }),
   /** Run 4.1: the operator expired terminal operation records (P-65). */
   "operator.operations_expire": z.strictObject({ expired: z.int().nonnegative() }),
@@ -95,7 +146,8 @@ export interface AuditEvent {
   source: "web" | "cli" | "api" | "operator" | "system";
   organizationId: string | null;
   target: { kind: string; id: string | null } | null;
-  outcome: "success" | "denied" | "failure";
+  /** `intent` is written before an effect is sent; `unknown` when its result cannot be known (Run 4.2). */
+  outcome: "success" | "denied" | "failure" | "intent" | "unknown";
   requestId: string | null;
   operationId: string | null;
   details: AuditDetails;
@@ -120,7 +172,7 @@ export const auditEnvelopeSchema = z.strictObject({
       id: z.uuid().nullable(),
     })
     .nullable(),
-  outcome: z.enum(["success", "denied", "failure"]),
+  outcome: z.enum(["success", "denied", "failure", "intent", "unknown"]),
   requestId: z.uuid().nullable(),
   operationId: z.uuid().nullable(),
   details: z.record(z.string(), z.unknown()),

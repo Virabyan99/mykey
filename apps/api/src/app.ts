@@ -26,6 +26,7 @@ import {
   projectsRenameHandler,
 } from "./routes/resources.ts";
 import { resetCompleteHandler } from "./routes/reset.ts";
+import { secretsCreateHandler } from "./routes/secrets.ts";
 import { sessionActivityHandler } from "./routes/session.ts";
 import { versionHandler } from "./routes/version.ts";
 
@@ -83,6 +84,7 @@ function handlers(): Partial<Record<string, Handler>> {
     "environments.rename": environmentsRenameHandler,
     "operations.get": operationsGetHandler,
     "operations.list": operationsListHandler,
+    "secrets.create": secretsCreateHandler,
     "session.activity": sessionActivityHandler,
     "auth.reset.complete": resetCompleteHandler,
   };

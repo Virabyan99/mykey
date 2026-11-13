@@ -12,7 +12,7 @@ import { namespaceFor } from "@mykey/openbao";
 import { OpenBaoAdmin } from "@mykey/openbao/admin";
 import { createSender, type JobSender } from "@mykey/operations";
 import type { OperationId, OrganizationId } from "@mykey/contracts";
-import { startTestApi, type TestApi } from "../../harness/api.ts";
+import { startTestApi, type StartTestApiOptions, type TestApi } from "../../harness/api.ts";
 import { startProvisionerProcess, type ProvisionerProcess } from "../../harness/api-worker.ts";
 import { provisionTestOrganization } from "../../harness/org-fixture.ts";
 import { getSharedStack, startStack, type Stack } from "../../harness/stack.ts";
@@ -82,10 +82,13 @@ export async function createProvisioningFixture(
     stubs?: boolean;
     /** Runs after the pipeline's checks and before the handler (startTestApi). */
     beforeHandler?: (routeId: string) => Promise<void>;
+    /** Further options of the test API (Run 4.2: the runtime identity, keys, faults). */
+    api?: (stack: Stack) => Partial<StartTestApiOptions>;
   } = {},
 ): Promise<ProvisioningFixture> {
   const stack = opts.shared === true ? await getSharedStack() : await startStack();
   const api = await startTestApi({
+    ...opts.api?.(stack),
     stack,
     relayDatabase: opts.shared !== true,
     ...(opts.stubs === true ? { stubs: true } : {}),

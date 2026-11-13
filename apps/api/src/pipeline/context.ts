@@ -3,6 +3,7 @@ import type { HttpBindings } from "@hono/node-server";
 import type { Auth, AuthKeys, Throttle } from "@mykey/auth";
 import type { Authority, ErrorCode, RouteDef } from "@mykey/contracts";
 import type { OperationRow } from "@mykey/db";
+import type { RuntimeBao } from "@mykey/operations";
 import type pg from "pg";
 import type { HealthReading } from "../health.ts";
 import type { LogEntry } from "../log.ts";
@@ -30,6 +31,15 @@ export interface TestRouteEntry {
 export interface AppDeps {
   /** The API's pool, logged in as api_runtime. */
   pool: pg.Pool;
+  /**
+   * One dedicated connection per secret action or value read (P-66, D-36): it
+   * holds the environment's advisory lock. Absent: secret routes answer 503.
+   */
+  lockPool?: pg.Pool;
+  /** The organization's runtime identity in OpenBao (P-62, D-34). */
+  bao?: RuntimeBao;
+  /** A UUID per process start: the executor id of the operations it runs. */
+  bootId: string;
   config: ApiConfig;
   health: () => Promise<HealthReading>;
   log: (entry: LogEntry) => void;
@@ -46,8 +56,12 @@ export interface AppDeps {
     stubs?: (routeId: string) => void | Promise<void>;
     /** The stub replaces every contract route's handler but health and version (P-80). */
     stubAll?: boolean;
+    /** These contract routes answer through the stub although they have a handler (Run 4.2). */
+    stubRoutes?: ReadonlySet<string>;
     /** Runs after freshness, before a real handler (Run 4.1): a state change after the pipeline. */
     beforeHandler?: (routeId: string) => Promise<void>;
+    /** Fault hooks of the secret protocol (Run 4.2, FAULT_POINTS). */
+    faults?: (point: string, operationId: string) => Promise<void>;
     /** The time TOTP codes are checked at, from a request header. */
     clock?: (headers: Headers) => Date | undefined;
   };

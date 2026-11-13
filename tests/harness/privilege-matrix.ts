@@ -242,6 +242,14 @@ export function expectedColumnUpdate(row: ColumnRow, grantee: string): boolean {
   return false;
 }
 
+/**
+ * EXECUTE on the functions of schema `app` (Run 4.2, migration 0012): who may
+ * call each. Every function of the schema must be listed.
+ */
+export const APP_FUNCTIONS: Record<string, string[]> = {
+  "app.mark_environment_review(uuid,uuid)": ["api_runtime"],
+};
+
 export const SCHEMA_USAGE: Record<string, string[]> = {
   api_runtime: ["app", "audit", "auth", "jobs"],
   provisioner_runtime: ["app", "audit", "jobs"],
@@ -334,6 +342,34 @@ export async function matrixProblems(pool: pg.Pool): Promise<string[]> {
       problems.push(
         `${row.grantee} UPDATE ${row.table}.${row.column}: granted=${String(row.granted)}`,
       );
+    }
+  }
+
+  const functions = await query<{ name: string; owner: string; definer: boolean }>(
+    `SELECT n.nspname || '.' || p.proname || '(' ||
+              -- Argument types only: parameter names are not part of a function's identity.
+              replace(oidvectortypes(p.proargtypes), ' ', '') || ')' AS name,
+            pg_get_userbyid(p.proowner) AS owner, p.prosecdef AS definer
+       FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+      WHERE n.nspname = 'app'`,
+  );
+  const namedFunctions = new Set(Object.keys(APP_FUNCTIONS));
+  for (const fn of functions) {
+    if (!namedFunctions.has(fn.name)) problems.push(`function not in the matrix: ${fn.name}`);
+    if (fn.owner !== "migration_owner") problems.push(`owner of ${fn.name}: ${fn.owner}`);
+  }
+  for (const name of namedFunctions) {
+    if (!functions.some((fn) => fn.name === name)) problems.push(`function missing: ${name}`);
+  }
+  const executes = await query<{ fn: string; grantee: string; granted: boolean }>(
+    `SELECT f AS fn, g AS grantee, has_function_privilege(g, f, 'EXECUTE') AS granted
+       FROM unnest($1::text[]) AS f, unnest($2::text[]) AS g`,
+    [functions.map((fn) => fn.name).filter((name) => namedFunctions.has(name)), GRANTEES],
+  );
+  for (const row of executes) {
+    const expected = (APP_FUNCTIONS[row.fn] ?? []).includes(row.grantee);
+    if (row.granted !== expected) {
+      problems.push(`${row.grantee} EXECUTE ${row.fn}: granted=${String(row.granted)}`);
     }
   }
 

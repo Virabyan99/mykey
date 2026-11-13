@@ -15,6 +15,8 @@ let latch: { routeId: string; entered: () => void; release: Promise<void> } | nu
 beforeAll(async () => {
   api = await startTestApi({
     stubs: true,
+    // Secret routes stand for "a write" and "a read" here, handled or not (Run 4.2).
+    stubRoutes: ["secrets.create", "secrets.list"],
     stubHook: async (routeId) => {
       if (latch?.routeId !== routeId) return;
       latch.entered();

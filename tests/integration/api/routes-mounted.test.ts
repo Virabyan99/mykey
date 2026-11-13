@@ -22,6 +22,7 @@ const HANDLED = new Set([
   "environments.rename",
   "operations.get",
   "operations.list",
+  "secrets.create",
   "session.activity",
   "auth.reset.complete",
 ]);

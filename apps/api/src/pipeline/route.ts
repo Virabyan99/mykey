@@ -225,6 +225,7 @@ async function run(
     }
     const stubbed =
       handler === terminal ||
+      deps.test?.stubRoutes?.has(route.id) === true ||
       (deps.test?.stubAll === true &&
         route.id !== "health.get" &&
         route.id !== "version.get" &&

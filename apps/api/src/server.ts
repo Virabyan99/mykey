@@ -1,5 +1,6 @@
 // The API process: an HTTPS listener in front of the app. TLS on this hop is
 // required by Doc 06 §2 (the proxy verifies this certificate).
+import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 import https from "node:https";
 import type { AddressInfo } from "node:net";
@@ -11,6 +12,7 @@ import { drizzle } from "drizzle-orm/node-postgres";
 import type { Hono } from "hono";
 import { createApp } from "./app.ts";
 import { createHealthCheck, type OpenBaoHealthTarget } from "./health.ts";
+import { runtimeBaoFromDirectory } from "./runtime-bao.ts";
 import { runtimeSelfCheck } from "./selfcheck.ts";
 import { createLogger, type LogEntry } from "./log.ts";
 import { startOutboxDispatcher } from "./outbox-dispatcher.ts";
@@ -75,19 +77,39 @@ export interface ServerConfig extends ListenOptions {
   api: ApiConfig;
   /** The key files of the auth module (read-only mount on a host). */
   keysDirectory: string;
+  /** The runtime credential files (organization-id, runtime-role-id, runtime-secret-id). */
+  secretsDirectory?: string;
   log: (entry: LogEntry) => void;
 }
+
+/** P-66: of the process's connections, this many are dedicated lock connections. */
+export const LOCK_POOL_SIZE = 8;
 
 export async function startServer(config: ServerConfig): Promise<ApiServer> {
   const health = createHealthCheck(config.database, config.openbao);
   const pool = createPool(config.database, {
-    max: LIMITS.db.apiPool,
+    max: LIMITS.db.apiPool - LOCK_POOL_SIZE,
     queryTimeoutMs: LIMITS.deadlines.requestMs,
+  });
+  // One connection per secret action or value read, holding the environment's lock (P-66).
+  const lockPool = createPool(config.database, {
+    max: LOCK_POOL_SIZE,
+    queryTimeoutMs: LIMITS.deadlines.largeRequestMs,
   });
   const keys = loadAuthKeys(config.keysDirectory);
   const auth = createAuth({ db: drizzle(pool), keys, baseURL: config.api.baseUrl });
   const app = createApp({
     pool,
+    lockPool,
+    ...(config.openbao === undefined
+      ? {}
+      : {
+          bao: runtimeBaoFromDirectory(
+            config.openbao,
+            config.secretsDirectory ?? "/run/mykey/secrets",
+          ),
+        }),
+    bootId: randomUUID(),
     config: config.api,
     health: () => health.check(),
     log: config.log,
@@ -106,6 +128,7 @@ export async function startServer(config: ServerConfig): Promise<ApiServer> {
       await server.close();
       await health.close();
       await pool.end();
+      await lockPool.end();
     },
   };
 }
@@ -166,6 +189,7 @@ export function configFromEnvironment(env: NodeJS.ProcessEnv): Omit<ServerConfig
       ? {}
       : { openbao: { url: env.MYKEY_BAO_URL, caCertPath: required(env, "MYKEY_BAO_CA_FILE") } }),
     keysDirectory: env.MYKEY_AUTH_RINGS_DIR ?? "/run/mykey/keys",
+    secretsDirectory: env.MYKEY_API_SECRETS_DIR ?? "/run/mykey/secrets",
     api: {
       baseUrl,
       build,
@@ -199,7 +223,7 @@ if (import.meta.main) {
     event: "selfcheck",
     runtimeLogin: await runtimeSelfCheck(
       settings.openbao,
-      process.env.MYKEY_API_SECRETS_DIR ?? "/run/mykey/secrets",
+      settings.secretsDirectory ?? "/run/mykey/secrets",
     ).catch(() => "unreachable" as const),
   });
   const stop = (): void => {

@@ -40,3 +40,14 @@ export {
   type ReplayAnswer,
 } from "./replay.ts";
 export type { RuntimeBao } from "./runtime.ts";
+export { Busy, withEnvironmentLock, type Locked } from "./secrets/lock.ts";
+export {
+  FAULT_POINTS,
+  freshStateTag,
+  runSecretAction,
+  type EffectDeps,
+  type FaultPoint,
+  type SecretAction,
+  type SecretOutcome,
+  type SecretRequest,
+} from "./secrets/protocol.ts";

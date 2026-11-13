@@ -30,6 +30,20 @@ export {
   type OperationRow,
   type PrincipalKind,
 } from "./repos/operations.ts";
+export {
+  applyCounters,
+  environmentCounters,
+  lockIndexRow,
+  markEnvironmentReview,
+  markKeyReview,
+  newStateTag,
+  readIndexRow,
+  recordVersionEvent,
+  writeIndexRow,
+  type IndexRow,
+  type IndexState,
+} from "./repos/secrets.ts";
+export { releaseSlot, slotKey, slotOf, takeSlot } from "./repos/slots.ts";
 export { claimOutbox, enqueueOutbox, markOutboxDelivered, type OutboxRow } from "./repos/outbox.ts";
 export {
   bumpCounter,

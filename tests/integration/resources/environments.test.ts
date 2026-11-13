@@ -187,8 +187,12 @@ describe("rename", () => {
       cookie: await fx.tenants.cookie("envEditorA"),
       headers: { "idempotency-key": randomUUID() },
     });
-    // No handler yet (Run 4.2): every check passed, the terminal 404 — not a 403.
-    expect(write.status).toBe(404);
+    // Every check of the pipeline passed — not a 403 or 404. This fixture's API
+    // holds no runtime identity, so the protocol answers 503 (Run 4.2).
+    expect(write.status).toBe(503);
+    expect(((await write.json()) as { error: { code: string } }).error.code).toBe(
+      "dependency_unavailable",
+    );
     const denied = await fx.api.superuser.query(
       "SELECT 1 FROM audit.event WHERE action = 'access.denied' AND request_id = $1",
       [write.headers.get("x-request-id")],
