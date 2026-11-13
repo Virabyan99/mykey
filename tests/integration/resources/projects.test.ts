@@ -289,7 +289,8 @@ describe("rename", () => {
     const editor = await fx.api.request("GET", secrets, {
       cookie: await fx.tenants.cookie("editorA"),
     });
-    expect(editor.status).toBe(204);
+    // secrets.list has its handler since Run 4.3: the editor's access answers 200.
+    expect(editor.status).toBe(200);
     const ungranted = await fx.api.request("GET", secrets, {
       cookie: await fx.tenants.cookie("ungrantedA"),
     });

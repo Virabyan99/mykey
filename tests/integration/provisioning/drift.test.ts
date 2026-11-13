@@ -228,8 +228,8 @@ describe("drift sweep", () => {
       [listed.headers.get("x-request-id")],
     );
     expect(auditDenied.rowCount).toBe(0);
-    // A sibling environment answers the terminal 404 too.
+    // A sibling environment is not in review: its list answers (handler since Run 4.3).
     const sibling = await fx.api.request("GET", `${base}/${a.env1b}/secrets`, { cookie });
-    expect(sibling.status).toBe(404);
+    expect(sibling.status).toBe(200);
   });
 });
