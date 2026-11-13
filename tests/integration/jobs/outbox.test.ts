@@ -157,17 +157,20 @@ describe("withTransaction", () => {
       const id = randomUUID();
       await expect(
         withTransaction(pool, async (tx) => {
+          // A row the API may write (since migration 0010 it creates no organization).
           await tx.query(
-            "INSERT INTO app.organization (id, namespace, state) VALUES ($1, $2, 'provisioning')",
-            [id, `org-${id}`],
+            "INSERT INTO app.rate_limit (scope, key_digest, window_start, count) VALUES ('test:rollback', sha256(convert_to($1, 'UTF8')), now(), 1)",
+            [id],
           );
           throw new Error("roll back");
         }),
       ).rejects.toThrow("roll back");
       expect(pool.totalCount - pool.idleCount).toBe(0);
-      const rows = await run(db.pool("superuser"), "SELECT 1 FROM app.organization WHERE id = $1", [
-        id,
-      ]);
+      const rows = await run(
+        db.pool("superuser"),
+        "SELECT 1 FROM app.rate_limit WHERE scope = 'test:rollback' AND key_digest = sha256(convert_to($1, 'UTF8'))",
+        [id],
+      );
       expect(rows).toEqual([]);
       // The only client of the pool was released: another transaction can start.
       const level = await withTransaction(pool, async (tx) => {
