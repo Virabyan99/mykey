@@ -144,6 +144,15 @@ export function nameParam(ctx: ApiContext): string {
   return name;
 }
 
+export const secretsUpdateHandler: Handler = (ctx, deps) => {
+  const name = nameParam(ctx);
+  const body = ctx.body as { value: string; expectedVersion: number; expectedStateTag: string };
+  return mutate(ctx, deps, "update", name, {
+    value: body.value,
+    expected: { version: body.expectedVersion, stateTag: body.expectedStateTag },
+  });
+};
+
 export const secretsCreateHandler: Handler = (ctx, deps) => {
   const body = ctx.body as { name: string; value: string };
   return mutate(ctx, deps, "create", body.name, { value: body.value });

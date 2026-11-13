@@ -23,6 +23,7 @@ const HANDLED = new Set([
   "operations.get",
   "operations.list",
   "secrets.create",
+  "secrets.update",
   "session.activity",
   "auth.reset.complete",
 ]);

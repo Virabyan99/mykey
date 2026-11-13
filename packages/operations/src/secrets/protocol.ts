@@ -215,6 +215,34 @@ function checkAction(
       }
       return { cas: 0, bytes, liveDelta: bytes };
     }
+    case "update": {
+      const expected = request.expected;
+      if (expected === undefined) throw new Error("an update carries its expected version");
+      if (row === null) throw new Refusal(refused("not_found"));
+      if (row.state === "needs_review") throw new Refusal(refused("key_under_review"));
+      if (row.state === "deleted") throw new Refusal(refused("state_conflict"));
+      if (row.currentVersion !== expected.version || row.stateTag !== expected.stateTag) {
+        throw new Refusal(
+          refused("version_conflict", {
+            details: {
+              currentVersion: row.currentVersion,
+              currentStateTag: row.stateTag,
+              state: row.state,
+            },
+          }),
+        );
+      }
+      // The index and the backend must agree before anything is sent (P-68).
+      if (backend === null || backend.deleted || backend.currentVersion !== row.currentVersion) {
+        throw new Refusal(refused("backend_inconsistent"), true);
+      }
+      const bytes = byteLength(request.value);
+      const liveDelta = bytes - row.liveValueBytes;
+      if (counters.liveBytes + liveDelta > LIMITS.environment.maxLiveValueBytes) {
+        throw new Refusal(refused("capacity_exceeded", { details: { limit: "bytes" } }));
+      }
+      return { cas: expected.version, bytes, liveDelta };
+    }
     default:
       throw new Error(`secret action ${request.action} is not implemented`);
   }

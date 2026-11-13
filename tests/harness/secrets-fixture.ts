@@ -31,6 +31,8 @@ export interface Answer {
   body: Record<string, unknown>;
   code: string | undefined;
   operationId: string | undefined;
+  /** `error.details` of a refusal (allowlisted by code). */
+  details: Record<string, unknown> | undefined;
   /** The raw body text (for searching it for a canary). */
   text: string;
 }
@@ -59,6 +61,8 @@ export interface SecretsFixture {
   env(name: EnvName): { projectId: ProjectId; environmentId: EnvironmentId; path: string };
   /** In-process API faults (null clears). */
   setFaults(hook: FaultHook | null): void;
+  /** Runs after the pipeline, before the handler (the admission recheck; null clears). */
+  setBeforeHandler(hook: ((routeId: string) => Promise<void>) | null): void;
   /** Where the in-process API reaches OpenBao: through the relay, or a closed port. */
   setBao(target: "relay" | "closed"): void;
   /** Restarts the second process with a fault (or none). */
@@ -138,6 +142,7 @@ export async function createSecretsFixture(
   generateKeyFiles(keysDirectory);
   let current: OpenBaoTarget | null = null;
   let faults: FaultHook | null = null;
+  let beforeHandler: ((routeId: string) => Promise<void>) | null = null;
   const fx = await createProvisioningFixture({
     shared: opts.private !== true,
     api: (stack) => {
@@ -146,6 +151,9 @@ export async function createSecretsFixture(
         runtime: { openBao: () => current ?? stack.bao, secretsDirectory },
         keys: loadAuthKeys(keysDirectory),
         faults: () => faults ?? undefined,
+        beforeHandler: async (routeId: string) => {
+          await beforeHandler?.(routeId);
+        },
       };
     },
   });
@@ -217,6 +225,9 @@ export async function createSecretsFixture(
       return second;
     },
     env: ids,
+    setBeforeHandler(hook) {
+      beforeHandler = hook;
+    },
     setFaults(hook) {
       faults = hook;
     },
@@ -242,12 +253,14 @@ export async function createSecretsFixture(
       }
       const text = await response.text();
       const body = parseObject(text);
-      const error = body.error as { code?: string; operationId?: string } | undefined;
+      const error = body.error as
+        { code?: string; operationId?: string; details?: Record<string, unknown> } | undefined;
       return {
         status: response.status,
         body,
         code: error?.code,
         operationId: error?.operationId ?? (body.operationId as string | undefined),
+        details: error?.details,
         text,
       };
     },
