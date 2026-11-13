@@ -15,7 +15,7 @@ import {
   checkSecretName,
   checkSecretValue,
 } from "./names.ts";
-import { operationResponseSchema } from "./operation.ts";
+import { OPERATION_STATES, operationResponseSchema } from "./operation.ts";
 
 export type HttpMethod = "GET" | "POST" | "PATCH";
 
@@ -171,6 +171,29 @@ const environmentsBody = z.strictObject({
       reviewReason: z.string().nullable(),
       kvReady: z.boolean(),
       createdAt: z.iso.datetime(),
+    }),
+  ),
+  nextCursor: z.string().nullable(),
+});
+
+/** operations.list (Run 4.1, P-63): newest first; children of an import are not listed. */
+const operationsListQuery = z.strictObject({
+  limit: z.int().min(1).max(LIMITS.listing.maxLimit).default(LIMITS.listing.defaultLimit),
+  cursor: z.string().min(1).optional(),
+  state: z.enum(["unfinished"]).optional(),
+});
+const operationsListBody = z.strictObject({
+  operations: z.array(
+    z.strictObject({
+      operationId: z.uuid(),
+      action: z.string(),
+      state: z.enum(OPERATION_STATES),
+      name: z.string().nullable(),
+      createdAt: z.iso.datetime(),
+      completedAt: z.iso.datetime().nullable(),
+      replayExpiresAt: z.iso.datetime().nullable(),
+      errorCode: z.string().nullable(),
+      mine: z.boolean(),
     }),
   ),
   nextCursor: z.string().nullable(),
@@ -465,12 +488,17 @@ export const ROUTES: readonly RouteDef[] = Object.freeze([
     { action: "credentials.manage", body: confirmedBody, errors: ["state_conflict", ...BACKEND] },
   ),
 
+  // Status stays readable while a project or environment is in review (P-63, D-35):
+  // action null puts both in state class metadata_read; who sees which row is
+  // decided from the operation's own scope and author.
   define("operations.get", "GET", "/v1/operations/:operation", "human", false, "4.1", {
-    action: "secrets.read",
+    action: null,
     responses: operation,
   }),
   define("operations.list", "GET", `${E}/operations`, "human", false, "4.1", {
-    action: "secrets.read",
+    action: null,
+    query: operationsListQuery,
+    responses: { 200: operationsListBody },
   }),
 
   define("audit.list", "GET", `${O}/audit`, "human", false, "6.1", { action: "audit.view" }),

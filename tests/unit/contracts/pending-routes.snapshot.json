@@ -5,7 +5,6 @@
   "import.preview",
   "credentials.list",
   "credentials.issue",
-  "operations.list",
   "audit.list",
   "activity.list",
   "overview.get",
