@@ -98,7 +98,13 @@ What went wrong on the way:
 
 ## Step 6 — production
 
-Not touched: the owner gave no answer to the update request. Production still runs migration `0002` and its Run 2.5 API image. This is item 1 of "What Session 4 must know".
+Updated after the merge, on the owner's yes (13 Nov 2026, 16:01–16:06 UTC):
+
+- `host.ts prod keys init` installed production's eight auth key rings (the new API needs them).
+- `push`, `image api` (`c9ce24ef9d08`, `sha256:c48c08ab…`), `db-init` (migrations `0003`–`0010`, job queues), `up`.
+- Before the update, `up` could not render the compose file on a host without OpenBao: compose interpolates the provisioner's required variables even in an inactive profile. Fixed first: `up` now gives them placeholders there (`c9ce24e`, test in `deploy.test.ts`).
+- No gate file was written, no owner was bootstrapped, and there is no OpenBao and no provisioner. Production answers `503 quarantined` on every route, `/health` reports `down` (503), and the probe raises `health_failing` for production until its gate opens.
+- `status`: API, edge and postgres running; `gate: absent`; `reviewOpen: 0`; `provisioner: absent`.
 
 ## Step 7 — the fresh-context review
 
@@ -166,7 +172,7 @@ Applied through `registry-overrides.json`, each entry with its run note: 54 `SPI
 
 ## What Session 4 must know
 
-1. **Production** still runs migration `0002` and the Run 2.5 API image. Updating it needs the owner's yes: `host.ts prod push`, `image api`, `db-init`, `up`, with no gate file, so `/health` reports down and the probe alerts.
+1. **Production** runs the Session 3 API (`c9ce24ef9d08`, migrations up to `0010`, its own key rings) behind a gate that is not open: every route answers `quarantined` and the probe's `health_failing` stays open for production until a gate is written (`host.ts prod gate open`, an owner decision). No OpenBao, no provisioner and no owner exist there.
 2. **The pipeline order** is final (Doc 06 §4.4): request id → gate → body limits → mixed credentials → Origin → authentication → validation → ancestry and membership → visibility → action → (mutation: Idempotency-Key and replay lookup) → state → freshness → handler.
    - A route is mounted from `ROUTES` by `mountRoute(app, deps, routeId, handler)`; a missing handler answers the terminal 404 (or the stub under `startTestApi({ stubs: true })`).
    - Handlers get `ctx.scope`, `ctx.authority` and `ctx.idempotencyKey`.

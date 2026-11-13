@@ -1000,7 +1000,10 @@ async function hostSecret(
 
 /** `docker compose … up -d`; with OpenBao, under its profile (production has none in Session 2). */
 export function composeUpCommand(withOpenBao: boolean): string {
-  return `${COMPOSE}${withOpenBao ? " --profile openbao" : ""} up -d`;
+  if (withOpenBao) return `${COMPOSE} --profile openbao up -d`;
+  // Compose interpolates every service, also those of an inactive profile: the
+  // provisioner's required variables get placeholders where it never starts.
+  return `PROVISIONER_IMAGE=unused-without-openbao MYKEY_BAO_URL=https://unused.invalid ${COMPOSE} up -d`;
 }
 
 /** D-20: the request-duration cap of OpenBao on a host. */
