@@ -11,11 +11,20 @@ export * as schema from "./schema/index.ts";
 export { withTransaction, type Queryable } from "./tx.ts";
 export type { EnvironmentScope, OrgScope, ProjectScope } from "./scope.ts";
 export {
+  OPERATION_COLUMNS,
+  claimDispatch,
   completeOperation,
+  expireOperations,
   findOperation,
   findOperationByKey,
+  finishOperation,
+  hasTombstone,
   insertOperation,
+  toOperationRow,
+  touchOperation,
+  type Finish,
   type NewOperation,
+  type StoredOperation,
   type OperationKey,
   type OperationRow,
   type PrincipalKind,

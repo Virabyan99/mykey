@@ -95,8 +95,14 @@ export const TABLES: Record<string, Expected> = {
   "app.secret_index": { api: [S, I], provisioner: [] },
   "app.secret_version_event": { api: [S, I], provisioner: [] },
   "app.machine_credential": { api: [S, I], provisioner: [] },
-  "app.operation": { api: [S, I], provisioner: [S, I, U] },
-  "app.operation_tombstone": { api: [S, I], provisioner: [] },
+  "app.operation": {
+    api: [S, I],
+    provisioner: [S, I, U],
+    // Run 4.1: the scope of an operation is written at insert only.
+    apiNoColumns: ["secret_name", "parent_operation_id"],
+  },
+  // Run 4.1 (migration 0011): tombstones are the operator's; the API reads them.
+  "app.operation_tombstone": { api: [S], provisioner: [], apiNoColumns: ["expired_at"] },
   "app.operation_step": { api: [S, I], provisioner: [S, I, U] },
   "app.effect_slot": { api: [S, I, D], provisioner: [S, I, D] },
   "app.outbox": { api: [S, I], provisioner: [S, I, U] },
