@@ -208,6 +208,17 @@ export class OpenBaoAdmin {
     );
   }
 
+  /** The type of the auth method mounted at `path/` ("approle"), or null when none is. */
+  async readAuthMount(namespace: string, path: string): Promise<string | null> {
+    requireNamespace(namespace, true);
+    requireName(path);
+    const answer = await this.#request("GET", namespace, "sys/auth", [200]);
+    const body = record(answer.body);
+    const mounts = Object.keys(record(body.data)).length > 0 ? record(body.data) : body;
+    const type = record(mounts[`${path}/`]).type;
+    return typeof type === "string" ? type : null;
+  }
+
   /** True when the organization namespace exists. */
   async readNamespace(namespace: string): Promise<boolean> {
     requireNamespace(namespace, false);

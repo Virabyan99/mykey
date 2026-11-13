@@ -8,9 +8,12 @@
 // printed. Exit codes: 0 done, 1 failed, 2 refused, 3 needs review, 64 usage.
 import type { Readable, Writable } from "node:stream";
 import type { DbTarget } from "@mykey/db";
+import type { AppRoleName, OpenBaoTarget } from "@mykey/openbao";
 import { authCleanupCommand } from "./commands/auth-cleanup.ts";
 import { bootstrapOwnerCommand } from "./commands/bootstrap-owner.ts";
+import { provisionOrganizationCommand } from "./commands/provision-organization.ts";
 import { resetAccountCommand } from "./commands/reset-account.ts";
+import { verifyOrganizationCommand } from "./commands/verify-organization.ts";
 
 export interface OpsEnv {
   /** The database as `maintenance` (through the tunnel on a host). */
@@ -21,6 +24,12 @@ export interface OpsEnv {
   baseUrl?: string;
   /** Where ~/.mykey/out lives; the real home unless a test says otherwise. */
   home?: string;
+  /** OpenBao through the tunnel with the operator (root) token from workstation custody (Run 3.8). */
+  openBao?: { target: OpenBaoTarget; rootToken: string };
+  /** Installs a provisioned role's credential where its process reads it (on a host: over SSH, on stdin). */
+  deliver?: (name: AppRoleName, credential: { roleId: string; secretId: string }) => Promise<void>;
+  /** The addresses each AppRole is bound to on this host (P-56); none when absent. */
+  boundCidrs?: Record<AppRoleName, readonly string[]>;
 }
 
 export interface OpsIo {
@@ -42,6 +51,8 @@ export const COMMANDS: Readonly<Record<string, OpsCommand>> = {
   "bootstrap-owner": bootstrapOwnerCommand,
   "auth-cleanup": authCleanupCommand,
   "reset-account": resetAccountCommand,
+  "provision-organization": provisionOrganizationCommand,
+  "verify-organization": verifyOrganizationCommand,
 };
 
 export const OPS_COMMANDS = Object.freeze(Object.keys(COMMANDS));

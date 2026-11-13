@@ -12,6 +12,8 @@
     "@mykey/auth": "workspace:*",
     "@mykey/contracts": "workspace:*",
     "@mykey/db": "workspace:*",
+    "@mykey/openbao": "workspace:*",
+    "@mykey/operations": "workspace:*",
     "drizzle-orm": "catalog:",
     "pg": "catalog:"
   },

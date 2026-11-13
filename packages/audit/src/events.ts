@@ -46,6 +46,34 @@ export const AUDIT_DETAILS = {
     routeId,
     reason: z.enum(["hidden", "action", "state", "fresh"]),
   }),
+  /** Run 3.8: the organization became active, or stopped for review at a step. */
+  "operator.organization_provision": z.strictObject({
+    outcome: z.enum(["active", "review"]),
+    step: z
+      .string()
+      .max(32)
+      .regex(/^[a-z]+(?:[-:][a-z]+)*$/)
+      .optional(),
+  }),
+  /** Run 3.8: the provisioner finished an environment, or sent it to review. */
+  "system.environment_provision": z.strictObject({
+    outcome: z.enum(["active", "review"]),
+    reason: z.enum(["backend_inconsistent", "provisioning_failed"]).optional(),
+  }),
+  /** Run 3.8: the drift sweep found an object that differs from what was provisioned. */
+  "system.drift_detected": z.strictObject({
+    scope: z.enum(["organization", "environment"]),
+    object: z.enum([
+      "kv_mount",
+      "kv_config",
+      "policy_runtime",
+      "policy_issuer",
+      "policy_provisioner",
+      "provisioner_login",
+      "machine_policy",
+      "machine_token_role",
+    ]),
+  }),
 } as const;
 
 export type AuditAction = keyof typeof AUDIT_DETAILS;

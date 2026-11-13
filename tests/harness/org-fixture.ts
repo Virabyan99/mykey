@@ -179,3 +179,31 @@ export async function createOrgFixture(
     throw error;
   }
 }
+
+/**
+ * Provisions `organizationId` (a row of the test API's database with one
+ * owner) through the product's `provisionOrganization`, with the stack's root
+ * token and no bound addresses; answers the credentials it delivered (Run 3.8).
+ */
+export async function provisionTestOrganization(
+  api: { database: { pool(role: "maintenance"): import("pg").Pool } },
+  stack: Stack,
+  organizationId: string,
+): Promise<{ credentials: Record<AppRoleName, { roleId: string; secretId: string }> }> {
+  const { provisionOrganization } = await import("@mykey/operations/operator");
+  const credentials = {} as Record<AppRoleName, { roleId: string; secretId: string }>;
+  const result = await provisionOrganization(
+    {
+      pool: api.database.pool("maintenance"),
+      admin: new OpenBaoAdmin(stack.bao, stack.bao.rootToken),
+      deliver: (name, credential) => {
+        credentials[name] = credential;
+        return Promise.resolve();
+      },
+      boundCidrs: { runtime: [], issuer: [], provisioner: [] },
+    },
+    organizationIdSchema.parse(organizationId),
+  );
+  if (result.outcome !== "active") throw new Error(`provisioning ended ${result.outcome}`);
+  return { credentials };
+}

@@ -77,6 +77,9 @@ importers:
       '@mykey/ops':
         specifier: workspace:*
         version: link:apps/ops
+      '@mykey/provisioner':
+        specifier: workspace:*
+        version: link:apps/provisioner
       '@types/node':
         specifier: 24.19.2
         version: 24.19.2
@@ -158,6 +161,12 @@ importers:
       '@mykey/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@mykey/openbao':
+        specifier: workspace:*
+        version: link:../../packages/openbao
+      '@mykey/operations':
+        specifier: workspace:*
+        version: link:../../packages/operations
       drizzle-orm:
         specifier: 'catalog:'
         version: 0.45.4(@opentelemetry/api@1.10.0)(@types/pg@8.23.1)(kysely@0.29.8)(pg@8.23.1)
@@ -169,7 +178,27 @@ importers:
         specifier: 'catalog:'
         version: 8.23.1
 
-  apps/provisioner: {}
+  apps/provisioner:
+    dependencies:
+      '@mykey/contracts':
+        specifier: workspace:*
+        version: link:../../packages/contracts
+      '@mykey/db':
+        specifier: workspace:*
+        version: link:../../packages/db
+      '@mykey/openbao':
+        specifier: workspace:*
+        version: link:../../packages/openbao
+      '@mykey/operations':
+        specifier: workspace:*
+        version: link:../../packages/operations
+      pg:
+        specifier: 'catalog:'
+        version: 8.23.1
+    devDependencies:
+      '@types/pg':
+        specifier: 'catalog:'
+        version: 8.23.1
 
   apps/web: {}
 
@@ -258,6 +287,9 @@ importers:
 
   packages/operations:
     dependencies:
+      '@mykey/audit':
+        specifier: workspace:*
+        version: link:../audit
       '@mykey/contracts':
         specifier: workspace:*
         version: link:../contracts
