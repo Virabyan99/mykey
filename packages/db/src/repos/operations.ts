@@ -25,6 +25,8 @@ export interface OperationRow extends OperationKey {
   errorCode: string | null;
   createdAt: Date;
   completedAt: Date | null;
+  /** Until when the outcome replays (Run 3.9); null while unfinished. */
+  replayExpiresAt: Date | null;
 }
 
 export type NewOperation = OperationKey & {
@@ -79,10 +81,12 @@ interface StoredOperation {
   error_code: string | null;
   created_at: Date;
   completed_at: Date | null;
+  replay_expires_at: Date | null;
 }
 
 const COLUMNS = `id, organization_id, principal_kind, principal_id, action, target, idempotency_key,
-  state, fingerprint, fingerprint_key_id, result, error_code, created_at, completed_at`;
+  state, fingerprint, fingerprint_key_id, result, error_code, created_at, completed_at,
+  replay_expires_at`;
 
 function toRow(stored: StoredOperation): OperationRow {
   return {
@@ -100,6 +104,7 @@ function toRow(stored: StoredOperation): OperationRow {
     errorCode: stored.error_code,
     createdAt: stored.created_at,
     completedAt: stored.completed_at,
+    replayExpiresAt: stored.replay_expires_at,
   };
 }
 

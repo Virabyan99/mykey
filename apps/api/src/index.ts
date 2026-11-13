@@ -48,3 +48,4 @@ export {
   type ServerConfig,
 } from "./server.ts";
 export { runtimeSelfCheck, type SelfCheck } from "./selfcheck.ts";
+export { readCursor, signCursor, type CursorFields, type MacRing } from "./pipeline/cursor.ts";

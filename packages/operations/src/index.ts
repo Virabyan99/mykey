@@ -28,3 +28,12 @@ export {
   type GateReading,
   type GateRecord,
 } from "./gate.ts";
+export {
+  beginOperation,
+  intentFingerprint,
+  operationResponse,
+  sameIntent,
+  type Begin,
+  type HmacRing,
+  type Intent,
+} from "./replay.ts";
