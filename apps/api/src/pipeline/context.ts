@@ -64,6 +64,8 @@ export interface AppDeps {
     faults?: (point: string, operationId: string) => Promise<void>;
     /** The time TOTP codes are checked at, from a request header. */
     clock?: (headers: Headers) => Date | undefined;
+    /** An import's time budget per request (Run 4.7), read on every request; undefined: the product's. */
+    importBudgetMs?: () => number | undefined;
   };
 }
 

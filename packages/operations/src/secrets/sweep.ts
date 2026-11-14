@@ -10,6 +10,9 @@
 //   no dispatch marker was written, so nothing was sent (D-20). The slot is
 //   released and the action's own audit row records the failure.
 //
+// - an import parent (Run 4.7), executing with a stale heartbeat → uncertain
+//   when one of its children is unresolved, otherwise awaiting_input (the
+//   owner resumes it).
 // - an import preview that expired unclaimed, or whose import has finished, is
 //   removed (Run 4.7).
 //
@@ -51,7 +54,7 @@ const RETURNING = `RETURNING id, organization_id, project_id, environment_id, se
 export interface SweepResult {
   uncertain: OperationId[];
   rejected: OperationId[];
-  /** Import parents (Run 4.7); always empty until then. */
+  /** Import parents left to their owner's resume (Run 4.7). */
   awaitingInput: OperationId[];
   /** Import previews removed: expired and unclaimed, or claimed by a finished import (Run 4.7). */
   previewsRemoved: number;
@@ -127,7 +130,61 @@ export async function sweepStaleOperations(
     return rows.rows.map((row) => row.id);
   });
 
+  // Import parents (Run 4.7), after their children: uncertain when a child may
+  // still have changed something, else waiting for the owner's resume.
+  const parents = await withTransaction(pool, async (tx) => {
+    const rows = await tx.query<{
+      id: OperationId;
+      organization_id: OrganizationId;
+      environment_id: EnvironmentId;
+      state: "uncertain" | "awaiting_input";
+    }>(
+      `UPDATE app.operation p
+          SET state = CASE WHEN EXISTS (
+                SELECT 1 FROM app.operation c
+                 WHERE c.parent_operation_id = p.id AND c.completed_at IS NULL
+                   AND c.state IN ('uncertain', 'accepted', 'executing'))
+              THEN 'uncertain' ELSE 'awaiting_input' END,
+              executor_boot_id = NULL
+        WHERE p.action = 'import.apply' AND p.state = 'executing'
+          AND p.heartbeat_at < now() - make_interval(secs => $1)
+        RETURNING p.id, p.organization_id, p.environment_id, p.state`,
+      [staleSeconds],
+    );
+    for (const row of rows.rows) {
+      if (row.state !== "uncertain") continue;
+      // The entry of the uncertain child records it, as when the import stops by itself.
+      await tx.query(
+        `UPDATE app.import_entry e SET outcome = 'uncertain', child_operation_id = c.id
+           FROM app.operation c
+          WHERE c.parent_operation_id = $1 AND c.state = 'uncertain' AND c.completed_at IS NULL
+            AND e.parent_operation_id = $1 AND e.name = c.secret_name AND e.outcome IS NULL`,
+        [row.id],
+      );
+      await appendAudit(tx, {
+        action: "system.operation_stuck",
+        actor: { kind: "system", id: null },
+        source: "api",
+        organizationId: row.organization_id,
+        target: { kind: "environment", id: row.environment_id },
+        outcome: "unknown",
+        requestId: null,
+        operationId: row.id,
+        details: { action: "import.apply" },
+      });
+    }
+    return rows.rows;
+  });
+
   const previewsRemoved = await deleteDeadPreviews(pool);
 
-  return { uncertain, rejected, awaitingInput: [], previewsRemoved };
+  return {
+    uncertain: [
+      ...uncertain,
+      ...parents.filter((row) => row.state === "uncertain").map((row) => row.id),
+    ],
+    rejected,
+    awaitingInput: parents.filter((row) => row.state === "awaiting_input").map((row) => row.id),
+    previewsRemoved,
+  };
 }

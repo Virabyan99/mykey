@@ -21,8 +21,12 @@
 import { appendAudit } from "@mykey/audit";
 import { LIMITS, type OperationId } from "@mykey/contracts";
 import {
+  closeImportEntries,
+  entryOfChild,
   environmentCounters,
   findOperation,
+  importResult,
+  recordImportOutcome,
   readIndexRow,
   recomputeCounters,
   recordVersionEvent,
@@ -34,6 +38,7 @@ import {
 } from "@mykey/db";
 import { secretPath, type OpenBaoClient } from "@mykey/openbao";
 import type pg from "pg";
+import { IMPORT_ACTION, allApplied } from "../imports/apply.ts";
 import { inTransaction, withEnvironmentLock } from "../secrets/lock.ts";
 import { SWEPT_ACTIONS, sweepStaleOperations } from "../secrets/sweep.ts";
 import { BackendUnreadable, rebuildKey } from "./rebuild.ts";
@@ -95,6 +100,18 @@ export async function reconcileOperation(
     // A stale row is first moved by the sweep's own rule; a fresh one is still running.
     await sweepStaleOperations(deps.database);
     row = (await findOperation(deps.database, operationId)) ?? row;
+  }
+  if (row.action === IMPORT_ACTION) {
+    // An import is settled through its child (Run 4.7): the one that may have changed something.
+    const child = await deps.database.query<{ id: OperationId }>(
+      `SELECT id FROM app.operation
+        WHERE parent_operation_id = $1 AND state = 'uncertain' AND completed_at IS NULL
+        ORDER BY created_at LIMIT 1`,
+      [row.id],
+    );
+    const childId = child.rows[0]?.id;
+    if (childId === undefined || !unresolved(row)) return undetermined("not_unresolved");
+    return reconcileOperation(deps, childId, opts);
   }
   const scope = scopeOf(row);
   if (scope === null || SWEPT_ACTIONS[row.action] === undefined || !unresolved(row)) {
@@ -243,6 +260,9 @@ async function settle(
         });
       }
       await releaseSlot(tx, row.id);
+      if (row.parentOperationId !== null) {
+        await settleParent(tx, deps, row, row.parentOperationId, scope, verdict.kind);
+      }
       await appendAudit(tx, {
         action: "operator.reconcile_operation",
         actor: { kind: "operator", id: deps.operatorId },
@@ -270,3 +290,52 @@ async function settle(
 }
 
 class NotUnresolved extends Error {}
+
+/**
+ * The child of an import was settled (Run 4.7): in the same transaction its
+ * entry takes the verdict's outcome, every entry still without one becomes
+ * not_attempted, and the parent is settled: succeeded when every outcome is
+ * created, updated or unchanged, partial otherwise. An import is not resumed
+ * after uncertainty; the owner previews the file again.
+ */
+async function settleParent(
+  tx: pg.PoolClient,
+  deps: ReconcileDeps,
+  child: OperationRow,
+  parentId: OperationId,
+  scope: EnvironmentScope & { name: string },
+  verdict: "succeeded" | "rejected" | "closed_unknown",
+): Promise<void> {
+  const entry = await entryOfChild(tx, parentId, scope.name);
+  if (entry !== null) {
+    const outcome =
+      verdict === "succeeded"
+        ? child.action === "secrets.create"
+          ? "created"
+          : "updated"
+        : verdict === "rejected"
+          ? "rejected"
+          : "uncertain";
+    await recordImportOutcome(tx, parentId, entry.ordinal, outcome, child.id);
+  }
+  await closeImportEntries(tx, parentId);
+  const result = await importResult(tx, parentId);
+  const settled = await settleOperation(
+    tx,
+    parentId,
+    { state: allApplied(result) ? "succeeded" : "partial", result: { ...result } },
+    LIMITS.operation.terminalRetentionDays,
+  );
+  if (!settled) return;
+  await appendAudit(tx, {
+    action: "import.apply",
+    actor: { kind: "operator", id: deps.operatorId },
+    source: "operator",
+    organizationId: scope.organizationId,
+    target: { kind: "environment", id: scope.environmentId },
+    outcome: "success",
+    requestId: deps.requestId,
+    operationId: parentId,
+    details: result.counts,
+  });
+}

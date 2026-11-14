@@ -43,6 +43,8 @@ export type { RuntimeBao } from "./runtime.ts";
 export { Busy, withEnvironmentLock, type Locked } from "./secrets/lock.ts";
 export {
   FAULT_POINTS,
+  IMPORT_FAULT_POINTS,
+  onMainPool,
   freshStateTag,
   runSecretAction,
   type EffectDeps,
@@ -72,3 +74,12 @@ export {
   type PreviewOutcome,
   type PreviewRequest,
 } from "./imports/preview.ts";
+export {
+  IMPORT_ACTION,
+  allApplied,
+  applyImport,
+  resumeImport,
+  type ApplyRequest,
+  type ImportOutcome,
+  type ResumeRequest,
+} from "./imports/apply.ts";

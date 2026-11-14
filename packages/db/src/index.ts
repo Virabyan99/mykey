@@ -13,6 +13,7 @@ export type { EnvironmentScope, OrgScope, ProjectScope } from "./scope.ts";
 export {
   OPERATION_COLUMNS,
   claimDispatch,
+  claimResume,
   completeOperation,
   expireOperations,
   findOperation,
@@ -55,7 +56,24 @@ export {
   type IndexState,
 } from "./repos/secrets.ts";
 export { releaseSlot, slotKey, slotOf, takeSlot } from "./repos/slots.ts";
-export { deleteDeadPreviews, insertPreview, type ImportEntryRecord } from "./repos/imports.ts";
+export {
+  ENTRY_OUTCOMES,
+  claimPreview,
+  closeImportEntries,
+  deleteDeadPreviews,
+  entryOfChild,
+  fileOfParent,
+  importResult,
+  insertImportEntries,
+  insertPreview,
+  nextImportEntry,
+  recordImportOutcome,
+  type EntryOutcome,
+  type ImportEntryRecord,
+  type ImportResult,
+  type PendingEntry,
+  type PreviewClaim,
+} from "./repos/imports.ts";
 export { claimOutbox, enqueueOutbox, markOutboxDelivered, type OutboxRow } from "./repos/outbox.ts";
 export {
   bumpCounter,

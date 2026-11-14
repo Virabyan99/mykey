@@ -49,6 +49,10 @@ export const FAULT_POINTS = [
 ] as const;
 export type FaultPoint = (typeof FAULT_POINTS)[number];
 
+/** The points of an import between its entries (Run 4.7). */
+export const IMPORT_FAULT_POINTS = ["between_entries", "before_import_finish"] as const;
+export type ImportFaultPoint = (typeof IMPORT_FAULT_POINTS)[number];
+
 export interface EffectDeps {
   pool: pg.Pool;
   lockPool: pg.Pool;
@@ -56,8 +60,8 @@ export interface EffectDeps {
   bootId: string;
   ring: HmacRing;
   gateOpen: () => boolean;
-  /** Test only: a hook at each point of the protocol. */
-  faults?: (point: FaultPoint, operationId: OperationId) => void | Promise<void>;
+  /** Test only: a hook at each point of the protocol (and of an import). */
+  faults?: (point: FaultPoint | ImportFaultPoint, operationId: OperationId) => void | Promise<void>;
 }
 
 export interface SecretRequest {
@@ -121,7 +125,11 @@ const refused = (
   extra: { operationId?: OperationId; details?: Record<string, unknown> } = {},
 ): Refused => ({ kind: "refused", code, ...extra });
 
-async function onMainPool<T>(pool: pg.Pool, fn: (tx: pg.PoolClient) => Promise<T>): Promise<T> {
+/** One transaction on a connection of the main pool; a connection that failed is destroyed. */
+export async function onMainPool<T>(
+  pool: pg.Pool,
+  fn: (tx: pg.PoolClient) => Promise<T>,
+): Promise<T> {
   const client = await pool.connect();
   let broken = false;
   try {

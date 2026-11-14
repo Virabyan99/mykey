@@ -90,6 +90,8 @@ export interface StartTestApiOptions {
   keys?: AuthKeys;
   /** Fault hooks of the secret protocol (Run 4.2), read on every call. */
   faults?: () => FaultHook | undefined;
+  /** An import's time budget per request (Run 4.7), read on every request. */
+  importBudgetMs?: () => number | undefined;
 }
 
 export type FaultHook = (point: string, operationId: string) => void | Promise<void>;
@@ -268,6 +270,7 @@ export async function startTestApi(opts: StartTestApiOptions = {}): Promise<Test
           ...(opts.stubs === "all" ? { stubAll: true } : {}),
           ...(opts.stubRoutes === undefined ? {} : { stubRoutes: new Set(opts.stubRoutes) }),
           ...(opts.beforeHandler === undefined ? {} : { beforeHandler: opts.beforeHandler }),
+          ...(opts.importBudgetMs === undefined ? {} : { importBudgetMs: opts.importBudgetMs }),
           ...(opts.faults === undefined
             ? {}
             : {

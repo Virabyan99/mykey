@@ -9,6 +9,7 @@
 // ancestry and membership → visibility → action → state → freshness →
 // handler → output validation; no-store and x-request-id on every response
 // (app.ts).
+import { createHash } from "node:crypto";
 import { AuditUnavailable } from "@mykey/audit";
 import { LIMITS, ROUTES, type RouteDef } from "@mykey/contracts";
 import type { Context, Hono } from "hono";
@@ -59,7 +60,11 @@ export function intentOf(
     action: route.id,
     target: params.env ?? params.project ?? params.org ?? "",
     ...(Object.keys(extra).length === 0 ? {} : { params: extra }),
-    body,
+    // A dotenv file (Run 4.7) enters as its digest: the canonical text is only HMAC'd, never stored.
+    body:
+      body instanceof Uint8Array
+        ? { sha256: createHash("sha256").update(body).digest("hex") }
+        : body,
   };
 }
 

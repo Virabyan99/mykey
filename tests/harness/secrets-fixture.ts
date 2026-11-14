@@ -64,6 +64,8 @@ export interface SecretsFixture {
   setFaults(hook: FaultHook | null): void;
   /** Runs after the pipeline, before the handler (the admission recheck; null clears). */
   setBeforeHandler(hook: ((routeId: string) => Promise<void>) | null): void;
+  /** The in-process API's import budget per request in ms (null: the product's). */
+  setImportBudget(ms: number | null): void;
   /** Where the in-process API reaches OpenBao: through the relay, or a closed port. */
   setBao(target: "relay" | "closed"): void;
   /** Restarts the second process with a fault (or none). */
@@ -179,6 +181,7 @@ export async function createSecretsFixture(
   let current: OpenBaoTarget | null = null;
   let faults: FaultHook | null = null;
   let beforeHandler: ((routeId: string) => Promise<void>) | null = null;
+  let importBudget: number | null = null;
   const fx = await createProvisioningFixture({
     shared: opts.private !== true,
     api: (stack) => {
@@ -190,6 +193,7 @@ export async function createSecretsFixture(
         beforeHandler: async (routeId: string) => {
           await beforeHandler?.(routeId);
         },
+        importBudgetMs: () => importBudget ?? undefined,
       };
     },
   });
@@ -269,6 +273,9 @@ export async function createSecretsFixture(
     },
     setFaults(hook) {
       faults = hook;
+    },
+    setImportBudget(ms) {
+      importBudget = ms;
     },
     setBao(target) {
       current = target === "relay" ? relayTarget : closedTarget;

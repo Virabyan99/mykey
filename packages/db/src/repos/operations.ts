@@ -426,7 +426,7 @@ export async function listUnresolved(
 }
 
 export type Settlement =
-  | { state: "succeeded"; result: Record<string, unknown> }
+  | { state: "succeeded" | "partial"; result: Record<string, unknown> }
   | { state: "rejected"; errorCode: ErrorCode }
   /** Closed as unknown: stays uncertain for ever, no longer unresolved (rule 11). */
   | { state: "uncertain" };
@@ -456,10 +456,30 @@ export async function settleOperation(
     [
       id,
       verdict.state,
-      verdict.state === "succeeded" ? JSON.stringify(verdict.result) : null,
+      verdict.state === "succeeded" || verdict.state === "partial"
+        ? JSON.stringify(verdict.result)
+        : null,
       verdict.state === "rejected" ? verdict.errorCode : null,
       retentionDays,
     ],
+  );
+  return result.rowCount === 1;
+}
+
+/**
+ * An import waiting for its owner resumes (Run 4.7): awaiting_input becomes
+ * executing under the new executor, heartbeat now. False: it was not waiting
+ * (another resume claimed it first, or it is no longer resumable).
+ */
+export async function claimResume(
+  tx: Queryable,
+  id: OperationId,
+  bootId: string,
+): Promise<boolean> {
+  const result = await tx.query(
+    `UPDATE app.operation SET state = 'executing', executor_boot_id = $2, heartbeat_at = now()
+      WHERE id = $1 AND state = 'awaiting_input'`,
+    [id, bootId],
   );
   return result.rowCount === 1;
 }
