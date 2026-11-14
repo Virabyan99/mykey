@@ -60,10 +60,12 @@ async function previewRows(env: EnvName): Promise<number> {
 }
 
 /** Requests in OpenBao's audit device that change KV (any operation id). */
+/** KV changes in A's namespace: other files write to the shared stack meanwhile. */
 async function kvChanges(): Promise<number> {
   return (await readAuditLog(f.stack)).filter(
     (entry) =>
       entry.type === "request" &&
+      entry.namespacePath.startsWith(f.fx.namespace) &&
       /^kv\/(data|delete|undelete)\//.test(entry.path) &&
       (entry.operation === "create" || entry.operation === "update"),
   ).length;

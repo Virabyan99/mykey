@@ -8,6 +8,7 @@
 import { randomUUID } from "node:crypto";
 import { writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { format, resolveConfig } from "prettier";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { ROUTES, type Action, type RouteDef } from "@mykey/contracts";
 import { errorOf, startTestApi, type TestApi } from "../../harness/api.ts";
@@ -198,24 +199,27 @@ describe("the authorization matrix", () => {
       (route) => route.scope !== "operation" && !allowedRoutes.has(route.id),
     ).map((route) => route.id);
     expect(unreachable).toEqual([]);
-    writeFileSync(
-      join(import.meta.dirname, "../../../docs/evidence/session-4/authorization-matrix.md"),
-      [
-        "# Authorization matrix (Run 3.7, Run 4.1)",
-        "",
-        "Written by `tests/integration/authz/matrix.test.ts`. A = the request passed every check",
-        "(the harness stub was reached), D = `403 action_denied`, H = `404 not_found`. Every D and H",
-        "cell also has its `access.denied` audit row with the reason checked. `operations.get` here",
-        "names a random id (H for everyone); its own rows are in the test's operation table.",
-        "",
-        `Cells: ${String(lines.length)} — A ${String(totals.A)}, D ${String(totals.D)}, H ${String(totals.H)}. Mismatches: ${String(failures.length)}.`,
-        "",
-        "| Route | User | Target | Result |",
-        "| --- | --- | --- | --- |",
-        ...lines,
-        "",
-      ].join("\n"),
+    // Formatted as the repository formats it, so `format:check` passes after a run.
+    const file = join(
+      import.meta.dirname,
+      "../../../docs/evidence/session-4/authorization-matrix.md",
     );
+    const markdown = [
+      "# Authorization matrix (Run 3.7, Run 4.1)",
+      "",
+      "Written by `tests/integration/authz/matrix.test.ts`. A = the request passed every check",
+      "(the harness stub was reached), D = `403 action_denied`, H = `404 not_found`. Every D and H",
+      "cell also has its `access.denied` audit row with the reason checked. `operations.get` here",
+      "names a random id (H for everyone); its own rows are in the test's operation table.",
+      "",
+      `Cells: ${String(lines.length)} — A ${String(totals.A)}, D ${String(totals.D)}, H ${String(totals.H)}. Mismatches: ${String(failures.length)}.`,
+      "",
+      "| Route | User | Target | Result |",
+      "| --- | --- | --- | --- |",
+      ...lines,
+      "",
+    ].join("\n");
+    writeFileSync(file, await format(markdown, { ...(await resolveConfig(file)), filepath: file }));
     expect(failures).toEqual([]);
   }, 600_000);
 });
