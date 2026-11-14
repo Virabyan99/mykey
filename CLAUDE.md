@@ -16,18 +16,18 @@ The project is in **Stage 1**, a 14-day plan of nine sessions.
 
 ## Where we stand
 
-_Last updated: 14 Nov 2026, at the Session 4 gate (PR not yet merged)._
+_Last updated: 14 Nov 2026, after the Session 4 merge (PR #9)._
 
-| Session | Topic                                                       | State                                          |
-| ------- | ----------------------------------------------------------- | ---------------------------------------------- |
-| 1       | Foundation                                                  | **Done** (PASS WITH ISSUES), merged            |
-| 2       | Infrastructure and make-or-break proofs                     | **Done** (GO, no fallback), merged             |
-| 3       | Identity, access and resources                              | **Done** (PASS WITH ISSUES), merged            |
-| 4       | Operations engine and secret lifecycle                      | **Done** (PASS WITH ISSUES), PR awaiting merge |
-| 5       | Machine access, CLI and API reference                       | Not started — **no plan yet**                  |
-| 6 ∥ 7   | Audit, limits, backup, recovery, deployment ∥ Web workspace | Not started                                    |
-| 8       | Security review and controlled-use release                  | Not started                                    |
-| 9       | Real use, agent experiment, stage exit                      | Not started                                    |
+| Session | Topic                                                       | State                               |
+| ------- | ----------------------------------------------------------- | ----------------------------------- |
+| 1       | Foundation                                                  | **Done** (PASS WITH ISSUES), merged |
+| 2       | Infrastructure and make-or-break proofs                     | **Done** (GO, no fallback), merged  |
+| 3       | Identity, access and resources                              | **Done** (PASS WITH ISSUES), merged |
+| 4       | Operations engine and secret lifecycle                      | **Done** (PASS WITH ISSUES), merged |
+| 5       | Machine access, CLI and API reference                       | Not started — **no plan yet**       |
+| 6 ∥ 7   | Audit, limits, backup, recovery, deployment ∥ Web workspace | Not started                         |
+| 8       | Security review and controlled-use release                  | Not started                         |
+| 9       | Real use, agent experiment, stage exit                      | Not started                         |
 
 What exists after Session 4 (details: `docs/evidence/session-4/report.md`, run notes `run-4.1.md` … `run-4.9.md`, D-34 … D-39; Session 3's base: `docs/evidence/session-3/report.md`):
 
@@ -44,7 +44,6 @@ What exists after Session 4 (details: `docs/evidence/session-4/report.md`, run n
 
 Before Session 5 can start:
 
-- The PR `session-4` → `main` must be merged on the owner's word.
 - `docs/plans/session-5-plan.md` must be written from the report's "What Session 5 must know". In short:
   - machine resolve calls `readEnvironment`;
   - new effects (issuance, revocation, archive) need a marker or an exclusion rule and fault rows;
