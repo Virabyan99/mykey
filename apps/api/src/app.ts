@@ -16,7 +16,7 @@ import { errorResponse } from "./pipeline/respond.ts";
 import { requestSource } from "./pipeline/source.ts";
 import { mountRoute, mountRouteDef } from "./pipeline/route.ts";
 import { healthHandler } from "./routes/health.ts";
-import { importApplyHandler, importPreviewHandler } from "./routes/imports.ts";
+import { importApplyHandler, importPreviewHandler, importResumeHandler } from "./routes/imports.ts";
 import { operationsGetHandler, operationsListHandler } from "./routes/operations.ts";
 import { organizationsListHandler } from "./routes/organizations.ts";
 import {
@@ -105,6 +105,7 @@ function handlers(large: LargeGate): Partial<Record<string, Handler>> {
     "secrets.restore": secretsRestoreHandler,
     "import.preview": importPreviewHandler(large),
     "import.apply": importApplyHandler(large),
+    "import.resume": importResumeHandler(large),
     "session.activity": sessionActivityHandler,
     "auth.reset.complete": resetCompleteHandler,
   };

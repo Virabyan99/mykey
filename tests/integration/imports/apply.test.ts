@@ -371,19 +371,29 @@ describe("import.apply", () => {
     const text = fileOf(...entries);
     const previewId = await previewed("env2a", text);
     const started = performance.now();
-    const answer = await apply("env2a", previewId, text);
+    let answer = await apply("env2a", previewId, text);
+    const parentId = answer.body.operationId as string;
+    const requests: string[] = [];
+    // A request that spends its budget answers 202; the owner resumes with the same file.
+    for (let round = 0; answer.status === 202 && round < 5; round += 1) {
+      requests.push(`${String(answer.status)} ${answer.body.state as string}`);
+      expect(answer.body.state).toBe("awaiting_input");
+      answer = await f.send("POST", `${f.env("env2a").path}/import-operations/${parentId}/resume`, {
+        text,
+        key: null,
+      });
+    }
+    requests.push(`${String(answer.status)} ${answer.body.state as string}`);
     const seconds = (performance.now() - started) / 1000;
-    expect([200, 202]).toContain(answer.status);
-    const state = answer.body.state as string;
-    expect(["succeeded", "awaiting_input"]).toContain(state);
-    const done = (await entriesOf(answer.body.operationId as string)).filter(
-      (entry) => entry.outcome === "created",
-    ).length;
+    expect(answer.status).toBe(200);
+    expect(answer.body.state).toBe("succeeded");
+    const done = (await entriesOf(parentId)).filter((entry) => entry.outcome === "created").length;
+    expect(done).toBe(count);
+    expect((await childrenOf(parentId)).length).toBe(count);
     console.log(
-      `import of ${String(count)} entries: ${state}, ${String(done)} created in ${seconds.toFixed(1)} s (${((seconds / done) * 100).toFixed(2)} s per hundred)`,
+      `import of ${String(count)} entries: ${requests.join(" → ")} in ${seconds.toFixed(1)} s (${((seconds / done) * 100).toFixed(2)} s per hundred)`,
     );
-    if (state === "succeeded") expect(done).toBe(count);
-  }, 600_000);
+  }, 900_000);
 
   it("no table of app, audit or jobs contains the canary after an import", async () => {
     const text = fileOf([unique(), valueOf("search")], [unique(), valueOf("search2")]);

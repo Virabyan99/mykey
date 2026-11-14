@@ -2,13 +2,14 @@
 // dotenv file against the index and stores no value; apply and resume write it
 // entry by entry through the mutation protocol. Every one of them runs inside
 // the process's large-request gate. A handler maps the outcome to an answer.
-import { LIMITS, decide } from "@mykey/contracts";
+import { LIMITS, decide, type OperationId } from "@mykey/contracts";
 import type { EnvironmentScope } from "@mykey/db";
 import {
   applyImport,
   operationResponse,
   previewImport,
   replayAnswer,
+  resumeImport,
   type ImportOutcome,
 } from "@mykey/operations";
 import type { LargeGate } from "../large.ts";
@@ -104,6 +105,32 @@ export function importApplyHandler(large: LargeGate): Handler {
         bytes: ctx.body as Uint8Array,
         idempotencyKey: key,
         intent: intentOf(ctx.route, ctx.params, principal, ctx.body),
+        requestId: ctx.requestId,
+        budgetMs: budgetOf(deps),
+        recheck: recheckOf(ctx, principal.userId, scope),
+      });
+      return answerOf(ctx, outcome);
+    });
+}
+
+/**
+ * import.resume: the caller's own import of this environment that waits for
+ * its owner, with the same file. 200 finished, 202 waiting or already running
+ * elsewhere, 503 when it is uncertain, 409 when it has finished.
+ */
+export function importResumeHandler(large: LargeGate): Handler {
+  return (ctx, deps) =>
+    large.run(async () => {
+      const scope = ctx.scope as EnvironmentScope | null;
+      const principal = ctx.principal;
+      if (scope === null || principal === null) throw new ApiError("dependency_unavailable");
+      const operationId = ctx.params.operation ?? "";
+      if (!UUID.test(operationId)) throw new ApiError("not_found");
+      const outcome = await resumeImport(effectDeps(deps), {
+        scope,
+        userId: principal.userId,
+        operationId: operationId as OperationId,
+        bytes: ctx.body as Uint8Array,
         requestId: ctx.requestId,
         budgetMs: budgetOf(deps),
         recheck: recheckOf(ctx, principal.userId, scope),

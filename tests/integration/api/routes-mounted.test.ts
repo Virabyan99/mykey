@@ -32,6 +32,7 @@ const HANDLED = new Set([
   "secrets.restore",
   "import.preview",
   "import.apply",
+  "import.resume",
   "session.activity",
   "auth.reset.complete",
 ]);
