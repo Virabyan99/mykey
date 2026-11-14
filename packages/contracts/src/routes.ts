@@ -2,6 +2,7 @@
 // routes; none adds, renames or removes one without a `contract:` commit.
 import { z } from "zod";
 import type { Action, RouteScope } from "./authz.ts";
+import { DOTENV_RULES } from "./dotenv/parse.ts";
 import type { ErrorCode } from "./errors.ts";
 import { environmentIdSchema } from "./ids.ts";
 import { LIMITS } from "./limits.ts";
@@ -200,6 +201,52 @@ const secretsRevealBody = z.strictObject({
   version: z.int().positive(),
   value: z.string(),
   stateTag: z.string(),
+});
+
+/**
+ * import.preview (Run 4.7, P-76): the classification of every entry against
+ * the index. Never a value. An invalid entry carries no name (it is typed text
+ * and may be anything); a file the parser refuses has issues and no entries.
+ */
+const importClassification = z.enum([
+  "create",
+  "update",
+  "unchanged",
+  "invalid",
+  "duplicate",
+  "conflict",
+]);
+const count = z.int().nonnegative();
+const importPreviewBody = z.strictObject({
+  previewId: z.uuid().nullable(),
+  expiresAt: z.iso.datetime().nullable(),
+  applicable: z.boolean(),
+  counts: z.strictObject({
+    create: count,
+    update: count,
+    unchanged: count,
+    conflict: count,
+    invalid: count,
+    duplicate: count,
+  }),
+  entries: z
+    .array(
+      z.strictObject({
+        ordinal: z.int().positive(),
+        line: z.int().positive(),
+        name: z.string().nullable(),
+        classification: importClassification,
+      }),
+    )
+    .max(LIMITS.body.dotenvMaxEntries),
+  issues: z.array(z.strictObject({ line: z.int().nonnegative(), rule: z.enum(DOTENV_RULES) })),
+  warnings: z.array(
+    z.strictObject({
+      name: z.string(),
+      loader: z.enum(["nextjs", "python-dotenv"]),
+      kind: z.enum(["expansion", "escape"]),
+    }),
+  ),
 });
 
 /** projects.list and environments.list (Run 3.9, P-59): keyset pages in id order. */
@@ -494,7 +541,8 @@ export const ROUTES: readonly RouteDef[] = Object.freeze([
   define("import.preview", "POST", `${E}/import/preview`, "human", false, "4.7", {
     action: "secrets.write",
     body: "raw-dotenv",
-    errors: ["state_conflict", "capacity_exceeded"],
+    responses: { 200: importPreviewBody },
+    errors: ["state_conflict", "capacity_exceeded", ...BACKEND],
   }),
   define("import.apply", "POST", `${E}/import/:preview/apply`, "human", true, "4.7", {
     action: "secrets.write",
