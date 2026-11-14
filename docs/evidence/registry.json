@@ -512,9 +512,11 @@
       "ownerRun": "4.9",
       "contributingRuns": [],
       "oldSession": "D08-S25",
-      "status": "OPEN",
-      "evidence": [],
-      "note": ""
+      "status": "SPIKE_PASS",
+      "evidence": [
+        "docs/evidence/session-4/run-4.9.md"
+      ],
+      "note": "Export of an environment as a dotenv attachment: complete read under the lock, secret.export audited before the bytes, exact headers, no compression through the edge; 1,000 names of 7 MiB in at most 19.8 s on staging."
     },
     {
       "id": "FR-1.38",
@@ -1550,9 +1552,11 @@
       "ownerRun": "4.9",
       "contributingRuns": [],
       "oldSession": "D08-S25",
-      "status": "OPEN",
-      "evidence": [],
-      "note": ""
+      "status": "SPIKE_PASS",
+      "evidence": [
+        "docs/evidence/session-4/run-4.9.md"
+      ],
+      "note": "Export → import → export is byte-identical with awkward values, on the local stack (12 values incl. 64 KiB) and on staging (20 names)."
     },
     {
       "id": "AC-1.18",

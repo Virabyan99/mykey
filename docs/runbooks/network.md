@@ -101,7 +101,7 @@ To cut one purpose off for a drill, on the server: `sudo /opt/mykey/hosts/firewa
 ## Deploying the services
 
 ```sh
-docker build --platform linux/amd64 -f apps/api/Dockerfile -t mykey-api .
+docker build --platform linux/amd64 -f apps/api/Dockerfile --build-arg MYKEY_BUILD=$(git rev-parse --short=12 HEAD) -t mykey-api .   # without MYKEY_BUILD the API refuses to start
 docker save mykey-api:latest -o C:/Users/<you>/mykey-tmp/mykey-api.tar   # one tag; outside OneDrive
 node scripts/host.ts staging image api C:/Users/<you>/mykey-tmp/mykey-api.tar
 node scripts/host.ts staging up          # creates missing host secrets, then compose up -d

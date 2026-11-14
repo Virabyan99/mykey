@@ -52,3 +52,20 @@
 - The race run, where every read equals the set of its generation exactly, is in `docs/evidence/session-4/run-4.8.md`.
 
 **Fallback.** The fallback of Doc 10 §8.1 (refuse while any write is in flight) was not needed.
+
+## Export (Run 4.9)
+
+`export.create` (P-79, FR-1.37) is the complete read with a file around it.
+
+- **Who and when:** a human with a fresh TOTP (`human_fresh_totp`), `{ confirmed: true }`, the action `secrets.read`. It runs inside the large gate (two per process; a third answers `503 busy`).
+- **Read:** `readEnvironment` with the audit row `secret.export` (the names, never a value), committed before a byte leaves. Every refusal of the read answers as JSON, and no value is in it.
+- **Body:** `serializeDotenv`: one `NAME="escaped"` line per live name, in bytewise name order. An empty environment answers 200 with length 0.
+- **Headers** (`exportHeaders`):
+  - `content-type: text/plain; charset=utf-8`;
+  - `content-disposition: attachment; filename="mykey-<name>.env"` (lower case, `[^a-z0-9-]` → `-`, at most 63 characters);
+  - `content-length`, and `content-digest: sha-256=:<base64>:`;
+  - `x-content-type-options: nosniff` and `cache-control: no-store`;
+  - `mykey-export-warnings`: base64url JSON of the loader warnings `{ name, loader, kind }`, cut to `{ truncated: true, count }` above 8,192 bytes.
+- **No compression:** the API never sets `content-encoding`, and the edge adds none, even when the request accepts `gzip, br` (staging, Run 4.9 Task D).
+- **Raw answers** (`HandlerResult.raw`) are allowed only on a route whose response is `dotenv-attachment`. Elsewhere they answer `output_invalid`.
+- **Known limit:** an export above 1 MiB cannot be imported again (the import body limit), and the import refuses it as `400 malformed_request`.
