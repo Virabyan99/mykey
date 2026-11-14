@@ -12,7 +12,11 @@ let api: TestApi;
 let tenants: Tenants;
 
 beforeAll(async () => {
-  api = await startTestApi({ stubs: true });
+  api = await startTestApi({
+    stubs: true,
+    // The columns' example routes answer through the stub, handled or not (Run 4.2).
+    stubRoutes: ["secrets.create", "secrets.update", "secrets.list", "secrets.reveal"],
+  });
   tenants = await createTenants(api);
 }, 300_000);
 

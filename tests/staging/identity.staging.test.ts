@@ -17,6 +17,7 @@ import * as OTPAuth from "otpauth";
 import type pg from "pg";
 import {
   connectStaging,
+  countOnHost,
   hostStatus,
   loadHosts,
   registerSecret,
@@ -487,9 +488,10 @@ describe("5. shut out", () => {
 
   it("the reader reads and cannot write; the editor writes and cannot manage; the ungranted member sees no project", async () => {
     const key = { "idempotency-key": randomUUID() };
+    // Session 4: secrets.list and secrets.create have handlers (Runs 4.2, 4.3).
     expect(
       (await publicRequest("GET", `${envPath()}/secrets`, { cookie: as("reader") })).status,
-    ).toBe(404);
+    ).toBe(200);
     const write = await publicRequest("POST", `${envPath()}/secrets`, {
       body: { name: "A", value: "" },
       cookie: as("reader"),
@@ -501,7 +503,7 @@ describe("5. shut out", () => {
       cookie: as("editor"),
       headers: { "idempotency-key": randomUUID() },
     });
-    expect(editorWrite.status).toBe(404); // every check passed; no handler before Run 4.2
+    expect(editorWrite.status).toBe(201);
     const manage = await publicRequest("POST", `/v1/organizations/${ORGANIZATION}/projects`, {
       body: { name: "By editor" },
       cookie: as("editor"),
@@ -533,13 +535,13 @@ describe("5. shut out", () => {
   it("a grant removed mid-session denies the next request", async () => {
     expect(
       (await publicRequest("GET", `${envPath()}/secrets`, { cookie: as("editor") })).status,
-    ).toBe(404);
+    ).toBe(200);
     const reader = synthetic.get("editor")!;
     await superuser.query("DELETE FROM app.access_grant WHERE user_id = $1", [reader.id]);
     const after = await publicRequest("GET", `${envPath()}/secrets`, { cookie: as("editor") });
     expect(after.status).toBe(404);
     expect(codeOf(after)).toBe("not_found");
-    // Before removal the 404 was the terminal one (no access.denied); after, it is a denial.
+    // Before removal the list answered 200; after, the 404 is a denial with its audit row.
     const denied = await superuser.query(
       "SELECT 1 FROM audit.event WHERE action = 'access.denied' AND request_id = $1",
       [after.headers.get("x-request-id")],
@@ -608,11 +610,16 @@ describe("8–9. canary sweep and clean-up", () => {
       });
       places.push([`docker logs ${container}`, logs.stdout + logs.stderr]);
     }
-    const audit = await sshExec(host, "docker exec mykey-openbao-1 cat /openbao/audit/audit.log", {
-      sudo: true,
-      timeoutMs: 120_000,
-    });
-    places.push(["openbao audit device", audit.stdout]);
+    // The audit device is searched on the host: since Session 4 it is too large to download
+    // in time. The values travel on stdin; only counts come back. The control is the KV path
+    // of the editor's write above: a search that misses it read nothing (countOnHost throws).
+    const audit = await countOnHost(
+      host,
+      "docker exec mykey-openbao-1 cat /openbao/audit/audit.log",
+      values,
+      [`kv/data/p/${projectId}/e/${developmentId}/A`],
+    );
+    const hostHits = audit.found > 0 ? ["openbao audit device"] : [];
     const auditRows = await superuser.query<{ row: string }>(
       "SELECT row_to_json(e)::text AS row FROM audit.event e",
     );
@@ -658,7 +665,7 @@ describe("8–9. canary sweep and clean-up", () => {
     } finally {
       rmSync(directory, { recursive: true, force: true });
     }
-    const hits: string[] = [];
+    const hits: string[] = [...hostHits];
     for (const [place, text] of places) {
       for (const value of values) {
         if (text.includes(value)) hits.push(place);
@@ -667,7 +674,7 @@ describe("8–9. canary sweep and clean-up", () => {
     const lines = [
       `# Canary sweep (Run 3.10), ${new Date().toISOString()}`,
       `values: ${String(values.length)} (passwords, TOTP seeds and codes, recovery codes, reset tokens and links, session cookie values, AppRole secret ids)`,
-      `places: ${String(places.length)} (${places.map(([place]) => place).join(", ")})`,
+      `places: ${String(places.length + 1)} (${[...places.map(([place]) => place), "openbao audit device (searched on the host)"].join(", ")})`,
       `hits: ${String(hits.length)}${hits.length === 0 ? "" : ` in ${[...new Set(hits)].join(", ")}`}`,
       "",
     ];

@@ -45,7 +45,14 @@ export function validateQuery(route: RouteDef, search: URLSearchParams): unknown
   const schema = route.request.query;
   const names = [...search.keys()];
   if (schema === undefined) {
-    if (names.length > 0) throw new ApiError("malformed_request");
+    // A route that names the code (secrets.history, D-14) refuses any parameter with it.
+    if (names.length > 0) {
+      throw new ApiError(
+        route.errors.includes("unsupported_history_parameter")
+          ? "unsupported_history_parameter"
+          : "malformed_request",
+      );
+    }
     return undefined;
   }
   if (new Set(names).size !== names.length) throw new ApiError("malformed_request");

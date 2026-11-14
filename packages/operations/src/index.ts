@@ -32,8 +32,60 @@ export {
   beginOperation,
   intentFingerprint,
   operationResponse,
+  replayAnswer,
   sameIntent,
   type Begin,
   type HmacRing,
   type Intent,
+  type ReplayAnswer,
 } from "./replay.ts";
+export type { RuntimeBao } from "./runtime.ts";
+export { Busy, withEnvironmentLock, type Locked } from "./secrets/lock.ts";
+export {
+  FAULT_POINTS,
+  IMPORT_FAULT_POINTS,
+  onMainPool,
+  freshStateTag,
+  runSecretAction,
+  type EffectDeps,
+  type FaultPoint,
+  type SecretAction,
+  type SecretOutcome,
+  type SecretRequest,
+} from "./secrets/protocol.ts";
+export { backendRefusal } from "./secrets/protocol.ts";
+export {
+  READ_FAULT_POINTS,
+  readHistory,
+  type HistoryVersion,
+  type ReadDeps,
+  type ReadFaultPoint,
+  type Refused,
+  type SecretHistory,
+} from "./secrets/history.ts";
+export { revealSecret, type RevealOutcome, type RevealRequest } from "./secrets/reveal.ts";
+export { inTransaction } from "./secrets/lock.ts";
+export { SWEPT_ACTIONS, sweepStaleOperations, type SweepResult } from "./secrets/sweep.ts";
+export { classifyEntries, type Classification, type Classified } from "./imports/classify.ts";
+export {
+  fileHmac,
+  previewImport,
+  type ImportPreviewBody,
+  type PreviewOutcome,
+  type PreviewRequest,
+} from "./imports/preview.ts";
+export {
+  IMPORT_ACTION,
+  allApplied,
+  applyImport,
+  resumeImport,
+  type ApplyRequest,
+  type ImportOutcome,
+  type ResumeRequest,
+} from "./imports/apply.ts";
+export {
+  readEnvironment,
+  type EnvironmentRead,
+  type EnvironmentReadOutcome,
+  type EnvironmentReadRequest,
+} from "./secrets/read-environment.ts";

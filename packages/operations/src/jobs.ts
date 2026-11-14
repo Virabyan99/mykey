@@ -43,7 +43,16 @@ export function jobSchemaSql(): string {
 }
 
 /** Retries of a failed job: five, with exponential backoff (Run 3.8 relies on it). */
-const QUEUE_OPTIONS = { retryLimit: 5, retryDelay: 2, retryBackoff: true, retryDelayMax: 120 };
+// expireInSeconds (Run 4.1, P-83): a job held by a killed worker is handed out
+// again after two minutes instead of pg-boss's default fifteen. A retried step
+// is compare-then-act (P-55), so a second delivery is safe.
+const QUEUE_OPTIONS = {
+  retryLimit: 5,
+  retryDelay: 2,
+  retryBackoff: true,
+  retryDelayMax: 120,
+  expireInSeconds: 120,
+};
 
 function adapter(db: Queryable): Db {
   return {
@@ -89,7 +98,9 @@ export async function ensureQueues(pool: pg.Pool): Promise<void> {
   try {
     const existing = new Set((await boss.getQueues()).map((queue) => queue.name));
     for (const kind of JOB_KINDS) {
-      if (!existing.has(kind)) await boss.createQueue(kind, QUEUE_OPTIONS);
+      // An existing queue takes the current options too (a host deployed before Run 4.1).
+      if (existing.has(kind)) await boss.updateQueue(kind, QUEUE_OPTIONS);
+      else await boss.createQueue(kind, QUEUE_OPTIONS);
     }
   } finally {
     await boss.stop({ graceful: false });

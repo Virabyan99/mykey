@@ -2,6 +2,8 @@
 import type { HttpBindings } from "@hono/node-server";
 import type { Auth, AuthKeys, Throttle } from "@mykey/auth";
 import type { Authority, ErrorCode, RouteDef } from "@mykey/contracts";
+import type { OperationRow } from "@mykey/db";
+import type { RuntimeBao } from "@mykey/operations";
 import type pg from "pg";
 import type { HealthReading } from "../health.ts";
 import type { LogEntry } from "../log.ts";
@@ -29,6 +31,15 @@ export interface TestRouteEntry {
 export interface AppDeps {
   /** The API's pool, logged in as api_runtime. */
   pool: pg.Pool;
+  /**
+   * One dedicated connection per secret action or value read (P-66, D-36): it
+   * holds the environment's advisory lock. Absent: secret routes answer 503.
+   */
+  lockPool?: pg.Pool;
+  /** The organization's runtime identity in OpenBao (P-62, D-34). */
+  bao?: RuntimeBao;
+  /** A UUID per process start: the executor id of the operations it runs. */
+  bootId: string;
   config: ApiConfig;
   health: () => Promise<HealthReading>;
   log: (entry: LogEntry) => void;
@@ -43,8 +54,18 @@ export interface AppDeps {
     routes?: readonly TestRouteEntry[];
     /** Replaces the terminal 404 of a route without a handler: records the id, answers 204. */
     stubs?: (routeId: string) => void | Promise<void>;
+    /** The stub replaces every contract route's handler but health and version (P-80). */
+    stubAll?: boolean;
+    /** These contract routes answer through the stub although they have a handler (Run 4.2). */
+    stubRoutes?: ReadonlySet<string>;
+    /** Runs after freshness, before a real handler (Run 4.1): a state change after the pipeline. */
+    beforeHandler?: (routeId: string) => Promise<void>;
+    /** Fault hooks of the secret protocol (Run 4.2, FAULT_POINTS). */
+    faults?: (point: string, operationId: string) => Promise<void>;
     /** The time TOTP codes are checked at, from a request header. */
     clock?: (headers: Headers) => Date | undefined;
+    /** An import's time budget per request (Run 4.7), read on every request; undefined: the product's. */
+    importBudgetMs?: () => number | undefined;
   };
 }
 
@@ -60,6 +81,8 @@ export interface ApiContext {
   scope: Scope | null;
   /** The caller's authority in that organization, read on this request. */
   authority: Authority | null;
+  /** The operation a route of scope `operation` names, read on this request (Run 4.1). */
+  operation: OperationRow | null;
   /** The request's Idempotency-Key (lower case) on a mutation route (Run 3.9). */
   idempotencyKey: string | null;
   /** The harness's clock for TOTP codes (AppDeps.test.clock); undefined in production. */
@@ -71,6 +94,8 @@ export interface HandlerResult {
   body: unknown;
   /** Extra response headers (a session cookie, Run 3.6). */
   headers?: Record<string, string>;
+  /** Only for a route whose response kind is "dotenv-attachment" (Run 4.9): the body as sent. */
+  raw?: { bytes: Uint8Array; contentType: string };
 }
 
 export type Handler = (ctx: ApiContext, deps: AppDeps) => Promise<HandlerResult>;
@@ -81,13 +106,21 @@ export class ApiError extends Error {
   readonly reason: string | undefined;
   /** Headers of the error answer (Retry-After of a 429). */
   readonly headers: Record<string, string> | undefined;
+  /** The operation the answer is about, and allowlisted details (Run 4.1, respond.ts). */
+  readonly extra: { operationId?: string; details?: Record<string, unknown> };
 
-  constructor(code: ErrorCode, reason?: string, headers?: Record<string, string>) {
+  constructor(
+    code: ErrorCode,
+    reason?: string,
+    headers?: Record<string, string>,
+    extra: { operationId?: string; details?: Record<string, unknown> } = {},
+  ) {
     super(code);
     this.name = "ApiError";
     this.code = code;
     this.reason = reason;
     this.headers = headers;
+    this.extra = extra;
   }
 }
 

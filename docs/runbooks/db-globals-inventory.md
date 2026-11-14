@@ -31,6 +31,7 @@ Written in Run 1.7 (2026-11-10) against PostgreSQL 18.6.
 - **The operator's rights (Run 3.1, P-45).** `maintenance` holds `INSERT` on `audit.event`, `auth.user`, `auth.account`, `auth.account_state`; `UPDATE (state, auth_epoch, credential_epoch, updated_at)` on `auth.account_state`; `DELETE` on `auth.session`.
 - **Accounts are created by the operator only (Run 3.2, migration `0005`).** `api_runtime` no longer holds `INSERT` on `auth.user` and `auth.account`.
 - **Resets (Run 3.6, migration `0006`).** Table `auth.reset_token` and column `auth.session.reset_token_id`. `api_runtime`: `SELECT` and `UPDATE (verifier, consumed_at)` on `reset_token`. `maintenance`: `SELECT, INSERT` and `UPDATE (verifier, superseded_at)` on `reset_token`; `DELETE` on `auth.totp_step_used` and `auth.recovery_code` (the factor clean-up of Run 3.5).
+- **Operation scope (Run 4.1, migration `0011`).** Columns `project_id`, `environment_id`, `secret_name` (checked against the name pattern) and `parent_operation_id` (references `app.operation`) on `app.operation`, written at insert only; indexes `operation_environment_created_idx` and `operation_unresolved_idx`. `api_runtime` loses `INSERT` and `UPDATE` on `app.operation_tombstone` (only the operator's `ops operations-expire` writes tombstones); it keeps `SELECT`.
 
 ## Reconstruction order
 

@@ -17,6 +17,7 @@ import { machineName, machineTokenRole, renderMachinePolicy } from "@mykey/openb
 import type { ProvisionerClient, ReadableTokenRole } from "@mykey/openbao/provisioner";
 import type pg from "pg";
 import { isDeepStrictEqual } from "node:util";
+import { kvConfigOf } from "./plan.ts";
 
 export const ENVIRONMENT_STEPS = ["kv-scope", "machine-policy", "token-role"] as const;
 
@@ -145,8 +146,12 @@ export async function provisionEnvironment(
       const config = await client.readKvConfig();
       if (!config.ok) return { cause: config.cause };
       if (config.value === null) return "mismatch";
-      return config.value.cas_required === true &&
-        config.value.max_versions === LIMITS.secret.versionsKept
+      // All three fields of the plan (Run 4.5): an automatic deletion is drift too.
+      return isDeepStrictEqual(kvConfigOf(config.value), {
+        cas_required: true,
+        max_versions: LIMITS.secret.versionsKept,
+        delete_version_after: "0s",
+      })
         ? "verified"
         : "mismatch";
     },
@@ -215,19 +220,31 @@ export async function provisionEnvironment(
 
     crash("activate:before");
     const digest = policyDigest(policy, readable);
-    await withTransaction(pool, async (tx) => {
-      await tx.query(
+    // Activation is conditional (Run 4.1 Task D): the operation must still be
+    // this worker's and executing, and the environment still pending. Anything
+    // else changed it after the steps (an operator, a review): nothing activates.
+    const activated = await withTransaction(pool, async (tx) => {
+      const owned = await tx.query(
+        `UPDATE app.operation SET state = 'succeeded', completed_at = now(), heartbeat_at = now()
+          WHERE id = $1 AND state = 'executing' AND executor_boot_id = $2`,
+        [operationId, deps.bootId],
+      );
+      if (owned.rowCount !== 1) return "not_claimed" as const;
+      const environment = await tx.query(
         `UPDATE app.environment SET state = 'active', kv_ready = true, policy_digest = $3, review_reason = NULL
-          WHERE organization_id = $1 AND id = $2`,
+          WHERE organization_id = $1 AND id = $2 AND state = 'pending'`,
         [organizationId, environmentId, digest],
       );
+      if (environment.rowCount !== 1) {
+        await tx.query(
+          "UPDATE app.operation SET state = 'awaiting_input', completed_at = NULL, error_code = 'state_conflict' WHERE id = $1",
+          [operationId],
+        );
+        return "review" as const;
+      }
       await tx.query(
         "UPDATE app.project SET state = 'active' WHERE organization_id = $1 AND id = $2 AND state = 'pending'",
         [organizationId, projectId],
-      );
-      await tx.query(
-        "UPDATE app.operation SET state = 'succeeded', completed_at = now(), heartbeat_at = now() WHERE id = $1",
-        [operationId],
       );
       await appendAudit(tx, {
         action: "system.environment_provision",
@@ -240,7 +257,9 @@ export async function provisionEnvironment(
         operationId,
         details: { outcome: "active" },
       });
+      return "active" as const;
     });
+    if (activated !== "active") return activated;
     crash("activate:after-effect");
     return "active";
   } finally {

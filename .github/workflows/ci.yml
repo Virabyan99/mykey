@@ -53,6 +53,11 @@ jobs:
   integration:
     runs-on: ubuntu-24.04
     timeout-minutes: 30
+    # Two shards by file (Run 4.9): the whole suite outgrew 30 minutes on one runner.
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -67,7 +72,9 @@ jobs:
         with:
           python-version: "3.12"
       - run: pnpm install --frozen-lockfile
-      - run: pnpm run test:integration
+      - run: pnpm run test:integration --shard="$SHARD/2"
+        env:
+          SHARD: ${{ matrix.shard }}
       - name: Remove every test stack
         if: always()
         run: node scripts/stack.ts down --all

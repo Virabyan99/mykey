@@ -28,7 +28,12 @@ const from = (): Record<string, string> => {
 };
 
 beforeAll(async () => {
-  api = await startTestApi({ stubs: true, config: { trustedProxy: "127.0.0.1" } });
+  // export.create answers through the stub: this API has no runtime identity (Run 4.9).
+  api = await startTestApi({
+    stubs: true,
+    stubRoutes: ["export.create"],
+    config: { trustedProxy: "127.0.0.1" },
+  });
   owner = await enrollOwner(api, await seedOwner(api), { source: "198.51.100.251" });
   target = await activeTarget(api, owner.organizationId);
 });

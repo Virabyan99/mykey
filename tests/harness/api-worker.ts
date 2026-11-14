@@ -1,10 +1,13 @@
 // A real second API process for tests that need two (Run 3.3): throttling,
 // one-use steps and reset links must hold across processes, as on a host with
-// two API containers (LIMITS.concurrency.apiProcesses).
+// two API containers (LIMITS.concurrency.apiProcesses). Run 4.2 adds the
+// runtime identity and one fault at one point of the secret protocol.
 import { spawn } from "node:child_process";
 import { resolve } from "node:path";
 import type { ApiConfig } from "@mykey/api";
 import type { DbTarget } from "@mykey/db";
+import type { OpenBaoTarget } from "@mykey/openbao";
+import type { FaultAction } from "./api-process.ts";
 
 const ENTRY = resolve(import.meta.dirname, "api-process.ts");
 
@@ -13,6 +16,10 @@ export interface ApiProcess {
   port: number;
   pid: number;
   kill(signal?: NodeJS.Signals): Promise<void>;
+  /** The exit code (null after a signal), once the process has exited. */
+  exited: Promise<number | null>;
+  /** Everything the process wrote to stderr so far (its log lines among it). */
+  output(): string;
 }
 
 /**
@@ -26,15 +33,19 @@ export function startApiProcess(
     keysDirectory: string;
     api: ApiConfig;
     tls: { certPath: string; keyPath: string };
+    /** Run 4.2: the runtime identity (OpenBao target and credential directory). */
+    openBao?: OpenBaoTarget;
+    secretsDirectory?: string;
+    faults?: { point: string; action: FaultAction };
   },
 ): Promise<ApiProcess> {
   return new Promise((resolveStart, reject) => {
     const child = spawn(process.execPath, [ENTRY], { stdio: ["pipe", "pipe", "pipe"] });
     let output = "";
     let errors = "";
-    const exited = new Promise<void>((resolveExit) =>
-      child.once("exit", () => {
-        resolveExit();
+    const exited = new Promise<number | null>((resolveExit) =>
+      child.once("exit", (code) => {
+        resolveExit(code);
       }),
     );
     child.stderr.on("data", (chunk: Buffer) => {
@@ -57,17 +68,27 @@ export function startApiProcess(
         port,
         baseUrl: `https://127.0.0.1:${String(port)}`,
         pid: child.pid ?? -1,
+        exited,
+        output: () => errors,
         async kill(signal) {
-          if (child.exitCode !== null) return;
+          if (child.exitCode !== null || child.signalCode !== null) return;
           if (signal === undefined) child.stdin.end("stop\n");
           else child.kill(signal);
           await exited;
         },
       });
     });
-    child.stdin.write(
-      `${JSON.stringify({ database, keysDirectory: opts.keysDirectory, api: opts.api, tls: opts.tls })}\n`,
-    );
+    const settings = {
+      database,
+      keysDirectory: opts.keysDirectory,
+      api: opts.api,
+      tls: opts.tls,
+      ...(opts.openBao === undefined || opts.secretsDirectory === undefined
+        ? {}
+        : { runtime: { openBao: opts.openBao, secretsDirectory: opts.secretsDirectory } }),
+      ...(opts.faults === undefined ? {} : { fault: opts.faults }),
+    };
+    child.stdin.write(`${JSON.stringify(settings)}\n`);
   });
 }
 

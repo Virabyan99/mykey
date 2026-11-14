@@ -36,6 +36,8 @@ export interface OrgFixture {
   environments: { id: EnvironmentId; machineName: string }[];
   /** A fresh AppRole login token (new secret id, then login inside the namespace). */
   login(identity: AppRoleName): Promise<string>;
+  /** The role id and a new secret id of an AppRole, for inline authentication (Run 4.2). */
+  credential(identity: AppRoleName): Promise<{ roleId: string; secretId: string }>;
   /** Deletes the namespace and waits until it is gone. */
   drop(): Promise<void>;
 }
@@ -171,6 +173,12 @@ export async function createOrgFixture(
           );
         }
         return result.data.token;
+      },
+      credential: async (identity) => {
+        const roleId = roleIds.get(identity);
+        if (roleId === undefined) throw new Error("unknown AppRole");
+        const { secretId } = await admin.newSecretId(namespace, identity);
+        return { roleId, secretId };
       },
       drop: () => dropNamespace(stack, namespace),
     };

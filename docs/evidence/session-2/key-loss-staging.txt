@@ -16,3 +16,19 @@
 2026-11-12T12:55:56.964Z recovery key on sys/unseal: HTTP 400, not unsealed
 2026-11-12T12:57:21.278Z restore on L-C: snapshot HTTP 400, snapshot-force HTTP 204, afterwards sealed=true, secret readable=false
 2026-11-12T12:57:21.279Z KMS-L1 SPIKE_PASS — seal key lost: UNRECOVERABLE, as Doc 04 says; a backup pair is only as recoverable as its seal key
+2026-11-14T11:44:24.814Z keys created and activated: L-A 1eb907ed-53a0-425f-9099-f3d13a01925f, L-C b13ae501-cc33-4732-bad5-9e6379a88616
+2026-11-14T11:44:46.104Z losstest: initialised on L-A, secret written, snapshot 19993 bytes
+2026-11-14T11:44:58.153Z L-A 1eb907ed-53a0-425f-9099-f3d13a01925f revoked and destroyed
+2026-11-14T11:46:05.714Z losstest restarted with L-A destroyed: never unsealed in 60 s
+2026-11-14T11:47:17.302Z losstest reconfigured to L-C: never unsealed in 60 s
+2026-11-14T11:47:17.597Z recovery key on sys/unseal: HTTP 400, not unsealed
+2026-11-14T11:48:44.096Z restore on L-C: snapshot HTTP 400, snapshot-force HTTP 204, afterwards sealed=true, secret readable=false
+2026-11-14T11:48:44.098Z KMS-L1 SPIKE_PASS — seal key lost: UNRECOVERABLE, as Doc 04 says; a backup pair is only as recoverable as its seal key
+2026-11-14T13:36:22.028Z keys created and activated: L-A a97a8380-3ba1-4809-a8f5-02b41749a82d, L-C dc1b3518-0345-4157-9d58-e006034d3aab
+2026-11-14T13:36:41.982Z losstest: initialised on L-A, secret written, snapshot 19993 bytes
+2026-11-14T13:36:52.062Z L-A a97a8380-3ba1-4809-a8f5-02b41749a82d revoked and destroyed
+2026-11-14T13:37:56.359Z losstest restarted with L-A destroyed: never unsealed in 60 s
+2026-11-14T13:39:04.715Z losstest reconfigured to L-C: never unsealed in 60 s
+2026-11-14T13:39:05.016Z recovery key on sys/unseal: HTTP 400, not unsealed
+2026-11-14T13:40:30.171Z restore on L-C: snapshot HTTP 400, snapshot-force HTTP 204, afterwards sealed=true, secret readable=false
+2026-11-14T13:40:30.171Z KMS-L1 SPIKE_PASS — seal key lost: UNRECOVERABLE, as Doc 04 says; a backup pair is only as recoverable as its seal key

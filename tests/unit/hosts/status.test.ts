@@ -67,8 +67,20 @@ describe("parseHostStatus", () => {
     expect(odd.provisioner).toBeNull();
   });
 
+  it("reads the unresolved operations (Run 4.5)", () => {
+    expect(
+      parseHostStatus(JSON.stringify({ ...base, operationsUnresolved: 3 }), at, at)
+        .operationsUnresolved,
+    ).toBe(3);
+    expect(
+      parseHostStatus(JSON.stringify({ ...base, operationsUnresolved: "x" }), at, at)
+        .operationsUnresolved,
+    ).toBeNull();
+  });
+
   it("says unknown for everything an older status.sh does not print", () => {
     const status = parseHostStatus(JSON.stringify(base), at, at);
+    expect(status.operationsUnresolved).toBeNull();
     expect(status.reviewOpen).toBeNull();
     expect(status.provisioner).toBeNull();
     expect(status.chronyOffsetMs).toBeNull();

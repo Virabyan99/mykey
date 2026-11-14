@@ -12,7 +12,12 @@ import type { Login, RoleName, TestDatabase } from "../integration/database/setu
 import type { Stack } from "./stack.ts";
 import { expectSuccess, registerSecret, sshExec, type StagingStack } from "./staging.ts";
 
-const API_RUNTIME_PASSWORD = "/etc/mykey/secrets/api/db-password";
+// The runtime roles' passwords live only on the host (the workstation copies of
+// provisioner_runtime were shredded in Run 4.10); the other roles' on the workstation.
+const ON_HOST: Partial<Record<RoleName, string>> = {
+  api_runtime: "/etc/mykey/secrets/api/db-password",
+  provisioner_runtime: "/etc/mykey/secrets/provisioner/db-password",
+};
 
 export async function stagingDatabase(staging: StagingStack): Promise<TestDatabase> {
   const base = {
@@ -23,13 +28,14 @@ export async function stagingDatabase(staging: StagingStack): Promise<TestDataba
   };
   const passwords = {} as Record<RoleName, string>;
   for (const role of ROLE_NAMES) {
-    if (role === "api_runtime") {
+    const onHost = ON_HOST[role];
+    if (onHost !== undefined) {
       passwords[role] = expectSuccess(
-        await sshExec(staging.host, `cat ${API_RUNTIME_PASSWORD}`, {
+        await sshExec(staging.host, `cat ${onHost}`, {
           sudo: true,
           secretOutput: true,
         }),
-        "reading the api_runtime password",
+        `reading the ${role} password`,
       ).stdout.trim();
     } else {
       passwords[role] = readFileSync(

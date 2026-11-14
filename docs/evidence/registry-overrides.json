@@ -87,8 +87,8 @@
     {
       "id": "PO-16",
       "status": "SPIKE_PASS",
-      "evidence": ["docs/evidence/session-2/run-2.4.md"],
-      "note": "G-EFFECT: delayed effects, replay and exclusion with real process death and sockets (spike executor, not the protocol)."
+      "evidence": ["docs/evidence/session-2/run-2.4.md", "docs/evidence/session-4/run-4.6.md"],
+      "note": "G-EFFECT: delayed effects, replay and exclusion with real process death and sockets (spike executor, Run 2.4); the product's KV actions under the same faults, at most one backend change each (Run 4.6). Soft delete and undelete: no backend marker, settled under exclusion (D-38). Session 5 effects (issuance, revocation, archive) owed."
     },
     {
       "id": "FR-1.70",
@@ -359,6 +359,180 @@
       "status": "SPIKE_PASS",
       "evidence": ["docs/evidence/session-3/run-3.9.md"],
       "note": "Projects and environments as replayable operations, keyset lists, readiness; a pending environment cannot issue credentials is proven at the state gate and again on the real route by Run 5.1 (product code, real stores)."
+    },
+    {
+      "id": "FR-1.20",
+      "status": "SPIKE_PASS",
+      "evidence": ["docs/evidence/session-4/run-4.2.md"],
+      "note": "Values: empty, 64 KiB of multibyte text, CR/LF/tab, four-byte characters stored exactly; oversize, NUL and lone surrogates refused before any effect and never echoed (product code, real stores; staging create)."
+    },
+    {
+      "id": "FR-1.24",
+      "status": "SPIKE_PASS",
+      "evidence": ["docs/evidence/session-4/run-4.2.md"],
+      "note": "Create through the six-step protocol: one version carrying the operation id, index, version event, audit intent and success; replay, races on two processes, authorization and state refusals (product code, real stores; staging through the public name)."
+    },
+    {
+      "id": "FR-1.25",
+      "status": "SPIKE_PASS",
+      "evidence": ["docs/evidence/session-4/run-4.2.md"],
+      "note": "Update with expected version and state tag: version_conflict with details, backend moved underneath goes to review, capacity 507, admission recheck (product code, real stores; staging through the public name)."
+    },
+    {
+      "id": "AC-1.14",
+      "status": "SPIKE_PASS",
+      "evidence": ["docs/evidence/session-4/run-4.2.md"],
+      "note": "Two concurrent updates with one version and tag: exactly one 200 and one 409 version_conflict, one new version and one audited change, twenty rounds on two API processes (local stack)."
+    },
+    {
+      "id": "FR-1.21",
+      "status": "SPIKE_PASS",
+      "evidence": ["docs/evidence/session-4/run-4.3.md"],
+      "note": "Metadata from the index: pages under a signed cursor with the metadata generation, bytewise order, literal prefixes, deleted and in-review names with their state; never OpenBao, never a value (product code, real stores)."
+    },
+    {
+      "id": "FR-1.26",
+      "status": "SPIKE_PASS",
+      "evidence": ["docs/evidence/session-4/run-4.3.md"],
+      "note": "History: OpenBao metadata joined with version events — who wrote each version and its last delete or undelete, twenty at most, no value; delete/undelete/restore made by the fixture until Run 4.4 adds their routes (product code, real stores)."
+    },
+    {
+      "id": "AC-1.12",
+      "status": "SPIKE_PASS",
+      "evidence": ["docs/evidence/session-4/run-4.3.md"],
+      "note": "Boundary names (1 and 128 characters) and values (empty, 65,536 bytes of multibyte text, CR/LF/tab, four-byte characters) are written and read back with equal digests through create and reveal (product code, real stores)."
+    },
+    {
+      "id": "FR-1.27",
+      "status": "SPIKE_PASS",
+      "evidence": ["docs/evidence/session-4/run-4.4.md"],
+      "note": "Soft delete of the current version under the protocol: state deleted, new tag, byte count kept, counters reduced; reveal, update and create refused after it; replay, races and a delayed answer (product code, real stores; staging with Run 4.5)."
+    },
+    {
+      "id": "FR-1.28",
+      "status": "SPIKE_PASS",
+      "evidence": ["docs/evidence/session-4/run-4.4.md"],
+      "note": "Undelete brings the same version back with a new tag and equal digest; capacity from the kept byte count before any effect (product code, real stores)."
+    },
+    {
+      "id": "FR-1.29",
+      "status": "SPIKE_PASS",
+      "evidence": ["docs/evidence/session-4/run-4.4.md"],
+      "note": "Restore writes an older version as a new one with cas = current, also over a deleted current; deleted or trimmed sources are 409; the source value appears in no database row (product code, real stores)."
+    },
+    {
+      "id": "FR-1.32",
+      "status": "SPIKE_PASS",
+      "evidence": ["docs/evidence/session-4/run-4.4.md"],
+      "note": "No route and no runtime client method destroys a version or deletes metadata (unit); the runtime policy is denied kv/destroy and metadata deletion on real OpenBao (authority matrix, Run 2.1)."
+    },
+    {
+      "id": "AC-1.15",
+      "status": "SPIKE_PASS",
+      "evidence": ["docs/evidence/session-4/run-4.4.md"],
+      "note": "Lifecycle mutations raced across two API processes: delete × delete, delete × update, undelete × restore — exactly one 200 and one 409, exactly one backend change (local stack)."
+    },
+    {
+      "id": "PO-7",
+      "status": "SPIKE_PASS",
+      "evidence": ["docs/evidence/session-4/run-4.4.md"],
+      "note": "State tags and cas under the protocol: stale tags change nothing, the backend is checked against the index before any effect, delayed answers become uncertain with the key in review, replays write nothing twice (product code, real stores)."
+    },
+    {
+      "id": "FR-1.30",
+      "status": "SPIKE_PASS",
+      "evidence": ["docs/evidence/session-4/run-4.5.md"],
+      "note": "Concurrency with uncertain outcomes: the stale-work sweep moves executing operations to uncertain and accepted ones to rejected, one audit row each under two sweepers; a swept executor can neither finalize nor dispatch; the slot blocks the environment until settled (product code, real stores)."
+    },
+    {
+      "id": "FR-1.31",
+      "status": "SPIKE_PASS",
+      "evidence": ["docs/evidence/session-4/run-4.5.md"],
+      "note": "Unknown result: a landed write is reconciled as success without exclusion; a not-landed write is rejected only after executor exclusion; deletes and undeletes always need exclusion; evidence conflicts can be closed as unknown (product code, real stores; staging drill)."
+    },
+    {
+      "id": "FR-1.88",
+      "status": "SPIKE_PASS",
+      "evidence": ["docs/evidence/session-4/run-4.5.md"],
+      "note": "Reconciliation: ops operations, reconcile-operation and reconcile-environment; an environment's index rebuilt from OpenBao (300 names within 60 s), a review ended, refused while an operation is unresolved or the lock is held (product code, real stores)."
+    },
+    {
+      "id": "AC-1.16",
+      "status": "SPIKE_PASS",
+      "evidence": ["docs/evidence/session-4/run-4.5.md"],
+      "note": "A timeout after a real backend change gives uncertain with its operation id, the key under review and the slot held, an operations_unresolved alert, and a settlement by the operator (local stack; staging drill with OpenBao paused)."
+    },
+    {
+      "id": "AC-1.38",
+      "status": "SPIKE_PASS",
+      "evidence": ["docs/evidence/session-4/run-4.6.md"],
+      "note": "Real API processes killed (SIGKILL) at each of the six protocol points for each of the five secret actions: truthful answers and replays at every stage, at most one backend change, the index equal to the backend after settlement (product code, real stores)."
+    },
+    {
+      "id": "FR-1.82",
+      "status": "SPIKE_PASS",
+      "evidence": ["docs/evidence/session-4/run-4.6.md"],
+      "note": "Durable operation lifecycle under crashes: accepted rows swept to rejected, executing rows to uncertain, settled by the operator; replays tell the truth at every stage (product code, real stores)."
+    },
+    {
+      "id": "FR-1.83",
+      "status": "SPIKE_PASS",
+      "evidence": ["docs/evidence/session-4/run-4.6.md"],
+      "note": "Replay contract under faults: the original key answers 202, then 503 outcome_unknown or the stored error, then the settled result; eight repeats during a held request change nothing (product code, real stores)."
+    },
+    {
+      "id": "FR-1.35",
+      "status": "SPIKE_PASS",
+      "evidence": ["docs/evidence/session-4/run-4.7.md"],
+      "note": "Import preview: classification under the lock, values compared in memory only, nothing written; stored rows hold names, lines, classifications, versions and tags (product code, real stores)."
+    },
+    {
+      "id": "FR-1.36",
+      "status": "SPIKE_PASS",
+      "evidence": ["docs/evidence/session-4/run-4.7.md"],
+      "note": "Import apply and resume entry by entry through the mutation protocol; seven outcomes; partial when not every entry applied; resume never writes an entry twice."
+    },
+    {
+      "id": "AC-1.39",
+      "status": "SPIKE_PASS",
+      "evidence": ["docs/evidence/session-4/run-4.7.md"],
+      "note": "Import under faults: an unknown entry stops the import as uncertain and is settled through its child; a process killed between entries, inside an entry or before the finish leaves a truthful parent."
+    },
+    {
+      "id": "PO-17",
+      "status": "SPIKE_PASS",
+      "evidence": ["docs/evidence/session-4/run-4.7.md"],
+      "note": "Import is truthfully non-atomic: every entry has one of seven outcomes and a resumed import never applies an entry twice."
+    },
+    {
+      "id": "FR-1.84",
+      "status": "SPIKE_PASS",
+      "evidence": ["docs/evidence/session-4/run-4.8.md"],
+      "note": "Complete environment read under the lock: every live value of one generation or nothing; drift, review, slots, size, generation change and audit failure refuse the whole read (product code, real stores)."
+    },
+    {
+      "id": "AC-1.41",
+      "status": "SPIKE_PASS",
+      "evidence": ["docs/evidence/session-4/run-4.8.md"],
+      "note": "Race test: four writers on two processes, an import, four readers; every read equals the set of its generation exactly, five runs in a row."
+    },
+    {
+      "id": "PO-19",
+      "status": "SPIKE_PASS",
+      "evidence": ["docs/evidence/session-4/run-4.8.md"],
+      "note": "G-RESOLVE, human path; machine resolve is Run 5.1. A read racing multi-key changes returns one generation's set or fails as a whole."
+    },
+    {
+      "id": "FR-1.37",
+      "status": "SPIKE_PASS",
+      "evidence": ["docs/evidence/session-4/run-4.9.md"],
+      "note": "Export of an environment as a dotenv attachment: complete read under the lock, secret.export audited before the bytes, exact headers, no compression through the edge; 1,000 names of 7 MiB in at most 19.8 s on staging."
+    },
+    {
+      "id": "AC-1.17",
+      "status": "SPIKE_PASS",
+      "evidence": ["docs/evidence/session-4/run-4.9.md"],
+      "note": "Export → import → export is byte-identical with awkward values, on the local stack (12 values incl. 64 KiB) and on staging (20 names)."
     }
   ]
 }

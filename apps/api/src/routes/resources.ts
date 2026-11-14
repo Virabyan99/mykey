@@ -69,6 +69,8 @@ async function mutate(
       target,
       idempotencyKey: key,
       organizationId: scope.organizationId,
+      ...("projectId" in scope ? { projectId: scope.projectId } : {}),
+      ...("environmentId" in scope ? { environmentId: scope.environmentId } : {}),
       body: ctx.body,
     });
     if (begin.kind === "conflict") throw new ApiError("idempotency_conflict");

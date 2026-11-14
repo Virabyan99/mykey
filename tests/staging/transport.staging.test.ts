@@ -50,10 +50,17 @@ async function waitForApi(host: HostEntry, tls: string, status: string): Promise
 }
 
 describe.each([hosts.staging, hosts.prod])("$name, public HTTPS", (host) => {
+  // Production runs without a gate file since Session 3 (the owner opens it): its /health
+  // answers down by design. The chain, HSTS and forwarded headers are checked the same.
+  const health =
+    host.name === "prod"
+      ? { status: 503, body: '{"status":"down"}' }
+      : { status: 200, body: '{"status":"up"}' };
+
   it("serves /health with a valid chain for the host name and HSTS", async () => {
     const answer = await httpsGet(host.hostname, "/health");
-    expect(answer.status).toBe(200);
-    expect(answer.body).toBe('{"status":"up"}');
+    expect(answer.status).toBe(health.status);
+    expect(answer.body).toBe(health.body);
     expect(answer.authorized).toBe(true);
     expect(answer.certificate.subjectAltName.split(", ")).toContain(`DNS:${host.hostname}`);
     expect(answer.certificate.issuer).toMatch(/^Let's Encrypt /);
@@ -96,7 +103,7 @@ describe.each([hosts.staging, hosts.prod])("$name, public HTTPS", (host) => {
       "X-Forwarded-For": "203.0.113.9",
       "X-Forwarded-Proto": "http",
     });
-    expect(answer.status).toBe(200);
+    expect(answer.status).toBe(health.status);
     const requestId = answer.headers["x-request-id"];
     expect(requestId).toMatch(/^[0-9a-f-]{36}$/);
     // The workstation's public address as the host sees it: its WireGuard endpoint.
@@ -106,13 +113,16 @@ describe.each([hosts.staging, hosts.prod])("$name, public HTTPS", (host) => {
       await run(host, `docker logs --since 10m mykey-api-1 2>&1 | grep -F ${String(requestId)}`)
     )
       .trim()
-      .split("\n");
+      .split("\n")
+      .map((line) => JSON.parse(line) as { event?: string })
+      // A down /health also writes its cause (`health_down`) under the same request id.
+      .filter((line) => line.event === "request");
     expect(lines).toHaveLength(1);
-    expect(JSON.parse(lines[0] ?? "")).toMatchObject({
+    expect(lines[0]).toMatchObject({
       event: "request",
       requestId,
       path: "/health",
-      status: 200,
+      status: health.status,
       // The proxy is the only peer; the forwarded values are the proxy's own.
       peer: "10.78.1.2",
       forwardedFor: workstation[0],

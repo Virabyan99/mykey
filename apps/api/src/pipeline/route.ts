@@ -9,13 +9,15 @@
 // ancestry and membership → visibility → action → state → freshness →
 // handler → output validation; no-store and x-request-id on every response
 // (app.ts).
+import { createHash } from "node:crypto";
 import { AuditUnavailable } from "@mykey/audit";
 import { LIMITS, ROUTES, type RouteDef } from "@mykey/contracts";
 import type { Context, Hono } from "hono";
 import { now } from "../log.ts";
 import { authenticateHuman } from "./authn.ts";
-import { findOperationByKey } from "@mykey/db";
-import { operationResponse, sameIntent } from "@mykey/operations";
+import { findOperationByKey, hasTombstone } from "@mykey/db";
+import { replayAnswer, sameIntent, type Intent } from "@mykey/operations";
+import type { Principal } from "./authn.ts";
 import { admitStates, authorize, deny } from "./authz.ts";
 import { checkOrigin, hasMixedCredentials, needsOriginCheck } from "./origin.ts";
 import { headerBytes, readBody } from "./body.ts";
@@ -27,13 +29,44 @@ import {
   type Handler,
   type HandlerResult,
 } from "./context.ts";
-import { errorResponse, jsonResponse } from "./respond.ts";
+import { checkDetails, errorResponse, jsonResponse } from "./respond.ts";
 import { validateBody, validateQuery } from "./validate.ts";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
 /** The end of a route with no handler yet: written directly, since not every route lists not_found. */
 class NoHandler extends Error {}
+
+/** The path parameters that name the scope; every other one is part of the intent (P-64). */
+const SCOPE_PARAMS: ReadonlySet<string> = new Set(["org", "project", "env"]);
+
+/**
+ * The intent of a mutation (P-64): the target is the deepest scope id of the
+ * path; `params` holds the other path parameters, when there are any. The one
+ * place target and params are derived.
+ */
+export function intentOf(
+  route: RouteDef,
+  params: Record<string, string>,
+  principal: Principal,
+  body: unknown,
+): Intent {
+  const extra = Object.fromEntries(
+    Object.entries(params).filter(([name]) => !SCOPE_PARAMS.has(name)),
+  );
+  return {
+    principalKind: "user",
+    principalId: principal.userId,
+    action: route.id,
+    target: params.env ?? params.project ?? params.org ?? "",
+    ...(Object.keys(extra).length === 0 ? {} : { params: extra }),
+    // A dotenv file (Run 4.7) enters as its digest: the canonical text is only HMAC'd, never stored.
+    body:
+      body instanceof Uint8Array
+        ? { sha256: createHash("sha256").update(body).digest("hex") }
+        : body,
+  };
+}
 
 /** What a route with no handler does after every check has passed. */
 const terminal: Handler = () => Promise.reject(new NoHandler());
@@ -70,7 +103,11 @@ export function failureResponse(
   }
   // A route without the code in its list never sends it.
   if (route.errors.includes(code)) {
-    return errorResponse(code, requestId, error instanceof ApiError ? error.headers : undefined);
+    if (!(error instanceof ApiError)) return errorResponse(code, requestId);
+    if (!checkDetails(code, error.extra.details).valid) {
+      deps.log({ event: "output_invalid", time: now(), requestId, routeId: route.id, status: 0 });
+    }
+    return errorResponse(code, requestId, error.headers, error.extra);
   }
   deps.log({ event: "unlisted_error", time: now(), requestId, routeId: route.id, code });
   return errorResponse("dependency_unavailable", requestId);
@@ -83,6 +120,27 @@ function outputResponse(
   deps: AppDeps,
 ): Response {
   const schema = route.responses[result.status];
+  // An attachment (Run 4.9): the bytes as they are, their length, no transformation.
+  if (schema === "dotenv-attachment" || result.raw !== undefined) {
+    if (schema !== "dotenv-attachment" || result.raw === undefined) {
+      deps.log({
+        event: "output_invalid",
+        time: now(),
+        requestId,
+        routeId: route.id,
+        status: result.status,
+      });
+      return errorResponse("dependency_unavailable", requestId);
+    }
+    return new Response(result.raw.bytes, {
+      status: result.status,
+      headers: {
+        ...result.headers,
+        "content-type": result.raw.contentType,
+        "content-length": String(result.raw.bytes.length),
+      },
+    });
+  }
   if (schema === undefined || typeof schema === "string") {
     deps.log({
       event: "output_invalid",
@@ -146,37 +204,36 @@ async function run(
     // stored outcome before the state and freshness checks (Doc 06 §6.2 step 1).
     let idempotencyKey: string | null = null;
     if (route.idempotent && principal !== null) {
-      const key = headers.get("idempotency-key")?.toLowerCase() ?? "";
-      if (!UUID.test(key)) throw new ApiError("precondition_required");
-      idempotencyKey = key;
+      const header = headers.get("idempotency-key")?.toLowerCase() ?? "";
+      if (!UUID.test(header)) throw new ApiError("precondition_required");
+      idempotencyKey = header;
       const ring = deps.auth?.keys.replayFingerprint;
       if (ring === undefined) throw new ApiError("dependency_unavailable");
-      const intent = {
-        principalKind: "user",
-        principalId: principal.userId,
-        action: route.id,
-        target: params.env ?? params.project ?? params.org ?? "",
-        body,
-      };
-      const stored = await findOperationByKey(deps.pool, {
-        principalKind: "user",
+      const intent = intentOf(route, params, principal, body);
+      const key = {
+        principalKind: "user" as const,
         principalId: principal.userId,
         action: route.id,
         target: intent.target,
         idempotencyKey,
-      });
-      if (stored !== null) {
-        if (!sameIntent(ring, stored, intent)) throw new ApiError("idempotency_conflict");
-        const completed = 201 in route.responses ? 201 : 200;
-        return outputResponse(
-          {
-            status: stored.state === "succeeded" ? completed : 202,
-            body: operationResponse(stored),
-          },
-          route,
-          requestId,
-          deps,
-        );
+      };
+      const stored = await findOperationByKey(deps.pool, key);
+      if (stored === null) {
+        if (await hasTombstone(deps.pool, key)) throw new ApiError("replay_expired");
+      } else {
+        // An expired record has lost its fingerprint: it answers replay_expired, never a conflict.
+        const expired =
+          stored.expired && ["succeeded", "partial", "rejected"].includes(stored.state);
+        if (!expired && !sameIntent(ring, stored, intent)) {
+          throw new ApiError("idempotency_conflict");
+        }
+        const answer = replayAnswer(route, stored);
+        if ("error" in answer) {
+          throw new ApiError(answer.error, "replay", undefined, {
+            ...(answer.operationId === undefined ? {} : { operationId: answer.operationId }),
+          });
+        }
+        return outputResponse(answer, route, requestId, deps);
       }
     }
     if (principal !== null) await admitStates(deps, route, params, principal, requestId, access);
@@ -192,11 +249,19 @@ async function run(
         targetId: params.env ?? params.project ?? params.org ?? null,
       });
     }
-    if (handler === terminal && deps.test?.stubs !== undefined) {
+    const stubbed =
+      handler === terminal ||
+      deps.test?.stubRoutes?.has(route.id) === true ||
+      (deps.test?.stubAll === true &&
+        route.id !== "health.get" &&
+        route.id !== "version.get" &&
+        ROUTES.some((contract) => contract.id === route.id));
+    if (stubbed && deps.test?.stubs !== undefined) {
       // The harness's stub: every check of the pipeline has passed.
       await deps.test.stubs(route.id);
       return new Response(null, { status: 204 });
     }
+    await deps.test?.beforeHandler?.(route.id);
     const result = await handler(
       {
         requestId,
@@ -212,6 +277,7 @@ async function run(
         principal,
         scope: access.scope,
         authority: access.authority,
+        operation: access.operation ?? null,
         idempotencyKey,
         ...(clock === undefined ? {} : { now: clock }),
       },

@@ -1,0 +1,85 @@
+{
+  "project": {
+    "name": "s4-export-0162944e",
+    "id": "3082a30a-2e78-4746-b254-603f24c7bb4d",
+    "environments": {
+      "development": "3c96e49d-1e54-4eb4-8d58-200a11480cc1",
+      "copy": "5bd73f3d-9556-4c4b-8bd1-15277921dcfd",
+      "full": "f3a8e3da-377b-45e3-b3b5-e090e22f8f1d"
+    }
+  },
+  "edge": {
+    "bytes": 66408,
+    "contentEncoding": null
+  },
+  "roundTrip": {
+    "names": 20,
+    "bytes": 66408,
+    "digestsEqual": true
+  },
+  "imports": [
+    {
+      "batch": 0,
+      "seconds": 9.8,
+      "resumes": 0,
+      "state": "succeeded"
+    },
+    {
+      "batch": 1,
+      "seconds": 13.1,
+      "resumes": 0,
+      "state": "succeeded"
+    },
+    {
+      "batch": 2,
+      "seconds": 9.2,
+      "resumes": 0,
+      "state": "succeeded"
+    },
+    {
+      "batch": 3,
+      "seconds": 9.2,
+      "resumes": 0,
+      "state": "succeeded"
+    },
+    {
+      "batch": 4,
+      "seconds": 9.1,
+      "resumes": 0,
+      "state": "succeeded"
+    },
+    {
+      "batch": 5,
+      "seconds": 9.7,
+      "resumes": 0,
+      "state": "succeeded"
+    },
+    {
+      "batch": 6,
+      "seconds": 9.4,
+      "resumes": 0,
+      "state": "succeeded"
+    },
+    {
+      "batch": 7,
+      "seconds": 9.1,
+      "resumes": 0,
+      "state": "succeeded"
+    }
+  ],
+  "exports": [
+    {
+      "seconds": 10.6,
+      "bytes": 7182000
+    },
+    {
+      "seconds": 18.8,
+      "bytes": 7182000
+    },
+    {
+      "seconds": 19.8,
+      "bytes": 7182000
+    }
+  ],
+  "slowestExportMs": 19800
+}

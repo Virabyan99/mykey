@@ -11,6 +11,10 @@
 //     closed 300 ms after its first record (the server has the request);
 //   - "hold": the first request record passes and nothing ever comes back.
 //
+// In "pass" mode, swallowRequests(true) (Run 4.5) discards every request record
+// after the handshake: the server never sees the request, the client waits for
+// its deadline. Such a connection's server side is closed with the client's.
+//
 // A delayed request whose server connection has closed in the meantime is lost,
 // as it would be on a real network once the receiving process is gone.
 import net from "node:net";
@@ -27,6 +31,22 @@ export interface TlsRelay {
   /** Delays every request record after a connection's first one: the headers arrive, the rest of a large body waits. */
   delayRequestTail(ms: number): void;
   delayResponses(ms: number): void;
+  /** Requests never reach the server while on (a change that did not land). */
+  swallowRequests(on: boolean): void;
+  /**
+   * Run 4.6: while on, request records wait in the relay; off releases every
+   * waiting record to its server connection — lost if that connection has
+   * closed meanwhile (an OpenBao restarted), delivered if it is still open.
+   */
+  holdRequests(on: boolean): void;
+  /** Run 4.6: the mode for connections' next records. */
+  setMode(mode: RelayMode): void;
+  /**
+   * Run 4.8: after `records` more request records pass in "pass" mode, the
+   * mode becomes "drop" (a GET without a body is one record): the Nth backend
+   * call of a multi-call read fails.
+   */
+  dropAfter(records: number): void;
   clear(): void;
   close(): Promise<void>;
 }
@@ -38,26 +58,35 @@ const later = (ms: number): Promise<void> =>
   new Promise((resolveLater) => setTimeout(resolveLater, Math.max(0, ms)));
 
 export async function startTlsRelay(
-  target: { host: string; port: number },
-  mode: RelayMode = "pass",
+  /** A function is asked again for every connection (a restarted server may move). */
+  target: { host: string; port: number } | (() => { host: string; port: number }),
+  initialMode: RelayMode = "pass",
 ): Promise<TlsRelay> {
+  let mode = initialMode;
+  let holding = false;
+  const releases = new Set<() => void>();
   const sockets = new Set<net.Socket>();
   const forwardedAt: number[] = [];
   let requestDelay = 0;
   let tailDelay = 0;
   let responseDelay = 0;
+  let swallow = false;
+  // Request records still to pass before the mode turns to "drop" (null: never).
+  let dropIn: number | null = null;
   let markForwarded: () => void = () => undefined;
   const requestForwarded = new Promise<void>((resolveForwarded) => {
     markForwarded = resolveForwarded;
   });
 
   const server = net.createServer((client) => {
-    const upstream = net.connect(target);
+    const upstream = net.connect(typeof target === "function" ? target() : target);
+    const held: Buffer[] = [];
     sockets.add(client).add(upstream);
     let pending = Buffer.alloc(0);
     // 0: before the client's ChangeCipherSpec; 1: its Finished is next; 2: request records.
     let phase = 0;
     let requestSeen = false;
+    let swallowed = false;
     // Keeps records in order when they are delayed.
     let toServer = Promise.resolve();
     let toClient = Promise.resolve();
@@ -104,9 +133,32 @@ export async function startTlsRelay(
           }
           continue;
         }
+        if (swallow) {
+          swallowed = true;
+          continue;
+        }
+        if (holding) {
+          if (held.length === 0) {
+            const release = (): void => {
+              releases.delete(release);
+              for (const waiting of held.splice(0)) forward(waiting, 0);
+            };
+            releases.add(release);
+          }
+          held.push(record);
+          requestSeen = true;
+          continue;
+        }
         // The first request record carries the HTTP headers; a large body follows in more records.
         forward(record, requestSeen ? requestDelay + tailDelay : requestDelay);
         requestSeen = true;
+        if (dropIn !== null) {
+          dropIn -= 1;
+          if (dropIn <= 0) {
+            dropIn = null;
+            mode = "drop";
+          }
+        }
       }
     });
     upstream.on("data", (chunk: Buffer) => {
@@ -129,7 +181,10 @@ export async function startTlsRelay(
     upstream.on("error", end);
     // A frozen client keeps its socket; a dead one closes it. Either way the
     // request already on its way still goes on, as on a real network.
-    client.on("close", () => sockets.delete(client));
+    client.on("close", () => {
+      sockets.delete(client);
+      if (swallowed) upstream.destroy();
+    });
     upstream.on("close", () => {
       sockets.delete(upstream);
       void toClient.then(() => client.destroy());
@@ -151,7 +206,25 @@ export async function startTlsRelay(
     delayResponses: (ms) => {
       responseDelay = ms;
     },
+    swallowRequests: (on) => {
+      swallow = on;
+    },
+    holdRequests: (on) => {
+      holding = on;
+      if (!on) for (const release of [...releases]) release();
+    },
+    setMode: (next) => {
+      mode = next;
+    },
+    dropAfter: (records) => {
+      dropIn = records;
+    },
     clear: () => {
+      swallow = false;
+      dropIn = null;
+      mode = initialMode;
+      holding = false;
+      for (const release of [...releases]) release();
       requestDelay = 0;
       tailDelay = 0;
       responseDelay = 0;

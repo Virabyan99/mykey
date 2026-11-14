@@ -324,6 +324,90 @@ describe("role privileges", () => {
   });
 });
 
+// Run 4.2 (P-72, migration 0012): the API sends an environment to review through one function.
+describe("app.mark_environment_review", () => {
+  async function environment(state: string): Promise<{ org: string; env: string }> {
+    const org = randomUUID();
+    const project = randomUUID();
+    const env = randomUUID();
+    const superuser = db.pool("superuser");
+    await run(
+      superuser,
+      "INSERT INTO app.organization (id, namespace, state) VALUES ($1, $2, 'active')",
+      [org, `org-${org}`],
+    );
+    await run(
+      superuser,
+      "INSERT INTO app.project (id, organization_id, name, state) VALUES ($1, $2, 'P', 'active')",
+      [project, org],
+    );
+    await run(
+      superuser,
+      `INSERT INTO app.environment (id, organization_id, project_id, name, state, kv_ready)
+       VALUES ($1, $2, $3, 'dev', $4, true)`,
+      [env, org, project, state],
+    );
+    return { org, env };
+  }
+
+  async function stateOf(env: string) {
+    const [row] = await run<{ state: string; review_reason: string | null }>(
+      db.pool("superuser"),
+      "SELECT state, review_reason FROM app.environment WHERE id = $1",
+      [env],
+    );
+    return row;
+  }
+
+  it("api_runtime calls it: active and pending go to needs_review with backend_inconsistent", async () => {
+    for (const state of ["active", "pending"]) {
+      const { org, env } = await environment(state);
+      await run(db.pool("api_runtime"), "SELECT app.mark_environment_review($1, $2)", [org, env]);
+      expect(await stateOf(env)).toEqual({
+        state: "needs_review",
+        review_reason: "backend_inconsistent",
+      });
+    }
+  });
+
+  it("it changes nothing else: an archived environment stays archived; another organization's id does nothing", async () => {
+    const archived = await environment("archived");
+    await run(db.pool("api_runtime"), "SELECT app.mark_environment_review($1, $2)", [
+      archived.org,
+      archived.env,
+    ]);
+    expect((await stateOf(archived.env))?.state).toBe("archived");
+    const active = await environment("active");
+    await run(db.pool("api_runtime"), "SELECT app.mark_environment_review($1, $2)", [
+      randomUUID(),
+      active.env,
+    ]);
+    expect((await stateOf(active.env))?.state).toBe("active");
+  });
+
+  it("api_runtime cannot clear a review: the reason is not its to write, and the state alone is refused", async () => {
+    const { org, env } = await environment("active");
+    await run(db.pool("api_runtime"), "SELECT app.mark_environment_review($1, $2)", [org, env]);
+    const api = db.pool("api_runtime");
+    expect(
+      await attempt(api, "UPDATE app.environment SET review_reason = NULL WHERE id = $1", [env]),
+    ).toBe(DENIED);
+    expect(
+      await attempt(api, "UPDATE app.environment SET state = 'active' WHERE id = $1", [env]),
+    ).toBe("23514");
+  });
+
+  it("provisioner_runtime, backup_reader and maintenance cannot call it", async () => {
+    const { org, env } = await environment("active");
+    for (const login of ["provisioner_runtime", "backup_reader", "maintenance"] as const) {
+      expect(
+        await attempt(db.pool(login), "SELECT app.mark_environment_review($1, $2)", [org, env]),
+        login,
+      ).toBe(DENIED);
+    }
+  });
+});
+
 describe("catalog sweep", () => {
   it("every table is in the expected-grants matrix and is owned by migration_owner", async () => {
     const tables = await run<{ name: string; owner: string }>(

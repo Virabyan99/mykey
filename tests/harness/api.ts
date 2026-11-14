@@ -16,6 +16,7 @@ import {
   createApp,
   createHealthCheck,
   listen,
+  runtimeBaoFromDirectory,
   startOutboxDispatcher,
   type ApiConfig,
   type ApiServer,
@@ -36,7 +37,8 @@ import type { RouteDef } from "@mykey/contracts";
 import { drizzle } from "drizzle-orm/node-postgres";
 import * as OTPAuth from "otpauth";
 import { createPool } from "@mykey/db";
-import { ensureQueues } from "@mykey/operations";
+import type { OpenBaoTarget } from "@mykey/openbao";
+import { ensureQueues, type RuntimeBao } from "@mykey/operations";
 import type pg from "pg";
 import { prepareDatabase, type TestDatabase } from "../integration/database/setup.ts";
 import { getSharedStack, type Stack } from "./stack.ts";
@@ -65,11 +67,49 @@ export interface StartTestApiOptions {
   dispatcher?: boolean;
   /**
    * Routes without a handler answer 204 after every pipeline check and record
-   * their id in `reached` (Run 3.4), instead of the terminal 404.
+   * their id in `reached` (Run 3.4), instead of the terminal 404. `"all"`: every
+   * contract route but health and version answers through the stub (P-80).
    */
-  stubs?: boolean;
+  stubs?: boolean | "all";
+  /**
+   * With `stubs: true`: these routes answer through the stub although they have
+   * a handler — suites about the pipeline that use a route a later run filled in.
+   */
+  stubRoutes?: readonly string[];
   /** Runs inside the stub after the id is recorded; the stub answers when it settles (Run 3.7). */
   stubHook?: (routeId: string) => Promise<void> | void;
+  /** Runs after freshness and before a real handler (Run 4.1): state changed after the pipeline. */
+  beforeHandler?: (routeId: string) => Promise<void>;
+  /**
+   * The API's OpenBao identity (Run 4.2): the runtime credential files in
+   * `secretsDirectory`, OpenBao at `openBao()` (read on every call, so a test
+   * can point the API elsewhere), and a lock pool of 8.
+   */
+  runtime?: { openBao: () => OpenBaoTarget; secretsDirectory: string };
+  /** The auth keys (default: fresh ephemeral ones); shared with a child API process. */
+  keys?: AuthKeys;
+  /** Fault hooks of the secret protocol (Run 4.2), read on every call. */
+  faults?: () => FaultHook | undefined;
+  /** An import's time budget per request (Run 4.7), read on every request. */
+  importBudgetMs?: () => number | undefined;
+}
+
+export type FaultHook = (point: string, operationId: string) => void | Promise<void>;
+
+/** A RuntimeBao whose OpenBao target is read on every call (one cached reader per target). */
+function switchableRuntime(runtime: NonNullable<StartTestApiOptions["runtime"]>): RuntimeBao {
+  const readers = new Map<string, RuntimeBao>();
+  return {
+    clientFor(organizationId) {
+      const target = runtime.openBao();
+      let reader = readers.get(target.url);
+      if (reader === undefined) {
+        reader = runtimeBaoFromDirectory(target, runtime.secretsDirectory);
+        readers.set(target.url, reader);
+      }
+      return reader.clientFor(organizationId);
+    },
+  };
 }
 
 /** A TCP relay to the stack's PostgreSQL, reading its current port for every connection. */
@@ -121,6 +161,12 @@ export interface TestApi {
   routes: { method: string; path: string }[];
   /** Route ids whose stub ran (with `stubs: true`). */
   reached: string[];
+  /** The gate file and host id the API reads (for a child process on the same gate). */
+  gate: { gatePath: string; hostInstanceId: string };
+  /** The lock pool of the runtime identity (Run 4.2); undefined without `runtime`. */
+  lockPool: pg.Pool | undefined;
+  /** The current app's boot id (a new one after restart()). */
+  readonly bootId: string;
   /**
    * A new app and listener on the same database, keys and gate: what survives
    * is what the database holds. Answers this object, now on its new port.
@@ -188,10 +234,17 @@ export async function startTestApi(opts: StartTestApiOptions = {}): Promise<Test
 
     const pool = createPool(database.targets.api_runtime, { max: 10, queryTimeoutMs: 30_000 });
     cleanup.push(() => pool.end());
+    const lockPool =
+      opts.runtime === undefined
+        ? undefined
+        : createPool(database.targets.api_runtime, { max: 8, queryTimeoutMs: 30_000 });
+    if (lockPool !== undefined) cleanup.push(() => lockPool.end());
+    const bao = opts.runtime === undefined ? undefined : switchableRuntime(opts.runtime);
+    let bootId = randomUUID();
     const health = createHealthCheck(database.targets.api_runtime);
     cleanup.push(() => health.close());
     const logs: LogEntry[] = [];
-    const keys = ephemeralKeys();
+    const keys = opts.keys ?? ephemeralKeys();
     const reached: string[] = [];
     const config: ApiConfig = {
       baseUrl: TEST_ORIGIN,
@@ -205,13 +258,27 @@ export async function startTestApi(opts: StartTestApiOptions = {}): Promise<Test
       const auth = createAuth({ db: drizzle(pool), keys, baseURL: TEST_ORIGIN });
       const app = createApp({
         pool,
+        ...(lockPool === undefined ? {} : { lockPool }),
+        ...(bao === undefined ? {} : { bao }),
+        bootId,
         config,
         health: () => health.check(),
         log: (entry) => logs.push(entry),
         auth: { auth, keys, throttle: createThrottle({ pool, ring: keys.rateLimit }) },
         test: {
           ...(opts.routes === undefined ? {} : { routes: opts.routes }),
-          ...(opts.stubs === true
+          ...(opts.stubs === "all" ? { stubAll: true } : {}),
+          ...(opts.stubRoutes === undefined ? {} : { stubRoutes: new Set(opts.stubRoutes) }),
+          ...(opts.beforeHandler === undefined ? {} : { beforeHandler: opts.beforeHandler }),
+          ...(opts.importBudgetMs === undefined ? {} : { importBudgetMs: opts.importBudgetMs }),
+          ...(opts.faults === undefined
+            ? {}
+            : {
+                faults: async (point: string, operationId: string) => {
+                  await opts.faults?.()?.(point, operationId);
+                },
+              }),
+          ...(opts.stubs === true || opts.stubs === "all"
             ? {
                 stubs: async (routeId: string) => {
                   reached.push(routeId);
@@ -309,8 +376,14 @@ export async function startTestApi(opts: StartTestApiOptions = {}): Promise<Test
         return server.port;
       },
       reached,
+      gate: { gatePath, hostInstanceId },
+      lockPool,
+      get bootId() {
+        return bootId;
+      },
       async restart() {
         await server.close();
+        bootId = randomUUID();
         built = build();
         server = await listen(built.app, { hostname: "127.0.0.1", port: 0, tls });
         return api;
@@ -441,11 +514,13 @@ export function requestTo(
       "sec-fetch-site": "same-origin",
     };
     let payload: Buffer | undefined;
-    if (init.body !== undefined) {
+    if (init.rawBody !== undefined) {
+      payload = Buffer.from(init.rawBody);
+    } else if (init.body !== undefined) {
       payload = Buffer.from(JSON.stringify(init.body), "utf8");
       headers["content-type"] = "application/json";
-      headers["content-length"] = String(payload.length);
     }
+    if (payload !== undefined) headers["content-length"] = String(payload.length);
     if (init.cookie !== undefined) headers.cookie = init.cookie;
     for (const [name, value] of Object.entries(init.headers ?? {})) {
       headers[name.toLowerCase()] = value;

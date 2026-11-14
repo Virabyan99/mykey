@@ -2,6 +2,7 @@
 // routes; none adds, renames or removes one without a `contract:` commit.
 import { z } from "zod";
 import type { Action, RouteScope } from "./authz.ts";
+import { DOTENV_RULES } from "./dotenv/parse.ts";
 import type { ErrorCode } from "./errors.ts";
 import { environmentIdSchema } from "./ids.ts";
 import { LIMITS } from "./limits.ts";
@@ -15,7 +16,7 @@ import {
   checkSecretName,
   checkSecretValue,
 } from "./names.ts";
-import { operationResponseSchema } from "./operation.ts";
+import { OPERATION_STATES, operationResponseSchema } from "./operation.ts";
 
 export type HttpMethod = "GET" | "POST" | "PATCH";
 
@@ -139,9 +140,113 @@ const resolveBody = z.strictObject({
 });
 
 const secretsListQuery = z.strictObject({
-  prefix: z.string().max(LIMITS.listing.filterMaxLength).optional(),
+  // A name prefix (Run 4.3): the name pattern, so `_` and `%` are never wildcards.
+  prefix: z.string().regex(SECRET_NAME_PATTERN).optional(),
   limit: z.int().min(1).max(LIMITS.listing.maxLimit).default(LIMITS.listing.defaultLimit),
   cursor: z.string().min(1).optional(),
+});
+
+/** Run 4.3 (P-73): the index's view of a name. Never a value. */
+const indexState = z.enum(["live", "deleted", "needs_review"]);
+const secretsListBody = z.strictObject({
+  secrets: z.array(
+    z.strictObject({
+      name: z.string(),
+      version: z.int().positive().nullable(),
+      stateTag: z.string(),
+      state: indexState,
+      changedAt: z.iso.datetime(),
+    }),
+  ),
+  nextCursor: z.string().nullable(),
+});
+const historyActor = z.strictObject({
+  kind: z.enum(["user", "operator", "system", "unknown"]),
+  id: z.string().nullable(),
+});
+/** secrets.history: newest version first, at most the twenty OpenBao keeps. */
+const secretsHistoryBody = z.strictObject({
+  name: z.string(),
+  currentVersion: z.int().positive().nullable(),
+  state: indexState,
+  stateTag: z.string(),
+  versions: z
+    .array(
+      z.strictObject({
+        version: z.int().positive(),
+        createdAt: z.iso.datetime(),
+        deleted: z.boolean(),
+        destroyed: z.boolean(),
+        current: z.boolean(),
+        written: z.strictObject({
+          action: z.enum(["create", "update", "restore"]).nullable(),
+          actor: historyActor,
+          operationId: z.uuid().nullable(),
+        }),
+        lastChange: z
+          .strictObject({
+            action: z.enum(["delete", "undelete"]),
+            actor: historyActor,
+            occurredAt: z.iso.datetime(),
+            operationId: z.uuid().nullable(),
+          })
+          .nullable(),
+      }),
+    )
+    .max(LIMITS.secret.versionsKept),
+});
+/** secrets.reveal: one value, after its audit row is committed (Run 4.3). */
+const secretsRevealBody = z.strictObject({
+  name: z.string(),
+  version: z.int().positive(),
+  value: z.string(),
+  stateTag: z.string(),
+});
+
+/**
+ * import.preview (Run 4.7, P-76): the classification of every entry against
+ * the index. Never a value. An invalid entry carries no name (it is typed text
+ * and may be anything); a file the parser refuses has issues and no entries.
+ */
+const importClassification = z.enum([
+  "create",
+  "update",
+  "unchanged",
+  "invalid",
+  "duplicate",
+  "conflict",
+]);
+const count = z.int().nonnegative();
+const importPreviewBody = z.strictObject({
+  previewId: z.uuid().nullable(),
+  expiresAt: z.iso.datetime().nullable(),
+  applicable: z.boolean(),
+  counts: z.strictObject({
+    create: count,
+    update: count,
+    unchanged: count,
+    conflict: count,
+    invalid: count,
+    duplicate: count,
+  }),
+  entries: z
+    .array(
+      z.strictObject({
+        ordinal: z.int().positive(),
+        line: z.int().positive(),
+        name: z.string().nullable(),
+        classification: importClassification,
+      }),
+    )
+    .max(LIMITS.body.dotenvMaxEntries),
+  issues: z.array(z.strictObject({ line: z.int().nonnegative(), rule: z.enum(DOTENV_RULES) })),
+  warnings: z.array(
+    z.strictObject({
+      name: z.string(),
+      loader: z.enum(["nextjs", "python-dotenv"]),
+      kind: z.enum(["expansion", "escape"]),
+    }),
+  ),
 });
 
 /** projects.list and environments.list (Run 3.9, P-59): keyset pages in id order. */
@@ -171,6 +276,29 @@ const environmentsBody = z.strictObject({
       reviewReason: z.string().nullable(),
       kvReady: z.boolean(),
       createdAt: z.iso.datetime(),
+    }),
+  ),
+  nextCursor: z.string().nullable(),
+});
+
+/** operations.list (Run 4.1, P-63): newest first; children of an import are not listed. */
+const operationsListQuery = z.strictObject({
+  limit: z.int().min(1).max(LIMITS.listing.maxLimit).default(LIMITS.listing.defaultLimit),
+  cursor: z.string().min(1).optional(),
+  state: z.enum(["unfinished"]).optional(),
+});
+const operationsListBody = z.strictObject({
+  operations: z.array(
+    z.strictObject({
+      operationId: z.uuid(),
+      action: z.string(),
+      state: z.enum(OPERATION_STATES),
+      name: z.string().nullable(),
+      createdAt: z.iso.datetime(),
+      completedAt: z.iso.datetime().nullable(),
+      replayExpiresAt: z.iso.datetime().nullable(),
+      errorCode: z.string().nullable(),
+      mine: z.boolean(),
     }),
   ),
   nextCursor: z.string().nullable(),
@@ -370,14 +498,17 @@ export const ROUTES: readonly RouteDef[] = Object.freeze([
   define("secrets.list", "GET", `${E}/secrets`, "human", false, "4.3", {
     action: "secrets.read",
     query: secretsListQuery,
+    responses: { 200: secretsListBody },
   }),
   define("secrets.history", "GET", `${E}/secrets/:name/history`, "human", false, "4.3", {
     action: "secrets.history",
+    responses: { 200: secretsHistoryBody },
     errors: ["unsupported_history_parameter", "key_under_review", ...BACKEND],
   }),
   define("secrets.reveal", "POST", `${E}/secrets/:name/reveal`, "human", false, "4.3", {
     action: "secrets.read",
     body: z.strictObject({ version: version.optional() }),
+    responses: { 200: secretsRevealBody },
     errors: ["state_conflict", ...VALUE_READ],
   }),
   define("secrets.create", "POST", `${E}/secrets`, "human", true, "4.2", {
@@ -410,7 +541,8 @@ export const ROUTES: readonly RouteDef[] = Object.freeze([
   define("import.preview", "POST", `${E}/import/preview`, "human", false, "4.7", {
     action: "secrets.write",
     body: "raw-dotenv",
-    errors: ["state_conflict", "capacity_exceeded"],
+    responses: { 200: importPreviewBody },
+    errors: ["state_conflict", "capacity_exceeded", ...BACKEND],
   }),
   define("import.apply", "POST", `${E}/import/:preview/apply`, "human", true, "4.7", {
     action: "secrets.write",
@@ -465,12 +597,19 @@ export const ROUTES: readonly RouteDef[] = Object.freeze([
     { action: "credentials.manage", body: confirmedBody, errors: ["state_conflict", ...BACKEND] },
   ),
 
+  // Status stays readable while a project or environment is in review (P-63, D-35):
+  // action null puts both in state class metadata_read; who sees which row is
+  // decided from the operation's own scope and author.
   define("operations.get", "GET", "/v1/operations/:operation", "human", false, "4.1", {
-    action: "secrets.read",
+    action: null,
     responses: operation,
+    // The operation's organization state answers as on every scoped route (P-53).
+    errors: ["state_conflict", "backend_inconsistent"],
   }),
   define("operations.list", "GET", `${E}/operations`, "human", false, "4.1", {
-    action: "secrets.read",
+    action: null,
+    query: operationsListQuery,
+    responses: { 200: operationsListBody },
   }),
 
   define("audit.list", "GET", `${O}/audit`, "human", false, "6.1", { action: "audit.view" }),

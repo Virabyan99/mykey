@@ -31,6 +31,8 @@ export interface HostStatus {
   gate: "open" | "closed" | "absent" | "invalid" | null;
   /** Organizations, projects and environments in needs_review (Run 3.8); null when unread. */
   reviewOpen: number | null;
+  /** Uncertain or stale secret operations over all organizations (Run 4.5); null when unread. */
+  operationsUnresolved: number | null;
   /** The provisioner container's health (Run 3.8); null when not reported. */
   provisioner: "healthy" | "unhealthy" | "absent" | null;
 }
@@ -40,6 +42,9 @@ export const STATUS_COMMAND = `${REMOTE.hostsDir}/checks/status.sh`;
 
 const nullableBoolean = (value: unknown): boolean | null =>
   typeof value === "boolean" ? value : null;
+
+const countOf = (value: unknown): number | null =>
+  typeof value === "number" && Number.isInteger(value) && value >= 0 ? value : null;
 
 /**
  * Parses the output of checks/status.sh. `clockOffsetMs` is the host clock
@@ -101,10 +106,8 @@ export function parseHostStatus(text: string, sentAt: number, receivedAt: number
       raw.gate === "invalid"
         ? raw.gate
         : null,
-    reviewOpen:
-      typeof raw.reviewOpen === "number" && Number.isInteger(raw.reviewOpen) && raw.reviewOpen >= 0
-        ? raw.reviewOpen
-        : null,
+    reviewOpen: countOf(raw.reviewOpen),
+    operationsUnresolved: countOf(raw.operationsUnresolved),
     provisioner:
       raw.provisioner === "healthy" ||
       raw.provisioner === "unhealthy" ||

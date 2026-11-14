@@ -54,7 +54,7 @@ A scope in review stays visible (lists, `organizations.list` with `reviewReason`
 1. Find the object: `ops verify-organization` for the organization; for an environment, the audit row's `object` (`machine_policy`, `machine_token_role`).
 2. Remove the foreign object (or put the planned one back) with the root token.
 3. Organization: run `ops provision-organization` again — it is the reconciliation and ends `active`.
-4. Environment: until Run 4.5's reconciliation command, set it back to `active` through the superuser once its objects equal the plan (`docs/evidence/session-3/run-3.8.md`, the AC-1.09 drill).
+4. Environment: once its objects equal the plan, `ops reconcile-environment --environment <id>` rebuilds its index and sets it `active` (`reconciliation.md`). Never through the superuser.
 
 ## Health
 

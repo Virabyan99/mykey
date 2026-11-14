@@ -14,6 +14,7 @@ import {
   openTunnel,
   parseHostEnv,
   registerSecret,
+  shQuote,
   sshExec,
   type HostEntry,
   type HostStatus,
@@ -148,4 +149,48 @@ export async function connectStaging(opts: { openbao?: boolean } = {}): Promise<
     close,
     stop: close,
   };
+}
+
+// ------------------------------------------------------------ search on host
+
+/**
+ * Searches the output of `producer` on the host for `secrets` without bringing
+ * the output or the secrets back: the secrets travel on stdin, only counts
+ * return. `controls` are strings that are not secret and must be in the output;
+ * a search that does not find every one of them read nothing and throws.
+ */
+export async function countOnHost(
+  host: HostEntry,
+  producer: string,
+  secrets: string[],
+  controls: string[],
+): Promise<{ found: number; controls: number }> {
+  if (controls.length === 0) throw new Error("countOnHost needs at least one control");
+  const quoted = controls.map((control) => `-e ${shQuote(control)}`).join(" ");
+  // Inside a pipeline grep's stdin is the producer's output, so `-f /dev/stdin`
+  // would read the output as its patterns and search nothing (found at the
+  // Session 4 gate). The secrets are moved to fd 3 first; the producer gets no stdin.
+  const script = [
+    "exec 3<&0",
+    `m=$( { ${producer}; } </dev/null 2>&1 | grep -o -F -f /dev/fd/3 ${quoted} | sort -u )`,
+    "exec 3<&-",
+    `all=$(printf '%s\\n' "$m" | grep -c -v '^$' || true)`,
+    `known=$(printf '%s\\n' "$m" | grep -c -x -F ${quoted} || true)`,
+    `echo "$((all - known)) $known"`,
+  ].join("; ");
+  const result = expectSuccess(
+    await sshExec(host, script, {
+      sudo: true,
+      stdin: `${secrets.filter((secret) => secret !== "").join("\n")}\n`,
+      timeoutMs: 600_000,
+    }),
+    `searching ${producer}`,
+  );
+  const [found, known] = result.stdout.trim().split(/\s+/).map(Number);
+  if (known !== controls.length) {
+    throw new Error(
+      `searching ${producer}: ${String(known)} of ${String(controls.length)} controls found; the search read nothing`,
+    );
+  }
+  return { found: found ?? Number.NaN, controls: known };
 }

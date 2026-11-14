@@ -101,7 +101,7 @@ To cut one purpose off for a drill, on the server: `sudo /opt/mykey/hosts/firewa
 ## Deploying the services
 
 ```sh
-docker build --platform linux/amd64 -f apps/api/Dockerfile -t mykey-api .
+docker build --platform linux/amd64 -f apps/api/Dockerfile --build-arg MYKEY_BUILD=$(git rev-parse --short=12 HEAD) -t mykey-api .   # without MYKEY_BUILD the API refuses to start
 docker save mykey-api:latest -o C:/Users/<you>/mykey-tmp/mykey-api.tar   # one tag; outside OneDrive
 node scripts/host.ts staging image api C:/Users/<you>/mykey-tmp/mykey-api.tar
 node scripts/host.ts staging up          # creates missing host secrets, then compose up -d
@@ -110,7 +110,7 @@ node scripts/host.ts staging db-init     # roles and migrations through an SSH t
 
 - **`image`** sends the archive in 2 MiB parts over eight SSH connections and loads it only when the checksum of the joined parts matches. The upload direction from the workstation loses packets on the way to the US hosts (6 to 23 % measured), which holds a single connection near 40 kB/s; eight connections moved 66 MB in 61 s.
 - **Upstream images** (`postgres`, `traefik`) are pulled on the host by digest inside a maintenance window (above), never copied with `docker save`.
-- **Secrets on a host:** only the PostgreSQL superuser password (`/etc/mykey/secrets/postgres/`, owner 999) and the `api_runtime` password (`/etc/mykey/secrets/api/`, owner 1000). The other four role passwords live on the workstation under `~/.mykey/secrets/hosts/<host>/<role>`.
+- **Secrets on a host:** only the PostgreSQL superuser password (`/etc/mykey/secrets/postgres/`, owner 999), the `api_runtime` password (`/etc/mykey/secrets/api/`, owner 1000) and the `provisioner_runtime` password (`/etc/mykey/secrets/provisioner/`, owner 1000; since Run 3.8). The other three role passwords live on the workstation under `~/.mykey/secrets/hosts/<host>/<role>`.
 
 ### Public certificate
 

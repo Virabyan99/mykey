@@ -69,6 +69,26 @@ describe("heartbeat route", () => {
     }
     expect(store.writes).toBe(0);
   });
+
+  it("takes operationsUnresolved beside reviewOpen (Run 4.5); refuses it negative or without reviewOpen", async () => {
+    const store = new MemoryStore();
+    const send = (payload: Record<string, unknown>) =>
+      handleRequest(
+        heartbeat("staging", "staging-token-synthetic-0123456789", JSON.stringify(payload)),
+        env,
+        store,
+        NOW,
+      );
+    const good = { bootId: "b", sealed: null, kmsReachable: null, reviewOpen: 0 };
+    expect((await send({ ...good, operationsUnresolved: 2 })).status).toBe(204);
+    expect((await send({ ...good, operationsUnresolved: null })).status).toBe(204);
+    expect((await send({ ...good, operationsUnresolved: -1 })).status).toBe(400);
+    expect((await send({ ...good, operationsUnresolved: 1.5 })).status).toBe(400);
+    expect(
+      (await send({ bootId: "b", sealed: null, kmsReachable: null, operationsUnresolved: 1 }))
+        .status,
+    ).toBe(400);
+  });
 });
 
 describe("state route and everything else", () => {

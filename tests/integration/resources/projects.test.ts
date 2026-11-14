@@ -11,7 +11,11 @@ import { createProvisioningFixture, type ProvisioningFixture } from "../provisio
 let fx: ProvisioningFixture;
 
 beforeAll(async () => {
-  fx = await createProvisioningFixture({ shared: true, stubs: true });
+  fx = await createProvisioningFixture({
+    shared: true,
+    stubs: true,
+    beforeHandler: (routeId) => beforeHandler(routeId),
+  });
 }, 600_000);
 
 afterAll(async () => {
@@ -19,6 +23,9 @@ afterAll(async () => {
 }, 300_000);
 
 const orgA = () => fx.tenants.a.organizationId;
+
+/** Runs after the pipeline's checks and before the handler (Run 4.1 Task D). */
+let beforeHandler: (routeId: string) => Promise<void> = () => Promise.resolve();
 
 interface Answer {
   status: number;
@@ -282,7 +289,8 @@ describe("rename", () => {
     const editor = await fx.api.request("GET", secrets, {
       cookie: await fx.tenants.cookie("editorA"),
     });
-    expect(editor.status).toBe(204);
+    // secrets.list has its handler since Run 4.3: the editor's access answers 200.
+    expect(editor.status).toBe(200);
     const ungranted = await fx.api.request("GET", secrets, {
       cookie: await fx.tenants.cookie("ungrantedA"),
     });
@@ -339,6 +347,33 @@ describe("rename", () => {
         a.project2,
       ]);
     }
+  });
+});
+
+describe("admission recheck", () => {
+  it("the admission recheck sees a state that changed after the pipeline: 503 backend_inconsistent, nothing created", async () => {
+    const name = `Recheck ${randomUUID().slice(0, 8)}`;
+    beforeHandler = async (routeId) => {
+      if (routeId !== "projects.create") return;
+      await fx.api.superuser.query(
+        "UPDATE app.organization SET state = 'needs_review', review_reason = 'backend_inconsistent' WHERE id = $1",
+        [orgA()],
+      );
+    };
+    try {
+      const answer = await create(name);
+      expect(answer.status).toBe(503);
+      expect(answer.code).toBe("backend_inconsistent");
+      expect(await projectsNamed(name)).toEqual([]);
+    } finally {
+      beforeHandler = () => Promise.resolve();
+      await fx.api.superuser.query(
+        "UPDATE app.organization SET state = 'active', review_reason = NULL WHERE id = $1",
+        [orgA()],
+      );
+    }
+    // Control: with the organization active the same name is created.
+    expect((await create(name)).status).toBe(201);
   });
 });
 

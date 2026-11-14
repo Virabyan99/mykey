@@ -326,6 +326,11 @@ export const operation = appSchema.table(
     auditEventId: uuid("audit_event_id"),
     createdAt: timestamptz("created_at").notNull().defaultNow(),
     completedAt: timestamptz("completed_at"),
+    // Run 4.1 (P-63): the scope an operation acts in, written at insert only.
+    projectId: uuid("project_id"),
+    environmentId: uuid("environment_id"),
+    secretName: text("secret_name"),
+    parentOperationId: uuid("parent_operation_id").references((): AnyPgColumn => operation.id),
   },
   (t) => [
     unique("operation_idempotency_key").on(
@@ -337,6 +342,14 @@ export const operation = appSchema.table(
     ),
     check("operation_principal_kind_check", oneOf(t.principalKind, PRINCIPAL_KINDS)),
     check("operation_state_check", oneOf(t.state, OPERATION_STATES)),
+    check(
+      "operation_secret_name_check",
+      sql`${t.secretName} ~ ${sql.raw(`'${SECRET_NAME_PATTERN.source}'`)}`,
+    ),
+    index("operation_environment_created_idx").on(t.environmentId, t.createdAt.desc(), t.id.desc()),
+    index("operation_unresolved_idx")
+      .on(t.state)
+      .where(sql`${t.state} IN ('accepted', 'executing', 'awaiting_input', 'uncertain')`),
   ],
 );
 

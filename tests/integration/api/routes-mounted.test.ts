@@ -20,6 +20,20 @@ const HANDLED = new Set([
   "environments.list",
   "environments.create",
   "environments.rename",
+  "operations.get",
+  "operations.list",
+  "secrets.list",
+  "secrets.history",
+  "secrets.reveal",
+  "secrets.create",
+  "secrets.update",
+  "secrets.delete",
+  "secrets.undelete",
+  "secrets.restore",
+  "import.preview",
+  "import.apply",
+  "import.resume",
+  "export.create",
   "session.activity",
   "auth.reset.complete",
 ]);
@@ -122,8 +136,8 @@ describe("mounted routes", () => {
       });
       expect(response.status).toBe(404);
       expect((await errorOf(response)).code).toBe("not_found");
-      // The terminal 404, not a refusal of the authorization steps (operations.get excepted until Run 4.1).
-      if (route.scope !== "operation") {
+      // The terminal 404, not a refusal of the authorization steps.
+      {
         const denied = await api.superuser.query(
           "SELECT 1 FROM audit.event WHERE action = 'access.denied' AND request_id = $1",
           [response.headers.get("x-request-id")],

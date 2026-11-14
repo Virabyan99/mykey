@@ -14,7 +14,10 @@ export {
   type OutboxDispatcher,
 } from "./outbox-dispatcher.ts";
 export { authenticateHuman, type Principal } from "./pipeline/authn.ts";
-export { parseStrictJson, readAuthBody } from "./pipeline/body.ts";
+export { parseStrictJson, readAuthBody, readBody } from "./pipeline/body.ts";
+export { createLargeGate, type LargeGate } from "./large.ts";
+export { readDeps, recheckOf, refusedOf } from "./routes/secrets.ts";
+export { exportHeaders, safeFileName } from "./routes/export.ts";
 export { checkOrigin, hasMixedCredentials, needsOriginCheck } from "./pipeline/origin.ts";
 export { checkStates } from "./pipeline/states.ts";
 export {
@@ -34,10 +37,17 @@ export {
   type Handler,
   type HandlerResult,
 } from "./pipeline/context.ts";
-export { ERROR_MESSAGES, errorResponse, jsonResponse } from "./pipeline/respond.ts";
+export {
+  ERROR_MESSAGES,
+  checkDetails,
+  errorResponse,
+  jsonResponse,
+  type ErrorExtra,
+} from "./pipeline/respond.ts";
 export { requestSource } from "./pipeline/source.ts";
 export { startThrottleSweep } from "./throttle-sweep.ts";
-export { mountRoute, mountRouteDef } from "./pipeline/route.ts";
+export { startOperationSweep } from "./operation-sweep.ts";
+export { intentOf, mountRoute, mountRouteDef } from "./pipeline/route.ts";
 export {
   MissingSetting,
   configFromEnvironment,
@@ -49,3 +59,4 @@ export {
 } from "./server.ts";
 export { runtimeSelfCheck, type SelfCheck } from "./selfcheck.ts";
 export { readCursor, signCursor, type CursorFields, type MacRing } from "./pipeline/cursor.ts";
+export { runtimeBaoFromDirectory } from "./runtime-bao.ts";
