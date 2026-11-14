@@ -1,28 +1,56 @@
 name: ci
 
+# Actions minutes are scarce on this private repository (2,000 a month), so CI
+# runs only on pull requests and by hand, never on a plain push. Every run on a
+# working branch is preceded by the local `pnpm run check` and test runs.
 on:
-  push:
   pull_request:
   workflow_dispatch:
 
 permissions:
   contents: read
 
+# A newer push to the same pull request cancels the run it supersedes.
 concurrency:
-  group: ci-${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}
+  group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 # Every action is pinned by commit SHA and every container image by digest;
 # both come from infra/dependencies.lock.json and are checked by pins:verify.
 
 jobs:
+  # check and the unit tests share one job (one install, one rounded minute).
+  # It also decides whether anything besides documentation changed; the
+  # integration suite and the scans wait for it, so a red check costs no more.
   check:
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    timeout-minutes: 20
+    outputs:
+      code: ${{ steps.diff.outputs.code }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          fetch-depth: 0
           persist-credentials: false
+      # Documentation only = every changed path is under docs/ or ends in .md,
+      # except the dotenv runbook, whose table an integration test checks.
+      # A manual run, or a base that cannot be found, runs everything.
+      - id: diff
+        name: Did anything besides documentation change?
+        env:
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+        run: |
+          if [ -z "$PR_BASE" ] || ! git cat-file -e "$PR_BASE^{commit}" 2>/dev/null; then
+            echo "code=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          changed="$(git diff --name-only "$PR_BASE" HEAD)"
+          if printf '%s\n' "$changed" | grep -qvE '^docs/|\.md$|^$' \
+            || printf '%s\n' "$changed" | grep -qx 'docs/runbooks/dotenv-format-v1.md'; then
+            echo "code=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "code=false" >> "$GITHUB_OUTPUT"
+          fi
       - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
@@ -34,23 +62,50 @@ jobs:
       - run: pnpm run check
         env:
           NODE_OPTIONS: --max-old-space-size=6144
+      - name: Unit tests
+        if: ${{ !cancelled() }}
+        run: pnpm test
 
-  unit:
+  # Always runs: a value pasted into a document is still a leak.
+  secret-scan:
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          fetch-depth: 0
           persist-credentials: false
-      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version-file: .node-version
-          cache: pnpm
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm test
+      - name: gitleaks over the full history
+        run: node scripts/ci-scan.ts secrets
+
+  # The dependency and image scans and the scanners' self-test, in one job.
+  scans:
+    needs: check
+    if: needs.check.outputs.code == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .node-version
+      - name: Trivy over the lock files (HIGH and CRITICAL with a fix)
+        run: node scripts/ci-scan.ts dependencies
+      - name: Trivy over the pinned runtime images
+        if: ${{ !cancelled() }}
+        run: node scripts/ci-scan.ts images
+      - name: Both scanners must find their seeded fixture
+        if: ${{ !cancelled() }}
+        run: node scripts/ci-scan.ts selftest
 
   integration:
+    needs: check
+    if: needs.check.outputs.code == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     # Two shards by file (Run 4.9): the whole suite outgrew 30 minutes on one runner.
@@ -79,93 +134,11 @@ jobs:
         if: always()
         run: node scripts/stack.ts down --all
 
-  secret-scan:
-    runs-on: ubuntu-24.04
-    timeout-minutes: 15
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          fetch-depth: 0
-          persist-credentials: false
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-        with:
-          node-version-file: .node-version
-      - name: gitleaks over the full history
-        run: node scripts/ci-scan.ts secrets
-
-  dependency-scan:
-    runs-on: ubuntu-24.04
-    timeout-minutes: 15
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-        with:
-          node-version-file: .node-version
-      - name: Trivy over the lock files (HIGH and CRITICAL with a fix)
-        run: node scripts/ci-scan.ts dependencies
-
-  image-scan:
-    runs-on: ubuntu-24.04
-    timeout-minutes: 20
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-        with:
-          node-version-file: .node-version
-      - name: Trivy over the pinned runtime images
-        run: node scripts/ci-scan.ts images
-
-  scanner-selftest:
-    runs-on: ubuntu-24.04
-    timeout-minutes: 15
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-        with:
-          node-version-file: .node-version
-      - name: Both scanners must find their seeded fixture
-        run: node scripts/ci-scan.ts selftest
-
-  changes:
-    runs-on: ubuntu-24.04
-    timeout-minutes: 5
-    outputs:
-      cli: ${{ steps.diff.outputs.cli }}
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          fetch-depth: 0
-          persist-credentials: false
-      - id: diff
-        name: Did the CLI change?
-        env:
-          BEFORE: ${{ github.event.before }}
-          PR_BASE: ${{ github.event.pull_request.base.sha }}
-        run: |
-          base="${PR_BASE:-$BEFORE}"
-          if [ -z "$base" ] || [ "$base" = "0000000000000000000000000000000000000000" ] \
-            || ! git cat-file -e "$base^{commit}" 2>/dev/null; then
-            base="$(git merge-base origin/main HEAD 2>/dev/null || true)"
-          fi
-          if [ -z "$base" ]; then
-            echo "cli=true" >> "$GITHUB_OUTPUT"
-          elif git diff --name-only "$base" HEAD | grep -qE '^(apps/cli|tests/cli)/'; then
-            echo "cli=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "cli=false" >> "$GITHUB_OUTPUT"
-          fi
-
-  # Runs only when the CLI changed or on manual dispatch: macOS minutes are
-  # billed at a multiple on private repositories (planner decision P-7).
+  # Manual runs only (`gh workflow run ci --ref <branch>`), once at a gate that
+  # changed the CLI: macOS minutes count ten times on a private repository
+  # (planner decision P-7).
   cli-matrix:
-    needs: changes
-    if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.cli == 'true'
+    if: github.event_name == 'workflow_dispatch'
     strategy:
       fail-fast: false
       matrix:

@@ -130,7 +130,7 @@ Tooling:
 - TypeScript is pinned at 6.0.3, not 7, because of the linter's peer range (D-12).
 - A new OpenBao KV v2 mount answers 400 "Upgrading" for a moment; `mountKvV2` waits for it.
 - The image scan covers the pinned upstream images and the API image built from the repository (its own dependencies only). It is green only through `.trivyignore.images` (52 upstream CVEs without a fix), which **expires on 14 Dec 2026**.
-- The secret scan must see the whole history and at least one commit; a scanner that crashes or scans nothing fails the `scanner-selftest` job. Reviewed false positives go into `.gitleaksignore` by fingerprint, with the reason above them.
+- The secret scan must see the whole history and at least one commit; a scanner that crashes or scans nothing fails the self-test step of the `scans` job. Reviewed false positives go into `.gitleaksignore` by fingerprint, with the reason above them.
 - GitGuardian (an external app on the repository) flags `-e PGPASSWORD postgres` in `tests/harness/stack.ts` as a password (incident 39994924). It is a false positive: the value is the stack's random password from the environment, and `postgres` is the Compose service name. Only the owner can dismiss it in the dashboard; it is not a required check.
 
 Dotenv codec:
@@ -162,7 +162,7 @@ Auth (Better Auth 1.7.19, confirmed by test, D-19): sign-up is refused; a first 
 
 Session 3 (details in its run notes):
 
-- **Watch CI after every push** (`gh run list --branch <branch>`). It was red for the whole of Session 3 (heap of the typed lint, a gitleaks false positive, dev tooling in the API image) and nobody noticed until the gate.
+- **Watch CI after every push to a pull request** (`gh run list --branch <branch>`). It was red for the whole of Session 3 (heap of the typed lint, a gitleaks false positive, dev tooling in the API image) and nobody noticed until the gate.
 - Python on Windows writes CRLF in text mode: open files with `newline=""` in edit scripts (migrations are prettier-ignored and keep the CRLF otherwise).
 - Lock order in a transaction: take an update lock before any share lock on the same row; a share lock later raised to an update deadlocks two concurrent requests.
 - pg-boss needs data rights on more of schema `jobs` than its happy path suggests (failure path, supervisor): with too few, a failing job stays `active` for ever and the error is swallowed. Our adapter must pass multi-statement results through.
@@ -177,6 +177,10 @@ Session 4 (details in its run notes and report):
 - **One heavy job at a time on the workstation.** Two of the integration suite, the staging suite and a Docker build at once exhaust its memory. Workers then fail to start (`0xC0000142`) and suites starve or die. A killed shell can leave vitest processes behind: find them by command line (`Win32_Process`) before starting again.
 - **The API image needs `--build-arg MYKEY_BUILD=$(git rev-parse --short=12 HEAD)`.** Without it the API logs `startup_refused` and restarts in a loop. The probe then raises `health_failing`.
 - **CI's integration job runs in two shards** (`--shard=N/2`, about 16 and 21 min). One job hit the 30-minute limit.
+- **Actions minutes are scarce; the owner wants CI cost at a minimum.** The private repository gets 2,000 minutes a month, and Session 4 used over 1,800 of them. A full run costs about 50 minutes, almost all of it the integration suite.
+  - CI runs only on pull requests and by hand (`gh workflow run ci --ref <branch>`), never on a plain push. A pull request whose changes are all under `docs/` or in `.md` files runs only `check` (with the unit tests) and the secret scan.
+  - Prove each run locally. Open the pull request at the gate, not earlier, and push fixes to it in batches: each push to it costs a full run.
+  - `cli-matrix` runs only by hand, once at a gate that changed the CLI. Its macOS minutes count ten times.
 - **Staging tests go stale.** A route that gains a handler, a container added to a host or a moved credential breaks a staging test written earlier. Run the staging files one at a time. A staging run also rewrites committed evidence files of earlier runs (host scans, drill JSON): restore them before committing.
 - **OpenBao's audit device on staging is about 500 MB**, too large to download in a test. Search it on the host with `countOnHost` (`tests/harness/staging.ts`): the values go on fd 3 and only counts come back, and its controls must be found. Never use `producer | grep -f /dev/stdin`: inside a pipeline grep's stdin is the producer, so the search finds nothing.
 - **PostgreSQL on a host** accepts `pg_dump` only on its socket with the superuser password (`PGPASSWORD="$(cat "$POSTGRES_PASSWORD_FILE")"` inside the container); TCP on loopback is refused by `pg_hba`.
