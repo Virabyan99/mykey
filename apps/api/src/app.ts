@@ -15,6 +15,7 @@ import { checkOrigin } from "./pipeline/origin.ts";
 import { errorResponse } from "./pipeline/respond.ts";
 import { requestSource } from "./pipeline/source.ts";
 import { mountRoute, mountRouteDef } from "./pipeline/route.ts";
+import { exportCreateHandler } from "./routes/export.ts";
 import { healthHandler } from "./routes/health.ts";
 import { importApplyHandler, importPreviewHandler, importResumeHandler } from "./routes/imports.ts";
 import { operationsGetHandler, operationsListHandler } from "./routes/operations.ts";
@@ -106,6 +107,7 @@ function handlers(large: LargeGate): Partial<Record<string, Handler>> {
     "import.preview": importPreviewHandler(large),
     "import.apply": importApplyHandler(large),
     "import.resume": importResumeHandler(large),
+    "export.create": exportCreateHandler(large),
     "session.activity": sessionActivityHandler,
     "auth.reset.complete": resetCompleteHandler,
   };

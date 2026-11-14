@@ -120,6 +120,27 @@ function outputResponse(
   deps: AppDeps,
 ): Response {
   const schema = route.responses[result.status];
+  // An attachment (Run 4.9): the bytes as they are, their length, no transformation.
+  if (schema === "dotenv-attachment" || result.raw !== undefined) {
+    if (schema !== "dotenv-attachment" || result.raw === undefined) {
+      deps.log({
+        event: "output_invalid",
+        time: now(),
+        requestId,
+        routeId: route.id,
+        status: result.status,
+      });
+      return errorResponse("dependency_unavailable", requestId);
+    }
+    return new Response(result.raw.bytes, {
+      status: result.status,
+      headers: {
+        ...result.headers,
+        "content-type": result.raw.contentType,
+        "content-length": String(result.raw.bytes.length),
+      },
+    });
+  }
   if (schema === undefined || typeof schema === "string") {
     deps.log({
       event: "output_invalid",

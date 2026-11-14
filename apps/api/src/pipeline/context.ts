@@ -94,6 +94,8 @@ export interface HandlerResult {
   body: unknown;
   /** Extra response headers (a session cookie, Run 3.6). */
   headers?: Record<string, string>;
+  /** Only for a route whose response kind is "dotenv-attachment" (Run 4.9): the body as sent. */
+  raw?: { bytes: Uint8Array; contentType: string };
 }
 
 export type Handler = (ctx: ApiContext, deps: AppDeps) => Promise<HandlerResult>;

@@ -33,6 +33,7 @@ const HANDLED = new Set([
   "import.preview",
   "import.apply",
   "import.resume",
+  "export.create",
   "session.activity",
   "auth.reset.complete",
 ]);
