@@ -28,8 +28,11 @@ const from = (): Record<string, string> => {
 beforeAll(async () => {
   api = await startTestApi({
     stubs: true,
-    // Secret routes answer through the stub even once handled: this API has no runtime identity (Run 4.2).
-    stubRoutes: ROUTES.filter((route) => route.id.startsWith("secrets.")).map((route) => route.id),
+    // Secret and import routes answer through the stub even once handled: this API has no
+    // runtime identity (Runs 4.2, 4.7).
+    stubRoutes: ROUTES.filter(
+      (route) => route.id.startsWith("secrets.") || route.id.startsWith("import."),
+    ).map((route) => route.id),
     config: { trustedProxy: "127.0.0.1" },
   });
 });
