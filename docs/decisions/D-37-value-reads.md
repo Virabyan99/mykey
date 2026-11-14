@@ -28,3 +28,27 @@
 - **Only after that commit does the value leave the function.** If the audit write fails while the lock's session still answers → `503 audit_unavailable`. If the session is gone → `503 dependency_unavailable`. Either way the value is dropped and nothing is audited.
 - **The answer** is `{ name, version, value, stateTag }` with `cache-control: no-store`. A denied caller leaves `access.denied` and no `secret.reveal`.
 - **Body shape.** `{ version: "1" }` is `400 malformed_request` (wrong type); `{ version: 0 }` is `422`.
+
+## Complete read (Run 4.8)
+
+`readEnvironment` (P-78, FR-1.84) answers every live value of one metadata generation, or nothing. The environment's lock is held for the whole read, on the lock's connection. A writer of that environment waits two seconds for it and answers `503 busy`.
+
+1. **Transaction:**
+   - the caller's access and the states are read again;
+   - any slot → `409 key_under_review` with its holder's `operationId`;
+   - every index row is read, and a row in review → `409 key_under_review`;
+   - the generation `G` is taken.
+2. **The backend's list** of the environment's names (`kvList`; `not_found` is the empty set) must equal the index's names, live and deleted alike. A deleted name is still listed by the backend and is no drift. A difference sends the environment to review, is audited as `system.drift_detected` (`kv_data`), and is answered `503 backend_inconsistent`.
+3. **Every live value,** eight at a time. Each must carry the index's version, be a format-1 envelope, and have the index's byte length; otherwise the key goes to review and the answer is `503 backend_inconsistent`. Any other failed read ends the whole read through `backendRefusal`. Nothing partial is ever returned.
+4. **Size.** Values plus names plus 64 bytes per entry above `completeResponse.maxBodyBytes` → `507 capacity_exceeded { limit: "response" }`.
+5. **Transaction:**
+   - the generation must still be `G` and no slot held, else `409 environment_changed`;
+   - the caller's audit row is written through the `audit` callback and committed.
+   - If the audit write fails while the session answers → `503 audit_unavailable`. If the lock session is lost → `503 dependency_unavailable`. The values are dropped in both cases.
+
+**Measured** (workstation, Run 4.8):
+
+- 1,000 names of 8 KiB read in 5.3 s.
+- The race run, where every read equals the set of its generation exactly, is in `docs/evidence/session-4/run-4.8.md`.
+
+**Fallback.** The fallback of Doc 10 §8.1 (refuse while any write is in flight) was not needed.

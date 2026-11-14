@@ -503,6 +503,24 @@
       "status": "SPIKE_PASS",
       "evidence": ["docs/evidence/session-4/run-4.7.md"],
       "note": "Import is truthfully non-atomic: every entry has one of seven outcomes and a resumed import never applies an entry twice."
+    },
+    {
+      "id": "FR-1.84",
+      "status": "SPIKE_PASS",
+      "evidence": ["docs/evidence/session-4/run-4.8.md"],
+      "note": "Complete environment read under the lock: every live value of one generation or nothing; drift, review, slots, size, generation change and audit failure refuse the whole read (product code, real stores)."
+    },
+    {
+      "id": "AC-1.41",
+      "status": "SPIKE_PASS",
+      "evidence": ["docs/evidence/session-4/run-4.8.md"],
+      "note": "Race test: four writers on two processes, an import, four readers; every read equals the set of its generation exactly, five runs in a row."
+    },
+    {
+      "id": "PO-19",
+      "status": "SPIKE_PASS",
+      "evidence": ["docs/evidence/session-4/run-4.8.md"],
+      "note": "G-RESOLVE, human path; machine resolve is Run 5.1. A read racing multi-key changes returns one generation's set or fails as a whole."
     }
   ]
 }
