@@ -83,3 +83,9 @@ export {
   type ImportOutcome,
   type ResumeRequest,
 } from "./imports/apply.ts";
+export {
+  readEnvironment,
+  type EnvironmentRead,
+  type EnvironmentReadOutcome,
+  type EnvironmentReadRequest,
+} from "./secrets/read-environment.ts";

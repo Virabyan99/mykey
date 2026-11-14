@@ -15,7 +15,8 @@ export {
 } from "./outbox-dispatcher.ts";
 export { authenticateHuman, type Principal } from "./pipeline/authn.ts";
 export { parseStrictJson, readAuthBody, readBody } from "./pipeline/body.ts";
-export { createLargeGate } from "./large.ts";
+export { createLargeGate, type LargeGate } from "./large.ts";
+export { readDeps, recheckOf, refusedOf } from "./routes/secrets.ts";
 export { checkOrigin, hasMixedCredentials, needsOriginCheck } from "./pipeline/origin.ts";
 export { checkStates } from "./pipeline/states.ts";
 export {

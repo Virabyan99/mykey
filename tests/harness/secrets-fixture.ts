@@ -12,8 +12,20 @@ import net from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { expect } from "vitest";
+import { createLargeGate, readDeps, recheckOf, refusedOf, type Handler } from "@mykey/api";
+import { appendAudit } from "@mykey/audit";
 import { generateKeyFiles, loadAuthKeys } from "@mykey/auth";
-import { LIMITS, type EnvironmentId, type ProjectId } from "@mykey/contracts";
+import {
+  LIMITS,
+  ROUTES,
+  type EnvironmentId,
+  type ErrorCode,
+  type ProjectId,
+  type RouteDef,
+} from "@mykey/contracts";
+import type { EnvironmentScope } from "@mykey/db";
+import { readEnvironment } from "@mykey/operations";
+import { z } from "zod";
 import { OpenBaoClient, environmentPrefix, secretPath, type OpenBaoTarget } from "@mykey/openbao";
 import {
   createProvisioningFixture,
@@ -133,6 +145,12 @@ export interface SecretsFixture {
   ): Promise<void>;
   /** Removes rows seedIndex wrote. */
   unseedIndex(env: EnvName, names: readonly string[]): Promise<void>;
+  /**
+   * Run 4.8: `names` live keys of `bytesEach` bytes each, named SEED_0000 …:
+   * values through the operator client, index rows and counters through the
+   * superuser. The environment must hold none of these names.
+   */
+  seedEnvironment(env: EnvName, names: number, bytesEach: number): Promise<void>;
   close(): Promise<void>;
 }
 
@@ -194,6 +212,7 @@ export async function createSecretsFixture(
           await beforeHandler?.(routeId);
         },
         importBudgetMs: () => importBudget ?? undefined,
+        routes: [{ def: TEST_READ_ROUTE, handler: testReadHandler() }],
       };
     },
   });
@@ -395,6 +414,45 @@ export async function createSecretsFixture(
         [ids(env).environmentId, names],
       );
     },
+    async seedEnvironment(env, names, bytesEach) {
+      const { projectId, environmentId } = ids(env);
+      const bao = operator();
+      const all = Array.from(
+        { length: names },
+        (_, index) => `SEED_${String(index).padStart(4, "0")}`,
+      );
+      for (let start = 0; start < all.length; start += 16) {
+        await Promise.all(
+          all.slice(start, start + 16).map(async (name) => {
+            const value = createHash("sha256")
+              .update(`${name}-${randomUUID()}`)
+              .digest("hex")
+              .repeat(Math.ceil(bytesEach / 64))
+              .slice(0, bytesEach);
+            const written = await bao.kvWrite(
+              secretPath(projectId, environmentId, name),
+              { value, operation_id: randomUUID(), format: 1 },
+              0,
+              { operationId: randomUUID(), dispatchId: randomUUID() },
+            );
+            if (!written.ok) throw new Error(`seed write: ${written.kind}`);
+          }),
+        );
+      }
+      await api.superuser.query(
+        `INSERT INTO app.secret_index (environment_id, name, organization_id, current_version,
+           state_tag, state, live_value_bytes, last_changed_at)
+         SELECT $1, n, $2, 1, md5(random()::text || n), 'live', $4, now()
+           FROM unnest($3::text[]) AS n`,
+        [environmentId, tenants.a.organizationId, all, bytesEach],
+      );
+      await api.superuser.query(
+        `UPDATE app.environment SET live_value_bytes = live_value_bytes + $2,
+                metadata_generation = metadata_generation + 1
+          WHERE id = $1`,
+        [environmentId, names * bytesEach],
+      );
+    },
     async indexRow(env, name) {
       const result = await api.superuser.query<IndexRowView>(
         `SELECT current_version, state_tag, state, live_value_bytes, last_operation_id
@@ -420,6 +478,83 @@ export async function createSecretsFixture(
  * environment.live_value_bytes equal to the sum of the live rows; no effect
  * slot and no advisory lock left.
  */
+/**
+ * Run 4.8: a test-only route over the complete environment read. It answers
+ * digests, never values, so a failing assertion prints none; its audit row is
+ * `secret.export` with the number of names, as the export of Run 4.9 writes.
+ */
+export const TEST_READ_ROUTE: RouteDef = Object.freeze({
+  id: "test.read",
+  method: "GET",
+  path: "/v1/organizations/:org/projects/:project/environments/:env/test-read",
+  auth: "human",
+  idempotent: false,
+  ownerRun: "4.8",
+  pending: false,
+  request: {},
+  responses: {
+    200: z.strictObject({
+      generation: z.string(),
+      entries: z.array(
+        z.strictObject({ name: z.string(), version: z.int().positive(), digest: z.string() }),
+      ),
+    }),
+  },
+  errors: [
+    ...new Set<ErrorCode>([
+      ...(ROUTES.find((route) => route.id === "secrets.reveal")?.errors ?? []),
+      "environment_changed",
+      "capacity_exceeded",
+      "busy",
+    ]),
+  ],
+  action: "secrets.read",
+  scope: "environment",
+});
+
+/** The handler of TEST_READ_ROUTE, inside its own large-request gate of two. */
+function testReadHandler(): Handler {
+  const gate = createLargeGate(LIMITS.concurrency.largePerProcess);
+  return (ctx, deps) =>
+    gate.run(async () => {
+      const scope = ctx.scope as EnvironmentScope | null;
+      const principal = ctx.principal;
+      if (scope === null || principal === null) throw new Error("test.read without a scope");
+      const outcome = await readEnvironment(readDeps(deps), {
+        scope,
+        userId: principal.userId,
+        routeId: ctx.route.id,
+        requestId: ctx.requestId,
+        recheck: recheckOf(ctx, principal.userId, scope),
+        audit: async (tx, read) => {
+          await appendAudit(tx, {
+            action: "secret.export",
+            actor: { kind: "user", id: principal.userId },
+            source: "api",
+            organizationId: scope.organizationId,
+            target: { kind: "environment", id: scope.environmentId },
+            outcome: "success",
+            requestId: ctx.requestId,
+            operationId: null,
+            details: { names: read.names },
+          });
+        },
+      });
+      if (outcome.kind === "refused") refusedOf(outcome);
+      return {
+        status: 200,
+        body: {
+          generation: outcome.read.generation.toString(),
+          entries: outcome.read.entries.map((entry) => ({
+            name: entry.name,
+            version: entry.version,
+            digest: sha256(entry.value),
+          })),
+        },
+      };
+    });
+}
+
 export async function expectIndexMatchesBackend(
   fixture: SecretsFixture,
   env: EnvName,

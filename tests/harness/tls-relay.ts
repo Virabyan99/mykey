@@ -41,6 +41,12 @@ export interface TlsRelay {
   holdRequests(on: boolean): void;
   /** Run 4.6: the mode for connections' next records. */
   setMode(mode: RelayMode): void;
+  /**
+   * Run 4.8: after `records` more request records pass in "pass" mode, the
+   * mode becomes "drop" (a GET without a body is one record): the Nth backend
+   * call of a multi-call read fails.
+   */
+  dropAfter(records: number): void;
   clear(): void;
   close(): Promise<void>;
 }
@@ -65,6 +71,8 @@ export async function startTlsRelay(
   let tailDelay = 0;
   let responseDelay = 0;
   let swallow = false;
+  // Request records still to pass before the mode turns to "drop" (null: never).
+  let dropIn: number | null = null;
   let markForwarded: () => void = () => undefined;
   const requestForwarded = new Promise<void>((resolveForwarded) => {
     markForwarded = resolveForwarded;
@@ -144,6 +152,13 @@ export async function startTlsRelay(
         // The first request record carries the HTTP headers; a large body follows in more records.
         forward(record, requestSeen ? requestDelay + tailDelay : requestDelay);
         requestSeen = true;
+        if (dropIn !== null) {
+          dropIn -= 1;
+          if (dropIn <= 0) {
+            dropIn = null;
+            mode = "drop";
+          }
+        }
       }
     });
     upstream.on("data", (chunk: Buffer) => {
@@ -201,8 +216,12 @@ export async function startTlsRelay(
     setMode: (next) => {
       mode = next;
     },
+    dropAfter: (records) => {
+      dropIn = records;
+    },
     clear: () => {
       swallow = false;
+      dropIn = null;
       mode = initialMode;
       holding = false;
       for (const release of [...releases]) release();
