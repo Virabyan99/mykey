@@ -24,7 +24,7 @@ _Last updated: 14 Nov 2026, after the Session 4 merge (PR #9)._
 | 2       | Infrastructure and make-or-break proofs                     | **Done** (GO, no fallback), merged  |
 | 3       | Identity, access and resources                              | **Done** (PASS WITH ISSUES), merged |
 | 4       | Operations engine and secret lifecycle                      | **Done** (PASS WITH ISSUES), merged |
-| 5       | Machine access, CLI and API reference                       | Not started — **no plan yet**       |
+| 5       | Machine access, CLI and API reference                       | Not started — plan written          |
 | 6 ∥ 7   | Audit, limits, backup, recovery, deployment ∥ Web workspace | Not started                         |
 | 8       | Security review and controlled-use release                  | Not started                         |
 | 9       | Real use, agent experiment, stage exit                      | Not started                         |
@@ -44,7 +44,7 @@ What exists after Session 4 (details: `docs/evidence/session-4/report.md`, run n
 
 Before Session 5 can start:
 
-- `docs/plans/session-5-plan.md` must be written from the report's "What Session 5 must know". In short:
+- The plan is `docs/plans/session-5-plan.md` (added 15 Nov 2026; its "Session start" comes first). It answers the report's "What Session 5 must know". In short:
   - machine resolve calls `readEnvironment`;
   - new effects (issuance, revocation, archive) need a marker or an exclusion rule and fault rows;
   - the eight deferred review minors M-1 … M-8, each with its owner run.
