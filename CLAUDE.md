@@ -16,31 +16,44 @@ The project is in **Stage 1**, a 14-day plan of nine sessions.
 
 ## Where we stand
 
-_Last updated: 13 Nov 2026, after Session 3 was merged (PR #6)._
+_Last updated: 14 Nov 2026, at the Session 4 gate (PR not yet merged)._
 
-| Session | Topic                                                       | State                               |
-| ------- | ----------------------------------------------------------- | ----------------------------------- |
-| 1       | Foundation                                                  | **Done** (PASS WITH ISSUES), merged |
-| 2       | Infrastructure and make-or-break proofs                     | **Done** (GO, no fallback), merged  |
-| 3       | Identity, access and resources                              | **Done** (PASS WITH ISSUES), merged |
-| 4       | Operations engine and secret lifecycle                      | Not started — **no plan yet**       |
-| 5       | Machine access, CLI and API reference                       | Not started                         |
-| 6 ∥ 7   | Audit, limits, backup, recovery, deployment ∥ Web workspace | Not started                         |
-| 8       | Security review and controlled-use release                  | Not started                         |
-| 9       | Real use, agent experiment, stage exit                      | Not started                         |
+| Session | Topic                                                       | State                                          |
+| ------- | ----------------------------------------------------------- | ---------------------------------------------- |
+| 1       | Foundation                                                  | **Done** (PASS WITH ISSUES), merged            |
+| 2       | Infrastructure and make-or-break proofs                     | **Done** (GO, no fallback), merged             |
+| 3       | Identity, access and resources                              | **Done** (PASS WITH ISSUES), merged            |
+| 4       | Operations engine and secret lifecycle                      | **Done** (PASS WITH ISSUES), PR awaiting merge |
+| 5       | Machine access, CLI and API reference                       | Not started — **no plan yet**                  |
+| 6 ∥ 7   | Audit, limits, backup, recovery, deployment ∥ Web workspace | Not started                                    |
+| 8       | Security review and controlled-use release                  | Not started                                    |
+| 9       | Real use, agent experiment, stage exit                      | Not started                                    |
 
-What exists after Session 3 (details: `docs/evidence/session-3/report.md`, run notes `run-3.1.md` … `run-3.9.md`, D-26 … D-33):
+What exists after Session 4 (details: `docs/evidence/session-4/report.md`, run notes `run-4.1.md` … `run-4.9.md`, D-34 … D-39; Session 3's base: `docs/evidence/session-3/report.md`):
 
-- **API (`apps/api`):** one pipeline for every contract route (`mountRoute`; order in the report): gate, body limits, mixed credentials, Origin, authentication (`resolveSession`, database time), validation, authorization from current rows (`resolveAccess`, `decide` in `@mykey/contracts`), replay lookup for mutations, state table, freshness, handler. Handlers: health, version, organizations.list, session.activity, auth.reset.complete, projects and environments (create, rename, list with signed cursors). Every other route ends in the terminal 404. Self-check of the runtime credential at start.
-- **Auth (`@mykey/auth`):** operator-only accounts (`ops bootstrap-owner`), mandatory TOTP with one-use steps and recovery codes, sessions with idle/absolute limits, product password change, fresh TOTP for sensitive starts, throttling across processes, operator reset (`ops reset-account --kind password|mfa`).
-- **Provisioning:** `ops provision-organization` / `verify-organization` (`@mykey/operations/operator`, compare-then-act, never overwrite); `apps/provisioner` (job `environment.provision`, drift sweep; `@mykey/operations/provisioner`, `@mykey/openbao/provisioner`). Migrations up to `0010`.
-- **Staging** runs API and provisioner `acf94e5ac0f1`, gate open, the staging owner (`owner@mykey-staging.invalid`, password, TOTP seed and recovery codes in `~/.mykey/secrets/hosts/staging/`) and its active organization `e2350312-…`. **Production** runs the Session 3 API (`c9ce24ef9d08`, migrations up to `0010`) with no gate file: every route answers `quarantined`, `/health` is down and the probe's `health_failing` stays open until the owner decides to open it. No OpenBao, no provisioner, no owner there. Production deploys still need the owner's permission.
-- **Evidence registry:** 54 `SPIKE_PASS`, nothing `PASS`.
+- **API (`apps/api`):** the Session 3 pipeline (`mountRoute`: gate, body limits, credentials, Origin, authentication, validation, authorization from current rows, replay, state table, freshness, handler). Handlers for every Session 4 route: `secrets.list|history|reveal|create|update|delete|undelete|restore`, `import.preview|apply|resume`, `export.create`, `operations.get|list`, besides Session 3's. The API holds the organization's `runtime` AppRole and authenticates inline on every request (D-34). It runs a stale-operation sweep every 30 s. Large requests (import, export, complete read) go through a gate of two per process (`large.ts`).
+- **Operations engine (`@mykey/operations` root):**
+  - The six-step mutation protocol under one advisory lock per environment on a dedicated connection (D-36). After the dispatch marker every failure is `503 outcome_unknown` with the operation id.
+  - Replay by stored state, tombstones and `replay_expired` (D-35).
+  - Reveal and the complete read `readEnvironment`, each committing its audit row before release (D-37).
+  - Import as a parent with child operations, resumable (D-39); the sweep.
+- **Operator (`@mykey/operations/operator`, `apps/ops`):** `ops operations`, `reconcile-operation` (exit 3 = exclude the executors first), `reconcile-environment`, `operations-expire`; `host.ts staging quiesce|resume`; runbook `reconciliation.md`. The probe condition `operations_unresolved` (D-38). Migrations up to `0012`.
+- **Auth, provisioning:** as after Session 3 (operator-only accounts, TOTP, sessions, reset; `provision-organization`, `apps/provisioner`).
+- **Staging** runs API `2d6678af2342` and the matching provisioner, gate open, nothing in review or unresolved, the staging owner (`owner@mykey-staging.invalid`, credentials in `~/.mykey/secrets/hosts/staging/`) and its organization `e2350312-…`. **Production** runs the same API with migrations up to `0012` and no gate file: every route answers `quarantined`, `/health` is down and the probe's `health_failing` stays open until the owner opens it. No OpenBao, no provisioner, no owner there. Production deploys need the owner's permission.
+- **Evidence registry:** 83 `SPIKE_PASS`, 108 `OPEN`, nothing `PASS`.
 
-Before Session 4 can start:
+Before Session 5 can start:
 
-- `docs/plans/session-4-plan.md` must be written from the report's "What Session 4 must know" (owed: operation status routes, tombstones, `replay_expired`, scope `operation` — Run 4.1; the reconciliation command — Run 4.5; ten deferred minors).
-- Dated items: R2 fixture guard 15 Nov 2026 09:42 UTC (`test:cloud` fails on purpose from then until Run 6.6); checkpoint `pairs-lock-session-gate` from 15 Nov 10:42 UTC (owed by the Session 4 gate); `.trivyignore.images` 20 Nov 2026; **all KMS certificates expire 12 Dec 2026** (staging seal 10:50 UTC — replace before: runbook `kms-and-unseal.md`); checkpoint `kms-cert-expiry` from 12 Dec 2026 09:57 UTC.
+- The PR `session-4` → `main` must be merged on the owner's word.
+- `docs/plans/session-5-plan.md` must be written from the report's "What Session 5 must know". In short:
+  - machine resolve calls `readEnvironment`;
+  - new effects (issuance, revocation, archive) need a marker or an exclusion rule and fault rows;
+  - the eight deferred review minors M-1 … M-8, each with its owner run.
+- Dated items:
+  - The R2 fixture guard: `test:cloud` fails on purpose from 15 Nov 2026 09:42 UTC until Run 6.6.
+  - **Checkpoint `pairs-lock-session-gate`:** due from 15 Nov 2026 10:42:20 UTC; record it at the Session 5 start.
+  - `.trivyignore.images` expires on 14 Dec 2026.
+  - **All KMS certificates expire on 12 Dec 2026** (staging seal 10:50 UTC); replace them before then (runbook `kms-and-unseal.md`). Checkpoint `kms-cert-expiry` from 12 Dec 2026 09:57 UTC.
 
 ## Commands
 
@@ -117,7 +130,7 @@ Tooling:
 
 - TypeScript is pinned at 6.0.3, not 7, because of the linter's peer range (D-12).
 - A new OpenBao KV v2 mount answers 400 "Upgrading" for a moment; `mountKvV2` waits for it.
-- The image scan covers the pinned upstream images and the API image built from the repository (its own dependencies only). It is green only through `.trivyignore.images` (51 upstream CVEs without a fix), which **expires on 20 Nov 2026**.
+- The image scan covers the pinned upstream images and the API image built from the repository (its own dependencies only). It is green only through `.trivyignore.images` (52 upstream CVEs without a fix), which **expires on 14 Dec 2026**.
 - The secret scan must see the whole history and at least one commit; a scanner that crashes or scans nothing fails the `scanner-selftest` job. Reviewed false positives go into `.gitleaksignore` by fingerprint, with the reason above them.
 - GitGuardian (an external app on the repository) flags `-e PGPASSWORD postgres` in `tests/harness/stack.ts` as a password (incident 39994924). It is a false positive: the value is the stack's random password from the environment, and `postgres` is the Compose service name. Only the owner can dismiss it in the dashboard; it is not a required check.
 
@@ -160,4 +173,15 @@ Session 3 (details in its run notes):
 - A staging test that changes state must undo it in `finally`; two drills that stopped early left a review open and kept the probe alert up.
 - Sign-in normalizes e-mail to lower case: synthetic users must be stored lower-case.
 
-Open issues carried into Session 4 are listed in `docs/evidence/session-3/report.md` ("What Session 4 must know").
+Session 4 (details in its run notes and report):
+
+- **One heavy job at a time on the workstation.** Two of the integration suite, the staging suite and a Docker build at once exhaust its memory. Workers then fail to start (`0xC0000142`) and suites starve or die. A killed shell can leave vitest processes behind: find them by command line (`Win32_Process`) before starting again.
+- **The API image needs `--build-arg MYKEY_BUILD=$(git rev-parse --short=12 HEAD)`.** Without it the API logs `startup_refused` and restarts in a loop. The probe then raises `health_failing`.
+- **CI's integration job runs in two shards** (`--shard=N/2`, about 16 and 21 min). One job hit the 30-minute limit.
+- **Staging tests go stale.** A route that gains a handler, a container added to a host or a moved credential breaks a staging test written earlier. Run the staging files one at a time. A staging run also rewrites committed evidence files of earlier runs (host scans, drill JSON): restore them before committing.
+- **OpenBao's audit device on staging is about 500 MB**, too large to download in a test. Search it on the host with `countOnHost` (`tests/harness/staging.ts`): the values go on fd 3 and only counts come back, and its controls must be found. Never use `producer | grep -f /dev/stdin`: inside a pipeline grep's stdin is the producer, so the search finds nothing.
+- **PostgreSQL on a host** accepts `pg_dump` only on its socket with the superuser password (`PGPASSWORD="$(cat "$POSTGRES_PASSWORD_FILE")"` inside the container); TCP on loopback is refused by `pg_hba`.
+- **The `provisioner_runtime` password lives only on the host** (`/etc/mykey/secrets/provisioner/db-password`); the workstation copies were shredded.
+- **Throughput:** an import entry costs about 150–220 ms on the workstation's Docker and 76 ms on staging. The complete read of 1,000 × 8 KiB takes 5.3 s locally; a 7 MB export takes at most 23.5 s on staging.
+
+Open issues carried into Session 5 are listed in `docs/evidence/session-4/report.md` ("What Session 5 must know").
