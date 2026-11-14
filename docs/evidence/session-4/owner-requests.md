@@ -9,4 +9,5 @@ Sent 2026-11-13 in the Session 4 execution chat. Run 4.1 starts without waiting.
 
 ## Answers
 
-_None yet._
+- 2026-11-14 (gate, Run 4.10): **yes** to item 3. Production may take the current migrations and API image, with its gate still not open.
+- 2026-11-14: the owner shredded the obsolete workstation copies of the `provisioner_runtime` password (Run 4.10 Step 2).

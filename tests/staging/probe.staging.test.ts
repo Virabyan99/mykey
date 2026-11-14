@@ -84,7 +84,10 @@ describe("the off-host probe", () => {
       const current = await view(host.name);
       expect(current.state.lastHeartbeatAt, host.name).not.toBeNull();
       expect(current.now - (current.state.lastHeartbeatAt ?? 0), host.name).toBeLessThan(90_000);
-      expect(current.state.open, host.name).toEqual({});
+      // Production runs without a gate file since Session 3 (the owner opens it): its /health
+      // answers down and health_failing stays open by design. Nothing else may be open.
+      const expected = host.name === "prod" ? ["health_failing"] : [];
+      expect(Object.keys(current.state.open).sort(), host.name).toEqual(expected);
     }
   });
 

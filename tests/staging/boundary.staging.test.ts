@@ -263,7 +263,8 @@ async function expectContainersRestricted(host: HostEntry): Promise<void> {
     .split("\n")
     .map((line) => JSON.parse(line) as unknown[]);
   const names = containers.map((fields) => String(fields[0]).replace(/^\//, ""));
-  const openbao = (await runsOpenBao(host)) ? ["mykey-openbao-1"] : [];
+  // A host with OpenBao also runs the provisioner (Run 3.8), under the same restrictions.
+  const openbao = (await runsOpenBao(host)) ? ["mykey-openbao-1", "mykey-provisioner-1"] : [];
   expect(names.sort()).toEqual(
     ["mykey-api-1", "mykey-edge-1", "mykey-postgres-1", ...openbao].sort(),
   );
