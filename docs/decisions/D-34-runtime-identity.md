@@ -2,7 +2,7 @@
 
 **Date:** 2026-11-13
 
-**Status:** DECIDED in the Session 4 plan (P-62), recorded by the executing agent in Run 4.2. Evidence: `tests/integration/openbao/inline.test.ts`, `tests/integration/secrets/*.test.ts`, `tests/staging/secrets.staging.test.ts`, `docs/evidence/session-4/run-4.2.md`, `docs/evidence/session-4/run-4.2-staging.json`.
+**Status:** DECIDED in the Session 4 plan (P-62), recorded by the executing agent in Run 4.2. Evidence: `tests/integration/openbao/inline.test.ts`, `tests/integration/secrets/*.test.ts`, `tests/staging/secrets.staging.test.ts`, `docs/evidence/session-4/run-4.2.md`, `docs/evidence/session-4/run-4.2-staging.json`, `tests/staging/export.staging.test.ts`, `docs/evidence/session-4/run-4.9-staging.json`.
 
 ## Decision
 
@@ -15,8 +15,10 @@
 
 ## Measurement (P-62)
 
-Staging, 13 Nov 2026, API build `352889607d70`. Fifty sequential updates of one key, timed from the workstation through the public name over TLS, each answer included: **median 677 ms, slowest 1,150 ms, fastest 570 ms.** Each update makes three inline-authenticated OpenBao calls (pre-read, write, read-back), each with its own AppRole login. This is not yet the bound named in P-62; that bound is the export of 1,000 names in Run 4.9 Task D, and its numbers go here.
+Staging, 13 Nov 2026, API build `352889607d70`. Fifty sequential updates of one key, timed from the workstation through the public name over TLS, each answer included: **median 677 ms, slowest 1,150 ms, fastest 570 ms.** Each update makes three inline-authenticated OpenBao calls (pre-read, write, read-back), each with its own AppRole login. That was not yet the bound named in P-62.
+
+**The bound (Run 4.9 Task D)** — staging, 14 Nov 2026, API build `81a9aea56f0a`, project `s4-export-0162944e` (environment `full`, `f3a8e3da-377b-45e3-b3b5-e090e22f8f1d`). Eight imports of 125 entries of 7 KiB built 1,000 names and 7,182,000 bytes of export. Each import took **9.1–13.1 s**, measured from preview to final answer, and none answered `awaiting_input`. That is 7–10 s per hundred entries, against 14.6 s on the workstation. Three exports of the 1,000 names took **10.6 s, 18.8 s and 19.8 s**, measured from the workstation through the public name with every byte received. The three files had equal digests. **The slowest is under the 60-second ceiling, so inline authentication stays and the fallback is not taken.** Evidence: `tests/staging/export.staging.test.ts`, `docs/evidence/session-4/run-4.9-staging.json`.
 
 ## What would change this decision
 
-- The export of 1,000 names on staging taking more than 60 s (Run 4.9 Task D). Then D-17's fallback applies: one AppRole login token held in memory for 15 minutes, revoked at shutdown, never written anywhere.
+- The export of 1,000 names on staging taking more than 60 s (measured at 19.8 s in Run 4.9 Task D; Run 4.10 and later releases measure again). Then D-17's fallback applies: one AppRole login token held in memory for 15 minutes, revoked at shutdown, never written anywhere.

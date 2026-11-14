@@ -22,6 +22,8 @@ export interface PublicAnswer {
   status: number;
   headers: Headers;
   body: string;
+  /** The body as received (an export attachment is compared by digest). */
+  bytes: Buffer;
   cookies: string[];
 }
 
@@ -29,7 +31,13 @@ export interface PublicAnswer {
 export async function publicRequest(
   method: string,
   path: string,
-  init: { body?: unknown; cookie?: string; headers?: Record<string, string> } = {},
+  init: {
+    body?: unknown;
+    /** A text/plain body (a dotenv file, Run 4.7) instead of JSON. */
+    text?: string | Uint8Array;
+    cookie?: string;
+    headers?: Record<string, string>;
+  } = {},
 ): Promise<PublicAnswer> {
   const headers: Record<string, string> = {
     origin: STAGING_ORIGIN,
@@ -37,18 +45,22 @@ export async function publicRequest(
     ...init.headers,
   };
   if (init.body !== undefined) headers["content-type"] = "application/json";
+  if (init.text !== undefined) headers["content-type"] = "text/plain; charset=utf-8";
   if (init.cookie !== undefined) headers.cookie = init.cookie;
+  const payload = init.text ?? (init.body === undefined ? undefined : JSON.stringify(init.body));
   const response = await fetch(`${STAGING_ORIGIN}${path}`, {
     method,
     headers,
-    ...(init.body === undefined ? {} : { body: JSON.stringify(init.body) }),
+    ...(payload === undefined ? {} : { body: payload }),
     redirect: "manual",
   });
   const cookies = response.headers.getSetCookie();
+  const bytes = Buffer.from(await response.arrayBuffer());
   return {
     status: response.status,
     headers: response.headers,
-    body: await response.text(),
+    body: bytes.toString("utf8"),
+    bytes,
     cookies,
   };
 }
