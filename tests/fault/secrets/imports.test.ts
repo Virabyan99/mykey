@@ -139,6 +139,66 @@ describe("an import in a process that dies", () => {
     expect(noValueInOutput()).toBe(true);
   });
 
+  it("a child loses its lock between admission and the marker → outcome_unknown; after the sweep the operator settles the parent from its entries: partial, nothing written (gate review I-1)", async () => {
+    const names = [unique(), unique()];
+    const text = fileOf(names);
+    const previewId = await preview(text);
+    await ff.child({ point: "after_admission", action: "terminate_lock" });
+    const answer = await ff.f.send("POST", `${ff.f.env("env1a").path}/import/${previewId}/apply`, {
+      text,
+      to: "second",
+    });
+    const parentId = await parentOf(previewId);
+    expect(answer.status).toBe(503);
+    expect(answer.code).toBe("outcome_unknown");
+    expect(answer.operationId).toBe(parentId);
+    expect((await ff.operation(parentId))?.state).toBe("uncertain");
+
+    await ff.sweepNow();
+    const [child] = await children(parentId);
+    expect(child?.state).toBe("rejected");
+    expect(await ff.changes(child?.id ?? "")).toBe(0);
+
+    const verdict = await ff.settle(parentId, { excluded: false });
+    expect(verdict.kind).toBe("rejected");
+    expect((await ff.operation(parentId))?.state).toBe("partial");
+    expect(await outcomes(parentId)).toEqual(["rejected", "not_attempted"]);
+    const open = await ff.f.api.superuser.query<{ count: number }>(
+      "SELECT count(*)::int AS count FROM app.operation WHERE id = $1 AND completed_at IS NULL",
+      [parentId],
+    );
+    expect(open.rows[0]?.count).toBe(0);
+    expect(await ff.f.backend("env1a", names[0] ?? "")).toBeNull();
+    await expectIndexMatchesBackend(ff.f, "env1a");
+    expect(noValueInOutput()).toBe(true);
+  });
+
+  it("a failure inside the loop after the parent was accepted → 503 outcome_unknown with the parent's id, not a bare dependency_unavailable; the sweep and a resume finish it (gate review I-2)", async () => {
+    const names = [unique(), unique(), unique()];
+    const text = fileOf(names);
+    const previewId = await preview(text);
+    await ff.child({ point: "between_entries", action: "throw" });
+    const answer = await ff.f.send("POST", `${ff.f.env("env1a").path}/import/${previewId}/apply`, {
+      text,
+      to: "second",
+    });
+    const parentId = await parentOf(previewId);
+    expect(answer.status).toBe(503);
+    expect(answer.code).toBe("outcome_unknown");
+    expect(answer.operationId).toBe(parentId);
+    expect(await outcomes(parentId)).toEqual(["created", null, null]);
+
+    await ff.child();
+    const swept = await ff.sweepNow();
+    expect(swept.awaitingInput).toContain(parentId);
+    const resumed = await resume(parentId, text);
+    expect(resumed.status).toBe(200);
+    expect(resumed.body.state).toBe("succeeded");
+    for (const child of await children(parentId)) expect(await ff.changes(child.id)).toBe(1);
+    await expectIndexMatchesBackend(ff.f, "env1a");
+    expect(noValueInOutput()).toBe(true);
+  });
+
   it("the process dies after the last entry and before the parent is finished → resume answers 200 succeeded without a change", async () => {
     const names = [unique(), unique()];
     const text = fileOf(names);

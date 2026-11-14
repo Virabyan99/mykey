@@ -245,7 +245,27 @@ const CONFLICTS: ReadonlySet<ErrorCode> = new Set([
   "not_found",
 ]);
 
+/**
+ * The entries of an accepted parent. Once the parent is accepted, entries may
+ * have changed secrets: any failure here (PostgreSQL gone, a child's throw)
+ * answers outcome_unknown with the parent's id, never a bare refusal (gate
+ * review I-2). The parent stays executing; the sweep moves it truthfully.
+ */
 async function runEntries(
+  deps: EffectDeps,
+  run: Common,
+  parentId: OperationId,
+  values: Map<string, string>,
+  started: number,
+): Promise<ImportOutcome> {
+  try {
+    return await runEntriesOf(deps, run, parentId, values, started);
+  } catch {
+    return { kind: "unknown", operationId: parentId };
+  }
+}
+
+async function runEntriesOf(
   deps: EffectDeps,
   run: Common,
   parentId: OperationId,

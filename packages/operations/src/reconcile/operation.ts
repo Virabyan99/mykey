@@ -35,6 +35,7 @@ import {
   type EnvironmentScope,
   type OperationRow,
   type Settlement,
+  withTransaction,
 } from "@mykey/db";
 import { secretPath, type OpenBaoClient } from "@mykey/openbao";
 import type pg from "pg";
@@ -110,8 +111,10 @@ export async function reconcileOperation(
       [row.id],
     );
     const childId = child.rows[0]?.id;
-    if (childId === undefined || !unresolved(row)) return undetermined("not_unresolved");
-    return reconcileOperation(deps, childId, opts);
+    if (!unresolved(row)) return undetermined("not_unresolved");
+    if (childId !== undefined) return reconcileOperation(deps, childId, opts);
+    // No child is unresolved (gate review I-1): settle the parent from its entries.
+    return settleParentFromEntries(deps, row, opts);
   }
   const scope = scopeOf(row);
   if (scope === null || SWEPT_ACTIONS[row.action] === undefined || !unresolved(row)) {
@@ -290,6 +293,110 @@ async function settle(
 }
 
 class NotUnresolved extends Error {}
+
+/** A child still accepted or executing on a fresh heartbeat: its executor may still act. */
+class StillRunning extends Error {}
+
+/**
+ * An uncertain import whose children are all settled (gate review I-1): a
+ * child admitted and then rejected before its marker (its lock lost), or one
+ * the sweep rejected after the parent was called uncertain. Every entry that
+ * is uncertain or has no outcome takes its child's settled state; an entry
+ * without a child stays not_attempted. Stale children are first moved by the
+ * sweep's own rule; one still running refuses (`executors_not_excluded`).
+ * Nothing in the backend or the index changes, so no environment lock.
+ */
+async function settleParentFromEntries(
+  deps: ReconcileDeps,
+  parent: OperationRow,
+  opts: { executorsExcluded: boolean },
+): Promise<OperationVerdict> {
+  const { organizationId, environmentId } = parent;
+  if (organizationId === null || environmentId === null) return undetermined("not_unresolved");
+  await sweepStaleOperations(deps.database);
+  try {
+    return await withTransaction(deps.database, async (tx) => {
+      const locked = await tx.query(
+        `SELECT 1 FROM app.operation
+          WHERE id = $1 AND state = 'uncertain' AND completed_at IS NULL FOR UPDATE`,
+        [parent.id],
+      );
+      if (locked.rowCount !== 1) throw new NotUnresolved();
+      const entries = await tx.query<{
+        ordinal: number;
+        child_id: OperationId | null;
+        action: string | null;
+        state: string | null;
+        completed: boolean | null;
+        version: number | null;
+      }>(
+        `SELECT e.ordinal, c.id AS child_id, c.action, c.state,
+                c.completed_at IS NOT NULL AS completed, (c.result->>'version')::int AS version
+           FROM app.import_entry e
+           LEFT JOIN LATERAL (
+             SELECT id, action, state, completed_at, result FROM app.operation
+              WHERE parent_operation_id = e.parent_operation_id AND secret_name = e.name
+              ORDER BY created_at DESC LIMIT 1) c ON true
+          WHERE e.parent_operation_id = $1 AND (e.outcome IS NULL OR e.outcome = 'uncertain')
+          ORDER BY e.ordinal`,
+        [parent.id],
+      );
+      let verdict: Exclude<OperationVerdict, { kind: "undetermined" }> | null = null;
+      for (const entry of entries.rows) {
+        if (entry.child_id === null) continue;
+        if (entry.completed !== true) {
+          if (entry.state === "uncertain") throw new NotUnresolved();
+          throw new StillRunning();
+        }
+        const outcome =
+          entry.state === "succeeded"
+            ? entry.action === "secrets.create"
+              ? "created"
+              : "updated"
+            : entry.state === "rejected"
+              ? "rejected"
+              : "uncertain";
+        await recordImportOutcome(tx, parent.id, entry.ordinal, outcome, entry.child_id);
+        verdict ??=
+          entry.state === "succeeded"
+            ? { kind: "succeeded", version: entry.version ?? 0 }
+            : entry.state === "rejected"
+              ? { kind: "rejected" }
+              : { kind: "closed_unknown" };
+      }
+      await closeImportEntries(tx, parent.id);
+      const result = await importResult(tx, parent.id);
+      const settled = await settleOperation(
+        tx,
+        parent.id,
+        { state: allApplied(result) ? "succeeded" : "partial", result: { ...result } },
+        LIMITS.operation.terminalRetentionDays,
+      );
+      if (!settled) throw new NotUnresolved();
+      const answer = verdict ?? { kind: "rejected" };
+      const base = {
+        actor: { kind: "operator", id: deps.operatorId },
+        source: "operator",
+        organizationId,
+        target: { kind: "environment", id: environmentId },
+        outcome: "success",
+        requestId: deps.requestId,
+        operationId: parent.id,
+      } as const;
+      await appendAudit(tx, { ...base, action: "import.apply", details: result.counts });
+      await appendAudit(tx, {
+        ...base,
+        action: "operator.reconcile_operation",
+        details: { verdict: answer.kind, executorsExcluded: opts.executorsExcluded },
+      });
+      return answer;
+    });
+  } catch (error) {
+    if (error instanceof NotUnresolved) return undetermined("not_unresolved");
+    if (error instanceof StillRunning) return undetermined("executors_not_excluded");
+    throw error;
+  }
+}
 
 /**
  * The child of an import was settled (Run 4.7): in the same transaction its
