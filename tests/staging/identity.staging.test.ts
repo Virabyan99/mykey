@@ -17,8 +17,8 @@ import * as OTPAuth from "otpauth";
 import type pg from "pg";
 import {
   connectStaging,
+  countOnHost,
   hostStatus,
-  expectSuccess,
   loadHosts,
   registerSecret,
   sshExec,
@@ -611,24 +611,15 @@ describe("8–9. canary sweep and clean-up", () => {
       places.push([`docker logs ${container}`, logs.stdout + logs.stderr]);
     }
     // The audit device is searched on the host: since Session 4 it is too large to download
-    // in time. The values travel on stdin; only the number of distinct hits and the file's
-    // size come back (the size is the control that the search read something).
-    const audit = expectSuccess(
-      await sshExec(
-        host,
-        "docker exec mykey-openbao-1 cat /openbao/audit/audit.log | grep -o -F -f /dev/stdin | sort -u | wc -l; docker exec mykey-openbao-1 wc -c /openbao/audit/audit.log",
-        {
-          sudo: true,
-          stdin: `${values.filter((value) => value !== "").join("\n")}\n`,
-          secretOutput: true,
-          timeoutMs: 600_000,
-        },
-      ),
-      "searching the audit device",
-    ).stdout.trim();
-    const [auditHits, auditSize] = audit.split("\n");
-    expect(Number(auditSize?.trim().split(/\s+/)[0]), "audit device size").toBeGreaterThan(0);
-    const hostHits = Number(auditHits) > 0 ? ["openbao audit device"] : [];
+    // in time. The values travel on stdin; only counts come back. The control is the KV path
+    // of the editor's write above: a search that misses it read nothing (countOnHost throws).
+    const audit = await countOnHost(
+      host,
+      "docker exec mykey-openbao-1 cat /openbao/audit/audit.log",
+      values,
+      [`kv/data/p/${projectId}/e/${developmentId}/A`],
+    );
+    const hostHits = audit.found > 0 ? ["openbao audit device"] : [];
     const auditRows = await superuser.query<{ row: string }>(
       "SELECT row_to_json(e)::text AS row FROM audit.event e",
     );

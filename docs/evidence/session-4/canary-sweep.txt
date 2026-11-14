@@ -1,0 +1,14 @@
+# Canary sweep on staging (Run 4.10 Step 5)
+# 2026-11-14T15:01:01.832Z; project s4-sweep-8fde1614 (57019054-83bc-4c70-b419-a999c4a31241), environment f89bc370-8a1d-4df7-b05b-17ee3b0311ca
+# Six run-time canaries passed through create, update, restore, reveal, import and export.
+# Controls: reveal carries its canary: true; export carries the five stored: true.
+# Canaries reach the host on stdin (fd 3 of the search, never the pipe); only counts come back (countOnHost).
+# Each surface has controls, strings that are not secret and must be found there; a search missing one fails.
+# surface | command | canaries searched | canaries found | controls found
+API log | docker logs mykey-api-1 | 6 | 0 | 1 of 1
+provisioner log | docker logs mykey-provisioner-1 | 6 | 0 | 1 of 1
+pg_dump (database postgres) | docker exec mykey-postgres-1 sh -c 'PGPASSWORD="$(cat "$POSTGRES_PASSWORD_FILE")" pg_dump -U postgres postgres' | 6 | 0 | 2 of 2
+PostgreSQL log | docker logs mykey-postgres-1 | 6 | 0 | 1 of 1
+OpenBao audit device | docker exec mykey-openbao-1 cat /openbao/audit/audit.log | 6 | 0 | 1 of 1
+Traefik access log | docker logs mykey-edge-1 | 6 | 0 | 1 of 1
+# total canaries found outside the responses: 0
