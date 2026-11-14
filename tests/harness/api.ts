@@ -511,11 +511,13 @@ export function requestTo(
       "sec-fetch-site": "same-origin",
     };
     let payload: Buffer | undefined;
-    if (init.body !== undefined) {
+    if (init.rawBody !== undefined) {
+      payload = Buffer.from(init.rawBody);
+    } else if (init.body !== undefined) {
       payload = Buffer.from(JSON.stringify(init.body), "utf8");
       headers["content-type"] = "application/json";
-      headers["content-length"] = String(payload.length);
     }
+    if (payload !== undefined) headers["content-length"] = String(payload.length);
     if (init.cookie !== undefined) headers.cookie = init.cookie;
     for (const [name, value] of Object.entries(init.headers ?? {})) {
       headers[name.toLowerCase()] = value;

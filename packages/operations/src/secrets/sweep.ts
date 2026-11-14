@@ -10,6 +10,9 @@
 //   no dispatch marker was written, so nothing was sent (D-20). The slot is
 //   released and the action's own audit row records the failure.
 //
+// - an import preview that expired unclaimed, or whose import has finished, is
+//   removed (Run 4.7).
+//
 // It touches PostgreSQL only: it works while OpenBao is unreachable.
 import { appendAudit, type AuditAction } from "@mykey/audit";
 import {
@@ -19,7 +22,7 @@ import {
   type OrganizationId,
   type ProjectId,
 } from "@mykey/contracts";
-import { markKeyReview, releaseSlot, withTransaction } from "@mykey/db";
+import { deleteDeadPreviews, markKeyReview, releaseSlot, withTransaction } from "@mykey/db";
 import type pg from "pg";
 
 /** The secret actions the sweep owns (the operation's action is the route id). */
@@ -50,6 +53,8 @@ export interface SweepResult {
   rejected: OperationId[];
   /** Import parents (Run 4.7); always empty until then. */
   awaitingInput: OperationId[];
+  /** Import previews removed: expired and unclaimed, or claimed by a finished import (Run 4.7). */
+  previewsRemoved: number;
 }
 
 export async function sweepStaleOperations(
@@ -122,5 +127,7 @@ export async function sweepStaleOperations(
     return rows.rows.map((row) => row.id);
   });
 
-  return { uncertain, rejected, awaitingInput: [] };
+  const previewsRemoved = await deleteDeadPreviews(pool);
+
+  return { uncertain, rejected, awaitingInput: [], previewsRemoved };
 }

@@ -39,7 +39,7 @@ import { intentOf } from "../pipeline/route.ts";
 import { checkStates } from "../pipeline/states.ts";
 
 /** The protocol's dependencies; a process without the runtime identity answers 503. */
-function effectDeps(deps: AppDeps): EffectDeps {
+export function effectDeps(deps: AppDeps): EffectDeps {
   const ring = deps.auth?.keys.replayFingerprint;
   if (deps.bao === undefined || deps.lockPool === undefined || ring === undefined) {
     throw new ApiError("dependency_unavailable");
@@ -60,7 +60,7 @@ function effectDeps(deps: AppDeps): EffectDeps {
  * The admission recheck (FR-1.10): the parents locked FOR SHARE, then the
  * caller's authority and the states read again from the rows now locked.
  */
-function recheckOf(ctx: ApiContext, userId: UserId, scope: EnvironmentScope) {
+export function recheckOf(ctx: ApiContext, userId: UserId, scope: EnvironmentScope) {
   return async (tx: pg.PoolClient): Promise<ErrorCode | null> => {
     await lockParents(tx, scope, null);
     const resolved = await resolveAccess(tx, userId, {
@@ -153,7 +153,7 @@ export function nameParam(ctx: ApiContext): string {
 
 // -------------------------------------------------------------------- reads
 
-function readDeps(deps: AppDeps): ReadDeps {
+export function readDeps(deps: AppDeps): ReadDeps {
   if (deps.bao === undefined || deps.lockPool === undefined) {
     throw new ApiError("dependency_unavailable");
   }
@@ -166,7 +166,7 @@ function readDeps(deps: AppDeps): ReadDeps {
   };
 }
 
-function refusedOf(outcome: Refused): never {
+export function refusedOf(outcome: Refused): never {
   throw new ApiError(outcome.code, undefined, undefined, {
     ...(outcome.operationId === undefined ? {} : { operationId: outcome.operationId }),
     ...(outcome.details === undefined ? {} : { details: outcome.details }),

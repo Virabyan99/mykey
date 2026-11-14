@@ -39,6 +39,7 @@ export {
   deleteIndexRow,
   environmentCounters,
   indexNames,
+  indexRowsOf,
   recomputeCounters,
   listIndex,
   versionEvents,
@@ -54,6 +55,7 @@ export {
   type IndexState,
 } from "./repos/secrets.ts";
 export { releaseSlot, slotKey, slotOf, takeSlot } from "./repos/slots.ts";
+export { deleteDeadPreviews, insertPreview, type ImportEntryRecord } from "./repos/imports.ts";
 export { claimOutbox, enqueueOutbox, markOutboxDelivered, type OutboxRow } from "./repos/outbox.ts";
 export {
   bumpCounter,

@@ -1,7 +1,8 @@
 // Run 3.1 Task C: the one place a JSON body is parsed. Duplicate keys and
 // excessive depth are refused by a scanning pass before JSON.parse.
 import { describe, expect, it } from "vitest";
-import { parseStrictJson } from "@mykey/api";
+import { ROUTES } from "@mykey/contracts";
+import { parseStrictJson, readBody } from "@mykey/api";
 
 const ok = (text: string) => parseStrictJson(text, 16);
 
@@ -41,5 +42,31 @@ describe("parseStrictJson", () => {
 
   it.each([[""], ["{"], ["{'a':1}"], ['{"a":1}x'], ["NaN"]])("refuses invalid JSON: %s", (text) => {
     expect(ok(text)).toEqual({ ok: false });
+  });
+});
+
+describe("readBody of a dotenv route (Run 4.7)", () => {
+  const route = ROUTES.find((candidate) => candidate.id === "import.preview")!;
+  const post = (bytes: Uint8Array) =>
+    new Request("https://mykey.test/", {
+      method: "POST",
+      body: bytes,
+      headers: { "content-type": "text/plain; charset=utf-8" },
+    });
+
+  it("answers the exact bytes, a byte-order mark included, so the file's HMAC covers what was sent", async () => {
+    const bytes = Buffer.concat([Buffer.from([0xef, 0xbb, 0xbf]), Buffer.from("A=1\n", "utf8")]);
+    const body = await readBody(post(bytes), route, () => undefined);
+    expect(body instanceof Uint8Array).toBe(true);
+    expect(Buffer.from(body as Uint8Array).equals(bytes)).toBe(true);
+  });
+
+  it("still refuses invalid UTF-8", async () => {
+    const error = await readBody(
+      post(Buffer.from([0x41, 0x3d, 0xff])),
+      route,
+      () => undefined,
+    ).catch((caught: unknown) => caught);
+    expect((error as { code?: string }).code).toBe("malformed_request");
   });
 });

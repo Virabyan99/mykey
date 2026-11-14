@@ -64,3 +64,11 @@ export {
 export { revealSecret, type RevealOutcome, type RevealRequest } from "./secrets/reveal.ts";
 export { inTransaction } from "./secrets/lock.ts";
 export { SWEPT_ACTIONS, sweepStaleOperations, type SweepResult } from "./secrets/sweep.ts";
+export { classifyEntries, type Classification, type Classified } from "./imports/classify.ts";
+export {
+  fileHmac,
+  previewImport,
+  type ImportPreviewBody,
+  type PreviewOutcome,
+  type PreviewRequest,
+} from "./imports/preview.ts";

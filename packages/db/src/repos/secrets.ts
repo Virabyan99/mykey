@@ -76,6 +76,20 @@ export async function readIndexRow(
   return stored === undefined ? null : toIndexRow(stored);
 }
 
+/** The rows of these names (Run 4.7, import preview); an absent name has no entry. */
+export async function indexRowsOf(
+  db: Queryable,
+  scope: EnvironmentScope,
+  names: readonly string[],
+): Promise<Map<string, IndexRow>> {
+  const result = await db.query<StoredIndexRow>(
+    `SELECT ${INDEX_COLUMNS} FROM app.secret_index
+      WHERE organization_id = $1 AND environment_id = $2 AND name = ANY($3::text[])`,
+    [scope.organizationId, scope.environmentId, names],
+  );
+  return new Map(result.rows.map((stored) => [stored.name, toIndexRow(stored)]));
+}
+
 /**
  * One page of the index in bytewise name order, and the environment's
  * metadata generation — from one statement, so both come from one snapshot

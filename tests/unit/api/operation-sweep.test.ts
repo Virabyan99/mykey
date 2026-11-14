@@ -18,7 +18,12 @@ describe("startOperationSweep", () => {
     const sweep = vi.fn(() => {
       passes += 1;
       if (passes === 2) return Promise.reject(new TypeError("synthetic"));
-      return Promise.resolve({ uncertain: [], rejected: [], awaitingInput: [] });
+      return Promise.resolve({
+        uncertain: [],
+        rejected: [],
+        awaitingInput: [],
+        previewsRemoved: 0,
+      });
     });
     const timer = startOperationSweep({} as pg.Pool, (entry) => logs.push(entry), {
       sweep,
@@ -49,7 +54,8 @@ describe("startOperationSweep", () => {
     const logs: LogEntry[] = [];
     const id = "6f1c2f0e-0000-4000-8000-000000000001" as OperationId;
     const timer = startOperationSweep({} as pg.Pool, (entry) => logs.push(entry), {
-      sweep: () => Promise.resolve({ uncertain: [id], rejected: [], awaitingInput: [] }),
+      sweep: () =>
+        Promise.resolve({ uncertain: [id], rejected: [], awaitingInput: [], previewsRemoved: 0 }),
       random: () => 0,
     });
     await vi.advanceTimersByTimeAsync(30_000);

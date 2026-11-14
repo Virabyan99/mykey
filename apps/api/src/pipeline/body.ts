@@ -151,7 +151,7 @@ async function readLimited(
 /**
  * Reads the body the route takes, applying every rule above. Answers
  * `undefined` for a route without a body, the parsed JSON for a JSON route and
- * the text for a dotenv route.
+ * the bytes (valid UTF-8) for a dotenv route.
  */
 export async function readBody(
   request: Request,
@@ -184,7 +184,9 @@ export async function readBody(
   } catch {
     throw malformed();
   }
-  if (kind === "text") return text;
+  // A dotenv body (Run 4.7) stays bytes: the file's HMAC binds exactly what was
+  // sent, and the parser sees a byte-order mark the decoder would drop.
+  if (kind === "text") return bytes;
   const parsed = parseStrictJson(text, LIMITS.body.jsonMaxDepth);
   if (!parsed.ok) throw malformed();
   return parsed.value;

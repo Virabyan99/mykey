@@ -71,7 +71,14 @@ export interface SecretsFixture {
   send(
     method: string,
     path: string,
-    opts?: { user?: FixtureUser; body?: unknown; key?: string | null; to?: "first" | "second" },
+    opts?: {
+      user?: FixtureUser;
+      body?: unknown;
+      /** A text/plain body (a dotenv file, Run 4.7) instead of JSON. */
+      text?: string | Uint8Array;
+      key?: string | null;
+      to?: "first" | "second";
+    },
   ): Promise<Answer>;
   create(
     env: EnvName,
@@ -275,7 +282,13 @@ export async function createSecretsFixture(
       const cookie = await tenants.cookie(init.user ?? "ownerA");
       const headers: Record<string, string> =
         init.key === null ? {} : { "idempotency-key": init.key ?? randomUUID() };
-      const request = { cookie, headers, ...(init.body === undefined ? {} : { body: init.body }) };
+      if (init.text !== undefined) headers["content-type"] = "text/plain; charset=utf-8";
+      const request = {
+        cookie,
+        headers,
+        ...(init.body === undefined ? {} : { body: init.body }),
+        ...(init.text === undefined ? {} : { rawBody: init.text }),
+      };
       let response: Response;
       if (init.to === "second") {
         if (second === null) throw new Error("no second API process");

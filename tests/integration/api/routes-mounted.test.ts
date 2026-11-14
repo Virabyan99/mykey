@@ -30,6 +30,7 @@ const HANDLED = new Set([
   "secrets.delete",
   "secrets.undelete",
   "secrets.restore",
+  "import.preview",
   "session.activity",
   "auth.reset.complete",
 ]);
