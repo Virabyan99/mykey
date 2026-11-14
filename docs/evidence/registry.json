@@ -484,9 +484,11 @@
       "ownerRun": "4.7",
       "contributingRuns": [],
       "oldSession": "D08-S23",
-      "status": "OPEN",
-      "evidence": [],
-      "note": ""
+      "status": "SPIKE_PASS",
+      "evidence": [
+        "docs/evidence/session-4/run-4.7.md"
+      ],
+      "note": "Import preview: classification under the lock, values compared in memory only, nothing written; stored rows hold names, lines, classifications, versions and tags (product code, real stores)."
     },
     {
       "id": "FR-1.36",
@@ -496,9 +498,11 @@
       "ownerRun": "4.7",
       "contributingRuns": [],
       "oldSession": "D08-S23",
-      "status": "OPEN",
-      "evidence": [],
-      "note": ""
+      "status": "SPIKE_PASS",
+      "evidence": [
+        "docs/evidence/session-4/run-4.7.md"
+      ],
+      "note": "Import apply and resume entry by entry through the mutation protocol; seven outcomes; partial when not every entry applied; resume never writes an entry twice."
     },
     {
       "id": "FR-1.37",
@@ -1822,9 +1826,11 @@
       "ownerRun": "4.7",
       "contributingRuns": [],
       "oldSession": "D08-S23",
-      "status": "OPEN",
-      "evidence": [],
-      "note": ""
+      "status": "SPIKE_PASS",
+      "evidence": [
+        "docs/evidence/session-4/run-4.7.md"
+      ],
+      "note": "Import under faults: an unknown entry stops the import as uncertain and is settled through its child; a process killed between entries, inside an entry or before the finish leaves a truthful parent."
     },
     {
       "id": "AC-1.40",
@@ -2334,9 +2340,11 @@
       "ownerRun": "4.7",
       "contributingRuns": [],
       "oldSession": "D08-S23",
-      "status": "OPEN",
-      "evidence": [],
-      "note": ""
+      "status": "SPIKE_PASS",
+      "evidence": [
+        "docs/evidence/session-4/run-4.7.md"
+      ],
+      "note": "Import is truthfully non-atomic: every entry has one of seven outcomes and a resumed import never applies an entry twice."
     },
     {
       "id": "PO-18",
