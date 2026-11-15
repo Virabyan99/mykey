@@ -8,6 +8,7 @@ import {
   beginArchive,
   driveArchive,
   operationResponse,
+  reactivate,
   readGate,
   replayAnswer,
   type LifecycleDeps,
@@ -75,18 +76,16 @@ function refusal(code: ErrorCode, operationId?: OperationId): ApiError {
   });
 }
 
-export const archiveHandler: Handler = async (ctx, deps) => {
+function lifecycleRequest(ctx: ApiContext) {
   const principal = ctx.principal;
   const scope = ctx.scope as Scope | null;
   const key = ctx.idempotencyKey;
   if (principal === null || scope === null || key === null) {
     throw new ApiError("dependency_unavailable");
   }
-  const lifecycle = lifecycleDeps(deps);
-  const kind = scope.environmentId === undefined ? "project" : "environment";
-  const start = await beginArchive(lifecycle, {
+  return {
     routeId: ctx.route.id,
-    kind,
+    kind: scope.environmentId === undefined ? ("project" as const) : ("environment" as const),
     organizationId: scope.organizationId,
     projectId: scope.projectId,
     ...(scope.environmentId === undefined ? {} : { environmentId: scope.environmentId as never }),
@@ -95,7 +94,12 @@ export const archiveHandler: Handler = async (ctx, deps) => {
     intent: intentOf(ctx.route, ctx.params, principal, ctx.body),
     requestId: ctx.requestId,
     recheck: lifecycleRecheck(ctx, principal.userId, scope),
-  });
+  };
+}
+
+export const archiveHandler: Handler = async (ctx, deps) => {
+  const lifecycle = lifecycleDeps(deps);
+  const start = await beginArchive(lifecycle, lifecycleRequest(ctx));
   if (start.kind === "refused") throw refusal(start.code, start.operationId);
   if (start.kind === "replay") {
     const answer = replayAnswer(ctx.route, start.operation);
@@ -108,4 +112,16 @@ export const archiveHandler: Handler = async (ctx, deps) => {
   const current = await findOperation(deps.pool, operationId);
   if (current === null) throw new ApiError("dependency_unavailable");
   return { status: driven === "archived" ? 200 : 202, body: operationResponse(current) };
+};
+
+/** Reads only, then one transaction (P-92): 200 with the envelope, or the refusal. */
+export const reactivateHandler: Handler = async (ctx, deps) => {
+  const outcome = await reactivate(lifecycleDeps(deps), lifecycleRequest(ctx));
+  if (outcome.kind === "refused") throw refusal(outcome.code, outcome.operationId);
+  if (outcome.kind === "replay") {
+    const answer = replayAnswer(ctx.route, outcome.operation);
+    if (!("error" in answer)) return answer;
+    throw refusal(answer.error, answer.operationId);
+  }
+  return { status: 200, body: operationResponse(outcome.operation) };
 };

@@ -60,6 +60,7 @@ export {
   type ArchiveStart,
   type LifecycleDeps,
 } from "./lifecycle/archive.ts";
+export { reactivate, type ReactivateOutcome } from "./lifecycle/reactivate.ts";
 export {
   CREDENTIAL_ACTIONS,
   sweepCredentials,

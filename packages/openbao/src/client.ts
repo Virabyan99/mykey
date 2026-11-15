@@ -18,6 +18,7 @@ import {
   isOrganizationNamespace,
   isSecretPath,
 } from "./paths.ts";
+import type { MachineTokenRole } from "./policies.ts";
 
 export interface OpenBaoTarget {
   url: string;
@@ -548,6 +549,37 @@ export class OpenBaoClient {
       correlation: c,
     });
     return toNull(resultOf(outcome, noContent, "change"));
+  }
+
+  /**
+   * Run 5.3 (P-92): the machine policy's text, read with the issuer's session
+   * (`sys/policies/acl/machine-env-*` is readable by it).
+   */
+  async readMachinePolicy(name: string): Promise<BaoResult<string>> {
+    if (!isMachineName(name)) throw new Error("invalid machine name");
+    return resultOf(await this.#call("GET", `sys/policies/acl/${name}`), (body) => {
+      const policy = record(record(body).data).policy;
+      return typeof policy === "string" ? policy : null;
+    });
+  }
+
+  /** Run 5.3 (P-92): the machine token role as OpenBao reads it back (the fields of D-18). */
+  async readMachineTokenRole(
+    name: string,
+  ): Promise<BaoResult<Omit<MachineTokenRole, "token_num_uses">>> {
+    if (!isMachineName(name)) throw new Error("invalid machine name");
+    return resultOf(await this.#call("GET", `auth/token/roles/${name}`), (body) => {
+      const data = record(record(body).data);
+      return {
+        allowed_policies: data.allowed_policies,
+        orphan: data.orphan,
+        renewable: data.renewable,
+        token_no_default_policy: data.token_no_default_policy,
+        token_explicit_max_ttl: data.token_explicit_max_ttl,
+        token_type: data.token_type,
+        token_period: data.token_period,
+      } as Omit<MachineTokenRole, "token_num_uses">;
+    });
   }
 
   async tokenRevokeSelf(): Promise<BaoResult<null>> {
