@@ -129,6 +129,8 @@ export interface SecretsFixture {
     env: EnvName,
     name: string,
   ): Promise<{ currentVersion: number; versions: BackendVersion[] } | null>;
+  /** Where the API's credential files are (runtime and issuer). */
+  secretsDirectory: string;
   /** The operator client of A's namespace (root token): for writing past the product. */
   operatorBao(): OpenBaoClient;
   /** Requests the audit device recorded that change KV and carry this operation id. */
@@ -188,7 +190,12 @@ async function closedPort(): Promise<number> {
 }
 
 export async function createSecretsFixture(
-  opts: { private?: boolean; processes?: 1 | 2 } = {},
+  opts: {
+    private?: boolean;
+    processes?: 1 | 2;
+    /** Run 5.4: "broken" delivers a runtime secret id OpenBao refuses. */
+    runtime?: "ok" | "broken";
+  } = {},
 ): Promise<SecretsFixture> {
   const directory = mkdtempSync(join(tmpdir(), "mykey-secrets-"));
   const secretsDirectory = join(directory, "secrets");
@@ -244,7 +251,13 @@ export async function createSecretsFixture(
   // The runtime credential, delivered the way the host delivers it.
   writeFileSync(join(secretsDirectory, "organization-id"), tenants.a.organizationId);
   writeFileSync(join(secretsDirectory, "runtime-role-id"), fx.credentials.runtime.roleId);
-  writeFileSync(join(secretsDirectory, "runtime-secret-id"), fx.credentials.runtime.secretId);
+  writeFileSync(
+    join(secretsDirectory, "runtime-secret-id"),
+    opts.runtime === "broken" ? randomUUID() : fx.credentials.runtime.secretId,
+  );
+  // Run 5.1 (P-85): the issuer credential beside it, as the host installs it.
+  writeFileSync(join(secretsDirectory, "issuer-role-id"), fx.credentials.issuer.roleId);
+  writeFileSync(join(secretsDirectory, "issuer-secret-id"), fx.credentials.issuer.secretId);
 
   const tls = { certPath: stack.api.certPath, keyPath: stack.api.keyPath };
   const ca = readFileSync(stack.api.certAuthorityPath);
@@ -287,6 +300,7 @@ export async function createSecretsFixture(
       return second;
     },
     env: ids,
+    secretsDirectory,
     setBeforeHandler(hook) {
       beforeHandler = hook;
     },

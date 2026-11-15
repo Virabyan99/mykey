@@ -12,8 +12,8 @@ import { drizzle } from "drizzle-orm/node-postgres";
 import type { Hono } from "hono";
 import { createApp } from "./app.ts";
 import { createHealthCheck, type OpenBaoHealthTarget } from "./health.ts";
-import { runtimeBaoFromDirectory } from "./runtime-bao.ts";
-import { runtimeSelfCheck } from "./selfcheck.ts";
+import { issuerBaoFromDirectory, runtimeBaoFromDirectory } from "./runtime-bao.ts";
+import { issuerSelfCheck, runtimeSelfCheck } from "./selfcheck.ts";
 import { createLogger, type LogEntry } from "./log.ts";
 import { startOperationSweep } from "./operation-sweep.ts";
 import { startOutboxDispatcher } from "./outbox-dispatcher.ts";
@@ -78,7 +78,7 @@ export interface ServerConfig extends ListenOptions {
   api: ApiConfig;
   /** The key files of the auth module (read-only mount on a host). */
   keysDirectory: string;
-  /** The runtime credential files (organization-id, runtime-role-id, runtime-secret-id). */
+  /** The credential files (organization-id, runtime-role-id, runtime-secret-id, issuer-role-id, issuer-secret-id). */
   secretsDirectory?: string;
   log: (entry: LogEntry) => void;
 }
@@ -106,6 +106,10 @@ export async function startServer(config: ServerConfig): Promise<ApiServer> {
       ? {}
       : {
           bao: runtimeBaoFromDirectory(
+            config.openbao,
+            config.secretsDirectory ?? "/run/mykey/secrets",
+          ),
+          issuer: issuerBaoFromDirectory(
             config.openbao,
             config.secretsDirectory ?? "/run/mykey/secrets",
           ),
@@ -225,6 +229,11 @@ if (import.meta.main) {
   log({
     event: "selfcheck",
     runtimeLogin: await runtimeSelfCheck(
+      settings.openbao,
+      settings.secretsDirectory ?? "/run/mykey/secrets",
+    ).catch(() => "unreachable" as const),
+    // Run 5.1 (P-85): the issuer credential logs in and revokes itself; it does not gate /health.
+    issuerLogin: await issuerSelfCheck(
       settings.openbao,
       settings.secretsDirectory ?? "/run/mykey/secrets",
     ).catch(() => "unreachable" as const),

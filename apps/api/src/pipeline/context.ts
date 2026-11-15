@@ -3,7 +3,7 @@ import type { HttpBindings } from "@hono/node-server";
 import type { Auth, AuthKeys, Throttle } from "@mykey/auth";
 import type { Authority, ErrorCode, RouteDef } from "@mykey/contracts";
 import type { OperationRow } from "@mykey/db";
-import type { RuntimeBao } from "@mykey/operations";
+import type { IssuerBao, RuntimeBao } from "@mykey/operations";
 import type pg from "pg";
 import type { HealthReading } from "../health.ts";
 import type { LogEntry } from "../log.ts";
@@ -38,6 +38,8 @@ export interface AppDeps {
   lockPool?: pg.Pool;
   /** The organization's runtime identity in OpenBao (P-62, D-34). */
   bao?: RuntimeBao;
+  /** The organization's issuer identity (Run 5.1, P-85): one session per credential step. */
+  issuer?: IssuerBao;
   /** A UUID per process start: the executor id of the operations it runs. */
   bootId: string;
   config: ApiConfig;

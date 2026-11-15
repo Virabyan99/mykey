@@ -41,6 +41,14 @@ export {
 } from "./replay.ts";
 export type { IssuerBao, IssuerSession, RuntimeBao } from "./runtime.ts";
 export {
+  CREDENTIAL_FAULT_POINTS,
+  issueCredential,
+  type CredentialDeps,
+  type CredentialFaultPoint,
+  type IssueOutcome,
+  type IssueRequest,
+} from "./credentials/issue.ts";
+export {
   checkIssuedToken,
   revokeAndVerify,
   type RevokeProof,

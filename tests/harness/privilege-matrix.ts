@@ -94,7 +94,12 @@ export const TABLES: Record<string, Expected> = {
   "app.access_grant": { api: [S, I], provisioner: [] },
   "app.secret_index": { api: [S, I], provisioner: [] },
   "app.secret_version_event": { api: [S, I], provisioner: [] },
-  "app.machine_credential": { api: [S, I], provisioner: [] },
+  // Run 5.1 (migration 0013): what an issuance writes at insert is never changed.
+  "app.machine_credential": {
+    api: [S, I],
+    provisioner: [],
+    apiNoColumns: ["name", "issuance_operation_id", "requested_expires_at", "issued_by"],
+  },
   "app.operation": {
     api: [S, I],
     provisioner: [S, I, U],

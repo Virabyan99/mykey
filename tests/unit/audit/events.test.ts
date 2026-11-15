@@ -169,3 +169,31 @@ describe("secret actions", () => {
     ).toBe(true);
   });
 });
+
+// Run 5.1 (P-95): credential actions carry the credential id, never an accessor or a token.
+describe("credential actions", () => {
+  const id = "44444444-4444-4444-8444-444444444444";
+
+  it("the issuance and revocation actions exist with their details", () => {
+    expect(
+      AUDIT_DETAILS["credential.issue"].safeParse({
+        credentialId: id,
+        nameLength: 7,
+        ttlSeconds: 60,
+      }).success,
+    ).toBe(true);
+    expect(AUDIT_DETAILS["credential.revoke"].safeParse({ credentialId: id }).success).toBe(true);
+  });
+
+  it("an accessor, a token or the name itself is refused", () => {
+    const base = { credentialId: id, nameLength: 7, ttlSeconds: 60 };
+    for (const extra of [{ accessor: "a" }, { token: "t" }, { name: "deploy" }]) {
+      expect(AUDIT_DETAILS["credential.issue"].safeParse({ ...base, ...extra }).success).toBe(
+        false,
+      );
+    }
+    expect(
+      AUDIT_DETAILS["credential.revoke"].safeParse({ credentialId: "not-an-id" }).success,
+    ).toBe(false);
+  });
+});

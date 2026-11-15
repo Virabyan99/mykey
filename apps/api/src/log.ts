@@ -50,7 +50,12 @@ export type LogEntry =
   | { event: "operation_sweep"; time: string; uncertain: string[]; rejected: string[] }
   | { event: "listening"; port: number }
   | { event: "startup_refused"; missing: string }
-  | { event: "selfcheck"; runtimeLogin: "ok" | "refused" | "unreachable" | "absent" };
+  | {
+      event: "selfcheck";
+      runtimeLogin: "ok" | "refused" | "unreachable" | "absent";
+      /** Run 5.1 (P-85). */
+      issuerLogin?: "ok" | "refused" | "unreachable" | "absent";
+    };
 
 const DENIED_KEYS = new Set([
   "authorization",

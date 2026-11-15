@@ -130,6 +130,17 @@ export const AUDIT_DETAILS = {
     names: z.int().nonnegative(),
     changed: z.int().nonnegative(),
   }),
+  /**
+   * Run 5.1 (P-95): machine credentials. Target is the environment; the
+   * credential's id is in details, its name by length only (as a project's).
+   * Never an accessor, a token or a digest of one.
+   */
+  "credential.issue": z.strictObject({
+    credentialId: z.uuid(),
+    nameLength: z.int().min(1).max(64),
+    ttlSeconds: z.int().positive(),
+  }),
+  "credential.revoke": z.strictObject({ credentialId: z.uuid() }),
   /** Run 4.1: the operator expired terminal operation records (P-65). */
   "operator.operations_expire": z.strictObject({ expired: z.int().nonnegative() }),
 } as const;

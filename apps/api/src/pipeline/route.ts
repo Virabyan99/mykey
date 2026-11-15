@@ -30,6 +30,7 @@ import {
   type HandlerResult,
 } from "./context.ts";
 import { checkDetails, errorResponse, jsonResponse } from "./respond.ts";
+import { notReplayable } from "../routes/credentials.ts";
 import { validateBody, validateQuery } from "./validate.ts";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
@@ -228,6 +229,9 @@ async function run(
           throw new ApiError("idempotency_conflict");
         }
         const answer = replayAnswer(route, stored);
+        if ("error" in answer && answer.error === "credential_not_replayable") {
+          throw await notReplayable(deps.pool, stored.id);
+        }
         if ("error" in answer) {
           throw new ApiError(answer.error, "replay", undefined, {
             ...(answer.operationId === undefined ? {} : { operationId: answer.operationId }),

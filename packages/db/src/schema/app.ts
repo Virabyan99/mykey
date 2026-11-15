@@ -25,6 +25,7 @@ import {
   text,
   timestamp,
   unique,
+  uniqueIndex,
   uuid,
   type AnyPgColumn,
 } from "drizzle-orm/pg-core";
@@ -300,6 +301,11 @@ export const machineCredential = appSchema.table(
       "machine_credential_state_check",
       oneOf(t.state, ["issuing", "active", "revoking", "revoked", "expired", "needs_review"]),
     ),
+    // Run 5.1 (P-86): an issuance that is unresolved blocks the next one for its environment.
+    uniqueIndex("machine_credential_unresolved_issuance_key")
+      .on(t.environmentId)
+      .where(sql`${t.state} IN ('issuing', 'needs_review')`),
+    index("machine_credential_environment_state_idx").on(t.environmentId, t.state),
   ],
 );
 

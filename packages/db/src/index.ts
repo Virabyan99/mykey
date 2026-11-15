@@ -103,3 +103,16 @@ export {
   type EnvironmentRow,
   type ProjectRow,
 } from "./repos/resources.ts";
+export {
+  activateCredential,
+  blockingIssuance,
+  findCredentialByAccessor,
+  findCredentialByOperation,
+  insertIssuing,
+  listCredentials,
+  lockCredential,
+  moveCredential,
+  touchLastUsed,
+  type CredentialRow,
+  type CredentialState,
+} from "./repos/credentials.ts";

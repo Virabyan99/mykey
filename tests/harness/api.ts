@@ -15,6 +15,7 @@ import { join } from "node:path";
 import {
   createApp,
   createHealthCheck,
+  issuerBaoFromDirectory,
   listen,
   runtimeBaoFromDirectory,
   startOutboxDispatcher,
@@ -38,7 +39,7 @@ import { drizzle } from "drizzle-orm/node-postgres";
 import * as OTPAuth from "otpauth";
 import { createPool } from "@mykey/db";
 import type { OpenBaoTarget } from "@mykey/openbao";
-import { ensureQueues, type RuntimeBao } from "@mykey/operations";
+import { ensureQueues, type IssuerBao, type RuntimeBao } from "@mykey/operations";
 import type pg from "pg";
 import { prepareDatabase, type TestDatabase } from "../integration/database/setup.ts";
 import { getSharedStack, type Stack } from "./stack.ts";
@@ -112,6 +113,22 @@ function switchableRuntime(runtime: NonNullable<StartTestApiOptions["runtime"]>)
     clientFor: (organizationId) => reader().clientFor(organizationId),
     organizationId: () => reader().organizationId(),
     withToken: (organizationId, token) => reader().withToken(organizationId, token),
+  };
+}
+
+/** Run 5.1: the issuer identity from the same directory, its OpenBao target read on every call. */
+function switchableIssuer(runtime: NonNullable<StartTestApiOptions["runtime"]>): IssuerBao {
+  const issuers = new Map<string, IssuerBao>();
+  return {
+    open(organizationId) {
+      const target = runtime.openBao();
+      let issuer = issuers.get(target.url);
+      if (issuer === undefined) {
+        issuer = issuerBaoFromDirectory(target, runtime.secretsDirectory);
+        issuers.set(target.url, issuer);
+      }
+      return issuer.open(organizationId);
+    },
   };
 }
 
@@ -243,6 +260,7 @@ export async function startTestApi(opts: StartTestApiOptions = {}): Promise<Test
         : createPool(database.targets.api_runtime, { max: 8, queryTimeoutMs: 30_000 });
     if (lockPool !== undefined) cleanup.push(() => lockPool.end());
     const bao = opts.runtime === undefined ? undefined : switchableRuntime(opts.runtime);
+    const issuer = opts.runtime === undefined ? undefined : switchableIssuer(opts.runtime);
     let bootId = randomUUID();
     const health = createHealthCheck(database.targets.api_runtime);
     cleanup.push(() => health.close());
@@ -263,6 +281,7 @@ export async function startTestApi(opts: StartTestApiOptions = {}): Promise<Test
         pool,
         ...(lockPool === undefined ? {} : { lockPool }),
         ...(bao === undefined ? {} : { bao }),
+        ...(issuer === undefined ? {} : { issuer }),
         bootId,
         config,
         health: () => health.check(),

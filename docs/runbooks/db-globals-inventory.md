@@ -33,6 +33,8 @@ Written in Run 1.7 (2026-11-10) against PostgreSQL 18.6.
 - **Resets (Run 3.6, migration `0006`).** Table `auth.reset_token` and column `auth.session.reset_token_id`. `api_runtime`: `SELECT` and `UPDATE (verifier, consumed_at)` on `reset_token`. `maintenance`: `SELECT, INSERT` and `UPDATE (verifier, superseded_at)` on `reset_token`; `DELETE` on `auth.totp_step_used` and `auth.recovery_code` (the factor clean-up of Run 3.5).
 - **Operation scope (Run 4.1, migration `0011`).** Columns `project_id`, `environment_id`, `secret_name` (checked against the name pattern) and `parent_operation_id` (references `app.operation`) on `app.operation`, written at insert only; indexes `operation_environment_created_idx` and `operation_unresolved_idx`. `api_runtime` loses `INSERT` and `UPDATE` on `app.operation_tombstone` (only the operator's `ops operations-expire` writes tombstones); it keeps `SELECT`.
 
+- **Machine credentials (Run 5.1, migration `0013`).** On `app.machine_credential`: the partial unique index `machine_credential_unresolved_issuance_key (environment_id) WHERE state IN ('issuing', 'needs_review')` (an unresolved issuance blocks the next one for its environment) and the index `machine_credential_environment_state_idx (environment_id, state)`. `api_runtime` keeps `UPDATE` on `accessor`, `effective_expires_at`, `state` and `last_used_at` only, and has no `DELETE`.
+
 ## Reconstruction order
 
 Runs 2.9 and 6.8 follow this order and record the result of each step.

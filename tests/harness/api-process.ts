@@ -12,6 +12,7 @@ import { createInterface } from "node:readline";
 import {
   createApp,
   createHealthCheck,
+  issuerBaoFromDirectory,
   listen,
   runtimeBaoFromDirectory,
   type ApiConfig,
@@ -73,6 +74,7 @@ const app = createApp({
     ? {}
     : {
         bao: runtimeBaoFromDirectory(settings.runtime.openBao, settings.runtime.secretsDirectory),
+        issuer: issuerBaoFromDirectory(settings.runtime.openBao, settings.runtime.secretsDirectory),
       }),
   bootId: randomUUID(),
   config: settings.api,
