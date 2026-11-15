@@ -340,6 +340,18 @@ const credentialIssuedBody = z.strictObject({
 const credentialRevokedBody = operationResponseSchema.extend({
   result: z.strictObject({ credentialId: z.uuid(), state: z.literal("revoked") }),
 });
+/** projects.archive, environments.archive (Run 5.3, P-91): what the archive closed. */
+const archivedBody = operationResponseSchema.extend({
+  result: z.strictObject({
+    state: z.enum(["archived", "revoking"]),
+    environments: z.int().nonnegative(),
+    credentialsRevoked: z.int().nonnegative(),
+  }),
+});
+/** projects.reactivate, environments.reactivate (Run 5.3, P-92). */
+const reactivatedBody = operationResponseSchema.extend({
+  result: z.strictObject({ state: z.literal("active"), environments: z.int().nonnegative() }),
+});
 const credentialsListBody = z.strictObject({
   credentials: z.array(credentialView),
   nextCursor: z.string().nullable(),
@@ -501,11 +513,13 @@ export const ROUTES: readonly RouteDef[] = Object.freeze([
   define("projects.archive", "POST", `${P}/archive`, "human", true, "5.3", {
     action: "resources.manage",
     body: confirmedBody,
+    responses: { 200: archivedBody },
     errors: ["state_conflict", ...BACKEND],
   }),
   define("projects.reactivate", "POST", `${P}/reactivate`, "human", true, "5.3", {
     action: "resources.manage",
     body: confirmedBody,
+    responses: { 200: reactivatedBody },
     errors: ["state_conflict", ...BACKEND],
   }),
 
@@ -528,11 +542,13 @@ export const ROUTES: readonly RouteDef[] = Object.freeze([
   define("environments.archive", "POST", `${E}/archive`, "human", true, "5.3", {
     action: "resources.manage",
     body: confirmedBody,
+    responses: { 200: archivedBody },
     errors: ["state_conflict", ...BACKEND],
   }),
   define("environments.reactivate", "POST", `${E}/reactivate`, "human", true, "5.3", {
     action: "resources.manage",
     body: confirmedBody,
+    responses: { 200: reactivatedBody },
     errors: ["state_conflict", ...BACKEND],
   }),
 
