@@ -30,6 +30,12 @@ export type CredentialsFixture = SecretsFixture & {
     body?: { name?: string; ttlSeconds?: number } | Record<string, unknown>,
     opts?: { user?: FixtureUser; key?: string; to?: "first" | "second"; fresh?: boolean },
   ): Promise<Answer>;
+  /** POST credentials/:credential/revoke (Run 5.2), `{ confirmed: true }`, a new key. */
+  revoke(
+    env: EnvName,
+    credentialId: string,
+    opts?: { user?: FixtureUser; key?: string; to?: "first" | "second"; body?: unknown },
+  ): Promise<Answer>;
   admin: OpenBaoAdmin;
 };
 
@@ -53,6 +59,18 @@ export async function createCredentialsFixture(
   return Object.assign<SecretsFixture, Omit<CredentialsFixture, keyof SecretsFixture>>(base, {
     admin,
     freshen,
+    revoke(
+      env: EnvName,
+      credentialId: string,
+      init: { user?: FixtureUser; key?: string; to?: "first" | "second"; body?: unknown } = {},
+    ): Promise<Answer> {
+      return base.send("POST", `${base.env(env).path}/credentials/${credentialId}/revoke`, {
+        body: init.body ?? { confirmed: true },
+        key: init.key ?? randomUUID(),
+        ...(init.user === undefined ? {} : { user: init.user }),
+        ...(init.to === undefined ? {} : { to: init.to }),
+      });
+    },
     async issue(
       env: EnvName,
       body: Record<string, unknown> = {},

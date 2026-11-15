@@ -48,6 +48,7 @@ export {
   type IssueOutcome,
   type IssueRequest,
 } from "./credentials/issue.ts";
+export { revokeCredential, type RevokeOutcome, type RevokeRequest } from "./credentials/revoke.ts";
 export {
   checkIssuedToken,
   revokeAndVerify,

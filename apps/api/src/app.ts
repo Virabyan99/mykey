@@ -15,7 +15,11 @@ import { checkOrigin } from "./pipeline/origin.ts";
 import { errorResponse } from "./pipeline/respond.ts";
 import { requestSource } from "./pipeline/source.ts";
 import { mountRoute, mountRouteDef } from "./pipeline/route.ts";
-import { credentialsIssueHandler, credentialsListHandler } from "./routes/credentials.ts";
+import {
+  credentialsIssueHandler,
+  credentialsListHandler,
+  credentialsRevokeHandler,
+} from "./routes/credentials.ts";
 import { exportCreateHandler } from "./routes/export.ts";
 import { healthHandler } from "./routes/health.ts";
 import { importApplyHandler, importPreviewHandler, importResumeHandler } from "./routes/imports.ts";
@@ -111,6 +115,7 @@ function handlers(large: LargeGate): Partial<Record<string, Handler>> {
     "export.create": exportCreateHandler(large),
     "credentials.list": credentialsListHandler,
     "credentials.issue": credentialsIssueHandler,
+    "credentials.revoke": credentialsRevokeHandler,
     "session.activity": sessionActivityHandler,
     "auth.reset.complete": resetCompleteHandler,
   };

@@ -483,3 +483,45 @@ export async function claimResume(
   );
   return result.rowCount === 1;
 }
+
+/**
+ * Run 5.2 (P-89): every uncertain, unclosed revocation whose step targets the
+ * credential becomes succeeded, now that a lookup proved its token gone.
+ * Answers the ids it settled.
+ */
+export async function settleRevocations(
+  tx: pg.PoolClient,
+  credentialId: string,
+  retentionDays: number,
+): Promise<OperationId[]> {
+  const result = await tx.query<{ id: OperationId }>(
+    `UPDATE app.operation o
+        SET state = 'succeeded', result = jsonb_build_object('credentialId', $1::text, 'state', 'revoked'),
+            error_code = NULL, completed_at = now(),
+            replay_expires_at = now() + make_interval(days => $2), executor_boot_id = NULL
+      WHERE o.action = 'credentials.revoke' AND o.state = 'uncertain' AND o.completed_at IS NULL
+        AND EXISTS (SELECT 1 FROM app.operation_step s
+                     WHERE s.operation_id = o.id AND s.target = $1::text)
+      RETURNING o.id`,
+    [credentialId, retentionDays],
+  );
+  return result.rows.map((row) => row.id);
+}
+
+/** Run 5.2 (P-89): a revocation of the credential executing with a heartbeat younger than `freshSeconds`. */
+export async function liveRevocation(
+  db: Queryable,
+  credentialId: string,
+  freshSeconds: number,
+): Promise<OperationId | null> {
+  const result = await db.query<{ id: OperationId }>(
+    `SELECT o.id FROM app.operation o
+      WHERE o.action = 'credentials.revoke' AND o.state IN ('accepted', 'executing')
+        AND o.heartbeat_at >= now() - make_interval(secs => $2)
+        AND EXISTS (SELECT 1 FROM app.operation_step s
+                     WHERE s.operation_id = o.id AND s.target = $1::text)
+      LIMIT 1`,
+    [credentialId, freshSeconds],
+  );
+  return result.rows[0]?.id ?? null;
+}

@@ -80,6 +80,12 @@ export interface SecretsFixture {
   setImportBudget(ms: number | null): void;
   /** Where the in-process API reaches OpenBao: through the relay, or a closed port. */
   setBao(target: "relay" | "closed"): void;
+  /**
+   * Run 5.2: the relay's next connections go to a closed port (true) or to
+   * OpenBao again (false): a call through it is never made (status 0), while a
+   * client already logged in keeps its target.
+   */
+  setUpstreamClosed(closed: boolean): Promise<void>;
   /** Restarts the second process with a fault (or none). */
   restartSecond(fault?: { point: string; action: FaultAction }): Promise<ApiProcess>;
   send(
@@ -227,7 +233,9 @@ export async function createSecretsFixture(
   });
   const { api, stack, tenants } = fx;
   // Asked per connection: OpenBao restarted by a fault test may come back on another port.
+  let upstreamClosed: number | null = null;
   const relay = await startTlsRelay(() => {
+    if (upstreamClosed !== null) return { host: "127.0.0.1", port: upstreamClosed };
     const baoUrl = new URL(stack.bao.url);
     return { host: baoUrl.hostname, port: Number(baoUrl.port) };
   }, "pass");
@@ -314,6 +322,9 @@ export async function createSecretsFixture(
     },
     setBao(target) {
       current = target === "relay" ? relayTarget : closedTarget;
+    },
+    async setUpstreamClosed(closed) {
+      upstreamClosed = closed ? await closedPort() : null;
     },
     async restartSecond(fault) {
       await second?.kill();

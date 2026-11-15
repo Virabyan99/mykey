@@ -36,6 +36,7 @@ const HANDLED = new Set([
   "export.create",
   "credentials.list",
   "credentials.issue",
+  "credentials.revoke",
   "session.activity",
   "auth.reset.complete",
 ]);

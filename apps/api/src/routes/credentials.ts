@@ -3,7 +3,7 @@
 // record, the one create and its proof; the token leaves only in the 201 this
 // handler builds. The inventory reads the catalog only and never shows an
 // accessor or a token.
-import { LIMITS, type OperationId } from "@mykey/contracts";
+import { LIMITS, credentialIdSchema, type OperationId } from "@mykey/contracts";
 import {
   findCredentialByOperation,
   listCredentials,
@@ -13,8 +13,10 @@ import {
 } from "@mykey/db";
 import {
   issueCredential,
+  operationResponse,
   readGate,
   replayAnswer,
+  revokeCredential,
   type CredentialDeps,
   type IssueOutcome,
 } from "@mykey/operations";
@@ -126,6 +128,48 @@ export const credentialsIssueHandler: Handler = async (ctx, deps) => {
     recheck: recheckOf(ctx, principal.userId, scope),
   });
   return answerOf(ctx, deps, outcome);
+};
+
+/** credentials.revoke (Run 5.2, P-89): denied first, revoked only when the backend proved it. */
+export const credentialsRevokeHandler: Handler = async (ctx, deps) => {
+  const principal = ctx.principal;
+  const scope = ctx.scope as EnvironmentScope | null;
+  const key = ctx.idempotencyKey;
+  if (principal === null || scope === null || key === null) {
+    throw new ApiError("dependency_unavailable");
+  }
+  // A :credential that is not an id names nothing: 404, as an absent one.
+  const credentialId = credentialIdSchema.safeParse(ctx.params.credential);
+  if (!credentialId.success) throw new ApiError("not_found");
+  const outcome = await revokeCredential(credentialDeps(deps), {
+    routeId: ctx.route.id,
+    scope,
+    userId: principal.userId,
+    credentialId: credentialId.data,
+    idempotencyKey: key,
+    intent: intentOf(ctx.route, ctx.params, principal, ctx.body),
+    requestId: ctx.requestId,
+    recheck: recheckOf(ctx, principal.userId, scope),
+  });
+  switch (outcome.kind) {
+    case "revoked":
+      return { status: 200, body: operationResponse(outcome.operation) };
+    case "replay": {
+      const answer = replayAnswer(ctx.route, outcome.operation);
+      if (!("error" in answer)) return answer;
+      throw new ApiError(answer.error, "replay", undefined, {
+        ...(answer.operationId === undefined ? {} : { operationId: answer.operationId }),
+      });
+    }
+    case "refused":
+      throw new ApiError(outcome.code, undefined, undefined, {
+        ...(outcome.operationId === undefined ? {} : { operationId: outcome.operationId }),
+      });
+    case "unknown":
+      throw new ApiError("outcome_unknown", undefined, undefined, {
+        operationId: outcome.operationId,
+      });
+  }
 };
 
 interface ListQuery {
