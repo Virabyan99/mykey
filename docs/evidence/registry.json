@@ -580,9 +580,11 @@
       "ownerRun": "5.2",
       "contributingRuns": [],
       "oldSession": "D08-S27",
-      "status": "OPEN",
-      "evidence": [],
-      "note": ""
+      "status": "SPIKE_PASS",
+      "evidence": [
+        "docs/evidence/session-5/run-5.2.md"
+      ],
+      "note": "Revocation denied in the product first (revoking committed before OpenBao is asked) and called revoked only after a lookup proved the token gone; an unproven revocation stays revoking and a new request finishes it; local, fault table and staging."
     },
     {
       "id": "FR-1.43",
@@ -592,9 +594,11 @@
       "ownerRun": "5.2",
       "contributingRuns": [],
       "oldSession": "D08-S27",
-      "status": "OPEN",
-      "evidence": [],
-      "note": ""
+      "status": "SPIKE_PASS",
+      "evidence": [
+        "docs/evidence/session-5/run-5.2.md"
+      ],
+      "note": "An unknown issuance blocks the environment until the sweep and ops reconcile-credentials revoke every unrecorded token and settle it (with executor exclusion when its token was not found); replay never returns a token; the lost-delivery procedure in machine-credentials.md; staging drill."
     },
     {
       "id": "FR-1.44",
@@ -1852,9 +1856,12 @@
         "8.3"
       ],
       "oldSession": "D08-S27",
-      "status": "OPEN",
-      "evidence": [],
-      "note": ""
+      "status": "SPIKE_PASS",
+      "evidence": [
+        "docs/evidence/session-5/fault-table.md",
+        "docs/evidence/session-5/run-5.2.md"
+      ],
+      "note": "The fault table of issuance and revocation: the response lost at every boundary never leaves a working token nobody knows about once the operator has run; no replay creates a second token; three passes in a row."
     },
     {
       "id": "AC-1.41",

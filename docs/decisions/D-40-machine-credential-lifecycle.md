@@ -2,7 +2,7 @@
 
 **Date:** 2026-11-15
 
-**Status:** DECIDED in the Session 5 plan (P-85 … P-90), recorded by the executing agent. Issuance part: Run 5.1. Revocation, the sweep and `reconcile-credentials`: Run 5.2 (sections below added there). Evidence: `tests/integration/openbao/issuance.test.ts` ("token metadata, lifetime and issuer sessions"), `tests/unit/operations/credentials-verify.test.ts`, `tests/integration/credentials/{protocol,issue,inventory,surfaces}.test.ts`, `docs/evidence/session-5/run-5.1.md`.
+**Status:** DECIDED in the Session 5 plan (P-85 … P-90), recorded by the executing agent. Issuance part: Run 5.1. Revocation, the sweep and `reconcile-credentials`: Run 5.2 (sections below added there). Evidence: `tests/integration/openbao/issuance.test.ts` ("token metadata, lifetime and issuer sessions"), `tests/unit/operations/credentials-verify.test.ts`, `tests/integration/credentials/{protocol,issue,inventory,surfaces,revoke,sweep,reconcile}.test.ts`, `tests/fault/credentials/{issuance,revocation}.test.ts`, `tests/staging/credentials.staging.test.ts`, `docs/evidence/session-5/{run-5.1,run-5.2,fault-table}.md`.
 
 ## The issuer identity
 
@@ -51,6 +51,52 @@ After the marker the function never throws to its caller: any exception, or a lo
 
 - The 201 is the only response schema of the contract with a field that holds an OpenBao token (`tests/unit/contracts/token-fields.test.ts` walks every response schema).
 - A replay never executes: `executing` → 202 with the envelope; `succeeded` → `409 credential_not_replayable` with details `{ credentialId, state }`, the state read now; `rejected` → its stored error; `uncertain` → `503 outcome_unknown`.
+
+## Revocation (Run 5.2)
+
+All under the environment's advisory lock, on its own connection. A revocation of the same credential whose heartbeat is younger than 120 s answers `409 state_conflict` with its id before the lock is taken (under the lock it would wait and answer `busy`).
+
+1. The issuer session.
+2. **One** transaction, whose commit is the marker: the operation inserted as `executing`; capture mode `idle`, the gate open, the caller's authority re-read; the credential `FOR UPDATE` — `active` or `expired` admitted, `revoking` admitted when no live revocation holds it; `revoked` → `409 state_conflict`; `issuing` / `needs_review` → `409 state_conflict` with the issuance's operation id. The credential becomes `revoking`, a step targets it, audit `credential.revoke` `intent`. From this commit the product denies the credential.
+3. `revokeAndVerify`: one revoke by accessor, then up to three lookups 200 ms apart; only a lookup answering 400 proves absence.
+4. Absent: **one** transaction — the credential `revoked`, this operation `succeeded` with `{ credentialId, state: "revoked" }`, every `uncertain` revocation of it `succeeded` too (`settleRevocations`), audit `success`; `200`.
+
+| The revoke answered                     | Outcome                                                                                               |
+| --------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| absent proven                           | `revoked`, `200`                                                                                      |
+| `sealed` / `denied`                     | definite: operation `rejected` `backend_sealed` / `backend_inconsistent`; credential stays `revoking` |
+| not sent (status 0)                     | definite: `rejected` `dependency_unavailable`; credential stays `revoking`                            |
+| anything else (lost, timeout, no proof) | unknown: operation `uncertain`, credential `revoking`, `503 outcome_unknown`                          |
+
+`revoking` is never shown as revoked. A new revoke request (new key) re-sends the revocation, which is idempotent, and its proof settles the earlier operations. A revocation works whatever the state of the project or environment (state class `lifecycle`).
+
+## Unresolved work: the sweep (Run 5.2)
+
+The API's 30 s sweep runs `sweepCredentials` after the secret rules; PostgreSQL only. Each rule is one conditional update that also clears `executor_boot_id`, so the executor that comes back late cannot finalize (`finishOperation` answers null):
+
+- an issuance `executing` with a heartbeat older than 120 s → `uncertain`, its credential `issuing → needs_review`; `system.operation_stuck`;
+- a revocation likewise → `uncertain`, its credential stays `revoking`; `system.operation_stuck`;
+- an `active` credential past its expiry → `expired` (no audit row: it is not an operation).
+
+Two sweepers at once write one audit row per operation. An optional environment limits a pass to one environment (the operator command uses it).
+
+## Unresolved work: `ops reconcile-credentials` (Run 5.2)
+
+`ops reconcile-credentials --environment <id> [--executors-excluded yes]` runs as `maintenance` with the operator's OpenBao token, under the environment's lock (2 s, else `refused busy`, exit 3):
+
+0. The sweep for this environment (every executing credential operation when the executors are excluded).
+1. Every accessor of the namespace is looked up; those whose policies name `machine-env-<environmentId>` are kept. The AppRole login tokens are listed too and are left alone.
+2. Each kept accessor that is not the accessor of an `active`, unexpired row or of a `revoking` row is revoked and proven absent (`unrecorded-revoked`); its `meta.operation_id` is remembered.
+3. Each `revoking` row is revoked again and proven → `revoked`, its revocations `succeeded`, an uncertain issuance of it `rejected`. A `revoked` row with uncertain revocations has them settled.
+4. Each `needs_review` row → `revoked` (with the found token's accessor) and its issuance `rejected` `dependency_unavailable` — only when its token was found in step 2, or the executors are excluded. Otherwise it is left (`needs_exclusion`), and the command exits 3 after doing the rest. An `issuing` row still inside its heartbeat is left the same way.
+5. One audit row `operator.reconcile_credentials` with the counts and the flag.
+
+It prints ids and counts, never an accessor or a token. Without exclusion a create that was sent but whose token is not found may still arrive (D-20); only exclusion (`quiesce`) ends that.
+
+## Observed on OpenBao 2.7.2 (Run 5.2)
+
+- A request that reaches OpenBao more than about 10 s after its TLS connection opened is never served: a create delayed 15 s in the relay made no token, in two variants. A delayed create can only land inside that window. This is probably the listener's read-header timeout.
+- A create held in the relay until 3 s after the API answered (about 13 s after its connection opened, the API waiting for its own `revoke-self` too), then released together with that `revoke-self`, made no token. Either the 10 s window above or `revoke-self` reaching OpenBao first explains it; which one was not established. A late create that arrives after `revoke-self` is refused and is harmless.
 
 ## Observed on OpenBao 2.7.2 (Run 5.1)
 
