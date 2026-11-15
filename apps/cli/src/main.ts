@@ -4,14 +4,17 @@
 // `--version` stops after the arguments. Every failure is one stderr line and
 // its exit code; an error that is not the CLI's own prints no message at all.
 import { readFileSync, statSync } from "node:fs";
+import { isatty } from "node:tty";
 import { API_MAJOR } from "@mykey/contracts";
 import { parseArgs } from "./args.ts";
 import { createClient } from "./client.ts";
 import { resolveApiUrl, selectorOf } from "./config.ts";
 import { CliError, EXIT, formatError } from "./errors.ts";
+import { exportCommand } from "./export.ts";
 import { refuseUnsafeRuntime } from "./guard.ts";
 import { CLI_VERSION } from "./identity.ts";
 import { keysCommand } from "./keys.ts";
+import { runCommand } from "./run.ts";
 import { readToken } from "./token.ts";
 
 export interface Io {
@@ -63,15 +66,39 @@ export async function main(argv: readonly string[], io: Io): Promise<number> {
     }
     const apiUrl = resolveApiUrl(io.env, readConfig, process.getuid?.() ?? -1);
     const selector = selectorOf(parsed, io.env);
-    const token = await readToken(io.env, command.name !== "run" && command.tokenStdin, io.stdin);
+    // `run` never reads stdin: it belongs to the child.
+    const credential = {
+      token: await readToken(
+        io.env,
+        command.name !== "run" && command.tokenStdin,
+        command.name === "run" ? null : io.stdin,
+      ),
+    };
     const client = createClient(apiUrl);
     await client.version();
     switch (command.name) {
       case "keys":
-        return await keysCommand(client, selector, token, io.stdout);
+        return await keysCommand(client, selector, credential, io.stdout);
       case "run":
+        return await runCommand({
+          client,
+          selector,
+          credential,
+          command: command.command,
+          args: command.args,
+          override: command.override,
+          env: io.env,
+          tty: isatty(0),
+        });
       case "export":
-        throw new CliError("unsupported", `${command.name} is not in this build of the CLI`);
+        return await exportCommand({
+          client,
+          selector,
+          credential,
+          out: command.output,
+          stderr: io.stderr,
+          uid: process.getuid?.() ?? -1,
+        });
     }
   } catch (error) {
     const known =

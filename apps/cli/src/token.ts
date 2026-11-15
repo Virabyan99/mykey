@@ -29,7 +29,8 @@ async function readAll(stdin: NodeJS.ReadableStream): Promise<string> {
 export async function readToken(
   env: NodeJS.ProcessEnv,
   tokenStdin: boolean,
-  stdin: NodeJS.ReadableStream,
+  /** null for `run`, whose stdin belongs to the child. */
+  stdin: NodeJS.ReadableStream | null,
 ): Promise<string> {
   const fromEnv = env[MACHINE_TOKEN_VARIABLE];
   if (fromEnv !== undefined && tokenStdin) {
@@ -44,7 +45,7 @@ export async function readToken(
       `no machine token: set ${MACHINE_TOKEN_VARIABLE} or use --token-stdin`,
     );
   }
-  let token = fromEnv ?? (await readAll(stdin));
+  let token = fromEnv ?? (stdin === null ? "" : await readAll(stdin));
   if (tokenStdin) {
     if (token.endsWith("\r\n")) token = token.slice(0, -2);
     else if (token.endsWith("\n")) token = token.slice(0, -1);

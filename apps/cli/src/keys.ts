@@ -6,10 +6,11 @@ import type { ApiClient, Selector } from "./client.ts";
 export async function keysCommand(
   client: ApiClient,
   selector: Selector,
-  token: string,
+  credential: { token: string },
   stdout: NodeJS.WritableStream,
 ): Promise<number> {
-  const body = await client.keys(selector, token);
+  const body = await client.keys(selector, credential.token);
+  credential.token = "";
   if (body.names.length > 0) {
     await new Promise<void>((resolve, reject) => {
       stdout.write(`${body.names.join("\n")}\n`, (error) => {
