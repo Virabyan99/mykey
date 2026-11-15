@@ -683,6 +683,24 @@
       "status": "OPEN",
       "evidence": ["docs/evidence/session-5/cli-matrix.md"],
       "note": "D-44 decided (SEA is 1.1 and lacks darwin-x64; the bundle on pinned Node); D-24's nine requirements pass on Linux x64 and arm64, on macOS only 8 and 9 so far."
+    },
+    {
+      "id": "FR-1.85",
+      "status": "SPIKE_PASS",
+      "evidence": ["docs/evidence/session-5/run-5.8.md"],
+      "note": "Setup and rotation from consumer-local.md and consumer-deploy.md, every block rehearsed against staging from a clean machine and a Docker host, both fixtures; no token in history, arguments, images, inspect, tree or output."
+    },
+    {
+      "id": "PO-20",
+      "status": "SPIKE_PASS",
+      "evidence": ["docs/evidence/session-5/run-5.8.md"],
+      "note": "Credential setup and replacement (rotation, after a restore) for a workstation and a first deployment, Next.js and FastAPI fixtures, staging; the four-platform part is PO-8 (macOS open)."
+    },
+    {
+      "id": "AC-1.42",
+      "status": "SPIKE_PASS",
+      "evidence": ["docs/evidence/session-5/run-5.8.md"],
+      "note": "The synthetic consumer rehearsal of D-03: installation, endpoint check, protected token supply, launch, rotation and the restore replacement against staging."
     }
   ]
 }
