@@ -355,7 +355,66 @@
       "id": "pairs-lock-session-gate",
       "what": "At the first session gate on or after this time: repeat the refused delete on a pairs/ object before the lock ends, or record that the lock has ended after it.",
       "notBefore": "2026-11-15T10:42:20.000Z",
-      "status": "pending"
+      "status": "observed",
+      "observed": {
+        "how": "Reads only, at the start of Session 5 Run 5.4: a HEAD of every recorded pairs/ object (cleanup token) and the bucket's lock rules (Cloudflare REST API, admin token). No delete or overwrite was attempted, so the fixture stays intact for Run 6.6.",
+        "lockEndedAt": "2026-11-15T10:42:20.000Z",
+        "checkStartedAt": "2026-11-15T10:50:09.952Z",
+        "checkEndedAt": "2026-11-15T10:50:11.779Z",
+        "pairsObjects": [
+          {
+            "key": "pairs/pair-20261111-1/bundle.tar",
+            "lockExpiresAt": "2026-11-15T10:42:18.000Z",
+            "head": 200,
+            "etagAsUploaded": true
+          },
+          {
+            "key": "pairs/pair-20261111-1/manifest.json",
+            "lockExpiresAt": "2026-11-15T10:42:18.000Z",
+            "head": 200,
+            "etagAsUploaded": true
+          },
+          {
+            "key": "pairs/pair-20261111-2/bundle.tar",
+            "lockExpiresAt": "2026-11-15T10:42:19.000Z",
+            "head": 200,
+            "etagAsUploaded": true
+          },
+          {
+            "key": "pairs/pair-20261111-2/manifest.json",
+            "lockExpiresAt": "2026-11-15T10:42:19.000Z",
+            "head": 200,
+            "etagAsUploaded": true
+          },
+          {
+            "key": "pairs/pair-20261111-3/bundle.tar",
+            "lockExpiresAt": "2026-11-15T10:42:20.000Z",
+            "head": 200,
+            "etagAsUploaded": true
+          },
+          {
+            "key": "pairs/pair-20261111-3/manifest.json",
+            "lockExpiresAt": "2026-11-15T10:42:20.000Z",
+            "head": 200,
+            "etagAsUploaded": true
+          }
+        ],
+        "lockRules": [
+          {
+            "id": "fixture-pairs-4d",
+            "enabled": true,
+            "prefix": "pairs/",
+            "maxAgeSeconds": 345600
+          },
+          {
+            "id": "fixture-probe-10m",
+            "enabled": true,
+            "prefix": "probe/",
+            "maxAgeSeconds": 600
+          }
+        ],
+        "conclusion": "Every pairs/ lock (fixture-pairs-4d, 4 days from upload) has ended; all six pairs/ objects are present with the ETags they were uploaded with; the rules are unchanged. The refusal tests of fixture.cloud.test.ts stop by design until Run 6.6 cleans up and uploads a new fixture."
+      }
     },
     {
       "id": "run-6.6-cleanup-and-restore",
