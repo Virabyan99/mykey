@@ -93,6 +93,8 @@ const MATRIX: Record<FixtureUser, Record<TargetName, Record<Level, string>>> = {
 const TARGETS: readonly TargetName[] = ["p1/e1a", "p1/e1b", "p2/e2a", "B"];
 
 function expected(user: FixtureUser, target: TargetName, route: RouteDef): Outcome {
+  // Service scope (Run 5.9): the reference is for the owner and admins of the process's organization (A).
+  if (route.action === "reference.read") return user === "ownerA" || user === "adminA" ? "A" : "H";
   if (route.scope === "none") return "A";
   // The path holds a random operation id: absent, so hidden (the operation rows are below).
   if (route.scope === "operation") return "H";
@@ -154,7 +156,10 @@ async function verdict(route: RouteDef, response: Response, reachedBefore: numbe
 }
 
 beforeAll(async () => {
-  api = await startTestApi({ stubs: "all" });
+  api = await startTestApi({
+    stubs: "all",
+    processOrganization: () => tenants.a.organizationId,
+  });
   tenants = await createTenants(api);
   for (const user of FIXTURE_USERS) cookies.set(user, await tenants.cookie(user));
 }, 300_000);

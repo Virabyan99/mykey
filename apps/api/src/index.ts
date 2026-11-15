@@ -1,4 +1,4 @@
-export { createApp } from "./app.ts";
+export { createApp, handledRouteIds } from "./app.ts";
 export {
   HEALTH_DEADLINE_MS,
   classifyFailure,

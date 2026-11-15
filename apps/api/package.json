@@ -20,6 +20,7 @@
     "zod": "catalog:"
   },
   "devDependencies": {
+    "@scalar/api-reference": "catalog:",
     "@types/pg": "catalog:"
   }
 }

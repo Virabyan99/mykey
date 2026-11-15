@@ -62,7 +62,7 @@ export interface AppDeps {
     /** These contract routes answer through the stub although they have a handler (Run 4.2). */
     stubRoutes?: ReadonlySet<string>;
     /** Runs after freshness, before a real handler (Run 4.1): a state change after the pipeline. */
-    beforeHandler?: (routeId: string) => Promise<void>;
+    beforeHandler?: (routeId: string, info: { handled: boolean }) => Promise<void>;
     /** Fault hooks of the secret protocol (Run 4.2, FAULT_POINTS). */
     faults?: (point: string, operationId: string) => Promise<void>;
     /** The time TOTP codes are checked at, from a request header. */

@@ -296,7 +296,8 @@ async function run(
       await deps.test.stubs(route.id);
       return new Response(null, { status: 204 });
     }
-    await deps.test?.beforeHandler?.(route.id);
+    // `handled`: false for the terminal 404 of a route this build has no handler for (Run 5.9).
+    await deps.test?.beforeHandler?.(route.id, { handled: handler !== terminal });
     const result = await handler(
       {
         requestId,

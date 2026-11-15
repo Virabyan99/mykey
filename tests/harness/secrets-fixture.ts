@@ -75,7 +75,9 @@ export interface SecretsFixture {
   /** In-process API faults (null clears). */
   setFaults(hook: FaultHook | null): void;
   /** Runs after the pipeline, before the handler (the admission recheck; null clears). */
-  setBeforeHandler(hook: ((routeId: string) => Promise<void>) | null): void;
+  setBeforeHandler(
+    hook: ((routeId: string, info: { handled: boolean }) => Promise<void>) | null,
+  ): void;
   /** The in-process API's import budget per request in ms (null: the product's). */
   setImportBudget(ms: number | null): void;
   /** Where the in-process API reaches OpenBao: through the relay, or a closed port. */
@@ -216,7 +218,7 @@ export async function createSecretsFixture(
   generateKeyFiles(keysDirectory);
   let current: OpenBaoTarget | null = null;
   let faults: FaultHook | null = null;
-  let beforeHandler: ((routeId: string) => Promise<void>) | null = null;
+  let beforeHandler: ((routeId: string, info: { handled: boolean }) => Promise<void>) | null = null;
   let importBudget: number | null = null;
   const fx = await createProvisioningFixture({
     shared: opts.private !== true,
@@ -226,8 +228,8 @@ export async function createSecretsFixture(
         runtime: { openBao: () => current ?? stack.bao, secretsDirectory },
         keys: loadAuthKeys(keysDirectory),
         faults: () => faults ?? undefined,
-        beforeHandler: async (routeId: string) => {
-          await beforeHandler?.(routeId);
+        beforeHandler: async (routeId: string, info: { handled: boolean }) => {
+          await beforeHandler?.(routeId, info);
         },
         importBudgetMs: () => importBudget ?? undefined,
         routes: [{ def: TEST_READ_ROUTE, handler: testReadHandler() }, ...(opts.routes ?? [])],

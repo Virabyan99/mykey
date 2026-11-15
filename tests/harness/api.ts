@@ -80,13 +80,18 @@ export interface StartTestApiOptions {
   /** Runs inside the stub after the id is recorded; the stub answers when it settles (Run 3.7). */
   stubHook?: (routeId: string) => Promise<void> | void;
   /** Runs after freshness and before a real handler (Run 4.1): state changed after the pipeline. */
-  beforeHandler?: (routeId: string) => Promise<void>;
+  beforeHandler?: (routeId: string, info: { handled: boolean }) => Promise<void>;
   /**
    * The API's OpenBao identity (Run 4.2): the runtime credential files in
    * `secretsDirectory`, OpenBao at `openBao()` (read on every call, so a test
    * can point the API elsewhere), and a lock pool of 8.
    */
   runtime?: { openBao: () => OpenBaoTarget; secretsDirectory: string };
+  /**
+   * Run 5.9: without `runtime`, the organization the process serves (service
+   * scope, P-101); its RuntimeBao gives no OpenBao client. Read on every call.
+   */
+  processOrganization?: () => string | null;
   /** The auth keys (default: fresh ephemeral ones); shared with a child API process. */
   keys?: AuthKeys;
   /** Fault hooks of the secret protocol (Run 4.2), read on every call. */
@@ -113,6 +118,15 @@ function switchableRuntime(runtime: NonNullable<StartTestApiOptions["runtime"]>)
     clientFor: (organizationId) => reader().clientFor(organizationId),
     organizationId: () => reader().organizationId(),
     withToken: (organizationId, token) => reader().withToken(organizationId, token),
+  };
+}
+
+/** Run 5.9: a RuntimeBao that names the process's organization and gives no OpenBao client. */
+function organizationOnly(organization: () => string | null): RuntimeBao {
+  return {
+    clientFor: () => null,
+    organizationId: () => organization() as ReturnType<RuntimeBao["organizationId"]>,
+    withToken: () => null,
   };
 }
 
@@ -259,7 +273,12 @@ export async function startTestApi(opts: StartTestApiOptions = {}): Promise<Test
         ? undefined
         : createPool(database.targets.api_runtime, { max: 8, queryTimeoutMs: 30_000 });
     if (lockPool !== undefined) cleanup.push(() => lockPool.end());
-    const bao = opts.runtime === undefined ? undefined : switchableRuntime(opts.runtime);
+    const bao =
+      opts.runtime !== undefined
+        ? switchableRuntime(opts.runtime)
+        : opts.processOrganization === undefined
+          ? undefined
+          : organizationOnly(opts.processOrganization);
     const issuer = opts.runtime === undefined ? undefined : switchableIssuer(opts.runtime);
     let bootId = randomUUID();
     const health = createHealthCheck(database.targets.api_runtime);
