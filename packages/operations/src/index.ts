@@ -50,6 +50,11 @@ export {
 } from "./credentials/issue.ts";
 export { revokeCredential, type RevokeOutcome, type RevokeRequest } from "./credentials/revoke.ts";
 export {
+  CREDENTIAL_ACTIONS,
+  sweepCredentials,
+  type CredentialSweepResult,
+} from "./credentials/sweep.ts";
+export {
   checkIssuedToken,
   revokeAndVerify,
   type RevokeProof,

@@ -196,4 +196,19 @@ describe("credential actions", () => {
       AUDIT_DETAILS["credential.revoke"].safeParse({ credentialId: "not-an-id" }).success,
     ).toBe(false);
   });
+
+  // Run 5.2 (P-90): the operator's reconciliation records counts only.
+  it("operator.reconcile_credentials takes the four counts and the flag, and nothing else", () => {
+    const counts = {
+      unrecordedRevoked: 1,
+      revocationsCompleted: 0,
+      issuancesSettled: 2,
+      left: 0,
+      executorsExcluded: false,
+    };
+    const details = AUDIT_DETAILS["operator.reconcile_credentials"];
+    expect(details.safeParse(counts).success).toBe(true);
+    expect(details.safeParse({ ...counts, accessor: "a" }).success).toBe(false);
+    expect(details.safeParse({ ...counts, left: -1 }).success).toBe(false);
+  });
 });

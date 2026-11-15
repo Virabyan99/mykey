@@ -1,0 +1,85 @@
+# Machine credentials
+
+How a machine token is issued, listed and revoked, what the in-between states mean, and what to do when a token's delivery was lost (Runs 5.1–5.2, P-85 … P-90, D-40; FR-1.39 … FR-1.45).
+
+A machine credential is one OpenBao token of the role `machine-env-<environmentId>`: it reads its environment's current values and nothing else. PostgreSQL keeps the record (name, state, expiry, the token's accessor). **The token itself is stored nowhere**, not even encrypted: it is shown once, in the answer to the issuance.
+
+Paths below are under `/v1/organizations/<org>/projects/<project>/environments/<environment>`. Only the owner and admins may use them.
+
+## Issue
+
+`POST …/credentials` with `{ "name": "deploy", "ttlSeconds": 86400 }` (`ttlSeconds` 1 … 2,592,000; absent: the maximum), an `Idempotency-Key`, and a session whose second factor was verified in the last minutes (`fresh_verification_required` otherwise).
+
+- `201` `{ operationId, credential, token }` with `cache-control: no-store`. Copy the token now: it is never shown again. `credential.expiresAt` is OpenBao's expiry (a role maximum may make it shorter than asked).
+- `409 state_conflict` with an `operationId`: an earlier issuance in this environment has an unknown outcome (below), or the environment or project is not `active`.
+- `503 outcome_unknown` with an `operationId`: the token may or may not exist. No token is delivered. See "Unknown issuance".
+
+The same request again (same key and body):
+
+- while the first runs → `202` with the operation's state;
+- after it succeeded → `409 credential_not_replayable` with `{ credentialId, state }`: never the token;
+- after a definite failure → that failure again.
+
+## Inventory
+
+`GET …/credentials` lists the environment's credentials, newest first: id, name, state, expiry, issued at, last use (when known). Never a token or an accessor.
+
+| State          | Meaning                                                                                                                     |
+| -------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| `active`       | The token works until `expiresAt`.                                                                                          |
+| `expired`      | Past its expiry; OpenBao refuses it. (An `active` row past its expiry is shown as `expired` at once; the sweep writes it.)  |
+| `issuing`      | An issuance is running.                                                                                                     |
+| `needs_review` | The issuance's outcome is unknown: a token may exist. It blocks new issuance for the environment (`reconcile-credentials`). |
+| `revoking`     | The product denies it; OpenBao has not yet been proven to. Never read as revoked.                                           |
+| `revoked`      | OpenBao answered that the token no longer exists.                                                                           |
+
+## Revoke
+
+`POST …/credentials/<credentialId>/revoke` with an `Idempotency-Key` (fresh second factor).
+
+1. The credential becomes `revoking` in a committed transaction: from then on the product denies it.
+2. OpenBao revokes the token by accessor; up to three lookups must answer "no such token".
+3. Only then is it `revoked`, and the answer is `200` with `result: { credentialId, state: "revoked" }`.
+
+- `503 outcome_unknown`: the revocation may have happened but was not proven. The credential stays `revoking`. **Send a new revoke request** (a new key): it re-sends the revocation and proves it; the earlier operation then reads `succeeded` too.
+- `503 backend_sealed` / `backend_inconsistent` / `dependency_unavailable`: OpenBao refused or could not be reached. The credential stays `revoking`; send a new request once OpenBao answers (`status`).
+- `409 state_conflict` with an `operationId`: another revocation of it is running, or the credential is `issuing` / `needs_review` (settle the issuance with `reconcile-credentials`).
+- Revocation works in an environment that is in review or archived.
+
+## Lost delivery (FR-1.43)
+
+The issuance succeeded but the token never reached you (the connection broke, the window closed):
+
+1. Send the same request again (same key and body). It answers `409 credential_not_replayable` with the `credentialId`.
+2. Revoke that credential (above).
+3. Issue a new one with a **new** idempotency key.
+
+No retry ever returns a token again or creates a second one.
+
+## Unknown issuance
+
+A `503 outcome_unknown` from an issuance leaves the credential `needs_review` (the sweep does it within about two minutes when the API process died) and blocks new issuance for the environment. The probe raises `operations_unresolved`. Settle it with the operator command:
+
+```sh
+MSYS_NO_PATHCONV=1 node scripts/host.ts <host> ops reconcile-credentials --environment <environmentId>
+```
+
+| Output (exit)                                                                | Meaning                                                                                                                                   | Next                                |
+| ---------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------- |
+| `unrecorded-revoked <n> revocations-completed <n> issuances-settled <n>` (0) | Every token of the environment that no live row names was revoked and proven gone; every `revoking` row finished; every issuance settled. | Done; issue again if needed.        |
+| `nothing to change` (0)                                                      | The catalog and OpenBao already agree.                                                                                                    | Done.                               |
+| `left <credentialId> needs_exclusion` (3)                                    | An issuance whose token was not found: a create that was sent may still arrive (D-20).                                                    | `reconciliation.md`, "Credentials". |
+| `left <credentialId or -> unproven` (3)                                      | A revocation OpenBao did not prove.                                                                                                       | Make OpenBao answer; run it again.  |
+| `refused busy` (3)                                                           | A request held the environment's lock for 2 s.                                                                                            | Run it again.                       |
+
+The command prints ids and counts only, never an accessor or a token, and writes one audit row `operator.reconcile_credentials` per run. The AppRole login tokens of the namespace are listed by OpenBao too; they carry no machine policy and are left alone.
+
+## Residual: older versions (FR-1.45)
+
+The machine policy grants OpenBao's native KV read on the environment's path. In OpenBao that read authority also covers **older versions of a key that are not deleted**. The product API gives machines current values only, and OpenBao is not reachable from outside the host. Native policy alone does **not** enforce current-version-only access: a machine token used directly against OpenBao could read an older undeleted version.
+
+## Never
+
+- Paste a token into a ticket, a log, a chat or a commit. If one leaks, revoke it at once.
+- Edit `app.machine_credential` by hand, or revoke a token with the root token without running `reconcile-credentials` afterwards.
+- Give `--executors-excluded yes` without `quiesce`.

@@ -14,6 +14,7 @@ import { bootstrapOwnerCommand } from "./commands/bootstrap-owner.ts";
 import { operationsCommand } from "./commands/operations.ts";
 import { operationsExpireCommand } from "./commands/operations-expire.ts";
 import { provisionOrganizationCommand } from "./commands/provision-organization.ts";
+import { reconcileCredentialsCommand } from "./commands/reconcile-credentials.ts";
 import { reconcileEnvironmentCommand } from "./commands/reconcile-environment.ts";
 import { reconcileOperationCommand } from "./commands/reconcile-operation.ts";
 import { resetAccountCommand } from "./commands/reset-account.ts";
@@ -61,6 +62,7 @@ export const COMMANDS: Readonly<Record<string, OpsCommand>> = {
   operations: operationsCommand,
   "reconcile-operation": reconcileOperationCommand,
   "reconcile-environment": reconcileEnvironmentCommand,
+  "reconcile-credentials": reconcileCredentialsCommand,
 };
 
 export const OPS_COMMANDS = Object.freeze(Object.keys(COMMANDS));

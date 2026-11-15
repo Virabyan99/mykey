@@ -24,3 +24,9 @@ export {
   type EnvironmentVerdict,
 } from "./reconcile/environment.ts";
 export { BackendUnreadable, rebuildKey } from "./reconcile/rebuild.ts";
+// Run 5.2: an environment's machine credentials settled from the backend (P-90).
+export {
+  reconcileCredentials,
+  type CredentialReconcileDeps,
+  type CredentialReconciliation,
+} from "./reconcile/credentials.ts";

@@ -141,6 +141,14 @@ export const AUDIT_DETAILS = {
     ttlSeconds: z.int().positive(),
   }),
   "credential.revoke": z.strictObject({ credentialId: z.uuid() }),
+  /** Run 5.2 (P-90): the operator settled an environment's credentials. Counts only. */
+  "operator.reconcile_credentials": z.strictObject({
+    unrecordedRevoked: z.int().nonnegative(),
+    revocationsCompleted: z.int().nonnegative(),
+    issuancesSettled: z.int().nonnegative(),
+    left: z.int().nonnegative(),
+    executorsExcluded: z.boolean(),
+  }),
   /** Run 4.1: the operator expired terminal operation records (P-65). */
   "operator.operations_expire": z.strictObject({ expired: z.int().nonnegative() }),
 } as const;
