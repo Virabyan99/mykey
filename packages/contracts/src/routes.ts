@@ -336,6 +336,10 @@ const credentialIssuedBody = z.strictObject({
   credential: credentialView,
   token: z.string().min(1),
 });
+/** credentials.revoke (Run 5.2, P-89): the envelope of a revocation proven in the backend. */
+const credentialRevokedBody = operationResponseSchema.extend({
+  result: z.strictObject({ credentialId: z.uuid(), state: z.literal("revoked") }),
+});
 const credentialsListBody = z.strictObject({
   credentials: z.array(credentialView),
   nextCursor: z.string().nullable(),
@@ -633,7 +637,12 @@ export const ROUTES: readonly RouteDef[] = Object.freeze([
     "human",
     true,
     "5.2",
-    { action: "credentials.manage", body: confirmedBody, errors: ["state_conflict", ...BACKEND] },
+    {
+      action: "credentials.manage",
+      body: confirmedBody,
+      responses: { 200: credentialRevokedBody },
+      errors: ["state_conflict", ...BACKEND],
+    },
   ),
 
   // Status stays readable while a project or environment is in review (P-63, D-35):
