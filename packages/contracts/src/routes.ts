@@ -727,3 +727,6 @@ export const ROUTES: readonly RouteDef[] = Object.freeze([
     errors: ["environment_changed", "capacity_exceeded", ...VALUE_READ],
   }),
 ]);
+
+/** The two machine bodies, for the CLI's validator (Run 5.5, P-96). */
+export { keysBody as machineKeysBody, resolveBody as machineResolveBody };

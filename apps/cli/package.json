@@ -1,12 +1,22 @@
 {
   "name": "@mykey/cli",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "private": true,
   "type": "module",
+  "bin": {
+    "secrets": "dist/secrets.mjs"
+  },
   "exports": {
     ".": "./src/index.ts"
   },
   "scripts": {
     "test": "pnpm --dir ../.. exec vitest run --project cli"
+  },
+  "dependencies": {
+    "@mykey/contracts": "workspace:*",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "esbuild": "0.28.2"
   }
 }
