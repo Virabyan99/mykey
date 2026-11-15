@@ -3,6 +3,7 @@
 // Run: node scripts/pins-verify.ts
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { join, relative, resolve } from "node:path";
+import { TARGETS as CLI_TARGETS, renderInstaller } from "../infra/release/cli/build-release.ts";
 
 export interface ImagePin {
   image: string;
@@ -31,7 +32,14 @@ export interface DependenciesLock {
 }
 
 /** Binaries every checkout must pin (Run 2.10). */
-export const REQUIRED_BINARIES = ["okms-cli"];
+export const REQUIRED_BINARIES = [
+  "okms-cli",
+  // The CLI installer's runtime (Run 5.7, D-44).
+  "node-linux-x64",
+  "node-linux-arm64",
+  "node-darwin-x64",
+  "node-darwin-arm64",
+];
 
 export const REQUIRED_IMAGES = [
   "postgres",
@@ -401,6 +409,27 @@ export function consistencyProblems(root: string, lock: DependenciesLock): strin
   return problems;
 }
 
+/**
+ * The CLI installer (Run 5.7): rendering infra/release/cli/install.sh.template
+ * with the lock must work (each Node archive at the pinned Node version, named
+ * as nodejs.org names it) and must carry every pinned sum.
+ */
+export function cliReleaseProblems(root: string, lock: DependenciesLock): string[] {
+  const template = readFileSync(join(root, "infra/release/cli/install.sh.template"), "utf8");
+  try {
+    const rendered = renderInstaller(template, {
+      version: "0.0.0",
+      cliSha256: "0".repeat(64),
+      lock: { node: lock.node, binaries: lock.binaries ?? {} },
+    });
+    return CLI_TARGETS.filter(
+      (target) => !rendered.includes(lock.binaries?.[`node-${target}`]?.sha256 ?? "missing"),
+    ).map((target) => `install.sh.template does not carry binaries.node-${target}.sha256`);
+  } catch (error) {
+    return [`CLI installer: ${(error as Error).message}`];
+  }
+}
+
 export function verifyPins(root: string): string[] {
   const lock = loadLock(root);
   const problems = [
@@ -409,6 +438,7 @@ export function verifyPins(root: string): string[] {
     ...versionLineProblems(lock),
     ...digestProblems(lock),
     ...consistencyProblems(root, lock),
+    ...cliReleaseProblems(root, lock),
   ];
   for (const file of listFiles(join(root, "infra/compose"), /\.ya?ml$/)) {
     problems.push(...composeImageProblems(readFileSync(file, "utf8"), lock, relative(root, file)));

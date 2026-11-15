@@ -1,0 +1,10 @@
+MyKey CLI
+
+UNLICENSED. This is private software of the MyKey project. No licence to
+use, copy, modify or distribute it is granted by this file.
+
+The CLI bundles code of these packages, each under its own licence:
+zod (MIT).
+
+The installer downloads Node.js from nodejs.org; Node.js is under the MIT
+licence and its own bundled licences (see the LICENSE file in its archive).

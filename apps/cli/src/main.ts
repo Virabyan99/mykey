@@ -61,7 +61,8 @@ export async function main(argv: readonly string[], io: Io): Promise<number> {
     const parsed = parseArgs(argv);
     const command = parsed.command;
     if (command.name === "version") {
-      await write(io.stdout, `secrets ${CLI_VERSION} (API major ${String(API_MAJOR)})\n`);
+      const where = `${process.platform}-${process.arch}; node ${process.versions.node}`;
+      await write(io.stdout, `secrets ${CLI_VERSION} (API major ${String(API_MAJOR)}; ${where})\n`);
       return 0;
     }
     const apiUrl = resolveApiUrl(io.env, readConfig, process.getuid?.() ?? -1);

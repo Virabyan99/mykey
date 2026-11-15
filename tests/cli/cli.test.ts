@@ -50,7 +50,11 @@ describe("the executable (Run 5.5)", () => {
         version: string;
       };
       expect(result.code).toBe(0);
-      expect(result.stdout).toBe(`secrets ${version} (API major ${String(API_MAJOR)})\n`);
+      expect(result.stdout).toMatch(
+        new RegExp(
+          `^secrets ${version.replaceAll(".", "\\.")} \\(API major ${String(API_MAJOR)}; ${process.platform}-${process.arch}; node \\d+\\.\\d+\\.\\d+\\)\\n$`,
+        ),
+      );
       expect(server.requests).toEqual([]);
     } finally {
       await server.close();

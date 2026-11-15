@@ -8,3 +8,4 @@ coverage/
 # The CLI's release artifacts (Run 5.7) and the test server's certificates (Run 5.5).
 apps/cli/release/
 tests/cli/.certs/
+.release/

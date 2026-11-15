@@ -1,0 +1,147 @@
+#!/bin/sh
+# MyKey CLI installer, version @VERSION@ (D-44).
+#
+#   sh install.sh               install `secrets` for this user
+#   sh install.sh --uninstall   remove what this installer wrote
+#
+# It needs no root and edits no shell profile. It installs the CLI and the
+# official Node @NODE_VERSION@ for this system into
+# ${MYKEY_HOME:-$HOME/.local/share/mykey}/cli/@VERSION@/ and writes the
+# launcher $HOME/.local/bin/secrets. The Node archive is taken from the
+# directory this script is in, or else downloaded from nodejs.org over HTTPS.
+# Both archives are checked against SHA-256 sums written into this script.
+#
+# It cannot make a machine that is already compromised safe: whoever controls
+# your account, this directory or the Node binary controls the CLI.
+set -eu
+
+VERSION='@VERSION@'
+NODE_VERSION='@NODE_VERSION@'
+CLI_SHA256='@CLI_SHA256@'
+CLI_ARCHIVE="mykey-cli-$VERSION.tgz"
+
+fail() {
+  printf 'install.sh: %s\n' "$1" >&2
+  exit "${2:-1}"
+}
+
+if [ -z "${HOME:-}" ]; then fail "HOME is not set"; fi
+here=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)
+home=${MYKEY_HOME:-$HOME/.local/share/mykey}
+dir="$home/cli/$VERSION"
+bin_dir="$HOME/.local/bin"
+launcher="$bin_dir/secrets"
+marker='# mykey-cli launcher'
+
+case "$dir$launcher" in
+  *"'"*) fail "the install directory must not contain a single quote" ;;
+esac
+
+remove_empty() {
+  for path in "$@"; do
+    rmdir -- "$path" 2>/dev/null || true
+  done
+}
+
+if [ "$#" -eq 1 ] && [ "$1" = "--uninstall" ]; then
+  if [ -f "$launcher" ] && grep -q "^$marker" "$launcher"; then rm -f -- "$launcher"; fi
+  rm -rf -- "$dir"
+  remove_empty "$home/cli" "$home" "$bin_dir" "$HOME/.local/share" "$HOME/.local"
+  printf 'removed secrets %s\n' "$VERSION"
+  exit 0
+fi
+if [ "$#" -ne 0 ]; then fail "usage: sh install.sh [--uninstall]" 64; fi
+
+system=$(uname -s)
+machine=$(uname -m)
+case "$system" in
+  Linux) os=linux ;;
+  Darwin) os=darwin ;;
+  *) fail "unsupported system: $system $machine (supported: Linux and macOS on x86_64 and arm64)" 78 ;;
+esac
+case "$machine" in
+  x86_64 | amd64) arch=x64 ;;
+  aarch64 | arm64) arch=arm64 ;;
+  *) fail "unsupported system: $system $machine (supported: Linux and macOS on x86_64 and arm64)" 78 ;;
+esac
+if [ "$os" = linux ]; then
+  if ! ldd --version 2>&1 | grep -qi -e 'glibc' -e 'gnu libc'; then
+    fail "unsupported system: $system $machine without glibc (only glibc Linux is supported)" 78
+  fi
+fi
+case "$os-$arch" in
+  linux-x64) node_sha256='@NODE_SHA256_LINUX_X64@' ;;
+  linux-arm64) node_sha256='@NODE_SHA256_LINUX_ARM64@' ;;
+  darwin-x64) node_sha256='@NODE_SHA256_DARWIN_X64@' ;;
+  darwin-arm64) node_sha256='@NODE_SHA256_DARWIN_ARM64@' ;;
+esac
+node_archive="node-v$NODE_VERSION-$os-$arch.tar.gz"
+
+sha256_of() {
+  if command -v sha256sum >/dev/null 2>&1; then
+    sha256sum -- "$1" | cut -d ' ' -f 1
+  else
+    shasum -a 256 -- "$1" | cut -d ' ' -f 1
+  fi
+}
+
+launcher_text() {
+  printf '#!/bin/sh\n%s %s\nexec '"'"'%s/node/bin/node'"'"' '"'"'%s/secrets.mjs'"'"' "$@"\n' \
+    "$marker" "$VERSION" "$dir" "$dir"
+}
+
+# Installed already: nothing to change.
+if [ -f "$dir/.complete" ] && [ -f "$launcher" ] && [ "$(cat -- "$launcher")" = "$(launcher_text)" ]; then
+  printf 'secrets %s is installed already in %s\n' "$VERSION" "$dir"
+  exit 0
+fi
+
+# Every check comes before anything is written to the install directory.
+scratch=$(mktemp -d "${TMPDIR:-/tmp}/mykey-install.XXXXXX")
+work=''
+cleanup() {
+  rm -rf -- "$scratch"
+  if [ -n "$work" ]; then rm -rf -- "$work"; fi
+}
+trap cleanup EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
+
+if [ ! -f "$here/$CLI_ARCHIVE" ]; then fail "$CLI_ARCHIVE is not next to install.sh"; fi
+if [ "$(sha256_of "$here/$CLI_ARCHIVE")" != "$CLI_SHA256" ]; then
+  fail "$CLI_ARCHIVE does not match its checksum; nothing was installed"
+fi
+if [ -f "$here/$node_archive" ]; then
+  node_path="$here/$node_archive"
+else
+  node_path="$scratch/$node_archive"
+  printf 'downloading %s from nodejs.org\n' "$node_archive"
+  curl --proto '=https' --tlsv1.2 --fail --silent --show-error --location \
+    --output "$node_path" "https://nodejs.org/dist/v$NODE_VERSION/$node_archive"
+fi
+if [ "$(sha256_of "$node_path")" != "$node_sha256" ]; then
+  fail "$node_archive does not match its checksum; nothing was installed"
+fi
+
+# Unpacked beside the target and moved into place once: an interrupted
+# install leaves no half version.
+mkdir -p -- "$home/cli" "$bin_dir"
+work=$(mktemp -d "$home/cli/.install.XXXXXX")
+mkdir -- "$work/v" "$work/v/node"
+tar -xzf "$here/$CLI_ARCHIVE" -C "$work/v"
+tar -xzf "$node_path" -C "$work/v/node" --strip-components=1
+if [ ! -f "$work/v/secrets.mjs" ] || [ ! -x "$work/v/node/bin/node" ]; then
+  fail "the archives did not unpack as expected; nothing was installed"
+fi
+: >"$work/v/.complete"
+rm -rf -- "$dir"
+mv -- "$work/v" "$dir"
+launcher_text >"$work/launcher"
+chmod 755 "$work/launcher"
+mv -- "$work/launcher" "$launcher"
+
+printf 'installed secrets %s in %s\nlauncher: %s\n' "$VERSION" "$dir" "$launcher"
+case ":${PATH:-}:" in
+  *":$bin_dir:"*) ;;
+  *) printf 'note: %s is not on your PATH; add it in your shell profile yourself\n' "$bin_dir" ;;
+esac
