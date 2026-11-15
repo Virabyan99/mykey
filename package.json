@@ -24,6 +24,7 @@
     "stack:down": "node scripts/stack.ts down",
     "stack:status": "node scripts/stack.ts status",
     "contracts:openapi": "node scripts/contracts-openapi.ts",
+    "reference:asset": "node scripts/reference-asset.ts",
     "contracts:check": "node scripts/contracts-openapi.ts --check",
     "authority:matrix": "node scripts/authority-matrix.ts",
     "authority:check": "node scripts/authority-matrix.ts --check",

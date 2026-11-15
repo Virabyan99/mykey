@@ -128,9 +128,10 @@ function outputResponse(
   deps: AppDeps,
 ): Response {
   const schema = route.responses[result.status];
-  // An attachment (Run 4.9): the bytes as they are, their length, no transformation.
-  if (schema === "dotenv-attachment" || result.raw !== undefined) {
-    if (schema !== "dotenv-attachment" || result.raw === undefined) {
+  // An attachment (Run 4.9) or a page (Run 5.9): the bytes as they are, their length.
+  const rawKind = schema === "dotenv-attachment" || schema === "html-document";
+  if (rawKind || result.raw !== undefined) {
+    if (!rawKind || result.raw === undefined) {
       deps.log({
         event: "output_invalid",
         time: now(),

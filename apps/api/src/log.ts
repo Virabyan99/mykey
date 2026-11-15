@@ -44,6 +44,8 @@ export type LogEntry =
   | { event: "unlisted_error"; time: string; requestId: string; routeId: string; code: ErrorCode }
   | { event: "output_invalid"; time: string; requestId: string; routeId: string; status: number }
   | { event: "outbox"; time: string; outcome: "failed"; errorClass: string }
+  /** Run 5.9: the reference's asset is not in the image; reference.get answers 503. */
+  | { event: "reference_asset_missing"; time: string }
   | { event: "throttle_sweep"; time: string; outcome: "failed"; errorClass: string }
   | { event: "session_cleanup"; time: string; outcome: "failed"; errorClass: string }
   | { event: "operation_sweep"; time: string; outcome: "failed"; errorClass: string }

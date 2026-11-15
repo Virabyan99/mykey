@@ -12,3 +12,5 @@ tests/cli/.certs/
 # The consumer fixtures' build inputs (Run 5.8): release files copied in by consumer-deploy.md.
 tests/fixtures/consumers/*/mykey-release/
 tests/fixtures/consumers/next-app/.next/
+# The API reference's asset (Run 5.9): copied from the pinned package by `pnpm run reference:asset`.
+apps/api/assets/

@@ -35,8 +35,14 @@ import {
   projectsListHandler,
   projectsRenameHandler,
 } from "./routes/resources.ts";
-import { openapiGetHandler } from "./routes/reference.ts";
+import { openapiGetHandler, referenceGetHandler } from "./routes/reference.ts";
 import { servedDocument, type OpenApiDocument } from "./reference/document.ts";
+import {
+  DEFAULT_ASSET_DIRECTORY,
+  buildReferencePage,
+  loadScalarAsset,
+  type ReferencePage,
+} from "./reference/page.ts";
 import { resetCompleteHandler } from "./routes/reset.ts";
 import {
   secretsCreateHandler,
@@ -95,6 +101,7 @@ function mountAuth(app: Hono<ApiEnv>, deps: AppDeps, module: NonNullable<AppDeps
 function handlers(
   large: LargeGate,
   served: () => OpenApiDocument,
+  page: () => ReferencePage | null,
 ): Partial<Record<string, Handler>> {
   return {
     "health.get": healthHandler,
@@ -132,12 +139,17 @@ function handlers(
     "session.activity": sessionActivityHandler,
     "auth.reset.complete": resetCompleteHandler,
     "openapi.get": openapiGetHandler(served),
+    "reference.get": referenceGetHandler(page),
   };
 }
 
 /** The ids of the contract routes this build has a handler for (Run 5.9). */
 export function handledRouteIds(): ReadonlySet<string> {
-  const known = handlers(createLargeGate(1), () => ({ paths: {} }));
+  const known = handlers(
+    createLargeGate(1),
+    () => ({ paths: {} }),
+    () => null,
+  );
   return new Set(ROUTES.filter((route) => known[route.id] !== undefined).map((route) => route.id));
 }
 
@@ -179,13 +191,21 @@ export function createApp(deps: AppDeps): Hono<ApiEnv> {
   });
 
   // Per process (one app per process): import and export share the large-request limit.
-  // The document this build serves (Run 5.9): computed once, from the handlers it has.
+  // The document this build serves and its page (Run 5.9): computed once, from the handlers it has.
   let served: OpenApiDocument = { paths: {} };
-  const known = handlers(createLargeGate(LIMITS.concurrency.largePerProcess), () => served);
+  let page: ReferencePage | null = null;
+  const known = handlers(
+    createLargeGate(LIMITS.concurrency.largePerProcess),
+    () => served,
+    () => page,
+  );
   served = servedDocument(
     buildOpenApiDocument(ROUTES) as OpenApiDocument,
     new Set(Object.keys(known).filter((id) => known[id] !== undefined)),
   );
+  const asset = loadScalarAsset(deps.config.referenceAssetDirectory ?? DEFAULT_ASSET_DIRECTORY);
+  if (asset === null) deps.log({ event: "reference_asset_missing", time: now() });
+  else page = buildReferencePage(asset, served);
   for (const route of ROUTES) mountRoute(app, deps, route.id, known[route.id] ?? null);
   for (const entry of deps.test?.routes ?? []) mountRouteDef(app, deps, entry.def, entry.handler);
   // After the contract routes: the auth module closes the rest of /v1/auth with a 404.

@@ -22,6 +22,8 @@ export interface ApiConfig {
   hostInstanceId: string;
   /** The edge proxy's address; only its X-Forwarded-For is believed (P-47, Run 3.3). */
   trustedProxy: string | null;
+  /** Where scalar.js and scalar.json are (Run 5.9); default apps/api/assets. */
+  referenceAssetDirectory?: string;
 }
 
 export interface TestRouteEntry {
@@ -105,7 +107,10 @@ export interface HandlerResult {
    * with its content-length (the machine routes).
    */
   buffered?: boolean;
-  /** Only for a route whose response kind is "dotenv-attachment" (Run 4.9): the body as sent. */
+  /**
+   * Only for a route whose response kind is "dotenv-attachment" (Run 4.9) or
+   * "html-document" (Run 5.9): the body as sent.
+   */
   raw?: { bytes: Uint8Array; contentType: string };
 }
 

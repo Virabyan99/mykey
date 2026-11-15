@@ -23,3 +23,5 @@
 !apps/provisioner/src
 # The policy templates the provisioner renders (Run 3.8); text, no secret.
 !infra/openbao/policies
+# The API reference asset script (Run 5.9); the asset stage of apps/api/Dockerfile runs it.
+!scripts/reference-asset.ts
