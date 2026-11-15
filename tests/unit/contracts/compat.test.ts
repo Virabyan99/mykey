@@ -3,8 +3,14 @@
 // baseline fails: a removed path, method, response field or enum value, a
 // request field that becomes required, a request type that accepts less.
 // A new route, a new optional request field and a new response field are not breaks.
+import { readFileSync } from "node:fs";
+import { ROUTES, buildOpenApiDocument } from "@mykey/contracts";
 import { describe, expect, it } from "vitest";
-import { breakingChanges, type OpenApiDocument } from "../../../scripts/contracts-compat.ts";
+import {
+  BASELINE_FILE,
+  breakingChanges,
+  type OpenApiDocument,
+} from "../../../scripts/contracts-compat.ts";
 
 function baseline(): OpenApiDocument {
   return {
@@ -164,5 +170,12 @@ describe("breakingChanges", () => {
       at(postBody(doc), "properties", "count").type = ["integer", "string", "null"];
     });
     expect(breakingChanges(baseline(), additions)).toEqual([]);
+  });
+
+  it("the committed baseline-v1.json against the current document → nothing", () => {
+    const committed = JSON.parse(readFileSync(BASELINE_FILE, "utf8")) as OpenApiDocument;
+    const current = buildOpenApiDocument(ROUTES) as OpenApiDocument;
+    expect(Object.keys(committed.paths).length).toBeGreaterThan(30);
+    expect(breakingChanges(committed, current)).toEqual([]);
   });
 });

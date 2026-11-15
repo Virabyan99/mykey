@@ -12,7 +12,9 @@
 // 2. The loop: the parent's heartbeat first (false: the sweep or another
 //    executor has it — answer from the row), the budget after the first entry
 //    (spent: awaiting_input, 202), then the next entry. `unchanged` and
-//    `conflict` touch nothing; `create` and `update` run as a child with the
+//    `conflict` touch nothing; an `unchanged` entry is compared again with its
+//    index row under the lock (M-2) and is `conflict` when the key moved;
+//    `create` and `update` run as a child with the
 //    preview's precondition and the key `<parent>:<ordinal>`, so a resumed
 //    entry replays its child instead of writing twice.
 // 3. An unknown child outcome stops the import: the entry and the parent
@@ -32,6 +34,7 @@ import {
 import {
   claimPreview,
   claimResume,
+  environmentCounters,
   fileOfParent,
   findOperation,
   findOperationByKey,
@@ -40,7 +43,9 @@ import {
   insertImportEntries,
   insertOperation,
   nextImportEntry,
+  readIndexRow,
   recordImportOutcome,
+  slotOf,
   touchOperation,
   type EntryOutcome,
   type EnvironmentScope,
@@ -57,6 +62,7 @@ import {
   type EffectDeps,
   type SecretOutcome,
 } from "../secrets/protocol.ts";
+import { Busy, withEnvironmentLock } from "../secrets/lock.ts";
 import { fileHmac } from "./preview.ts";
 
 export const IMPORT_ACTION = "import.apply";
@@ -353,9 +359,7 @@ async function applyEntry(
   entry: PendingEntry,
   values: Map<string, string>,
 ): Promise<Step> {
-  if (entry.classification === "unchanged") {
-    return { kind: "outcome", outcome: "unchanged", childId: null };
-  }
+  if (entry.classification === "unchanged") return recheckUnchanged(deps, run, entry);
   if (entry.classification !== "create" && entry.classification !== "update") {
     // conflict (an invalid or duplicate entry never reaches an accepted import).
     return { kind: "outcome", outcome: "conflict", childId: null };
@@ -402,6 +406,32 @@ async function applyEntry(
   });
   const written: EntryOutcome = action === "create" ? "created" : "updated";
   return stepOf(deps, outcome, entry.name, written, () => recheckRefused);
+}
+
+/**
+ * M-2 (P-103, FR-1.36 "Recheck even unchanged entries"): under the
+ * environment's lock, the key must still be live at the version and state tag
+ * of the preview, and no secret action may hold it. Otherwise it moved: the
+ * entry is `conflict`, as a changed `update` entry is. The lock not had in
+ * time: the entry waits for a resume.
+ */
+async function recheckUnchanged(deps: EffectDeps, run: Common, entry: PendingEntry): Promise<Step> {
+  const { lockKey } = await environmentCounters(deps.pool, run.scope);
+  try {
+    return await withEnvironmentLock(deps.lockPool, lockKey, async (locked) => {
+      const row = await readIndexRow(locked.client, run.scope, entry.name);
+      const slot = await slotOf(locked.client, run.scope);
+      const same =
+        row?.state === "live" &&
+        row.currentVersion === entry.expectedVersion &&
+        row.stateTag === entry.expectedStateTag &&
+        slot?.secretName !== entry.name;
+      return { kind: "outcome", outcome: same ? "unchanged" : "conflict", childId: null };
+    });
+  } catch (error) {
+    if (error instanceof Busy) return { kind: "wait" };
+    throw error;
+  }
 }
 
 async function stepOf(

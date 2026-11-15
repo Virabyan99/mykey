@@ -10,7 +10,7 @@ const root = resolve(import.meta.dirname, "../../..");
 
 interface Operation {
   operationId: string;
-  parameters?: { name: string; in: string; required?: boolean }[];
+  parameters?: { name: string; in: string; required?: boolean; description?: string }[];
   requestBody?: { content: Record<string, { schema: Record<string, unknown> }> };
   responses: Record<string, { content?: Record<string, { schema: Record<string, unknown> }> }>;
   security?: Record<string, string[]>[];
@@ -75,6 +75,18 @@ describe("generated OpenAPI document", () => {
       }
       const header = parameters.some((p) => p.in === "header" && p.name === "Idempotency-Key");
       expect(header, route.id).toBe(route.idempotent);
+    }
+  });
+
+  // M-6 (P-103, FR-1.83): a stored rejection is final and replays as recorded.
+  it("the Idempotency-Key header says that a rejected request is retried with a new key", () => {
+    for (const route of ROUTES.filter((candidate) => candidate.idempotent)) {
+      const header = (operation(route.id).parameters ?? []).find(
+        (p) => p.in === "header" && p.name === "Idempotency-Key",
+      );
+      expect(header?.description, route.id).toContain(
+        "a rejected request is retried with a new key",
+      );
     }
   });
 
