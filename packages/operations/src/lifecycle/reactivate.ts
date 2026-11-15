@@ -34,7 +34,7 @@ import {
 } from "@mykey/db";
 import { environmentPrefix, machineName, type BaoResult, type OpenBaoClient } from "@mykey/openbao";
 import type pg from "pg";
-import { policyDigest } from "../provisioning/environment.ts";
+import { policyDigest } from "../provisioning/digest.ts";
 import { intentFingerprint, sameIntent } from "../replay.ts";
 import type { IssuerSession } from "../runtime.ts";
 import type { ArchiveRequest, LifecycleDeps } from "./archive.ts";
