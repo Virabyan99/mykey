@@ -34,6 +34,7 @@ Written in Run 1.7 (2026-11-10) against PostgreSQL 18.6.
 - **Operation scope (Run 4.1, migration `0011`).** Columns `project_id`, `environment_id`, `secret_name` (checked against the name pattern) and `parent_operation_id` (references `app.operation`) on `app.operation`, written at insert only; indexes `operation_environment_created_idx` and `operation_unresolved_idx`. `api_runtime` loses `INSERT` and `UPDATE` on `app.operation_tombstone` (only the operator's `ops operations-expire` writes tombstones); it keeps `SELECT`.
 
 - **Machine credentials (Run 5.1, migration `0013`).** On `app.machine_credential`: the partial unique index `machine_credential_unresolved_issuance_key (environment_id) WHERE state IN ('issuing', 'needs_review')` (an unresolved issuance blocks the next one for its environment) and the index `machine_credential_environment_state_idx (environment_id, state)`. `api_runtime` keeps `UPDATE` on `accessor`, `effective_expires_at`, `state` and `last_used_at` only, and has no `DELETE`.
+- **Archive and reactivate (Run 5.3, migration `0014`).** The function `app.lifecycle_transition(text, uuid, uuid, uuid, text, text)`: `SECURITY DEFINER`, `search_path = pg_catalog, pg_temp`, owned by `migration_owner`, `EXECUTE` for `api_runtime` only (revoked from `PUBLIC`). `api_runtime` loses `UPDATE` on `app.project (state, archive_operation_id)` and `app.environment (state, archive_origin, archive_operation_id)`.
 
 ## Reconstruction order
 

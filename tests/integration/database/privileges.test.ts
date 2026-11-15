@@ -394,7 +394,7 @@ describe("app.mark_environment_review", () => {
     ).toBe(DENIED);
     expect(
       await attempt(api, "UPDATE app.environment SET state = 'active' WHERE id = $1", [env]),
-    ).toBe("23514");
+    ).toBe(DENIED);
   });
 
   it("provisioner_runtime, backup_reader and maintenance cannot call it", async () => {
@@ -503,7 +503,7 @@ describe("catalog sweep", () => {
     // The rule must leave api_runtime something to update, and must protect the identity columns.
     const apiUpdatable = columns.filter((row) => expectedColumnUpdate(row, "api_runtime"));
     expect(apiUpdatable.map((row) => `${row.table}.${row.column}`)).toEqual(
-      expect.arrayContaining(["app.project.name", "app.environment.state", "app.operation.state"]),
+      expect.arrayContaining(["app.project.name", "app.environment.name", "app.operation.state"]),
     );
     expect(apiUpdatable.filter((row) => IDENTITY_COLUMNS.includes(row.column))).toEqual([]);
   });

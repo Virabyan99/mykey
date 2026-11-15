@@ -118,3 +118,4 @@ export {
   type CredentialRow,
   type CredentialState,
 } from "./repos/credentials.ts";
+export { lifecycleTransition, type LifecycleStep } from "./repos/lifecycle.ts";
