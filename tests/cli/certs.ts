@@ -31,12 +31,47 @@ export function certPaths(dir: string = CERT_DIR): CertPaths {
   };
 }
 
+// The same commands work with OpenSSL 3 and with LibreSSL (/usr/bin/openssl on
+// macOS), which differ in three ways that broke the macOS runners: LibreSSL's
+// `x509 -req` signs with SHA-1 unless told otherwise (so every signing names
+// -sha256), its system config adds a v3_ca section that doubles the
+// authority's basicConstraints (so every command reads only CONFIG, below),
+// and it refuses `-days -1` (so the expired certificate is signed with
+// `openssl ca` and explicit dates).
+const CONFIG = [
+  "[ req ]",
+  "distinguished_name = dn",
+  "[ dn ]",
+  "[ ca ]",
+  "default_ca = test_ca",
+  "[ test_ca ]",
+  "database = index.txt",
+  "new_certs_dir = issued",
+  "serial = ca-serial",
+  "default_md = sha256",
+  "policy = any_name",
+  "unique_subject = no",
+  "[ any_name ]",
+  "commonName = supplied",
+  "",
+].join("\n");
+
+/** YYMMDDHHMMSSZ (UTCTime), as `openssl ca -startdate/-enddate` take it. */
+function utcTime(at: Date): string {
+  return `${at.toISOString().slice(2, 19).replace(/[-T:]/g, "")}Z`;
+}
+
 function openssl(args: string[], cwd: string): void {
   const result = spawnSync("openssl", args, {
     cwd,
     encoding: "utf8",
     // Git Bash would rewrite "/CN=…" into a Windows path.
-    env: { ...process.env, MSYS_NO_PATHCONV: "1", MSYS2_ARG_CONV_EXCL: "*" },
+    env: {
+      ...process.env,
+      MSYS_NO_PATHCONV: "1",
+      MSYS2_ARG_CONV_EXCL: "*",
+      OPENSSL_CONF: join(cwd, "openssl.cnf"),
+    },
   });
   if (result.status !== 0) {
     throw new Error(
@@ -56,12 +91,18 @@ export function makeCertificates(opts: { force?: boolean; dir?: string } = {}): 
     return certPaths(dir);
   }
   rmSync(dir, { recursive: true, force: true });
-  mkdirSync(dir, { recursive: true });
+  mkdirSync(join(dir, "issued"), { recursive: true });
+  writeFileSync(join(dir, "openssl.cnf"), CONFIG);
+  writeFileSync(join(dir, "index.txt"), "");
+  writeFileSync(join(dir, "ca-serial"), "1000\n");
   const ec = ["-newkey", "ec", "-pkeyopt", "ec_paramgen_curve:P-256", "-nodes"];
+  const config = ["-config", "openssl.cnf"];
   openssl(
     [
       "req",
+      ...config,
       "-x509",
+      "-sha256",
       ...ec,
       "-keyout",
       "ca.key",
@@ -78,7 +119,7 @@ export function makeCertificates(opts: { force?: boolean; dir?: string } = {}): 
     ],
     dir,
   );
-  const leaf = (name: string, names: string, days: string): void => {
+  const leaf = (name: string, names: string, expired = false): void => {
     writeFileSync(
       join(dir, `${name}.ext`),
       [
@@ -90,34 +131,67 @@ export function makeCertificates(opts: { force?: boolean; dir?: string } = {}): 
       ].join("\n"),
     );
     openssl(
-      ["req", ...ec, "-keyout", `${name}.key`, "-out", `${name}.csr`, "-subj", `/CN=${name}`],
-      dir,
-    );
-    openssl(
       [
-        "x509",
-        "-req",
-        "-in",
-        `${name}.csr`,
-        "-CA",
-        "ca.pem",
-        "-CAkey",
-        "ca.key",
-        "-CAcreateserial",
-        "-days",
-        days,
-        "-extfile",
-        `${name}.ext`,
+        "req",
+        ...config,
+        "-sha256",
+        ...ec,
+        "-keyout",
+        `${name}.key`,
         "-out",
-        `${name}.pem`,
+        `${name}.csr`,
+        "-subj",
+        `/CN=${name}`,
       ],
       dir,
     );
+    const signed = expired
+      ? [
+          "ca",
+          ...config,
+          "-batch",
+          "-notext",
+          "-md",
+          "sha256",
+          "-cert",
+          "ca.pem",
+          "-keyfile",
+          "ca.key",
+          // Valid from three days before it was made until one day before.
+          "-startdate",
+          utcTime(new Date(Date.now() - 3 * DAY_MS)),
+          "-enddate",
+          utcTime(new Date(Date.now() - DAY_MS)),
+          "-extfile",
+          `${name}.ext`,
+          "-in",
+          `${name}.csr`,
+          "-out",
+          `${name}.pem`,
+        ]
+      : [
+          "x509",
+          "-req",
+          "-sha256",
+          "-in",
+          `${name}.csr`,
+          "-CA",
+          "ca.pem",
+          "-CAkey",
+          "ca.key",
+          "-CAcreateserial",
+          "-days",
+          "7",
+          "-extfile",
+          `${name}.ext`,
+          "-out",
+          `${name}.pem`,
+        ];
+    openssl(signed, dir);
   };
-  leaf("good", "DNS:localhost,IP:127.0.0.1", "7");
-  leaf("other-host", "DNS:other-host.invalid", "7");
-  // Valid until a day before it was made.
-  leaf("expired", "DNS:localhost,IP:127.0.0.1", "-1");
+  leaf("good", "DNS:localhost,IP:127.0.0.1");
+  leaf("other-host", "DNS:other-host.invalid");
+  leaf("expired", "DNS:localhost,IP:127.0.0.1", true);
   writeFileSync(marker, new Date().toISOString());
   return certPaths(dir);
 }

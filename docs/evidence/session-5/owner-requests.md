@@ -7,6 +7,8 @@ Sent 2026-11-15 in the Session 5 execution chat. Run 5.1 starts without waiting.
 3. **One yes/no, needed only at the gate:** may the gate run bring production to the current migrations and API image, with its gate still not open? Default when there is no answer: **no**.
 4. **For information:** `pnpm run test:cloud` fails on purpose from 15 Nov 2026 09:42 UTC (the R2 fixture guard) until Run 6.6; all KMS certificates expire on 12 Dec 2026 and `.trivyignore.images` on 14 Dec 2026.
 
+5. **Added 2026-11-15 (Run 5.7), the same question made concrete.** The matrix ran once (about 64 billed minutes). Linux passed. Both macOS runners failed on the test suite's own certificates, which is now fixed and proven on Linux and under LibreSSL. One more dispatch (about 64 minutes again, most of it macOS) would close FR-1.51, AC-1.37, PO-8 and AGENT-B1. Default when there is no answer: it does not run, and the four items stay `OPEN` (`cli-matrix.md`).
+
 ## Answers
 
 (none yet)

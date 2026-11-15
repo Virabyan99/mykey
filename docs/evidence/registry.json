@@ -717,8 +717,10 @@
       "contributingRuns": [],
       "oldSession": "D08-S31",
       "status": "OPEN",
-      "evidence": [],
-      "note": ""
+      "evidence": [
+        "docs/evidence/session-5/cli-matrix.md"
+      ],
+      "note": "cli-v0.1.0 proven on Linux x64 and arm64 from the release (run 43734935509); macOS failed on the suite's LibreSSL test certificates, fixed, not yet re-run there (owner's minutes answer pending)."
     },
     {
       "id": "FR-1.52",
@@ -1848,8 +1850,10 @@
       "contributingRuns": [],
       "oldSession": "D08-S31",
       "status": "OPEN",
-      "evidence": [],
-      "note": ""
+      "evidence": [
+        "docs/evidence/session-5/cli-matrix.md"
+      ],
+      "note": "Connection refusals pass from the release on Linux x64 and arm64; on macOS every TLS case failed on the test certificates (fixed in tests/cli/certs.ts, not yet re-run on macOS)."
     },
     {
       "id": "AC-1.38",
@@ -2263,8 +2267,10 @@
       "contributingRuns": [],
       "oldSession": "D08-S31",
       "status": "OPEN",
-      "evidence": [],
-      "note": ""
+      "evidence": [
+        "docs/evidence/session-5/cli-matrix.md"
+      ],
+      "note": "Installer and launcher proven on all four targets, the full suite on Linux only; credential setup and replacement is Run 5.8."
     },
     {
       "id": "PO-9",
@@ -2557,8 +2563,10 @@
       ],
       "oldSession": "D08-S31",
       "status": "OPEN",
-      "evidence": [],
-      "note": ""
+      "evidence": [
+        "docs/evidence/session-5/cli-matrix.md"
+      ],
+      "note": "D-44 decided (SEA is 1.1 and lacks darwin-x64; the bundle on pinned Node); D-24's nine requirements pass on Linux x64 and arm64, on macOS only 8 and 9 so far."
     },
     {
       "id": "COST-B1",
