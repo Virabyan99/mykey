@@ -6810,7 +6810,47 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "x-mykey-pending": true
+                  "properties": {
+                    "apiMajor": {
+                      "type": "integer",
+                      "exclusiveMinimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "environmentId": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    "generation": {
+                      "type": "string",
+                      "maxLength": 20,
+                      "pattern": "^(0|[1-9][0-9]*)$"
+                    },
+                    "count": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "names": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "complete": {
+                      "type": "boolean",
+                      "const": true
+                    }
+                  },
+                  "required": [
+                    "apiMajor",
+                    "environmentId",
+                    "generation",
+                    "count",
+                    "names",
+                    "complete"
+                  ],
+                  "additionalProperties": false
                 }
               }
             }
@@ -6856,7 +6896,7 @@
             }
           },
           "409": {
-            "description": "Conflict. Codes: environment_changed.",
+            "description": "Conflict. Codes: environment_changed, key_under_review.",
             "content": {
               "application/json": {
                 "schema": {
@@ -6876,7 +6916,7 @@
             }
           },
           "503": {
-            "description": "Service unavailable. Codes: busy, quarantined, dependency_unavailable, backend_sealed, backend_inconsistent.",
+            "description": "Service unavailable. Codes: busy, quarantined, dependency_unavailable, audit_unavailable, backend_sealed, backend_inconsistent.",
             "content": {
               "application/json": {
                 "schema": {
@@ -6935,9 +6975,9 @@
                       "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
                     },
                     "generation": {
-                      "type": "integer",
-                      "minimum": 0,
-                      "maximum": 9007199254740991
+                      "type": "string",
+                      "maxLength": 20,
+                      "pattern": "^(0|[1-9][0-9]*)$"
                     },
                     "count": {
                       "type": "integer",
@@ -7043,6 +7083,16 @@
           },
           "503": {
             "description": "Service unavailable. Codes: busy, quarantined, dependency_unavailable, audit_unavailable, backend_sealed, backend_inconsistent.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "507": {
+            "description": "Insufficient storage. Codes: capacity_exceeded.",
             "content": {
               "application/json": {
                 "schema": {

@@ -267,7 +267,7 @@ describe("response schemas the specification already fixes", () => {
     const good = {
       apiMajor: 1,
       environmentId: "0193a5c0-7b1e-7c3a-9f4e-2b6d8a1c5e7f",
-      generation: 7,
+      generation: "7",
       count: 1,
       entries: [{ name: "A", value: "synthetic" }],
       complete: true,
@@ -280,6 +280,45 @@ describe("response schemas the specification already fixes", () => {
       schema.safeParse({ ...good, entries: [{ name: "A", value: "v", version: 2 }] }).success,
     ).toBe(false);
     expect(route("machine.resolve").request.body).toBeUndefined();
+    expect(schema.safeParse({ ...good, generation: 7 }).success).toBe(false);
+    expect(schema.safeParse({ ...good, generation: "07" }).success).toBe(false);
+  });
+
+  it("machine.keys is the live names of one generation and never a value (Run 5.4, P-94)", () => {
+    const schema = route("machine.keys").responses[200] as z.ZodType;
+    const good = {
+      apiMajor: 1,
+      environmentId: "0193a5c0-7b1e-7c3a-9f4e-2b6d8a1c5e7f",
+      generation: "12",
+      count: 2,
+      names: ["A", "B"],
+      complete: true,
+    };
+    expect(schema.safeParse(good).success).toBe(true);
+    expect(schema.safeParse({ ...good, entries: [] }).success).toBe(false);
+    expect(schema.safeParse({ ...good, complete: false }).success).toBe(false);
+    expect(route("machine.keys").request.query).toBeUndefined();
+    for (const id of ["machine.keys", "machine.resolve"]) {
+      const errors = route(id).errors;
+      for (const code of [
+        "mixed_authentication",
+        "unauthenticated",
+        "action_denied",
+        "forbidden_selector",
+        "not_found",
+        "quarantined",
+        "environment_changed",
+        "key_under_review",
+        "busy",
+        "audit_unavailable",
+        "backend_sealed",
+        "backend_inconsistent",
+        "dependency_unavailable",
+      ] as const) {
+        expect(errors, `${id} ${code}`).toContain(code);
+      }
+    }
+    expect(route("machine.resolve").errors).toContain("capacity_exceeded");
   });
 });
 

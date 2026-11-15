@@ -5,6 +5,5 @@
   "credentials.summary",
   "metrics.get",
   "reference.get",
-  "openapi.get",
-  "machine.keys"
+  "openapi.get"
 ]

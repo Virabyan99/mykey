@@ -130,12 +130,29 @@ const versionBody = z.strictObject({
   build: z.string().regex(/^[0-9a-f]{7,40}$/),
 });
 
+/** An environment's metadata generation (a bigint): a decimal string, as in the cursors. */
+const generationText = z
+  .string()
+  .max(20)
+  .regex(/^(0|[1-9][0-9]*)$/);
+
+/** machine.resolve (Run 5.4, P-94): every live value of one generation, or nothing. */
 const resolveBody = z.strictObject({
   apiMajor: z.int().positive(),
   environmentId: environmentIdSchema,
-  generation: z.int().nonnegative(),
+  generation: generationText,
   count: z.int().nonnegative(),
   entries: z.array(z.strictObject({ name: z.string(), value: z.string() })),
+  complete: z.literal(true),
+});
+
+/** machine.keys (Run 5.4, P-94): the live names of one generation, bytewise order; never a value. */
+const keysBody = z.strictObject({
+  apiMajor: z.int().positive(),
+  environmentId: environmentIdSchema,
+  generation: generationText,
+  count: z.int().nonnegative(),
+  names: z.array(z.string()),
   complete: z.literal(true),
 });
 
@@ -696,11 +713,14 @@ export const ROUTES: readonly RouteDef[] = Object.freeze([
   define("reference.get", "GET", "/v1/reference", "human", false, "5.9", { action: null }),
   define("openapi.get", "GET", "/v1/openapi.json", "human", false, "5.9", { action: null }),
 
+  // Run 5.4 (P-93, P-94): no query and no body schema — a selector is refused
+  // before validation (forbidden_selector).
   define("machine.keys", "GET", `${M}/keys`, "machine", false, "5.4", {
-    errors: ["environment_changed", ...BACKEND],
+    responses: { 200: keysBody },
+    errors: ["environment_changed", ...VALUE_READ],
   }),
   define("machine.resolve", "POST", `${M}/resolve`, "machine", false, "5.4", {
     responses: { 200: resolveBody },
-    errors: ["environment_changed", ...VALUE_READ],
+    errors: ["environment_changed", "capacity_exceeded", ...VALUE_READ],
   }),
 ]);
