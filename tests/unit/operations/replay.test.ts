@@ -155,6 +155,42 @@ describe("replayAnswer", () => {
     }
   });
 
+  // Run 5.1 (P-88, FR-1.43): a token is shown once.
+  describe("credentials.issue", () => {
+    const issue = ROUTES.find((route) => route.id === "credentials.issue")!;
+    const issueRow = (overrides: Partial<OperationRow>) =>
+      row({ action: "credentials.issue", result: { credentialId: "c" }, ...overrides });
+
+    it("succeeded → credential_not_replayable with the operation id, never the envelope", () => {
+      expect(replayAnswer(issue, issueRow({}))).toEqual({
+        error: "credential_not_replayable",
+        operationId: row({}).id,
+      });
+    });
+
+    it("executing → 202; rejected → its error; uncertain → outcome_unknown; expired → replay_expired", () => {
+      expect(replayAnswer(issue, issueRow({ state: "executing", result: null }))).toMatchObject({
+        status: 202,
+      });
+      expect(
+        replayAnswer(issue, issueRow({ state: "rejected", result: null, errorCode: "busy" })),
+      ).toEqual({ error: "busy", operationId: row({}).id });
+      expect(replayAnswer(issue, issueRow({ state: "uncertain", result: null }))).toEqual({
+        error: "outcome_unknown",
+        operationId: row({}).id,
+      });
+      expect(replayAnswer(issue, issueRow({ expired: true }))).toMatchObject({
+        error: "replay_expired",
+      });
+    });
+
+    it("every other route's succeeded row is unchanged", () => {
+      for (const route of ROUTES.filter((r) => r.idempotent && r.id !== "credentials.issue")) {
+        expect("status" in replayAnswer(route, row({})), route.id).toBe(true);
+      }
+    });
+  });
+
   it("the envelope of a rejected row carries its error code; an uncertain one no result", () => {
     expect(
       operationResponse(row({ state: "rejected", result: null, errorCode: "busy" })).result,

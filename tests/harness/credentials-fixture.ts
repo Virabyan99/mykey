@@ -6,7 +6,8 @@
 // Tokens never leave the helpers but in their return value; a failing
 // assertion prints digests, counts or booleans (Doc 10 §4.1 rule 2).
 import { randomUUID } from "node:crypto";
-import type { EnvironmentId } from "@mykey/contracts";
+import type { Handler } from "@mykey/api";
+import type { EnvironmentId, RouteDef } from "@mykey/contracts";
 import { OpenBaoAdmin } from "@mykey/openbao/admin";
 import { machineName } from "@mykey/openbao";
 import { expect } from "vitest";
@@ -33,9 +34,15 @@ export type CredentialsFixture = SecretsFixture & {
 };
 
 export async function createCredentialsFixture(
-  opts: { processes?: 1 | 2; runtime?: "ok" | "broken" } = {},
+  opts: {
+    processes?: 1 | 2;
+    runtime?: "ok" | "broken";
+    /** More test-only routes. */
+    routes?: readonly { def: RouteDef; handler: Handler }[];
+  } = {},
 ): Promise<CredentialsFixture> {
   const base = await createSecretsFixture({
+    ...(opts.routes === undefined ? {} : { routes: opts.routes }),
     ...(opts.processes === undefined ? {} : { processes: opts.processes }),
     ...(opts.runtime === undefined ? {} : { runtime: opts.runtime }),
   });

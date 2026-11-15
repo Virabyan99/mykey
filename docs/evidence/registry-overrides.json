@@ -533,6 +533,18 @@
       "status": "SPIKE_PASS",
       "evidence": ["docs/evidence/session-4/run-4.9.md"],
       "note": "Export → import → export is byte-identical with awkward values, on the local stack (12 values incl. 64 KiB) and on staging (20 names)."
+    },
+    {
+      "id": "FR-1.39",
+      "status": "SPIKE_PASS",
+      "evidence": ["docs/evidence/session-5/run-5.1.md"],
+      "note": "Issuance with a marker under the environment's lock: issuer session, credential issuing + operation executing committed before the one create, the token checked and delivered only after accessor, expiry and active are committed; failures after the marker deliver nothing."
+    },
+    {
+      "id": "FR-1.41",
+      "status": "SPIKE_PASS",
+      "evidence": ["docs/evidence/session-5/run-5.1.md"],
+      "note": "The token is shown once in the 201; the inventory lists the catalog's view newest first with no accessor or token; no token bytes in PostgreSQL, logs, audit, jobs or OpenBao's audit device."
     }
   ]
 }

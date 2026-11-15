@@ -34,6 +34,8 @@ const HANDLED = new Set([
   "import.apply",
   "import.resume",
   "export.create",
+  "credentials.list",
+  "credentials.issue",
   "session.activity",
   "auth.reset.complete",
 ]);

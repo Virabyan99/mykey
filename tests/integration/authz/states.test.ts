@@ -15,7 +15,15 @@ beforeAll(async () => {
   api = await startTestApi({
     stubs: true,
     // The columns' example routes answer through the stub, handled or not (Run 4.2).
-    stubRoutes: ["secrets.create", "secrets.update", "secrets.list", "secrets.reveal"],
+    stubRoutes: [
+      "secrets.create",
+      "secrets.update",
+      "secrets.list",
+      "secrets.reveal",
+      // Run 5.1: handled now; the state table is about the pipeline.
+      "credentials.list",
+      "credentials.issue",
+    ],
   });
   tenants = await createTenants(api);
 }, 300_000);

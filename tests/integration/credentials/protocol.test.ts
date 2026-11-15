@@ -263,18 +263,17 @@ describe("before the marker", () => {
   it("the environment's lock is held by a writer: 503 busy and no credential row", async () => {
     await f.restartSecond({ point: "after_dispatch_marker", action: "hang" });
     try {
-      void f
-        .create("env2a", `HANG_${randomUUID().slice(0, 8).toUpperCase()}`, "synthetic", {
-          to: "second",
-        })
-        .catch(() => undefined);
-      // The writer holds the lock once its marker is committed.
+      const secret = `HANG_${randomUUID().slice(0, 8).toUpperCase()}`;
+      void f.create("env2a", secret, "synthetic", { to: "second" }).catch(() => undefined);
+      // The writer holds the lock once its dispatch marker is committed.
       const deadline = Date.now() + 15_000;
-      while (Date.now() < deadline) {
-        const held = await f.api.superuser.query(
-          "SELECT 1 FROM pg_locks WHERE locktype = 'advisory' AND granted",
+      for (;;) {
+        const marked = await f.api.superuser.query(
+          "SELECT 1 FROM app.operation WHERE secret_name = $1 AND state = 'executing'",
+          [secret],
         );
-        if ((held.rowCount ?? 0) > 0) break;
+        if ((marked.rowCount ?? 0) > 0) break;
+        if (Date.now() > deadline) throw new Error("the writer never reached its marker");
         await new Promise((resolve) => setTimeout(resolve, 100));
       }
       const before = (await rowsOf("env2a")).length;

@@ -195,6 +195,8 @@ export async function createSecretsFixture(
     processes?: 1 | 2;
     /** Run 5.4: "broken" delivers a runtime secret id OpenBao refuses. */
     runtime?: "ok" | "broken";
+    /** More test-only routes (Run 5.1). */
+    routes?: readonly { def: RouteDef; handler: Handler }[];
   } = {},
 ): Promise<SecretsFixture> {
   const directory = mkdtempSync(join(tmpdir(), "mykey-secrets-"));
@@ -219,7 +221,7 @@ export async function createSecretsFixture(
           await beforeHandler?.(routeId);
         },
         importBudgetMs: () => importBudget ?? undefined,
-        routes: [{ def: TEST_READ_ROUTE, handler: testReadHandler() }],
+        routes: [{ def: TEST_READ_ROUTE, handler: testReadHandler() }, ...(opts.routes ?? [])],
       };
     },
   });
