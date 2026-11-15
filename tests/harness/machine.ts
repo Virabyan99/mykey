@@ -1,8 +1,10 @@
 // Machine requests to the test API (Run 5.4): raw HTTPS with full control of
 // the headers (two Authorization headers, a cookie beside the bearer), no
 // Origin header. The token is a local of the caller; nothing here prints it.
+import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import https from "node:https";
+import { parseDotenv } from "@mykey/contracts";
 import type { SecretsFixture } from "./secrets-fixture.ts";
 import type { EnvName } from "./secrets-fixture.ts";
 
@@ -117,4 +119,31 @@ export function machineCall(
   const port = init.to === "second" ? (f.second?.port ?? 0) : f.api.port;
   const ca = readFileSync(f.stack.api.certAuthorityPath);
   return machineFetch({ port, ca }, route === "keys" ? "GET" : "POST", path, init);
+}
+
+/** sha256 of a value, hex: what the machine tests compare instead of values. */
+export const digestOf = (value: string): string =>
+  createHash("sha256").update(value, "utf8").digest("hex");
+
+/**
+ * The owner's export of an environment (a fresh session, `{ confirmed: true }`)
+ * as digests by name; fails unless it answers 200 with a dotenv body.
+ */
+export async function exportDigests(f: SecretsFixture, env: EnvName): Promise<Map<string, string>> {
+  await f.api.superuser.query("UPDATE auth.session SET totp_verified_at = now()");
+  const response = await f.api.request("POST", `${f.env(env).path}/export`, {
+    cookie: await f.tenants.cookie("ownerA"),
+    body: { confirmed: true },
+  });
+  const bytes = Buffer.from(await response.arrayBuffer());
+  if (response.status !== 200) throw new Error(`export answered ${String(response.status)}`);
+  const parsed = parseDotenv(bytes);
+  if (!parsed.ok) throw new Error("export is not a dotenv file");
+  return new Map(parsed.entries.map((entry) => [entry.name, digestOf(entry.value)]));
+}
+
+/** A resolve body as digests by name, in the order it came. */
+export function resolveDigests(answer: MachineAnswer): [string, string][] {
+  const entries = (answer.body.entries ?? []) as { name: string; value: string }[];
+  return entries.map((entry) => [entry.name, digestOf(entry.value)]);
 }
