@@ -6,6 +6,16 @@ name: ci
 on:
   pull_request:
   workflow_dispatch:
+    inputs:
+      jobs:
+        description: "all, or cli-matrix alone"
+        type: choice
+        options: [all, cli-matrix]
+        default: all
+      cli_release:
+        description: "the release tag cli-matrix tests (cli-v<version>)"
+        type: string
+        default: ""
 
 permissions:
   contents: read
@@ -22,7 +32,10 @@ jobs:
   # check and the unit tests share one job (one install, one rounded minute).
   # It also decides whether anything besides documentation changed; the
   # integration suite and the scans wait for it, so a red check costs no more.
+  # A `jobs=cli-matrix` dispatch runs nothing but cli-matrix: check and
+  # secret-scan stay out, and the jobs that need check are skipped with it.
   check:
+    if: github.event_name != 'workflow_dispatch' || inputs.jobs != 'cli-matrix'
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     outputs:
@@ -68,6 +81,7 @@ jobs:
 
   # Always runs: a value pasted into a document is still a leak.
   secret-scan:
+    if: github.event_name != 'workflow_dispatch' || inputs.jobs != 'cli-matrix'
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
@@ -134,11 +148,17 @@ jobs:
         if: always()
         run: node scripts/stack.ts down --all
 
-  # Manual runs only (`gh workflow run ci --ref <branch>`), once at a gate that
-  # changed the CLI: macOS minutes count ten times on a private repository
-  # (planner decision P-7).
+  # Manual runs only, once at a gate that changed the CLI: macOS minutes count
+  # ten times on a private repository (planner decisions P-7, P-99).
+  #   gh workflow run ci --ref <branch> -f jobs=cli-matrix -f cli_release=cli-v<version>
+  # It tests the released files, not this checkout's build: the release is
+  # downloaded, its SHA256SUMS checked, install.sh run, and project `cli` runs
+  # with MYKEY_CLI_BIN = the installed launcher. The job's own Node runs only
+  # Vitest; every CLI process of the suite runs on the installer's Node.
   cli-matrix:
-    if: github.event_name == 'workflow_dispatch'
+    if: github.event_name == 'workflow_dispatch' && inputs.cli_release != ''
+    permissions:
+      contents: read
     strategy:
       fail-fast: false
       matrix:
@@ -155,6 +175,7 @@ jobs:
     timeout-minutes: 15
     env:
       MYKEY_EXPECT_TARGET: ${{ matrix.target }}
+      TAG: ${{ inputs.cli_release }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -165,4 +186,31 @@ jobs:
           node-version-file: .node-version
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - run: pnpm --filter @mykey/cli test
+      - name: Download the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --dir rel
+      - name: Verify SHA256SUMS
+        working-directory: rel
+        run: |
+          cat SHA256SUMS
+          if command -v sha256sum >/dev/null 2>&1; then sha256sum -c SHA256SUMS; else shasum -a 256 -c SHA256SUMS; fi
+      - name: Install with install.sh
+        run: sh rel/install.sh
+      - name: The system and the installed launcher
+        run: |
+          uname -a
+          "$HOME/.local/bin/secrets" --version
+      - name: Project cli against the installed launcher
+        run: |
+          MYKEY_CLI_BIN="$HOME/.local/bin/secrets" MYKEY_RELEASE_DIR="$GITHUB_WORKSPACE/rel" \
+            pnpm exec vitest run --project cli --reporter=default --reporter=json \
+            --outputFile.json="cli-report-$MYKEY_EXPECT_TARGET.json"
+      - name: Upload the JSON report
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: cli-report-${{ matrix.target }}
+          path: cli-report-${{ matrix.target }}.json
+          if-no-files-found: error
+          retention-days: 30

@@ -85,6 +85,7 @@ export const REQUIRED_ACTIONS = [
   "actions/setup-node",
   "pnpm/action-setup",
   "actions/setup-python",
+  "actions/upload-artifact",
 ];
 export const FORBIDDEN_COMPONENTS = [
   "redis",
