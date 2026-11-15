@@ -11,8 +11,10 @@ import {
   collectPinnedVersions,
   composeImageProblems,
   consistencyProblems,
+  consumerFixtureProblems,
   digestProblems,
   dockerfileProblems,
+  fixtureDockerfiles,
   ownDockerfiles,
   forbiddenComponents,
   listFiles,
@@ -175,6 +177,26 @@ describe("dependency pins", () => {
       2,
     );
     expect(dockerfileProblems("ARG BASE\nFROM ${BASE}\n", lock, "variable")).toHaveLength(1);
+  });
+
+  it("the consumer fixtures (Run 5.8): FROM pinned by digest, packages exactly the lock's", () => {
+    const dockerfiles = fixtureDockerfiles(root);
+    expect(dockerfiles.map((file) => file.replaceAll("\\", "/").split("/").at(-2))).toEqual([
+      "fastapi-app",
+      "next-app",
+    ]);
+    expect(consumerFixtureProblems(root, lock)).toEqual([]);
+
+    const drifted = clone();
+    drifted.npm.next = { ...drifted.npm.next!, version: "0.0.1" };
+    drifted.python.uvicorn = { ...drifted.python.uvicorn!, version: "0.0.1" };
+    const found = consumerFixtureProblems(root, drifted);
+    expect(found.some((problem) => problem.includes("next"))).toBe(true);
+    expect(found.some((problem) => problem.includes("uvicorn"))).toBe(true);
+
+    const missing = clone();
+    delete missing.npm["react-dom"];
+    expect(consumerFixtureProblems(root, missing).some((p) => p.includes("react-dom"))).toBe(true);
   });
 
   it("the node image is required in the lock and is scanned", () => {

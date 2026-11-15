@@ -1,0 +1,15 @@
+{
+  "name": "mykey-fixture-next",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Run 5.8 consumer fixture: answers GET /check with the names and digests of FIXTURE_NAMES, never a value.",
+  "scripts": {
+    "build": "next build",
+    "start": "next start -H 0.0.0.0 -p 3000"
+  },
+  "dependencies": {
+    "next": "16.4.6",
+    "react": "19.3.1",
+    "react-dom": "19.3.1"
+  }
+}

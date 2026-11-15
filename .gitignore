@@ -9,3 +9,6 @@ coverage/
 apps/cli/release/
 tests/cli/.certs/
 .release/
+# The consumer fixtures' build inputs (Run 5.8): release files copied in by consumer-deploy.md.
+tests/fixtures/consumers/*/mykey-release/
+tests/fixtures/consumers/next-app/.next/

@@ -65,7 +65,7 @@
       "digest": "sha256:01d566e8d94d8c619591d78652babfccd3c6992a3dffa9ed5ab39e11cf6c70e9",
       "releaseUrl": "https://nodejs.org/en/blog/release/v24.22.2",
       "advisoriesChecked": "2026-11-15",
-      "note": "Test-only (Run 5.5, P-97): `pnpm run test:cli` runs project cli in it on a Windows workstation. The CLI refuses a Linux without glibc, so the Alpine image cannot host it. Never deployed, not in the image scan."
+      "note": "Test-only (Run 5.5, P-97): `pnpm run test:cli` runs project cli in it on a Windows workstation. The CLI refuses a Linux without glibc, so the Alpine image cannot host it. Never deployed, not in the image scan. Also the Next.js consumer fixture's base (Run 5.8)."
     },
     "nmap": {
       "image": "instrumentisto/nmap",
@@ -73,6 +73,15 @@
       "digest": "sha256:96f6ed194519b62421a1a1c57809e65a7f94d2aa1c8c25676f247e5e148c0827",
       "releaseUrl": "https://nmap.org/changelog.html",
       "advisoriesChecked": "2026-11-11"
+    },
+    "python": {
+      "image": "python",
+      "tag": "3.13.18",
+      "variant": "slim-trixie",
+      "digest": "sha256:e48f59cdba69a3cbd9ed2cf0f348d90d45a8d350d98134cf1070bc106ee9ed90",
+      "releaseUrl": "https://www.python.org/downloads/release/python-31318/",
+      "advisoriesChecked": "2026-11-15",
+      "note": "Consumer fixture only (Run 5.8, P-100): the FastAPI fixture's base. Never deployed, not in the image scan."
     }
   },
   "npm": {
@@ -178,13 +187,13 @@
     },
     "react": {
       "version": "19.3.1",
-      "advisoriesChecked": "2026-11-10",
-      "note": "catalog only until Run 7.1"
+      "advisoriesChecked": "2026-11-15",
+      "note": "Consumer fixture only (Run 5.8, P-100): tests/fixtures/consumers/next-app; never part of the product."
     },
     "react-dom": {
       "version": "19.3.1",
-      "advisoriesChecked": "2026-11-10",
-      "note": "catalog only until Run 7.1"
+      "advisoriesChecked": "2026-11-15",
+      "note": "Consumer fixture only (Run 5.8, P-100): tests/fixtures/consumers/next-app; never part of the product."
     },
     "@tanstack/react-query": {
       "version": "5.107.1",
@@ -210,6 +219,11 @@
       "version": "16.4.6",
       "advisoriesChecked": "2026-11-10",
       "note": "test-only loader for the dotenv compatibility evidence"
+    },
+    "next": {
+      "version": "16.4.6",
+      "advisoriesChecked": "2026-11-15",
+      "note": "Consumer fixture only (Run 5.8, P-100): tests/fixtures/consumers/next-app; never part of the product. OSV: no advisory for 16.4.6; npm audit of the fixture lock: 0."
     }
   },
   "binaries": {
@@ -263,6 +277,14 @@
     "python-dotenv": {
       "version": "1.2.4",
       "sha256": "42269a8a5b3fd54ffa6f3d84b18abed50064717576b4ecf03dc4a55d8aa04fdc"
+    },
+    "fastapi": {
+      "version": "0.163.1",
+      "sha256": "68f2d8050f5c3583121c0d203046cc7def5c16a7d6c43a0e7707a8ea610fe2d3"
+    },
+    "uvicorn": {
+      "version": "0.54.0",
+      "sha256": "505bdb0f318731d45f1f712071fc781a8981f6847a31c902c9f5e652d4f67faf"
     }
   },
   "actions": {

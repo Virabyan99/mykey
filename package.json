@@ -16,6 +16,7 @@
     "test": "vitest run --project unit",
     "test:integration": "vitest run --project integration",
     "test:cli": "node scripts/test-cli.ts",
+    "test:consumers": "node scripts/require-staging-env.ts && vitest run --project consumers",
     "cli:build": "node apps/cli/build.ts",
     "cli:release": "node infra/release/cli/build-release.ts",
     "pins:verify": "node scripts/pins-verify.ts",

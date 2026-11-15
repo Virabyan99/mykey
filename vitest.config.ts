@@ -54,6 +54,17 @@ export default defineConfig({
         },
       },
       {
+        // Run 5.8: the consumer fixtures and the rehearsed consumer runbooks
+        // (staging over its public name); run through `pnpm run test:consumers`.
+        test: {
+          name: "consumers",
+          include: ["tests/consumers/**/*.test.ts"],
+          testTimeout: 600_000,
+          hookTimeout: 1_800_000,
+          fileParallelism: false,
+        },
+      },
+      {
         test: {
           name: "cloud",
           include: [cloudTests],
