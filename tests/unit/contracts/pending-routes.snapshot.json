@@ -1,6 +1,4 @@
 [
-  "credentials.list",
-  "credentials.issue",
   "audit.list",
   "activity.list",
   "overview.get",

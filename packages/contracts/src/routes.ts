@@ -304,6 +304,43 @@ const operationsListBody = z.strictObject({
   nextCursor: z.string().nullable(),
 });
 
+/**
+ * A machine credential as the inventory shows it (Run 5.1, P-86): never the
+ * token, never its accessor. `state` is the stored state, except that an
+ * `active` credential past its expiry shows as `expired`; `issuedAt` is the
+ * completion time of the issuance.
+ */
+export const CREDENTIAL_STATES = [
+  "issuing",
+  "active",
+  "revoking",
+  "revoked",
+  "expired",
+  "needs_review",
+] as const;
+const credentialView = z.strictObject({
+  credentialId: z.uuid(),
+  name: z.string(),
+  projectId: z.uuid(),
+  environmentId: z.uuid(),
+  state: z.enum(CREDENTIAL_STATES),
+  issuedBy: z.uuid(),
+  issuedAt: z.iso.datetime().nullable(),
+  expiresAt: z.iso.datetime().nullable(),
+  expiringSoon: z.boolean(),
+  lastUsedAt: z.iso.datetime().nullable(),
+});
+/** credentials.issue (FR-1.41, P-88): the one response of the contract that holds a token. */
+const credentialIssuedBody = z.strictObject({
+  operationId: z.uuid(),
+  credential: credentialView,
+  token: z.string().min(1),
+});
+const credentialsListBody = z.strictObject({
+  credentials: z.array(credentialView),
+  nextCursor: z.string().nullable(),
+});
+
 // ----------------------------------------------------------------- error lists
 
 // The quarantine gate is the first step of every request (Doc 06 §9: even /v1/version).
@@ -572,6 +609,8 @@ export const ROUTES: readonly RouteDef[] = Object.freeze([
 
   define("credentials.list", "GET", `${E}/credentials`, "human", false, "5.1", {
     action: "credentials.manage",
+    query: pageQuery,
+    responses: { 200: credentialsListBody },
   }),
   define("credentials.issue", "POST", `${E}/credentials`, "human_fresh_totp", true, "5.1", {
     action: "credentials.manage",
@@ -584,7 +623,7 @@ export const ROUTES: readonly RouteDef[] = Object.freeze([
         .default(LIMITS.machineToken.maxTtlSeconds),
     }),
     completed: 201,
-    responses: { 201: PENDING },
+    responses: { 201: credentialIssuedBody },
     errors: ["credential_not_replayable", "state_conflict", ...BACKEND],
   }),
   define(
