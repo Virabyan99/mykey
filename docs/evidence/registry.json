@@ -730,9 +730,11 @@
       "ownerRun": "5.9",
       "contributingRuns": [],
       "oldSession": "D08-S32",
-      "status": "OPEN",
-      "evidence": [],
-      "note": ""
+      "status": "SPIKE_PASS",
+      "evidence": [
+        "docs/evidence/session-5/run-5.9.md"
+      ],
+      "note": "OpenAPI 3.1 from the runtime schemas, served reduced to the handled routes (each reaches a handler); breaking changes against baseline-v1.json fail contracts:check. The auth-route inventory is Session 3's auth:contract:check."
     },
     {
       "id": "FR-1.53",
@@ -742,9 +744,11 @@
       "ownerRun": "5.9",
       "contributingRuns": [],
       "oldSession": "D08-S32",
-      "status": "OPEN",
-      "evidence": [],
-      "note": ""
+      "status": "SPIKE_PASS",
+      "evidence": [
+        "docs/evidence/session-5/run-5.9.md"
+      ],
+      "note": "OpenBao-shaped aliases, method override, X-Vault-Token and X-Vault-Namespace reach no handler and no OpenBao audit entry; the document lists no token administration."
     },
     {
       "id": "FR-1.54",
@@ -754,9 +758,12 @@
       "ownerRun": "5.9",
       "contributingRuns": [],
       "oldSession": "D08-S32",
-      "status": "OPEN",
-      "evidence": [],
-      "note": ""
+      "status": "SPIKE_PASS",
+      "evidence": [
+        "docs/evidence/session-5/run-5.9.md",
+        "docs/evidence/session-5/reference-capture.json"
+      ],
+      "note": "Document and read-only Scalar for a fully authenticated owner or admin; no execution, telemetry, CDN or third-party request in the captured browser session (D-45; Scalar kept)."
     },
     {
       "id": "FR-1.55",
@@ -1661,9 +1668,11 @@
       "ownerRun": "5.9",
       "contributingRuns": [],
       "oldSession": "D08-S32",
-      "status": "OPEN",
-      "evidence": [],
-      "note": ""
+      "status": "SPIKE_PASS",
+      "evidence": [
+        "docs/evidence/session-5/run-5.9.md"
+      ],
+      "note": "OpenAPI matches validation; breaking change detected; the reference requires role and MFA and cannot execute or egress. The web mapping waits for Session 7."
     },
     {
       "id": "AC-1.23",
@@ -2301,9 +2310,12 @@
       "ownerRun": "5.9",
       "contributingRuns": [],
       "oldSession": "D08-S32",
-      "status": "OPEN",
-      "evidence": [],
-      "note": ""
+      "status": "SPIKE_PASS",
+      "evidence": [
+        "docs/evidence/session-5/run-5.9.md",
+        "docs/evidence/session-5/reference-capture.json"
+      ],
+      "note": "Local Scalar under the page's CSP in Chromium: zero violations, zero third-party attempts; the asset under Node's permission model loads with a covering grant, null when refused. Staging at the gate."
     },
     {
       "id": "PO-11",
