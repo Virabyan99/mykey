@@ -5,15 +5,20 @@
 import { resolveSession } from "@mykey/auth";
 import type { UserId } from "@mykey/contracts";
 import { ApiError, type AppDeps } from "./context.ts";
+import type { MachinePrincipal } from "./machine.ts";
 
-export interface Principal {
+/** A person with a complete session (Run 3.4). */
+export interface UserPrincipal {
   kind: "user";
   userId: UserId;
   sessionId: string;
   fresh: boolean;
 }
 
-export async function authenticateHuman(deps: AppDeps, headers: Headers): Promise<Principal> {
+/** Who a request acts for (Run 5.4): a person, or a machine credential. */
+export type Principal = UserPrincipal | MachinePrincipal;
+
+export async function authenticateHuman(deps: AppDeps, headers: Headers): Promise<UserPrincipal> {
   const module = deps.auth;
   if (module === undefined) throw new ApiError("unauthenticated");
   const verdict = await resolveSession(

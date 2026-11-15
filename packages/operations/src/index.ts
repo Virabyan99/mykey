@@ -117,6 +117,8 @@ export {
 } from "./imports/apply.ts";
 export {
   readEnvironment,
+  readEnvironmentNames,
+  type EnvironmentNamesOutcome,
   type EnvironmentRead,
   type EnvironmentReadOutcome,
   type EnvironmentReadRequest,

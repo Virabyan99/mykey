@@ -7,7 +7,8 @@ import type { IssuerBao, RuntimeBao } from "@mykey/operations";
 import type pg from "pg";
 import type { HealthReading } from "../health.ts";
 import type { LogEntry } from "../log.ts";
-import type { Principal } from "./authn.ts";
+import type { UserPrincipal } from "./authn.ts";
+import type { MachinePrincipal } from "./machine.ts";
 import type { Scope } from "./authz.ts";
 
 export interface ApiConfig {
@@ -78,7 +79,10 @@ export interface ApiContext {
   body: unknown;
   query: unknown;
   params: Record<string, string>;
-  principal: Principal | null;
+  /** The person of a human route; null on every other route. */
+  principal: UserPrincipal | null;
+  /** The credential of a machine route (Run 5.4, P-93); null on every other route. */
+  machine: MachinePrincipal | null;
   /** The resolved organization, project and environment of a scoped human route (Run 3.7). */
   scope: Scope | null;
   /** The caller's authority in that organization, read on this request. */
@@ -96,6 +100,11 @@ export interface HandlerResult {
   body: unknown;
   /** Extra response headers (a session cookie, Run 3.6). */
   headers?: Record<string, string>;
+  /**
+   * Run 5.4 (P-94): the JSON body is serialized once into a buffer and sent
+   * with its content-length (the machine routes).
+   */
+  buffered?: boolean;
   /** Only for a route whose response kind is "dotenv-attachment" (Run 4.9): the body as sent. */
   raw?: { bytes: Uint8Array; contentType: string };
 }

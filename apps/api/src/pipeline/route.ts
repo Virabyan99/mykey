@@ -17,10 +17,11 @@ import { now } from "../log.ts";
 import { authenticateHuman } from "./authn.ts";
 import { findOperationByKey, hasTombstone } from "@mykey/db";
 import { replayAnswer, sameIntent, type Intent } from "@mykey/operations";
-import type { Principal } from "./authn.ts";
+import type { UserPrincipal as Principal } from "./authn.ts";
 import { admitStates, authorize, deny } from "./authz.ts";
 import { checkOrigin, hasMixedCredentials, needsOriginCheck } from "./origin.ts";
 import { headerBytes, readBody } from "./body.ts";
+import { authenticateMachine, hasSelector } from "./machine.ts";
 import { requestSource } from "./source.ts";
 import {
   ApiError,
@@ -67,6 +68,12 @@ export function intentOf(
         ? { sha256: createHash("sha256").update(body).digest("hex") }
         : body,
   };
+}
+
+/** A request that declares body bytes (a length above zero, or chunks). */
+function hasBodyBytes(headers: Headers): boolean {
+  const length = headers.get("content-length");
+  return headers.get("transfer-encoding") !== null || (length !== null && length !== "0");
 }
 
 /** What a route with no handler does after every check has passed. */
@@ -163,6 +170,14 @@ function outputResponse(
     });
     return errorResponse("dependency_unavailable", requestId);
   }
+  if (result.buffered === true) {
+    const bytes = Buffer.from(JSON.stringify(parsed.data), "utf8");
+    const headers = new Headers(result.headers);
+    headers.set("content-type", "application/json; charset=utf-8");
+    headers.set("cache-control", "no-store");
+    headers.set("content-length", String(bytes.length));
+    return new Response(bytes, { status: result.status, headers });
+  }
   return jsonResponse(result.status, parsed.data, result.headers);
 }
 
@@ -178,9 +193,18 @@ async function run(
     if (headerBytes(c.env.incoming.rawHeaders) > LIMITS.body.headersMaxBytes) {
       throw new ApiError("malformed_request");
     }
-    const raw = await readBody(c.req.raw, route, (bytes) => {
+    const counted = (bytes: number) => {
       c.set("bodyBytesRead", c.get("bodyBytesRead") + bytes);
-    });
+    };
+    const machineRoute = route.auth === "machine";
+    // A machine route takes no body; any JSON it is sent is read only to be refused as a selector.
+    const raw = await readBody(
+      c.req.raw,
+      machineRoute && route.method !== "GET" && hasBodyBytes(c.req.raw.headers)
+        ? { ...route, request: { ...route.request, body: "pending" } }
+        : route,
+      counted,
+    );
     const headers = c.req.raw.headers;
     const human = route.auth === "human" || route.auth === "human_fresh_totp";
     // One kind of credential per request, refused before any database read.
@@ -193,10 +217,17 @@ async function run(
     }
     // Authentication before strict validation: an anonymous caller learns nothing from a 422.
     const principal = human ? await authenticateHuman(deps, headers) : null;
-    const clock = deps.test?.clock?.(headers);
-    const query = validateQuery(route, new URL(c.req.url).searchParams);
-    const body = validateBody(route, raw);
+    // A machine request (P-93): the token, its catalog row, its own path; then
+    // no selector. No Origin, no authorize (the binding is the authorization),
+    // no replay, no freshness, no validation.
     const params = c.req.param();
+    const machine = machineRoute
+      ? await authenticateMachine(deps, c.env.incoming.rawHeaders, params, route, requestId)
+      : null;
+    if (machine !== null && hasSelector(c.req.url, raw)) throw new ApiError("forbidden_selector");
+    const clock = deps.test?.clock?.(headers);
+    const query = machineRoute ? undefined : validateQuery(route, new URL(c.req.url).searchParams);
+    const body = machineRoute ? undefined : validateBody(route, raw);
     const access =
       principal === null
         ? { scope: null, authority: null, resolved: null }
@@ -279,6 +310,7 @@ async function run(
         query,
         params,
         principal,
+        machine,
         scope: access.scope,
         authority: access.authority,
         operation: access.operation ?? null,

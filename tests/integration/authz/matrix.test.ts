@@ -242,6 +242,23 @@ const OPERATION_ROWS: Record<
   ownerB: { own: "A", member: "H", foreign: "H", absent: "H" },
 };
 
+describe("machine routes (Run 5.4, P-93)", () => {
+  it("both machine routes with each of the seven users' sessions → 401: a session is never a machine credential", async () => {
+    const machine = ROUTES.filter((route) => route.auth === "machine");
+    expect(machine.map((route) => route.id).sort()).toEqual(["machine.keys", "machine.resolve"]);
+    for (const route of machine) {
+      const path = route.path.replace(":project", tenants.a.project1).replace(":envName", "dev");
+      for (const user of FIXTURE_USERS) {
+        const response = await api.request(route.method, path, { cookie: cookies.get(user)! });
+        expect([response.status, (await errorOf(response)).code], `${route.id} ${user}`).toEqual([
+          401,
+          "unauthenticated",
+        ]);
+      }
+    }
+  });
+});
+
 describe("operations.get rows", () => {
   async function operationBy(user: FixtureUser, inB = false): Promise<string> {
     const id = randomUUID();

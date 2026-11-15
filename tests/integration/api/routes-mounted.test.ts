@@ -24,6 +24,8 @@ const HANDLED = new Set([
   "environments.archive",
   "projects.reactivate",
   "environments.reactivate",
+  "machine.keys",
+  "machine.resolve",
   "operations.get",
   "operations.list",
   "secrets.list",

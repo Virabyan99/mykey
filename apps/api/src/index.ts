@@ -13,7 +13,8 @@ export {
   startOutboxDispatcher,
   type OutboxDispatcher,
 } from "./outbox-dispatcher.ts";
-export { authenticateHuman, type Principal } from "./pipeline/authn.ts";
+export { authenticateHuman, type Principal, type UserPrincipal } from "./pipeline/authn.ts";
+export { authenticateMachine, type MachinePrincipal } from "./pipeline/machine.ts";
 export { parseStrictJson, readAuthBody, readBody } from "./pipeline/body.ts";
 export { createLargeGate, type LargeGate } from "./large.ts";
 export { readDeps, recheckOf, refusedOf } from "./routes/secrets.ts";

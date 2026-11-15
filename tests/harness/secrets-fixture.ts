@@ -556,7 +556,6 @@ function testReadHandler(): Handler {
       if (scope === null || principal === null) throw new Error("test.read without a scope");
       const outcome = await readEnvironment(readDeps(deps), {
         scope,
-        userId: principal.userId,
         routeId: ctx.route.id,
         requestId: ctx.requestId,
         recheck: recheckOf(ctx, principal.userId, scope),

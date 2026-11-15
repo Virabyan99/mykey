@@ -50,6 +50,14 @@ export type LogEntry =
   | { event: "operation_sweep"; time: string; uncertain: string[]; rejected: string[] }
   /** Run 5.3: archives the tick finished, by operation id only. */
   | { event: "archive_continue"; time: string; archived: string[] }
+  /** Run 5.4 (P-93): a machine token nobody can attribute; counted here, never audited. */
+  | {
+      event: "machine_unauthenticated";
+      time: string;
+      requestId: string;
+      cause: "header" | "token" | "catalog";
+    }
+  | { event: "machine_last_used"; time: string; outcome: "failed"; errorClass: string }
   | { event: "listening"; port: number }
   | { event: "startup_refused"; missing: string }
   | {

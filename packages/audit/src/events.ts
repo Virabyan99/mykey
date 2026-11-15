@@ -146,6 +146,24 @@ export const AUDIT_DETAILS = {
     ttlSeconds: z.int().positive(),
   }),
   "credential.revoke": z.strictObject({ credentialId: z.uuid() }),
+  /**
+   * Run 5.4 (P-94, P-95): a machine read of its environment. Actor: the
+   * credential. The number of names and the generation; never a name.
+   */
+  "machine.keys": z.strictObject({
+    names: z.int().nonnegative(),
+    generation: z
+      .string()
+      .max(20)
+      .regex(/^(0|[1-9][0-9]*)$/),
+  }),
+  "machine.resolve": z.strictObject({
+    names: z.int().nonnegative(),
+    generation: z
+      .string()
+      .max(20)
+      .regex(/^(0|[1-9][0-9]*)$/),
+  }),
   /** Run 5.2 (P-90): the operator settled an environment's credentials. Counts only. */
   "operator.reconcile_credentials": z.strictObject({
     unrecordedRevoked: z.int().nonnegative(),

@@ -22,6 +22,7 @@ import {
 } from "./routes/credentials.ts";
 import { exportCreateHandler } from "./routes/export.ts";
 import { archiveHandler, reactivateHandler } from "./routes/lifecycle.ts";
+import { machineKeysHandler, machineResolveHandler } from "./routes/machine.ts";
 import { healthHandler } from "./routes/health.ts";
 import { importApplyHandler, importPreviewHandler, importResumeHandler } from "./routes/imports.ts";
 import { operationsGetHandler, operationsListHandler } from "./routes/operations.ts";
@@ -121,6 +122,8 @@ function handlers(large: LargeGate): Partial<Record<string, Handler>> {
     "environments.archive": archiveHandler,
     "projects.reactivate": reactivateHandler,
     "environments.reactivate": reactivateHandler,
+    "machine.keys": machineKeysHandler,
+    "machine.resolve": machineResolveHandler(large),
     "session.activity": sessionActivityHandler,
     "auth.reset.complete": resetCompleteHandler,
   };

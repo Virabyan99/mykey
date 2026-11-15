@@ -21,7 +21,7 @@ import {
   type ProjectScope,
   type Resolved,
 } from "@mykey/db";
-import type { Principal } from "./authn.ts";
+import type { UserPrincipal as Principal } from "./authn.ts";
 import { ApiError, type AppDeps } from "./context.ts";
 import { checkStates } from "./states.ts";
 
