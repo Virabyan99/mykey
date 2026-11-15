@@ -98,6 +98,13 @@ An archive of an environment or a project (`POST …/archive` with `{"confirmed"
 - An environment archived because its project was archived comes back only with the project. An environment archived on its own stays archived when its project comes back, and needs its own reactivation.
 - **Tokens never come back.** Reactivation creates, renews and re-activates nothing. Every old token stays dead, and machines need a new issuance.
 
+## What a machine token can read (FR-1.45)
+
+- **Through MyKey** (`/v1/machine/projects/<project>/environments/<name>/keys|resolve`, D-42), the token reads only the **current** values of its own environment. No query parameter or body key selects anything (`400 forbidden_selector`). The reads are made with the token itself, so they never go beyond its OpenBao policy.
+- **Directly in OpenBao**, the token's policy allows reading and listing its environment's path and `lookup-self`, and nothing else (`docs/evidence/session-5/native-scope.md`). Writes, deletes, other environments, token creation, renewal and the system paths are all denied.
+- **What OpenBao allows that MyKey does not:** older versions of a key that are not deleted (next section). OpenBao is reachable only from the service's private network, not from where machines run.
+- `lookup-self` with the token also answers in another namespace, with the token's own record. It reveals nothing beyond what the token already says about itself.
+
 ## Residual: older versions (FR-1.45)
 
 The machine policy grants OpenBao's native KV read on the environment's path. In OpenBao that read authority also covers **older versions of a key that are not deleted**. The product API gives machines current values only, and OpenBao is not reachable from outside the host. Native policy alone does **not** enforce current-version-only access: a machine token used directly against OpenBao could read an older undeleted version.

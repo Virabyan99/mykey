@@ -1,0 +1,28 @@
+{
+  "project": {
+    "name": "s5-machine-532c4a",
+    "id": "7a434306-ccf8-4eca-993c-07bf536567ee",
+    "environment": "5f30700b-ac16-47e4-a524-f16c1a613947"
+  },
+  "journey": {
+    "credentialId": "d70ceecf-1a39-492e-9ca2-11aa36a18eb5",
+    "issueMs": 697,
+    "resolveTenValuesMs": 287,
+    "afterRevoke": 401,
+    "accessorOnHost": [400]
+  },
+  "search": {
+    "apiLog": {
+      "found": 0,
+      "controls": 1
+    },
+    "dump": {
+      "found": 0,
+      "controls": 1
+    },
+    "access": {
+      "found": 0,
+      "controls": 1
+    }
+  }
+}

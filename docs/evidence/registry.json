@@ -240,9 +240,10 @@
       "oldSession": "D08-S28",
       "status": "SPIKE_PASS",
       "evidence": [
-        "docs/evidence/session-5/run-5.3.md"
+        "docs/evidence/session-5/run-5.3.md",
+        "docs/evidence/session-5/run-5.4.md"
       ],
-      "note": "Archive closes the scope first, revokes and verifies every credential, then says archived; an unfinished archive stays executing and the tick finishes it; transitions through one guarded function; local and fault table (staging in Run 5.4)."
+      "note": "Archive closes the scope first, revokes and verifies every credential, then says archived; an unfinished archive stays executing and the tick finishes it; transitions through one guarded function; local, fault table and staging (Run 5.4: both tokens refused, both accessors 400 on the host)."
     },
     {
       "id": "FR-1.18",
@@ -254,9 +255,10 @@
       "oldSession": "D08-S28",
       "status": "SPIKE_PASS",
       "evidence": [
-        "docs/evidence/session-5/run-5.3.md"
+        "docs/evidence/session-5/run-5.3.md",
+        "docs/evidence/session-5/run-5.4.md"
       ],
-      "note": "Reactivation reads only: machine policy and token role against the digest, names against the index, every credential revoked and each accessor 400; a failure changes nothing (503, rejected); no token comes back; local (staging in Run 5.4)."
+      "note": "Reactivation reads only: machine policy and token role against the digest, names against the index, every credential revoked and each accessor 400; a failure changes nothing (503, rejected); no token comes back; local and staging (Run 5.4: old tokens still 401, a new token resolves)."
     },
     {
       "id": "FR-1.19",
@@ -558,9 +560,12 @@
       "ownerRun": "5.1",
       "contributingRuns": [],
       "oldSession": "D08-S26",
-      "status": "OPEN",
-      "evidence": [],
-      "note": ""
+      "status": "SPIKE_PASS",
+      "evidence": [
+        "docs/evidence/session-5/run-5.4.md",
+        "docs/evidence/session-5/native-scope.md"
+      ],
+      "note": "A product-issued token used directly against OpenBao: read and list of its own path and lookup-self only; every write, delete, other scope, token create, renew and system path denied with a root control; lookup-self answers in another namespace with the token's own record (finding, nothing readable)."
     },
     {
       "id": "FR-1.41",
@@ -612,9 +617,11 @@
       "ownerRun": "5.4",
       "contributingRuns": [],
       "oldSession": "D08-S29",
-      "status": "OPEN",
-      "evidence": [],
-      "note": ""
+      "status": "SPIKE_PASS",
+      "evidence": [
+        "docs/evidence/session-5/run-5.4.md"
+      ],
+      "note": "Machine keys and resolve: bearer authentication by lookup-self with the presented token, the catalog row and the path's own scope; reads made with the token itself; a dead token mid-read is 401 and closes nothing; current values only; local and on staging through the public name."
     },
     {
       "id": "FR-1.45",
@@ -624,9 +631,12 @@
       "ownerRun": "5.4",
       "contributingRuns": [],
       "oldSession": "D08-S29",
-      "status": "OPEN",
-      "evidence": [],
-      "note": ""
+      "status": "SPIKE_PASS",
+      "evidence": [
+        "docs/evidence/session-5/run-5.4.md",
+        "docs/evidence/session-5/native-scope.md"
+      ],
+      "note": "The residual asserted as it is: an older undeleted version answers 200 directly in OpenBao with the machine token, no product request returns it; written in machine-credentials.md and D-42."
     },
     {
       "id": "FR-1.46",
@@ -1593,9 +1603,11 @@
       "ownerRun": "5.4",
       "contributingRuns": [],
       "oldSession": "D08-S29",
-      "status": "OPEN",
-      "evidence": [],
-      "note": ""
+      "status": "SPIKE_PASS",
+      "evidence": [
+        "docs/evidence/session-5/run-5.4.md"
+      ],
+      "note": "resolve returns exactly the live set of one generation by digest, keys the live names; the reads use the presented token (API with a refused runtime identity still answers 200); selectors refused; on staging the digests equal the owner's export."
     },
     {
       "id": "AC-1.20",
@@ -2144,9 +2156,10 @@
       "oldSession": "D08-S29",
       "status": "SPIKE_PASS",
       "evidence": [
-        "docs/evidence/session-2/run-2.2.md"
+        "docs/evidence/session-2/run-2.2.md",
+        "docs/evidence/session-5/run-5.4.md"
       ],
-      "note": "G-BAO: fixed-role orphan issuance by a 60 s issuer on the local stack; overrides refused. PASS needs the product's issuer."
+      "note": "G-BAO: fixed-role orphan issuance by a 60 s issuer on the local stack; overrides refused. Run 5.4: with the product's issuer, the issued token's native scope is its environment's read only (native-scope.md). PASS needs the integrated proof at the gate."
     },
     {
       "id": "PO-3",
