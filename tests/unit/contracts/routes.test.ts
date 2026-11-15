@@ -139,8 +139,11 @@ describe("frozen route list", () => {
         expect.arrayContaining(["idempotency_conflict", "replay_expired", "outcome_unknown"]),
       );
     }
+    // not_found: a path that names an id, or a route hidden from members (Run 5.9, reference.read).
     for (const r of ROUTES) {
-      expect(r.errors.includes("not_found"), r.id).toBe(r.path.includes("/:"));
+      expect(r.errors.includes("not_found"), r.id).toBe(
+        r.path.includes("/:") || r.action === "reference.read",
+      );
     }
   });
 

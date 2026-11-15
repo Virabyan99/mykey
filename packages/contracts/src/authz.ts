@@ -11,6 +11,8 @@ export const ACTIONS = [
   "secrets.write",
   "credentials.manage",
   "audit.view",
+  // Run 5.9 (P-101): the API reference and the OpenAPI document of this build.
+  "reference.read",
 ] as const;
 export type Action = (typeof ACTIONS)[number];
 
@@ -51,7 +53,8 @@ export function decide(
   if (target.environmentId !== undefined && target.projectId === undefined) return "hidden";
   if (authority.role === "owner" || authority.role === "admin") return "allow";
 
-  // A member.
+  // A member. The reference is for owner and admins only, and a member does not learn it exists.
+  if (action === "reference.read") return "hidden";
   const { projectId, environmentId } = target;
   if (projectId === undefined) return action === null ? "allow" : "denied";
 

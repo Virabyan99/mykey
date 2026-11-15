@@ -1,9 +1,1 @@
-[
-  "audit.list",
-  "activity.list",
-  "overview.get",
-  "credentials.summary",
-  "metrics.get",
-  "reference.get",
-  "openapi.get"
-]
+["audit.list", "activity.list", "overview.get", "credentials.summary", "metrics.get"]

@@ -103,14 +103,27 @@ describe("Doc 04 §1.1, row by row", () => {
       "secrets.write",
       "credentials.manage",
       "audit.view",
+      "reference.read",
     ]);
+  });
+
+  it("reference.read (Run 5.9, P-101): owner and admin only; every member is hidden, never denied", () => {
+    for (const target of [ORG, { projectId: P1 }, { projectId: P1, environmentId: E1A }]) {
+      expect(decide(OWNER, target, "reference.read")).toBe("allow");
+      expect(decide(ADMIN, target, "reference.read")).toBe("allow");
+      for (const member of [EDITOR, READER, UNGRANTED]) {
+        expect(decide(member, target, "reference.read")).toBe("hidden");
+      }
+    }
   });
 });
 
 describe("visibility and the union of grants", () => {
   it("a member sees the organization (action null) and is denied every action there", () => {
     expect(decide(UNGRANTED, ORG, null)).toBe("allow");
-    for (const action of ACTIONS) expect(decide(UNGRANTED, ORG, action)).toBe("denied");
+    for (const action of ACTIONS.filter((a) => a !== "reference.read")) {
+      expect(decide(UNGRANTED, ORG, action)).toBe("denied");
+    }
   });
 
   it("a project grant covers every environment of the project", () => {

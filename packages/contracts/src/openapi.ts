@@ -98,6 +98,9 @@ function requestBody(route: RouteDef): Json | undefined {
 
 function successResponse(status: string, body: ResponseBody): Json {
   const description = statusText(status);
+  if (body === "html-document") {
+    return { description, content: { "text/html": { schema: { type: "string" } } } };
+  }
   if (body === "dotenv-attachment") {
     return {
       description,

@@ -6640,10 +6640,9 @@
           "200": {
             "description": "OK",
             "content": {
-              "application/json": {
+              "text/html": {
                 "schema": {
-                  "type": "object",
-                  "x-mykey-pending": true
+                  "type": "string"
                 }
               }
             }
@@ -6670,6 +6669,16 @@
           },
           "403": {
             "description": "Forbidden. Codes: action_denied.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found. Codes: not_found.",
             "content": {
               "application/json": {
                 "schema": {
@@ -6717,7 +6726,15 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "x-mykey-pending": true
+                  "properties": {
+                    "openapi": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "openapi"
+                  ],
+                  "additionalProperties": {}
                 }
               }
             }
@@ -6744,6 +6761,16 @@
           },
           "403": {
             "description": "Forbidden. Codes: action_denied.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found. Codes: not_found.",
             "content": {
               "application/json": {
                 "schema": {

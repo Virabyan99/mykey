@@ -31,7 +31,11 @@ export type AuthClass = "public" | "human" | "human_fresh_totp" | "machine" | "r
 export const PENDING = "pending";
 
 export type RequestBody = z.ZodType | "raw-dotenv" | typeof PENDING;
-export type ResponseBody = z.ZodType | "dotenv-attachment" | typeof PENDING;
+/**
+ * A JSON schema, or a raw body: `dotenv-attachment` (Run 4.9) and
+ * `html-document` (Run 5.9, the API reference: one self-contained page).
+ */
+export type ResponseBody = z.ZodType | "dotenv-attachment" | "html-document" | typeof PENDING;
 
 export interface RouteDef {
   readonly id: string;
@@ -60,6 +64,9 @@ export const DENIED_ALIASES: readonly { readonly method: HttpMethod; readonly pa
   Object.freeze([Object.freeze({ method: "GET", path: "/v1/operations/:id/status" } as const)]);
 
 // ---------------------------------------------------------------- body schemas
+
+/** The OpenAPI document of this build (Run 5.9): an object; its shape is OpenAPI's. */
+const openApiDocumentBody = z.looseObject({ openapi: z.string() });
 
 const projectName = z
   .string()
@@ -713,8 +720,18 @@ export const ROUTES: readonly RouteDef[] = Object.freeze([
     responses: { 200: z.strictObject({ next: z.enum(["sign_in", "enroll"]) }) },
     errors: ["audit_unavailable"],
   }),
-  define("reference.get", "GET", "/v1/reference", "human", false, "5.9", { action: null }),
-  define("openapi.get", "GET", "/v1/openapi.json", "human", false, "5.9", { action: null }),
+  // Run 5.9 (P-101): the process's own organization is the scope (no :org in
+  // the path); owner and admins see them, everyone else gets the hidden 404.
+  define("reference.get", "GET", "/v1/reference", "human", false, "5.9", {
+    action: "reference.read",
+    responses: { 200: "html-document" },
+    errors: ["not_found", "dependency_unavailable"],
+  }),
+  define("openapi.get", "GET", "/v1/openapi.json", "human", false, "5.9", {
+    action: "reference.read",
+    responses: { 200: openApiDocumentBody },
+    errors: ["not_found", "dependency_unavailable"],
+  }),
 
   // Run 5.4 (P-93, P-94): no query and no body schema — a selector is refused
   // before validation (forbidden_selector).
