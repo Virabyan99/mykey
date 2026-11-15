@@ -65,6 +65,18 @@ export default defineConfig({
         },
       },
       {
+        // Run 5.9: the reference in Chromium (Playwright) against a local test API;
+        // `pnpm exec playwright install chromium` first.
+        test: {
+          name: "browser",
+          include: ["tests/browser/**/*.test.ts"],
+          globalSetup: ["tests/harness/global-setup.ts"],
+          testTimeout: 120_000,
+          hookTimeout: 300_000,
+          fileParallelism: false,
+        },
+      },
+      {
         test: {
           name: "cloud",
           include: [cloudTests],

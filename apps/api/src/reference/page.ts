@@ -50,6 +50,14 @@ export const escapeScript = (text: string): string => text.replace(/<(?=!--|\/?s
 /** JSON for a data block: `<` never appears, so nothing in it can end the element. */
 const dataBlock = (value: unknown): string => JSON.stringify(value).replace(/</g, "\\u003c");
 
+/**
+ * Before Scalar's code, in the same script: the zod bundled in Scalar probes
+ * `Function("")` once to choose a compiled parser, which the policy refuses
+ * (no 'unsafe-eval') and reports as a violation. `jitless` (zod's global
+ * configuration, read from globalThis) skips the probe; nothing else changes.
+ */
+const PRELUDE = "globalThis.__zod_globalConfig = { jitless: true };";
+
 // Option names of @scalar/types 0.27.0 (the configuration of @scalar/api-reference 1.77.0).
 const START = `(() => {
   "use strict";
@@ -76,7 +84,7 @@ const escapeAttribute = (text: string): string =>
   text.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;");
 
 export function buildReferencePage(asset: ScalarAsset, document: OpenApiDocument): ReferencePage {
-  const scripts = [escapeScript(asset.script), escapeScript(START)];
+  const scripts = [escapeScript(`${PRELUDE}\n${asset.script}`), escapeScript(START)];
   const html = [
     "<!doctype html>",
     '<html lang="en">',
