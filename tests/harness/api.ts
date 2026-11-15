@@ -99,16 +99,19 @@ export type FaultHook = (point: string, operationId: string) => void | Promise<v
 /** A RuntimeBao whose OpenBao target is read on every call (one cached reader per target). */
 function switchableRuntime(runtime: NonNullable<StartTestApiOptions["runtime"]>): RuntimeBao {
   const readers = new Map<string, RuntimeBao>();
+  const reader = (): RuntimeBao => {
+    const target = runtime.openBao();
+    let found = readers.get(target.url);
+    if (found === undefined) {
+      found = runtimeBaoFromDirectory(target, runtime.secretsDirectory);
+      readers.set(target.url, found);
+    }
+    return found;
+  };
   return {
-    clientFor(organizationId) {
-      const target = runtime.openBao();
-      let reader = readers.get(target.url);
-      if (reader === undefined) {
-        reader = runtimeBaoFromDirectory(target, runtime.secretsDirectory);
-        readers.set(target.url, reader);
-      }
-      return reader.clientFor(organizationId);
-    },
+    clientFor: (organizationId) => reader().clientFor(organizationId),
+    organizationId: () => reader().organizationId(),
+    withToken: (organizationId, token) => reader().withToken(organizationId, token),
   };
 }
 

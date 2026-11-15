@@ -39,7 +39,13 @@ export {
   type Intent,
   type ReplayAnswer,
 } from "./replay.ts";
-export type { RuntimeBao } from "./runtime.ts";
+export type { IssuerBao, IssuerSession, RuntimeBao } from "./runtime.ts";
+export {
+  checkIssuedToken,
+  revokeAndVerify,
+  type RevokeProof,
+  type TokenFault,
+} from "./credentials/verify.ts";
 export { Busy, withEnvironmentLock, type Locked } from "./secrets/lock.ts";
 export {
   FAULT_POINTS,
