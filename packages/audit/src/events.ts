@@ -77,6 +77,11 @@ export const AUDIT_DETAILS = {
   "project.rename": z.strictObject({ nameLength: z.int().min(1).max(64) }),
   "environment.create": z.strictObject({ nameLength: z.int().min(1).max(64) }),
   "environment.rename": z.strictObject({ nameLength: z.int().min(1).max(64) }),
+  /** Run 5.3 (P-91, P-92): how many environments the archive or reactivation covers. */
+  "project.archive": z.strictObject({ environments: z.int().nonnegative() }),
+  "environment.archive": z.strictObject({ environments: z.int().nonnegative() }),
+  "project.reactivate": z.strictObject({ environments: z.int().nonnegative() }),
+  "environment.reactivate": z.strictObject({ environments: z.int().nonnegative() }),
   /** Run 3.8: the provisioner finished an environment, or sent it to review. */
   "system.environment_provision": z.strictObject({
     outcome: z.enum(["active", "review"]),

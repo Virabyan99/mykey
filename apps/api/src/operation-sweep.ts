@@ -16,6 +16,8 @@ export function startOperationSweep(
   opts: {
     /** Test only. */
     sweep?: (pool: pg.Pool) => Promise<SweepResult>;
+    /** Run 5.3 (P-91): drives the archives left executing; its failure is logged like the sweep's. */
+    archives?: () => Promise<{ archived: string[]; waiting: string[] }>;
     random?: () => number;
   } = {},
 ): { stop(): void } {
@@ -35,28 +37,38 @@ export function startOperationSweep(
     timer.unref();
   };
   const pass = (): void => {
-    sweep(pool).then(
-      (result) => {
-        if (result.uncertain.length > 0 || result.rejected.length > 0) {
+    sweep(pool)
+      .then(async (result) => {
+        if (opts.archives !== undefined) {
+          const driven = await opts.archives();
+          if (driven.archived.length > 0) {
+            log({ event: "archive_continue", time: now(), archived: driven.archived });
+          }
+        }
+        return result;
+      })
+      .then(
+        (result) => {
+          if (result.uncertain.length > 0 || result.rejected.length > 0) {
+            log({
+              event: "operation_sweep",
+              time: now(),
+              uncertain: result.uncertain,
+              rejected: result.rejected,
+            });
+          }
+          schedule();
+        },
+        (error: unknown) => {
           log({
             event: "operation_sweep",
             time: now(),
-            uncertain: result.uncertain,
-            rejected: result.rejected,
+            outcome: "failed",
+            errorClass: error instanceof Error ? error.constructor.name : typeof error,
           });
-        }
-        schedule();
-      },
-      (error: unknown) => {
-        log({
-          event: "operation_sweep",
-          time: now(),
-          outcome: "failed",
-          errorClass: error instanceof Error ? error.constructor.name : typeof error,
-        });
-        schedule();
-      },
-    );
+          schedule();
+        },
+      );
   };
   schedule();
   return {

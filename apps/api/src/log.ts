@@ -48,6 +48,8 @@ export type LogEntry =
   | { event: "session_cleanup"; time: string; outcome: "failed"; errorClass: string }
   | { event: "operation_sweep"; time: string; outcome: "failed"; errorClass: string }
   | { event: "operation_sweep"; time: string; uncertain: string[]; rejected: string[] }
+  /** Run 5.3: archives the tick finished, by operation id only. */
+  | { event: "archive_continue"; time: string; archived: string[] }
   | { event: "listening"; port: number }
   | { event: "startup_refused"; missing: string }
   | {

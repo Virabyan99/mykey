@@ -64,4 +64,39 @@ describe("startOperationSweep", () => {
       expect.objectContaining({ event: "operation_sweep", uncertain: [id], rejected: [] }),
     );
   });
+
+  // Run 5.3 (P-91): each pass then drives the archives left executing.
+  it("drives the archives after each pass and logs those it finished; a failing drive is logged and the timer goes on", async () => {
+    vi.useFakeTimers();
+    const logs: LogEntry[] = [];
+    const id = "6f1c2f0e-0000-4000-8000-000000000002";
+    let drives = 0;
+    const timer = startOperationSweep({} as pg.Pool, (entry) => logs.push(entry), {
+      sweep: () =>
+        Promise.resolve({ uncertain: [], rejected: [], awaitingInput: [], previewsRemoved: 0 }),
+      archives: () => {
+        drives += 1;
+        if (drives === 2) return Promise.reject(new RangeError("synthetic"));
+        return Promise.resolve({ archived: [id], waiting: [] });
+      },
+      random: () => 0,
+    });
+    await vi.advanceTimersByTimeAsync(30_000);
+    expect(drives).toBe(1);
+    expect(logs).toContainEqual(
+      expect.objectContaining({ event: "archive_continue", archived: [id] }),
+    );
+    await vi.advanceTimersByTimeAsync(30_000);
+    expect(drives).toBe(2);
+    expect(logs).toContainEqual(
+      expect.objectContaining({
+        event: "operation_sweep",
+        outcome: "failed",
+        errorClass: "RangeError",
+      }),
+    );
+    await vi.advanceTimersByTimeAsync(30_000);
+    expect(drives).toBe(3);
+    timer.stop();
+  });
 });

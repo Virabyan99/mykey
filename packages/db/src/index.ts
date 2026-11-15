@@ -118,4 +118,12 @@ export {
   type CredentialRow,
   type CredentialState,
 } from "./repos/credentials.ts";
-export { lifecycleTransition, type LifecycleStep } from "./repos/lifecycle.ts";
+export {
+  ARCHIVE_ACTIONS,
+  archiveScope,
+  closeCredentials,
+  finishArchiveOperation,
+  lifecycleTransition,
+  openCredentialWork,
+  type LifecycleStep,
+} from "./repos/lifecycle.ts";

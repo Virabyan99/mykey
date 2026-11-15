@@ -21,6 +21,7 @@ import {
   credentialsRevokeHandler,
 } from "./routes/credentials.ts";
 import { exportCreateHandler } from "./routes/export.ts";
+import { archiveHandler } from "./routes/lifecycle.ts";
 import { healthHandler } from "./routes/health.ts";
 import { importApplyHandler, importPreviewHandler, importResumeHandler } from "./routes/imports.ts";
 import { operationsGetHandler, operationsListHandler } from "./routes/operations.ts";
@@ -116,6 +117,8 @@ function handlers(large: LargeGate): Partial<Record<string, Handler>> {
     "credentials.list": credentialsListHandler,
     "credentials.issue": credentialsIssueHandler,
     "credentials.revoke": credentialsRevokeHandler,
+    "projects.archive": archiveHandler,
+    "environments.archive": archiveHandler,
     "session.activity": sessionActivityHandler,
     "auth.reset.complete": resetCompleteHandler,
   };

@@ -15,6 +15,7 @@ import { createHealthCheck, type OpenBaoHealthTarget } from "./health.ts";
 import { issuerBaoFromDirectory, runtimeBaoFromDirectory } from "./runtime-bao.ts";
 import { issuerSelfCheck, runtimeSelfCheck } from "./selfcheck.ts";
 import { createLogger, type LogEntry } from "./log.ts";
+import { continueArchives } from "@mykey/operations";
 import { startOperationSweep } from "./operation-sweep.ts";
 import { startOutboxDispatcher } from "./outbox-dispatcher.ts";
 import { startSessionCleanup, startThrottleSweep } from "./throttle-sweep.ts";
@@ -99,22 +100,24 @@ export async function startServer(config: ServerConfig): Promise<ApiServer> {
   });
   const keys = loadAuthKeys(config.keysDirectory);
   const auth = createAuth({ db: drizzle(pool), keys, baseURL: config.api.baseUrl });
+  const issuer =
+    config.openbao === undefined
+      ? undefined
+      : issuerBaoFromDirectory(config.openbao, config.secretsDirectory ?? "/run/mykey/secrets");
+  const bootId = randomUUID();
   const app = createApp({
     pool,
     lockPool,
-    ...(config.openbao === undefined
+    ...(config.openbao === undefined || issuer === undefined
       ? {}
       : {
           bao: runtimeBaoFromDirectory(
             config.openbao,
             config.secretsDirectory ?? "/run/mykey/secrets",
           ),
-          issuer: issuerBaoFromDirectory(
-            config.openbao,
-            config.secretsDirectory ?? "/run/mykey/secrets",
-          ),
+          issuer,
         }),
-    bootId: randomUUID(),
+    bootId,
     config: config.api,
     health: () => health.check(),
     log: config.log,
@@ -124,7 +127,12 @@ export async function startServer(config: ServerConfig): Promise<ApiServer> {
   const dispatcher = startOutboxDispatcher(pool, config.log);
   const sweep = startThrottleSweep(pool, config.log);
   const sessionCleanup = startSessionCleanup(pool, config.log);
-  const operationSweep = startOperationSweep(pool, config.log);
+  // Run 5.3 (P-91): the tick also drives the archives whose request could not finish them.
+  const operationSweep = startOperationSweep(pool, config.log, {
+    ...(issuer === undefined
+      ? {}
+      : { archives: () => continueArchives({ pool, lockPool, issuer, bootId }) }),
+  });
   return {
     port: server.port,
     async close() {

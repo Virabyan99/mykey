@@ -50,6 +50,17 @@ export {
 } from "./credentials/issue.ts";
 export { revokeCredential, type RevokeOutcome, type RevokeRequest } from "./credentials/revoke.ts";
 export {
+  ARCHIVE_FAULT_POINTS,
+  beginArchive,
+  continueArchives,
+  driveArchive,
+  type ArchiveDriveDeps,
+  type ArchiveFaultPoint,
+  type ArchiveRequest,
+  type ArchiveStart,
+  type LifecycleDeps,
+} from "./lifecycle/archive.ts";
+export {
   CREDENTIAL_ACTIONS,
   sweepCredentials,
   type CredentialSweepResult,
