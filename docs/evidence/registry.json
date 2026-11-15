@@ -646,9 +646,11 @@
       "ownerRun": "5.5",
       "contributingRuns": [],
       "oldSession": "D08-S30",
-      "status": "OPEN",
-      "evidence": [],
-      "note": ""
+      "status": "SPIKE_PASS",
+      "evidence": [
+        "docs/evidence/session-5/run-5.5.md"
+      ],
+      "note": "One token source (SECRETS_MACHINE_TOKEN or --token-stdin for keys/export), never a flag or argument; two or none are usage errors; no output repeats the token; Linux container evidence (four platforms in Run 5.7)."
     },
     {
       "id": "FR-1.47",
@@ -658,9 +660,11 @@
       "ownerRun": "5.5",
       "contributingRuns": [],
       "oldSession": "D08-S30",
-      "status": "OPEN",
-      "evidence": [],
-      "note": ""
+      "status": "SPIKE_PASS",
+      "evidence": [
+        "docs/evidence/session-5/run-5.5.md"
+      ],
+      "note": "secrets keys prints the live names only after the whole answer passed the validator; the CLI's client against the real API (digests equal the owner's export); Linux evidence."
     },
     {
       "id": "FR-1.48",
@@ -1058,9 +1062,11 @@
       "ownerRun": "5.5",
       "contributingRuns": [],
       "oldSession": "D08-S30",
-      "status": "OPEN",
-      "evidence": [],
-      "note": ""
+      "status": "SPIKE_PASS",
+      "evidence": [
+        "docs/evidence/session-5/run-5.5.md"
+      ],
+      "note": "HTTP URL, untrusted/other-host/expired certificates, unsafe runtime settings, redirects and another API major each fail with their exit code before any credential is sent; Linux evidence (AC-1.37 on the four runners in Run 5.7)."
     },
     {
       "id": "FR-1.80",

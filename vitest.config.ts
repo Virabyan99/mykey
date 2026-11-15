@@ -48,6 +48,9 @@ export default defineConfig({
         test: {
           name: "cli",
           include: ["tests/cli/**/*.test.ts"],
+          // POSIX only (P-97): on Windows, `pnpm run test:cli` runs it in Linux.
+          globalSetup: ["tests/cli/setup.ts"],
+          testTimeout: 60_000,
         },
       },
       {

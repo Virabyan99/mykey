@@ -58,6 +58,15 @@
       "releaseUrl": "https://nodejs.org/en/blog/release/v24.22.2",
       "advisoriesChecked": "2026-11-11"
     },
+    "node-glibc": {
+      "image": "node",
+      "tag": "24.22.2",
+      "variant": "bookworm-slim",
+      "digest": "sha256:01d566e8d94d8c619591d78652babfccd3c6992a3dffa9ed5ab39e11cf6c70e9",
+      "releaseUrl": "https://nodejs.org/en/blog/release/v24.22.2",
+      "advisoriesChecked": "2026-11-15",
+      "note": "Test-only (Run 5.5, P-97): `pnpm run test:cli` runs project cli in it on a Windows workstation. The CLI refuses a Linux without glibc, so the Alpine image cannot host it. Never deployed, not in the image scan."
+    },
     "nmap": {
       "image": "instrumentisto/nmap",
       "tag": "7.98",
