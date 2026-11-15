@@ -39,6 +39,7 @@ import {
   finishArchiveOperation,
   insertOperation,
   lifecycleTransition,
+  lockParents,
   moveCredential,
   openCredentialWork,
   settleRevocations,
@@ -187,7 +188,19 @@ export async function beginArchive(
       );
       if (capture.rows[0]?.capture_mode !== "idle") throw new Refusal("busy");
       if (!deps.gateOpen()) throw new Refusal("quarantined");
-      // The target row first, FOR UPDATE: a concurrent create or finalize waits for this.
+      // The rows in the order every admission takes them — organization (share),
+      // project, environment, the target FOR UPDATE — so a concurrent create,
+      // which updates the organization row first, queues instead of deadlocking.
+      // A concurrent create or finalize then waits for this transaction.
+      await lockParents(
+        tx,
+        {
+          organizationId: request.organizationId,
+          projectId: request.projectId,
+          ...(request.environmentId === undefined ? {} : { environmentId: request.environmentId }),
+        },
+        request.kind,
+      );
       const own = await tx.query<{ state: string; archive_operation_id: OperationId | null }>(
         request.kind === "project"
           ? `SELECT state, archive_operation_id FROM app.project

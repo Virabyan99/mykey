@@ -28,6 +28,7 @@ import {
   insertOperation,
   lifecycleTransition,
   listIndex,
+  lockParents,
   withTransaction,
   type OperationRow,
 } from "@mykey/db";
@@ -258,12 +259,16 @@ export async function reactivate(
       );
       if (capture.rows[0]?.capture_mode !== "idle") throw new Refusal("busy");
       if (!deps.gateOpen()) throw new Refusal("quarantined");
-      // The target row first, FOR UPDATE; then authority and the states, re-read.
-      await tx.query(
-        request.kind === "project"
-          ? "SELECT 1 FROM app.project WHERE organization_id = $1 AND id = $2 FOR UPDATE"
-          : "SELECT 1 FROM app.environment WHERE organization_id = $1 AND id = $2 FOR UPDATE",
-        [request.organizationId, target],
+      // The rows in the order every admission takes them (organization, project,
+      // environment; the target FOR UPDATE); then authority and the states, re-read.
+      await lockParents(
+        tx,
+        {
+          organizationId: request.organizationId,
+          projectId: request.projectId,
+          ...(request.environmentId === undefined ? {} : { environmentId: request.environmentId }),
+        },
+        request.kind,
       );
       const code = await request.recheck(tx);
       if (code !== null) throw new Refusal(code);

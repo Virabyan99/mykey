@@ -238,9 +238,11 @@
       "ownerRun": "5.3",
       "contributingRuns": [],
       "oldSession": "D08-S28",
-      "status": "OPEN",
-      "evidence": [],
-      "note": ""
+      "status": "SPIKE_PASS",
+      "evidence": [
+        "docs/evidence/session-5/run-5.3.md"
+      ],
+      "note": "Archive closes the scope first, revokes and verifies every credential, then says archived; an unfinished archive stays executing and the tick finishes it; transitions through one guarded function; local and fault table (staging in Run 5.4)."
     },
     {
       "id": "FR-1.18",
@@ -250,9 +252,11 @@
       "ownerRun": "5.3",
       "contributingRuns": [],
       "oldSession": "D08-S28",
-      "status": "OPEN",
-      "evidence": [],
-      "note": ""
+      "status": "SPIKE_PASS",
+      "evidence": [
+        "docs/evidence/session-5/run-5.3.md"
+      ],
+      "note": "Reactivation reads only: machine policy and token role against the digest, names against the index, every credential revoked and each accessor 400; a failure changes nothing (503, rejected); no token comes back; local (staging in Run 5.4)."
     },
     {
       "id": "FR-1.19",
@@ -1480,9 +1484,12 @@
         "8.3"
       ],
       "oldSession": "D08-S28",
-      "status": "OPEN",
-      "evidence": [],
-      "note": ""
+      "status": "SPIKE_PASS",
+      "evidence": [
+        "docs/evidence/session-5/run-5.3.md",
+        "docs/evidence/session-5/fault-table.md"
+      ],
+      "note": "50 rounds of issuance racing an archive (both orders met) leave no usable token; 20 rounds of environment create racing a project archive never leave an active or pending environment under an archived project; three passes in a row."
     },
     {
       "id": "AC-1.12",
@@ -2373,9 +2380,12 @@
       "ownerRun": "5.3",
       "contributingRuns": [],
       "oldSession": "D08-S28",
-      "status": "OPEN",
-      "evidence": [],
-      "note": ""
+      "status": "SPIKE_PASS",
+      "evidence": [
+        "docs/evidence/session-5/run-5.3.md",
+        "docs/evidence/session-5/fault-table.md"
+      ],
+      "note": "Issuance races and archive under interruption: a process killed at each archive point is finished by another process's tick with one success audit row; the request and the tick at once finish once."
     },
     {
       "id": "PO-19",

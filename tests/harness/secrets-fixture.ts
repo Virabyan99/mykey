@@ -87,7 +87,10 @@ export interface SecretsFixture {
    */
   setUpstreamClosed(closed: boolean): Promise<void>;
   /** Restarts the second process with a fault (or none). */
-  restartSecond(fault?: { point: string; action: FaultAction }): Promise<ApiProcess>;
+  restartSecond(
+    fault?: { point: string; action: FaultAction },
+    opts?: { archiveTick?: { intervalMs: number; staleSeconds: number } },
+  ): Promise<ApiProcess>;
   send(
     method: string,
     path: string,
@@ -271,7 +274,10 @@ export async function createSecretsFixture(
 
   const tls = { certPath: stack.api.certPath, keyPath: stack.api.keyPath };
   const ca = readFileSync(stack.api.certAuthorityPath);
-  const startSecond = (fault?: { point: string; action: FaultAction }) =>
+  const startSecond = (
+    fault?: { point: string; action: FaultAction },
+    extra: { archiveTick?: { intervalMs: number; staleSeconds: number } } = {},
+  ) =>
     startApiProcess(api.database.targets.api_runtime, {
       keysDirectory,
       api: {
@@ -285,6 +291,7 @@ export async function createSecretsFixture(
       openBao: relayTarget,
       secretsDirectory,
       ...(fault === undefined ? {} : { faults: fault }),
+      ...extra,
     });
   let second: ApiProcess | null = opts.processes === 2 ? await startSecond() : null;
 
@@ -326,9 +333,9 @@ export async function createSecretsFixture(
     async setUpstreamClosed(closed) {
       upstreamClosed = closed ? await closedPort() : null;
     },
-    async restartSecond(fault) {
+    async restartSecond(fault, extra) {
       await second?.kill();
-      second = await startSecond(fault);
+      second = await startSecond(fault, extra);
       return second;
     },
     async send(method, path, init = {}) {

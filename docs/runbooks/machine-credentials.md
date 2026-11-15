@@ -74,6 +74,30 @@ MSYS_NO_PATHCONV=1 node scripts/host.ts <host> ops reconcile-credentials --envir
 
 The command prints ids and counts only, never an accessor or a token, and writes one audit row `operator.reconcile_credentials` per run. The AppRole login tokens of the namespace are listed by OpenBao too; they carry no machine policy and are left alone.
 
+## Archive and reactivate
+
+An archive of an environment or a project (`POST …/archive` with `{"confirmed": true}`) is the revocation of every machine token of its scope. Rules in D-41.
+
+- **`revoking`** means: the resource is closed, and its tokens are being revoked.
+  - No change, import, issuance or machine request is admitted (`409 state_conflict`).
+  - Humans keep their reads (reveal, export).
+  - The archive ends `archived` only when every credential of the scope is `revoked` and OpenBao has proven each token gone (lookup → 400).
+- **200** means archived. **202** means the archive is still running: the operation is `executing`, and the API's tick drives it again every 30 s once it is older than the stuck-alert time. Follow it with `ops operations` or the operation route.
+- **An archive that cannot finish keeps the alert `operations_unresolved` up.** It stays up until the archive ends. Reasons:
+  - OpenBao is unreachable or sealed (the tick finishes the archive once it is back);
+  - an issuance is in `needs_review`: run `ops reconcile-credentials --environment <id>` (see "Unknown issuance"); the next tick then finishes the archive;
+  - the environment's lock stays busy.
+    The alert stays up because "archived" is a promise that no token of the scope works. Until it is proven, the operator must know.
+- **Reactivate** (`POST …/reactivate`) only reads OpenBao. First it checks, for each environment it brings back:
+  - the machine policy and token role against the stored digest;
+  - the names OpenBao holds against the index;
+  - that every credential is `revoked` and each accessor answers 400.
+
+  A failure answers `503 backend_inconsistent`; the resource stays `archived`, and the operation is recorded `rejected`. Find the drift (`ops verify-organization`, `ops reconcile-environment`, `ops reconcile-credentials`), then send it again.
+
+- An environment archived because its project was archived comes back only with the project. An environment archived on its own stays archived when its project comes back, and needs its own reactivation.
+- **Tokens never come back.** Reactivation creates, renews and re-activates nothing. Every old token stays dead, and machines need a new issuance.
+
 ## Residual: older versions (FR-1.45)
 
 The machine policy grants OpenBao's native KV read on the environment's path. In OpenBao that read authority also covers **older versions of a key that are not deleted**. The product API gives machines current values only, and OpenBao is not reachable from outside the host. Native policy alone does **not** enforce current-version-only access: a machine token used directly against OpenBao could read an older undeleted version.
