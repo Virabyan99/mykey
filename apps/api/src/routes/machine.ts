@@ -6,7 +6,7 @@
 // admission), and the gate. The audit row is committed before the body leaves;
 // the body is one buffer with its length, never compressed.
 import { appendAudit } from "@mykey/audit";
-import type { ErrorCode } from "@mykey/contracts";
+import { API_MAJOR, type ErrorCode } from "@mykey/contracts";
 import { lockParents } from "@mykey/db";
 import {
   readEnvironment,
@@ -19,8 +19,6 @@ import type { LargeGate } from "../large.ts";
 import { ApiError, type ApiContext, type AppDeps, type Handler } from "../pipeline/context.ts";
 import type { MachinePrincipal } from "../pipeline/machine.ts";
 import { readDeps, refusedOf } from "./secrets.ts";
-
-const API_MAJOR = 1;
 
 function parentCode(state: string | null): ErrorCode | null {
   if (state === "active") return null;

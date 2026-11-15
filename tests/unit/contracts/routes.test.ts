@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import {
+  API_MAJOR,
   DENIED_ALIASES,
   ERROR_CODES,
   LIMITS,
@@ -260,6 +261,13 @@ describe("response schemas the specification already fixes", () => {
     expect(up.safeParse({ status: "down" }).success).toBe(true);
     expect(up.safeParse({ status: "up", database: "ok" }).success).toBe(false);
     expect(up.safeParse({ status: "degraded" }).success).toBe(false);
+  });
+
+  it("version.get answers API_MAJOR and nothing else (Run 5.5)", () => {
+    const schema = route("version.get").responses[200] as z.ZodType;
+    expect(API_MAJOR).toBe(1);
+    expect(schema.safeParse({ apiMajor: API_MAJOR, build: "abcdef1" }).success).toBe(true);
+    expect(schema.safeParse({ apiMajor: API_MAJOR + 1, build: "abcdef1" }).success).toBe(false);
   });
 
   it("machine.resolve is a strict, complete set", () => {

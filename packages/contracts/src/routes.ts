@@ -124,8 +124,11 @@ const organizationsBody = z.strictObject({
   ),
 });
 
+/** The API's major version (Doc 06 §9): a client refuses any other. */
+export const API_MAJOR = 1;
+
 const versionBody = z.strictObject({
-  apiMajor: z.literal(1),
+  apiMajor: z.literal(API_MAJOR),
   /** The commit the image was built from. */
   build: z.string().regex(/^[0-9a-f]{7,40}$/),
 });
