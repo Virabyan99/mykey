@@ -1,0 +1,19 @@
+{
+  "project": {
+    "name": "s5-cli-ab26a3",
+    "id": "77a1ab16-7556-4ef3-8696-74d15aa18d64",
+    "environment": "6c74da81-a879-44dd-80b0-3f91df789d9f"
+  },
+  "journey": {
+    "credentialId": "c84019b9-1285-4f42-979f-fd0284945b32",
+    "keys": 0,
+    "run": 0,
+    "names": 10,
+    "exportMode": "600",
+    "afterRevoke": {
+      "run": 77,
+      "keys": 77
+    },
+    "where": "node-glibc container"
+  }
+}
