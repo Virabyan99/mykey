@@ -16,41 +16,58 @@ The project is in **Stage 1**, a 14-day plan of nine sessions.
 
 ## Where we stand
 
-_Last updated: 14 Nov 2026, after the Session 4 merge (PR #9)._
+_Last updated: 16 Nov 2026, at the Session 5 gate (pull request `session-5` → `main`, not merged yet)._
 
-| Session | Topic                                                       | State                               |
-| ------- | ----------------------------------------------------------- | ----------------------------------- |
-| 1       | Foundation                                                  | **Done** (PASS WITH ISSUES), merged |
-| 2       | Infrastructure and make-or-break proofs                     | **Done** (GO, no fallback), merged  |
-| 3       | Identity, access and resources                              | **Done** (PASS WITH ISSUES), merged |
-| 4       | Operations engine and secret lifecycle                      | **Done** (PASS WITH ISSUES), merged |
-| 5       | Machine access, CLI and API reference                       | Not started — plan written          |
-| 6 ∥ 7   | Audit, limits, backup, recovery, deployment ∥ Web workspace | Not started                         |
-| 8       | Security review and controlled-use release                  | Not started                         |
-| 9       | Real use, agent experiment, stage exit                      | Not started                         |
+| Session | Topic                                                       | State                                |
+| ------- | ----------------------------------------------------------- | ------------------------------------ |
+| 1       | Foundation                                                  | **Done** (PASS WITH ISSUES), merged  |
+| 2       | Infrastructure and make-or-break proofs                     | **Done** (GO, no fallback), merged   |
+| 3       | Identity, access and resources                              | **Done** (PASS WITH ISSUES), merged  |
+| 4       | Operations engine and secret lifecycle                      | **Done** (PASS WITH ISSUES), merged  |
+| 5       | Machine access, CLI and API reference                       | **Done** (PASS WITH ISSUES), PR open |
+| 6 ∥ 7   | Audit, limits, backup, recovery, deployment ∥ Web workspace | Not started                          |
+| 8       | Security review and controlled-use release                  | Not started                          |
+| 9       | Real use, agent experiment, stage exit                      | Not started                          |
 
-What exists after Session 4 (details: `docs/evidence/session-4/report.md`, run notes `run-4.1.md` … `run-4.9.md`, D-34 … D-39; Session 3's base: `docs/evidence/session-3/report.md`):
+What exists after Session 5 (details: `docs/evidence/session-5/report.md`, run notes `run-5.1.md` … `run-5.9.md`, D-40 … D-45; the base: `docs/evidence/session-4/report.md` and `session-3/report.md`):
 
-- **API (`apps/api`):** the Session 3 pipeline (`mountRoute`: gate, body limits, credentials, Origin, authentication, validation, authorization from current rows, replay, state table, freshness, handler). Handlers for every Session 4 route: `secrets.list|history|reveal|create|update|delete|undelete|restore`, `import.preview|apply|resume`, `export.create`, `operations.get|list`, besides Session 3's. The API holds the organization's `runtime` AppRole and authenticates inline on every request (D-34). It runs a stale-operation sweep every 30 s. Large requests (import, export, complete read) go through a gate of two per process (`large.ts`).
-- **Operations engine (`@mykey/operations` root):**
-  - The six-step mutation protocol under one advisory lock per environment on a dedicated connection (D-36). After the dispatch marker every failure is `503 outcome_unknown` with the operation id.
-  - Replay by stored state, tombstones and `replay_expired` (D-35).
-  - Reveal and the complete read `readEnvironment`, each committing its audit row before release (D-37).
-  - Import as a parent with child operations, resumable (D-39); the sweep.
-- **Operator (`@mykey/operations/operator`, `apps/ops`):** `ops operations`, `reconcile-operation` (exit 3 = exclude the executors first), `reconcile-environment`, `operations-expire`; `host.ts staging quiesce|resume`; runbook `reconciliation.md`. The probe condition `operations_unresolved` (D-38). Migrations up to `0012`.
-- **Auth, provisioning:** as after Session 3 (operator-only accounts, TOTP, sessions, reset; `provision-organization`, `apps/provisioner`).
-- **Staging** runs API `2d6678af2342` and the matching provisioner, gate open, nothing in review or unresolved, the staging owner (`owner@mykey-staging.invalid`, credentials in `~/.mykey/secrets/hosts/staging/`) and its organization `e2350312-…`. **Production** runs the same API with migrations up to `0012` and no gate file: every route answers `quarantined`, `/health` is down and the probe's `health_failing` stays open until the owner opens it. No OpenBao, no provisioner, no owner there. Production deploys need the owner's permission.
-- **Evidence registry:** 83 `SPIKE_PASS`, 108 `OPEN`, nothing `PASS`.
+- **API (`apps/api`):** the Session 3 pipeline (`mountRoute`) with handlers for every route of Sessions 3–5. The Session 4 secret, import, export and operation routes are unchanged. New in Session 5:
+  - `credentials.list|issue|revoke`, `projects.archive|reactivate`, `environments.archive|reactivate`;
+  - the machine routes `machine.keys|resolve`, authenticated by the bearer's own `lookup-self`;
+  - `openapi.get` and `reference.get` (owner and admin; `/v1/reference` is a self-contained Scalar page, D-45).
 
-Before Session 5 can start:
+  The API holds two OpenBao identities: `runtime` (inline AppRole) and `issuer` (short sessions, for issuance and revocation). Machine reads use the presented token itself. Its 30 s sweep also settles stale credential work and drives archives.
 
-- The plan is `docs/plans/session-5-plan.md` (added 15 Nov 2026; its "Session start" comes first). It answers the report's "What Session 5 must know". In short:
-  - machine resolve calls `readEnvironment`;
-  - new effects (issuance, revocation, archive) need a marker or an exclusion rule and fault rows;
-  - the eight deferred review minors M-1 … M-8, each with its owner run.
-- Dated items:
+- **Operations (`@mykey/operations`):**
+  - Session 4's engine;
+  - credential issuance and revocation with markers, and their sweep (D-40);
+  - archive (close first, revoke and verify, then archived) and reactivation (D-41, migration `0014`'s guarded transition function);
+  - the complete read with a machine reader, with the admission rechecked at commit (D-42).
+
+  `/operator` adds `reconcileCredentials`, run as `ops reconcile-credentials` (runbooks `machine-credentials.md`, `reconciliation.md`). Migrations up to `0014`.
+
+- **CLI (`apps/cli`):**
+  - `secrets keys | run | export`: one esbuild bundle on the pinned Node, released as `cli-v0.1.1` with `install.sh` (D-43, D-44);
+  - consumer runbooks `consumer-local.md` and `consumer-deploy.md`, with the launch wrapper `tests/fixtures/consumers/secrets-launch.sh`.
+
+  Proven on Linux x64 and arm64. **macOS is not proven:** the one matrix run failed on the suite's test certificates.
+
+- **Staging** runs API `45b5c1f3cc3a` and the matching provisioner, gate open, nothing in review or unresolved. The staging owner is `owner@mykey-staging.invalid` (credentials in `~/.mykey/secrets/hosts/staging/`), with organization `e2350312-…`. **Production** was not updated in Session 5: Session 4's API, migrations up to `0012`, no gate file (every route `quarantined`). Production deploys need the owner's permission.
+- **Evidence registry:** 112 `SPIKE_PASS`, 79 `OPEN`, nothing `PASS`.
+
+Before Sessions 6 ∥ 7 can start:
+
+- **The owner merges PR `session-5`** and answers the open requests in `docs/evidence/session-5/owner-requests.md`:
+  - Actions minutes: a second CLI matrix run, about 64 minutes, for macOS;
+  - production.
+- **Plans:** each session needs its plan (`docs/plans/session-6-plan.md`, `session-7-plan.md`) built on the report's "What Sessions 6 and 7 must know". In short:
+  - the new audit actions and the machine actor;
+  - every rate limit, including unauthenticated machine requests (Run 6.3);
+  - `ops reconcile-credentials` for every environment after a restore;
+  - host timers for the sweeps (Run 6.9);
+  - the workspace's credential, archive and reference screens (Session 7).
+- **Dated items:**
   - The R2 fixture guard: `test:cloud` fails on purpose from 15 Nov 2026 09:42 UTC until Run 6.6.
-  - **Checkpoint `pairs-lock-session-gate`:** due from 15 Nov 2026 10:42:20 UTC; record it at the Session 5 start.
   - `.trivyignore.images` expires on 14 Dec 2026.
   - **All KMS certificates expire on 12 Dec 2026** (staging seal 10:50 UTC); replace them before then (runbook `kms-and-unseal.md`). Checkpoint `kms-cert-expiry` from 12 Dec 2026 09:57 UTC.
 
@@ -65,6 +82,9 @@ pnpm test                   # unit tests
 pnpm run test:integration   # starts its own PostgreSQL + OpenBao stack in Docker, removes it afterwards
 pnpm run test:cloud         # real Cloudflare R2; exits 1 without the credential files in ~/.mykey/secrets/r2/
 pnpm run test:staging       # the staging host over the VPN (about 1.5 h with drills; reboots staging); needs ~/.mykey
+pnpm run test:cli           # project cli in a Linux container (the only way on Windows); --release <dir> tests a downloaded release
+pnpm run test:browser       # the reference page in Chromium (once per workstation: pnpm exec playwright install chromium)
+pnpm run test:consumers     # the consumer runbooks rehearsed against staging from clean containers (WSL Ubuntu + Docker; ~17 min)
 ```
 
 One file or one test:
@@ -79,6 +99,8 @@ Other scripts:
 ```sh
 pnpm run stack:up | stack:down | stack:status   # the dev stack `mykey-dev`, for work by hand
 pnpm run contracts:openapi                      # regenerate packages/contracts/openapi after a route change
+pnpm run reference:asset                        # copy Scalar's build into apps/api/assets (without it /v1/reference answers 503)
+pnpm run cli:build | cli:release -- --version <v>   # the CLI bundle; a release (version = apps/cli/package.json)
 pnpm run db:migrate                             # apply migrations
 pnpm run evidence:build                         # rebuild docs/evidence/registry.json after editing registry-overrides.json
 node scripts/host.ts <staging|prod> <command>   # operator tool for the hosts (usage: run it without arguments)
@@ -187,4 +209,13 @@ Session 4 (details in its run notes and report):
 - **The `provisioner_runtime` password lives only on the host** (`/etc/mykey/secrets/provisioner/db-password`); the workstation copies were shredded.
 - **Throughput:** an import entry costs about 150–220 ms on the workstation's Docker and 76 ms on staging. The complete read of 1,000 × 8 KiB takes 5.3 s locally; a 7 MB export takes at most 23.5 s on staging.
 
-Open issues carried into Session 5 are listed in `docs/evidence/session-4/report.md` ("What Session 5 must know").
+Session 5 (details in its run notes and report):
+
+- **The CLI is tested from Windows only through `pnpm run test:cli`** (a Linux container; about two minutes). Its arguments may hold only letters, digits and `. _ / = -`: use `--testNamePattern=word`, not `-t "two words"`. `--release <dir>` tests a downloaded release with the installed launcher.
+- **A CLI matrix run costs about 64 billed minutes** (four targets; macOS counts ten times) and runs only by hand: `gh workflow run ci --ref <branch> -f jobs=cli-matrix -f cli_release=cli-vX.Y.Z`. The timing API reports 0 for its jobs; estimate from job times. A release is never changed: a CLI fix is a new version (bump `apps/cli/package.json`, the bundle compiles it in).
+- **Claude Code stops background jobs when memory runs low.** It stopped the gate's suite (beside a review agent) and a consumer rehearsal. Run one heavy job at a time with no agent beside it. The WSL VM keeps its memory after a job: quitting Docker Desktop (or `wsl --shutdown`) frees it. Find orphans by command line afterwards: a stopped shell leaves vitest and fixture containers running.
+- **Tests that only need "a product route answers" use `GET /v1/organizations`** (no action, no scope). `/v1/reference` needs the process organization and the Scalar asset, and `page.test.ts` copies the asset into `apps/api/assets`, so its answer depends on file order.
+- **An unknown issuance has two states.** `needs_review` (no token proven) blocks the next issuance; `revoking` (OpenBao made the token, its withdrawal is unproven) blocks nothing. Where a fault lands decides which; a test must accept both.
+- **The token sweep** is `tests/staging/token-sweep.staging.test.ts`. Tokens are stored nowhere, so each test searches the tokens it holds, with a control per surface (the provisioner's log names operation ids, not environment ids).
+
+Open issues carried into Sessions 6 ∥ 7 are listed in `docs/evidence/session-5/report.md` ("What Sessions 6 and 7 must know").
