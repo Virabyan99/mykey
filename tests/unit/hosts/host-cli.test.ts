@@ -91,7 +91,11 @@ describe("parseHostArgs", () => {
     ],
     [["staging", "up"], { host: "staging", command: "up", via: "vpn" }],
     [["staging", "db-init"], { host: "staging", command: "db-init", via: "vpn" }],
-    [["prod", "status"], { host: "prod", command: "status", via: "vpn" }],
+    [["prod", "status"], { host: "prod", command: "status", via: "vpn", json: false }],
+    [
+      ["staging", "status", "--json"],
+      { host: "staging", command: "status", via: "vpn", json: true },
+    ],
   ])("parses %j", (argv, expected) => {
     expect(parseHostArgs(argv)).toEqual(expected);
   });

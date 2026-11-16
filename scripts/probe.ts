@@ -348,6 +348,35 @@ async function secrets(): Promise<void> {
   }
 }
 
+/**
+ * Run 6.4 (P-117): the probe's view of one host for the status view; null when
+ * the Worker does not answer (the view then says unknown).
+ */
+export async function probeState(
+  host: string,
+): Promise<{ evaluatedAt: number | null; lastHeartbeatAt: number | null; open: string[] } | null> {
+  try {
+    const config = workerConfig();
+    const token = localSecret("read-token", false);
+    const response = await fetch(`https://${config.routes[0]?.pattern}/v1/state/${host}`, {
+      headers: { authorization: `Bearer ${token}` },
+      signal: AbortSignal.timeout(15_000),
+    });
+    if (!response.ok) return null;
+    const body = (await response.json()) as {
+      evaluatedAt?: number | null;
+      state: { lastHeartbeatAt: number | null; open: Record<string, unknown> };
+    };
+    return {
+      evaluatedAt: body.evaluatedAt ?? null,
+      lastHeartbeatAt: body.state.lastHeartbeatAt,
+      open: Object.keys(body.state.open),
+    };
+  } catch {
+    return null;
+  }
+}
+
 async function state(host: string): Promise<void> {
   const config = workerConfig();
   const probeHost = config.routes[0]?.pattern;

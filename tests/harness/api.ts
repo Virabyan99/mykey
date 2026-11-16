@@ -14,6 +14,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   createApp,
+  auditedBaoCall,
   createHealthCheck,
   issuerBaoFromDirectory,
   listen,
@@ -322,7 +323,12 @@ export async function startTestApi(opts: StartTestApiOptions = {}): Promise<Test
           : organizationOnly(opts.processOrganization);
     const issuer = opts.runtime === undefined ? undefined : switchableIssuer(opts.runtime);
     let bootId = randomUUID();
-    const health = createHealthCheck(database.targets.api_runtime);
+    // Run 6.4 (P-116): with a runtime identity, the audited OpenBao call as on a host.
+    const health = createHealthCheck(database.targets.api_runtime, undefined, {
+      ...(opts.runtime === undefined || bao === undefined
+        ? {}
+        : { auditedCall: auditedBaoCall(bao) }),
+    });
     cleanup.push(() => health.close());
     const logs: LogEntry[] = [];
     const keys = opts.keys ?? ephemeralKeys();

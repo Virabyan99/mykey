@@ -12,7 +12,7 @@ import { createPool, type DbTarget } from "@mykey/db";
 import { drizzle } from "drizzle-orm/node-postgres";
 import type { Hono } from "hono";
 import { createApp } from "./app.ts";
-import { createHealthCheck, type OpenBaoHealthTarget } from "./health.ts";
+import { auditedBaoCall, createHealthCheck, type OpenBaoHealthTarget } from "./health.ts";
 import { issuerBaoFromDirectory, runtimeBaoFromDirectory } from "./runtime-bao.ts";
 import { issuerSelfCheck, runtimeSelfCheck } from "./selfcheck.ts";
 import { createLogger, type LogEntry } from "./log.ts";
@@ -114,7 +114,14 @@ export const API_CONNECTIONS = {
 } as const;
 
 export async function startServer(config: ServerConfig): Promise<ApiServer> {
-  const health = createHealthCheck(config.database, config.openbao);
+  const runtimeBao =
+    config.openbao === undefined
+      ? undefined
+      : runtimeBaoFromDirectory(config.openbao, config.secretsDirectory ?? "/run/mykey/secrets");
+  // P-116: on a host with OpenBao, an audited call as the runtime identity too.
+  const health = createHealthCheck(config.database, config.openbao, {
+    ...(runtimeBao === undefined ? {} : { auditedCall: auditedBaoCall(runtimeBao) }),
+  });
   const pool = createPool(config.database, {
     max: API_CONNECTIONS.pool,
     queryTimeoutMs: LIMITS.deadlines.requestMs,
@@ -134,15 +141,7 @@ export async function startServer(config: ServerConfig): Promise<ApiServer> {
   const app = createApp({
     pool,
     lockPool,
-    ...(config.openbao === undefined || issuer === undefined
-      ? {}
-      : {
-          bao: runtimeBaoFromDirectory(
-            config.openbao,
-            config.secretsDirectory ?? "/run/mykey/secrets",
-          ),
-          issuer,
-        }),
+    ...(runtimeBao === undefined || issuer === undefined ? {} : { bao: runtimeBao, issuer }),
     bootId,
     config: config.api,
     health: () => health.check(),

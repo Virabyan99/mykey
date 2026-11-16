@@ -2,6 +2,8 @@ export { createApp, handledRouteIds } from "./app.ts";
 export {
   HEALTH_DEADLINE_MS,
   classifyFailure,
+  DEEP_REUSE_MS,
+  auditedBaoCall,
   createHealthCheck,
   type HealthCause,
   type HealthCheck,

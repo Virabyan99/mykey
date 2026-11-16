@@ -30,8 +30,10 @@ import {
   REMOTE,
   SshError,
   expectSuccess,
+  formatStatusView,
   hostStatus,
   isHostname,
+  statusView,
   loadHosts,
   mentionsSecretPath,
   openTunnel,
@@ -47,6 +49,7 @@ import { KEY_RINGS } from "@mykey/auth";
 import { loadR2Credentials } from "@mykey/backup";
 import type { RoleName } from "@mykey/db";
 import { readOpsJobs } from "./ops-jobs.ts";
+import { probeState } from "./probe.ts";
 
 const REPOSITORY = resolve(import.meta.dirname, "..");
 const FIREWALL = `${REMOTE.hostsDir}/firewall`;
@@ -110,7 +113,7 @@ export const USAGE = `usage: node scripts/host.ts <staging|prod> <command> [--pu
   up                             create missing host secrets, then docker compose up -d
   db-init                        roles and migrations through an SSH tunnel
   bao-init                       initialise OpenBao once; custody copy; root-namespace setup (staging only)
-  status                         print the host status as JSON
+  status [--json]                the private status view: every check with its observation time (P-117)
   gate <open|close|status>       the service gate record (P-43); every deploy starts closed
   keys init                      the auth key rings: new files on the workstation, installed on the host
   ops <command> [--flag value]   an operator command (apps/ops) as maintenance, through a tunnel
@@ -129,13 +132,13 @@ export type HostCommand = { host: HostName; via: Address } & (
         | "confirm"
         | "up"
         | "db-init"
-        | "status"
         | "bao-init"
         | "quiesce"
         | "resume"
         | "ops-secrets"
         | "timers";
     }
+  | { command: "status"; json: boolean }
   | { command: "apply"; target: "firewall" | "ssh" }
   | { command: "image"; name: string; tar: string }
   | { command: "acme"; directory: AcmeDirectory }
@@ -205,7 +208,9 @@ export function parseHostArgs(argv: string[]): HostCommand {
   const options = words.filter((word) => word.startsWith("--"));
   const positional = words.filter((word) => !word.startsWith("--"));
   for (const option of options) {
-    if (option !== "--public") throw new Error(`unknown option ${option}`);
+    if (option !== "--public" && !(option === "--json" && command === "status")) {
+      throw new Error(`unknown option ${option}`);
+    }
   }
   const via: Address = command === "bootstrap" || options.includes("--public") ? "public" : "vpn";
   const base = { host, via } as const;
@@ -215,7 +220,6 @@ export function parseHostArgs(argv: string[]): HostCommand {
     case "confirm":
     case "up":
     case "db-init":
-    case "status":
     case "bao-init":
     case "quiesce":
     case "resume":
@@ -223,6 +227,9 @@ export function parseHostArgs(argv: string[]): HostCommand {
     case "timers":
       if (positional.length !== 0) throw new Error(USAGE);
       return { ...base, command };
+    case "status":
+      if (positional.length !== 0) throw new Error(USAGE);
+      return { ...base, command, json: options.includes("--json") };
     case "apply": {
       const target = positional[0];
       if (positional.length !== 1 || (target !== "firewall" && target !== "ssh")) {
@@ -1721,9 +1728,18 @@ async function main(argv: string[], log: Logger): Promise<number> {
     case "bao-init":
       await runBaoInit(host, address, log);
       return 0;
-    case "status":
-      log.info(JSON.stringify(await hostStatus(host, address), null, 2));
+    case "status": {
+      // P-117: the private status view — the host's report and the probe's state, each check with its time.
+      const report = await hostStatus(host, address);
+      const probe = await probeState(host.name);
+      const lines = statusView(report, probe, Date.now());
+      log.info(
+        command.json
+          ? JSON.stringify({ status: report, probe, lines }, null, 2)
+          : formatStatusView(lines),
+      );
       return 0;
+    }
     case "gate":
       return runGate(host, command.action, address, log);
     case "quiesce":

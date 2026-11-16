@@ -89,6 +89,14 @@ if [ -e /etc/mykey/gate/gate.json ]; then
 		/etc/mykey/gate/gate.json 2>/dev/null || echo invalid)
 fi
 
+# One read-only statement as the superuser through the PostgreSQL container's
+# socket (Run 6.4); fails when it cannot be read. PGPASSWORD is exported below.
+pg_read() {
+	out=$(docker exec -e PGPASSWORD -u postgres mykey-postgres-1 psql -U postgres -d postgres -Atq -v ON_ERROR_STOP=1 -c "BEGIN READ ONLY;" -c "$1" -c "COMMIT;" 2>/dev/null) || return 1
+	printf '%s\n' "$out" | head -n 1
+}
+CHECKS_DIR=$(dirname "$0")
+
 # Scopes in review (Run 3.8, P-57): one read-only statement through the
 # PostgreSQL container's local socket; null when it cannot be read. The
 # superuser password goes through the environment (`-e PGPASSWORD` without a
@@ -104,14 +112,11 @@ case "$count" in
 *) review_open=$count ;;
 esac
 
-# Unresolved secret operations (Run 4.5, P-75): uncertain and not closed, or
-# accepted/executing with a heartbeat older than 120 s — what `ops operations`
-# lists (listUnresolved). Null when it cannot be read.
+# Unresolved secret operations (Run 4.5, P-75; Run 6.4, M-3): the query of
+# sql/operations-unresolved.sql. Null when it cannot be read.
 operations_unresolved=null
-count=$(docker exec -e PGPASSWORD -u postgres mykey-postgres-1 psql -U postgres -d postgres -Atq -c \
-	"BEGIN READ ONLY; SELECT count(*) FROM app.operation WHERE (state = 'uncertain' AND completed_at IS NULL) OR (state IN ('accepted', 'executing') AND heartbeat_at < now() - interval '120 seconds'); COMMIT;" \
-	2>/dev/null | head -n 1 || true)
-unset PGPASSWORD
+count=$(docker exec -i -e PGPASSWORD -u postgres mykey-postgres-1 psql -U postgres -d postgres -Atq -v ON_ERROR_STOP=1 -f - \
+	<"$CHECKS_DIR/sql/operations-unresolved.sql" 2>/dev/null | head -n 1 || true)
 case "$count" in
 '' | *[!0-9]*) ;;
 *) operations_unresolved=$count ;;
@@ -156,6 +161,133 @@ if [ "$(id -u)" = 0 ] && [ -d /etc/mykey/gate ] && [ "$capacity_complete" = yes 
 	fi
 fi
 
+# ---- Run 6.4 (P-116): the checks of heartbeat version 2. A check that cannot
+# be read is null (captureSince: absent), never a guess. Drill hooks live in
+# /etc/mykey/checks/ and exist only while a drill runs (alerts.staging.test.ts).
+HOOKS=/etc/mykey/checks
+
+# The firewall: the table is loaded (above); the drill flag reports it unloaded.
+firewall_check=$firewall_loaded
+[ -e "$HOOKS/firewall-unloaded" ] && firewall_check=false
+
+# Disk: this run's own capacity record (Run 6.3), when every volume was measured.
+disk_low=null
+if [ "$capacity_complete" = yes ]; then
+	if [ "$capacity_state" = low ]; then disk_low=true; else disk_low=false; fi
+fi
+
+# Credentials within LIMITS.machineToken.expiryWarningSeconds (604800 s) of
+# expiry, as the credential repository counts them (expiring_soon).
+credential_expiring=null
+count=$(pg_read "SELECT count(*) FROM app.machine_credential WHERE state = 'active' AND effective_expires_at > now() AND effective_expires_at <= now() + interval '604800 seconds';") || count=
+case "$count" in
+'' | *[!0-9]*) ;;
+*) credential_expiring=$count ;;
+esac
+
+# The capture (P-116): the control row's mode; a running capture since its
+# last change. "idle" → null; unreadable → the key is left out (unknown).
+capture='{}'
+mode=$(pg_read "SELECT CASE WHEN capture_mode = 'idle' THEN 'idle' ELSE to_char(updated_at AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS.MS\"Z\"') END FROM app.service_control;") || mode=
+case "$mode" in
+idle) capture='{"captureSince":null}' ;;
+[0-9][0-9][0-9][0-9]-*) capture=$(jq -n --arg s "$mode" '{captureSince: $s}') ;;
+esac
+
+# The backup: expected once Run 6.5 sets MYKEY_BACKUP_EXPECTED=yes; the newest
+# eligible capture from app.backup_pair.
+backup=null
+expected=false
+[ "${MYKEY_BACKUP_EXPECTED:-no}" = yes ] && expected=true
+if newest=$(pg_read "SELECT coalesce(to_char(max(capture_started_at) AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS.MS\"Z\"'), 'none') FROM app.backup_pair WHERE validation_status = 'eligible';"); then
+	case "$newest" in
+	none) backup=$(jq -n --argjson e "$expected" '{expected: $e, newestEligibleCaptureAt: null}') ;;
+	[0-9][0-9][0-9][0-9]-*) backup=$(jq -n --argjson e "$expected" --arg n "$newest" '{expected: $e, newestEligibleCaptureAt: $n}') ;;
+	esac
+fi
+
+# Audit (P-116): failing when the API's last health_down named audit, when
+# OpenBao's audit directory takes no byte, when an archive unit failed, or when
+# the oldest closed day not yet archived and verified ended more than 48 h ago.
+audit_failing=null
+audit_parts=0
+audit_bad=false
+if lines=$(docker logs --since 2m mykey-api-1 2>&1); then
+	audit_parts=$((audit_parts + 1))
+	last=$(printf '%s\n' "$lines" | grep '"event":"health_down"' | tail -n 1 | jq -r '.cause' 2>/dev/null || true)
+	case "$last" in audit_unwritable | openbao_audit) audit_bad=true ;; esac
+fi
+if docker inspect mykey-openbao-1 >/dev/null 2>&1; then
+	audit_parts=$((audit_parts + 1))
+	docker exec mykey-openbao-1 sh -c 'printf x >/openbao/audit/.writable && rm -f /openbao/audit/.writable' >/dev/null 2>&1 || audit_bad=true
+else
+	audit_parts=$((audit_parts + 1))
+fi
+for unit in mykey-audit-archive.service mykey-bao-audit-rotate.service; do
+	[ "$(systemctl is-failed "$unit" 2>/dev/null || true)" = failed ] && audit_bad=true
+done
+behind=$(pg_read "SELECT coalesce(coalesce((SELECT max(to_at) FROM audit.archive_segment WHERE stream = 'app' AND verified_at IS NOT NULL), (SELECT date_trunc('day', min(occurred_at) AT TIME ZONE 'UTC') AT TIME ZONE 'UTC' FROM audit.event)) + interval '1 day' < now() - interval '48 hours', false);") || behind=
+case "$behind" in
+t) audit_parts=$((audit_parts + 1)) audit_bad=true ;;
+f) audit_parts=$((audit_parts + 1)) ;;
+esac
+if [ "$audit_bad" = true ]; then
+	audit_failing=true
+elif [ "$audit_parts" -eq 3 ]; then
+	audit_failing=false
+fi
+
+# Certificates (names and dates only): the public one as the edge serves it,
+# the internal PKI's, and the KMS client certificate where the host has a KMS.
+# One that applies and cannot be read makes the list unknown.
+certificates='[]'
+cert_entry() { # <name> <openssl x509 input on stdin>
+	dates=$(openssl x509 -noout -startdate -enddate 2>/dev/null) || return 1
+	start=$(printf '%s\n' "$dates" | sed -n 's/^notBefore=//p')
+	end=$(printf '%s\n' "$dates" | sed -n 's/^notAfter=//p')
+	[ -n "$start" ] && [ -n "$end" ] || return 1
+	start=$(date -u -d "$start" +%Y-%m-%dT%H:%M:%SZ) || return 1
+	end=$(date -u -d "$end" +%Y-%m-%dT%H:%M:%SZ) || return 1
+	certificates=$(printf '%s' "$certificates" | jq -c --arg n "$1" --arg b "$start" --arg a "$end" '. + [{ name: $n, notBefore: $b, notAfter: $a }]')
+}
+certs_ok=yes
+if [ -n "${MYKEY_HOSTNAME:-}" ]; then
+	# Through a file: a function at the end of a pipe runs in a subshell.
+	served=$(mktemp)
+	timeout 10 openssl s_client -connect 127.0.0.1:443 -servername "$MYKEY_HOSTNAME" </dev/null >"$served" 2>/dev/null || true
+	cert_entry public <"$served" || certs_ok=no
+	rm -f "$served"
+fi
+for name in ca api openbao postgres; do
+	if [ -e "/etc/mykey/pki/$name.crt" ]; then
+		cert_entry "internal-$name" <"/etc/mykey/pki/$name.crt" || certs_ok=no
+	fi
+done
+if [ -n "${MYKEY_KMS_HOST:-}" ]; then
+	cert_entry kms-client </etc/mykey/secrets/kms/seal.crt || certs_ok=no
+fi
+if [ -r "$HOOKS/certificates.extra.json" ]; then
+	certificates=$(jq -c --argjson base "$certificates" '$base + .' "$HOOKS/certificates.extra.json" 2>/dev/null) || certs_ok=no
+fi
+[ "$certs_ok" = yes ] || certificates=null
+
+# Units: every mykey-* unit systemd reports failed.
+units_failed=null
+if failed=$(systemctl list-units 'mykey-*' --state=failed --no-legend --plain 2>/dev/null); then
+	units_failed=$(printf '%s\n' "$failed" | awk 'NF { print $1 }' | jq -R -s -c 'split("\n") | map(select(length > 0))')
+fi
+unset PGPASSWORD
+
+checks=$(jq -n -c --argjson capture "$capture" \
+	--argjson sealed "$sealed" --argjson kmsReachable "$kms_reachable" --argjson reviewOpen "$review_open" \
+	--argjson operationsUnresolved "$operations_unresolved" --argjson firewallLoaded "$firewall_check" \
+	--argjson diskLow "$disk_low" --argjson auditFailing "$audit_failing" --argjson backup "$backup" \
+	--argjson certificates "$certificates" --argjson credentialExpiring "$credential_expiring" \
+	--argjson unitsFailed "$units_failed" \
+	'{ sealed: $sealed, kmsReachable: $kmsReachable, reviewOpen: $reviewOpen, operationsUnresolved: $operationsUnresolved,
+	   firewallLoaded: $firewallLoaded, diskLow: $diskLow, auditFailing: $auditFailing, backup: $backup,
+	   certificates: $certificates, credentialExpiring: $credentialExpiring, unitsFailed: $unitsFailed } + $capture')
+
 # The provisioner container's health (Run 3.8): healthy, unhealthy, or absent.
 provisioner=absent
 if health=$(docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{end}}' mykey-provisioner-1 2>/dev/null); then
@@ -171,7 +303,9 @@ jq -n \
 	--argjson containers "$containers" --argjson pendingRevert "$pending" \
 	--argjson firewallLoaded "$firewall_loaded" --argjson sets "$sets" --argjson sshListen "$ssh_listen" \
 	--argjson sealed "$sealed" --argjson sealType "$seal_type" --argjson kmsReachable "$kms_reachable" \
+	--argjson checks "$checks" \
 	'{ host: $host, bootId: $bootId, time: $time, chronyOffsetMs: $chronyOffsetMs, clockSynced: $clockSynced,
 	   containers: $containers, sealed: $sealed, sealType: $sealType, kmsReachable: $kmsReachable, pendingRevert: $pendingRevert,
 	   firewall: { loaded: $firewallLoaded, sets: $sets }, sshListen: $sshListen, gate: $gate,
-	   reviewOpen: $reviewOpen, operationsUnresolved: $operationsUnresolved, provisioner: $provisioner }'
+	   reviewOpen: $reviewOpen, operationsUnresolved: $operationsUnresolved, provisioner: $provisioner,
+	   checks: $checks }'

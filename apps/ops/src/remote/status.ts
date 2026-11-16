@@ -35,6 +35,65 @@ export interface HostStatus {
   operationsUnresolved: number | null;
   /** The provisioner container's health (Run 3.8); null when not reported. */
   provisioner: "healthy" | "unhealthy" | "absent" | null;
+  /** Run 6.4 (P-116): the checks the heartbeat sends (version 2); null when not reported. */
+  checks: HostChecks | null;
+}
+
+/** The checks of heartbeat version 2 (workers/probe Checks): null is unknown; captureSince absent is unknown, null idle. */
+export interface HostChecks {
+  sealed: boolean | null;
+  kmsReachable: boolean | null;
+  reviewOpen: number | null;
+  operationsUnresolved: number | null;
+  firewallLoaded: boolean | null;
+  diskLow: boolean | null;
+  auditFailing: boolean | null;
+  captureSince?: string | null;
+  backup: { expected: boolean; newestEligibleCaptureAt: string | null } | null;
+  certificates: { name: string; notBefore: string; notAfter: string }[] | null;
+  credentialExpiring: number | null;
+  unitsFailed: string[] | null;
+}
+
+const isoOrNull = (value: unknown): string | null =>
+  typeof value === "string" && !Number.isNaN(Date.parse(value)) ? value : null;
+
+function parseChecks(value: unknown): HostChecks | null {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return null;
+  const c = value as Record<string, unknown>;
+  const backup =
+    typeof c.backup === "object" && c.backup !== null
+      ? (c.backup as Record<string, unknown>)
+      : null;
+  return {
+    sealed: nullableBoolean(c.sealed),
+    kmsReachable: nullableBoolean(c.kmsReachable),
+    reviewOpen: countOf(c.reviewOpen),
+    operationsUnresolved: countOf(c.operationsUnresolved),
+    firewallLoaded: nullableBoolean(c.firewallLoaded),
+    diskLow: nullableBoolean(c.diskLow),
+    auditFailing: nullableBoolean(c.auditFailing),
+    ...("captureSince" in c ? { captureSince: isoOrNull(c.captureSince) } : {}),
+    backup:
+      backup === null || typeof backup.expected !== "boolean"
+        ? null
+        : {
+            expected: backup.expected,
+            newestEligibleCaptureAt: isoOrNull(backup.newestEligibleCaptureAt),
+          },
+    certificates: Array.isArray(c.certificates)
+      ? c.certificates.flatMap((entry: unknown) => {
+          const cert = entry as Record<string, unknown>;
+          const notBefore = isoOrNull(cert.notBefore);
+          const notAfter = isoOrNull(cert.notAfter);
+          return typeof cert.name === "string" && notBefore !== null && notAfter !== null
+            ? [{ name: cert.name, notBefore, notAfter }]
+            : [];
+        })
+      : null,
+    credentialExpiring: countOf(c.credentialExpiring),
+    unitsFailed: Array.isArray(c.unitsFailed) ? c.unitsFailed.map(String) : null,
+  };
 }
 
 /** The remote check; prints one JSON object (everything but `clockOffsetMs`). */
@@ -114,6 +173,7 @@ export function parseHostStatus(text: string, sentAt: number, receivedAt: number
       raw.provisioner === "absent"
         ? raw.provisioner
         : null,
+    checks: parseChecks(raw.checks),
   };
 }
 

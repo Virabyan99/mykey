@@ -3,4 +3,5 @@ export * from "./hosts.ts";
 export * from "./redact.ts";
 export * from "./ssh.ts";
 export * from "./status.ts";
+export * from "./status-view.ts";
 export * from "./tunnel.ts";
