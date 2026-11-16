@@ -277,13 +277,25 @@ describe("machine credentials on staging", () => {
       const [environmentId] = [...caught.keys()];
       const environment = environments.find((e) => e.id === environmentId)!;
 
-      // 2. The environment is blocked for issuance.
-      const blocked = await send("POST", `${environment.path}/credentials`, {
-        name: "s5-machine",
-        ttlSeconds: 60,
-      });
-      expect(blocked.status).toBe(409);
-      expect(errorOf(blocked).code).toBe("state_conflict");
+      // 2. The caught issuance is unresolved in one of its two documented states
+      //    (P-87): `needs_review` (no token proven) blocks the next issuance;
+      //    `revoking` (OpenBao made a token, its withdrawal is unproven) is closed
+      //    to machines and blocks nothing. Where the pause lands decides which
+      //    (Run 5.2 caught the first, the Session 5 gate the second).
+      const unresolved = (await inventory(environment.path)).filter(
+        (c) => c.state === "needs_review" || c.state === "revoking",
+      );
+      expect(unresolved).toHaveLength(1);
+      const caughtState = unresolved[0]!.state;
+      record("caughtState", caughtState);
+      if (caughtState === "needs_review") {
+        const blocked = await send("POST", `${environment.path}/credentials`, {
+          name: "s5-machine",
+          ttlSeconds: 60,
+        });
+        expect(blocked.status).toBe(409);
+        expect(errorOf(blocked).code).toBe("state_conflict");
+      }
 
       // 3. The probe raises operations_unresolved.
       const raised = await waitUntil(

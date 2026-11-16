@@ -1,0 +1,15 @@
+# Token sweep on staging (Run 5.10 Step 5)
+# 2026-11-16T09:06:02.023Z; project s5-sweep-7e05ba (c2503d1a-8ad9-4ea0-b09e-2b9e6ec90653), environment daf2f00c-7619-4d69-9092-d8b32f8b676b
+# Three machine tokens issued here (two resolved, the first also listed keys, one never used; all revoked)
+# and one run-time canary value resolved by those machines.
+# Values reach the host on fd 3 of the search, never the pipe; only counts come back (countOnHost).
+# Each surface has controls, strings that are not secret and must be found there; a search missing one fails.
+# surface | command | values searched | values found | controls found
+API log | docker logs --since 2026-11-16T09:05:39.495Z mykey-api-1 | 4 | 0 | 1 of 1
+provisioner log | docker logs --since 2026-11-16T09:05:39.495Z mykey-provisioner-1 | 4 | 0 | 1 of 1
+pg_dump (database postgres) | docker exec mykey-postgres-1 sh -c 'PGPASSWORD="$(cat "$POSTGRES_PASSWORD_FILE")" pg_dump -U postgres -d postgres' | 4 | 0 | 3 of 3
+PostgreSQL log | docker logs mykey-postgres-1 | 4 | 0 | 1 of 1
+OpenBao audit device | docker exec mykey-openbao-1 cat /openbao/audit/audit.log | 4 | 0 | 1 of 1
+Traefik access log | docker logs --since 2026-11-16T09:05:39.495Z mykey-edge-1 | 4 | 0 | 1 of 1
+# total values found outside the responses: 0
+# The clean machine's history files and process list: docs/evidence/session-5/run-5.8-consumers.json (pnpm run test:consumers).

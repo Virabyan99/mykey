@@ -678,7 +678,7 @@
       "evidence": [
         "docs/evidence/session-5/run-5.6.md"
       ],
-      "note": "run: the complete validated set before the spawn, no SECRETS_* in the child, collisions refused without --override, size checked, no shell, stdin to the child, signals forwarded once (terminal and not), status preserved; Linux container and staging (macOS in Run 5.7)."
+      "note": "run: the complete validated set before the spawn, no SECRETS_* in the child, collisions refused without --override, size checked, no shell, stdin to the child, signals forwarded once (terminal and not), status preserved; Linux container and staging; macOS not proven (the matrix's macOS jobs failed on the suite's test certificates and did not run again: cli-matrix.md)."
     },
     {
       "id": "FR-1.49",
