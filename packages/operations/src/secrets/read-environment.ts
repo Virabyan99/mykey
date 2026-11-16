@@ -13,8 +13,9 @@
 //     Any failed read ends the read; nothing partial is ever returned.
 //  4. The response size limit.
 //  5. One transaction: the generation still G and no slot, else
-//     environment_changed; the caller's audit row; commit. Only then do the
-//     values leave this function.
+//     environment_changed; the admission recheck again, else its refusal;
+//     the caller's audit row; commit. Only then do the values leave this
+//     function.
 //
 // Run 5.4 (P-94): a machine request brings its own reader, the client of the
 // presented token; then every backend call uses it and `deps.bao` is never
@@ -181,6 +182,10 @@ async function commitRead(
       if (counters.generation !== read.generation || (await slotOf(tx, request.scope)) !== null) {
         throw new Stop(refused("environment_changed"));
       }
+      // Admission again (gate review): an archive admitted, or access removed,
+      // while the values were read means nothing answers.
+      const code = await request.recheck(tx);
+      if (code !== null) throw new Stop(refused(code));
       await request.audit(tx, read);
       await deps.faults?.("before_audit_commit");
     });

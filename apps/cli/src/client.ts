@@ -6,6 +6,7 @@
 // credential; the bearer is sent only after its apiMajor matched. Nothing here
 // logs, and no error carries a body, a header value or the token.
 import https from "node:https";
+import { setTimeout as sleep } from "node:timers/promises";
 import { rootCertificates } from "node:tls";
 import { API_MAJOR, LIMITS, ROUTES, errorEnvelopeSchema } from "@mykey/contracts";
 import type { z } from "zod";
@@ -34,6 +35,13 @@ export interface ApiClient {
 const BODY_CAP = LIMITS.completeResponse.maxBodyBytes + 64 * 1024;
 const SHORT_MS = 30_000;
 const RESOLVE_MS = 150_000;
+/**
+ * A machine read refused with 503 busy (the API's large-request gate, the
+ * environment's lock) is asked again after these pauses: a read has no effect,
+ * and instances started together would otherwise lose one (gate review of
+ * Session 5). Any other refusal is final at once.
+ */
+const BUSY_PAUSES_MS = [250, 500, 1_000, 2_000] as const;
 
 const versionSchema = ROUTES.find((route) => route.id === "version.get")?.responses[200] as
   z.ZodType | undefined;
@@ -157,15 +165,19 @@ export function createClient(
     });
   }
 
-  /** An answer other than 200: the contract's envelope when it is one, else the status alone. */
-  function refusal(answer: Answer): CliError {
-    let envelope: z.infer<typeof errorEnvelopeSchema> | null = null;
+  /** The contract's error envelope of an answer, or null when it is not one. */
+  function envelopeOf(answer: Answer): z.infer<typeof errorEnvelopeSchema> | null {
     try {
       const parsed = errorEnvelopeSchema.safeParse(JSON.parse(answer.body.toString("utf8")));
-      if (parsed.success) envelope = parsed.data;
+      return parsed.success ? parsed.data : null;
     } catch {
-      envelope = null;
+      return null;
     }
+  }
+
+  /** An answer other than 200: the contract's envelope when it is one, else the status alone. */
+  function refusal(answer: Answer): CliError {
+    const envelope = envelopeOf(answer);
     const code = envelope?.error.code ?? null;
     const category = categoryOf(answer.head.status, code);
     return new CliError(category, `the API answered ${String(answer.head.status)}`, {
@@ -200,17 +212,33 @@ export function createClient(
   const machinePath = (s: Selector, route: "keys" | "resolve"): string =>
     `/v1/machine/projects/${s.project}/environments/${s.env}/${route}`;
 
+  /** A machine read, asked again while the API answers 503 busy (BUSY_PAUSES_MS). */
+  async function machineRead(
+    method: "GET" | "POST",
+    path: string,
+    token: string,
+    deadlineMs: number,
+  ): Promise<Answer> {
+    for (const pause of [...BUSY_PAUSES_MS, null]) {
+      const answer = await call(method, path, token, deadlineMs);
+      const busy = answer.head.status === 503 && envelopeOf(answer)?.error.code === "busy";
+      if (!busy || pause === null) return answer;
+      await sleep(pause);
+    }
+    throw new Error("unreachable");
+  }
+
   return {
     version,
     async keys(s, token) {
       if (!versionChecked) await version();
-      const answer = await call("GET", machinePath(s, "keys"), token, SHORT_MS);
+      const answer = await machineRead("GET", machinePath(s, "keys"), token, SHORT_MS);
       if (answer.head.status !== 200) throw refusal(answer);
       return validateKeys(answer.body, answer.head);
     },
     async resolve(s, token) {
       if (!versionChecked) await version();
-      const answer = await call("POST", machinePath(s, "resolve"), token, RESOLVE_MS);
+      const answer = await machineRead("POST", machinePath(s, "resolve"), token, RESOLVE_MS);
       if (answer.head.status !== 200) throw refusal(answer);
       return validateResolve(answer.body, answer.head);
     },

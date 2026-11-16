@@ -231,6 +231,30 @@ describe("secrets run", () => {
     }
   });
 
+  // Gate review, Important 1: resolve shares the API's large-request gate (two
+  // per process), so instances started together can meet 503 busy. A read has
+  // no effect: the CLI asks again, a few times, before anything is started.
+  it("503 busy is asked again before anything starts: busy twice then 200 → the child runs; busy every time → 75 after five requests", async () => {
+    const busy = errorReply(503, "busy").reply;
+    const resolves = (server: CliServer) =>
+      server.requests.filter((request) => request.path.endsWith("/resolve")).length;
+    const recovering = await serve({ resolve: [busy, busy, { status: 200, body: goodResolve() }] });
+    const ran = await runCli(runArgs(), { env: envOf(recovering), cwd: dirs.cwd });
+    expect(ran.code, ran.stderr).toBe(0);
+    expect(existsSync(marker)).toBe(true);
+    expect(resolves(recovering)).toBe(3);
+    rmSync(marker);
+    const always = await serve({ resolve: busy });
+    const refused = await runCli(runArgs(), { env: envOf(always), cwd: dirs.cwd });
+    expect(refused.code).toBe(75);
+    expect(existsSync(marker)).toBe(false);
+    expect(resolves(always)).toBe(5);
+    // Another refusal is never asked again.
+    const sealed = await serve({ resolve: errorReply(503, "backend_sealed").reply });
+    expect((await runCli(runArgs(), { env: envOf(sealed), cwd: dirs.cwd })).code).toBe(69);
+    expect(resolves(sealed)).toBe(1);
+  });
+
   it("the token is nowhere a child could find it by default", async () => {
     const server = await serve();
     const env = envOf(server, { CHILD_MODE: "wait" });

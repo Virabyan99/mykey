@@ -17,6 +17,9 @@
 //    revoked in step 2, or the executors are excluded (D-20: a create that was
 //    sent may still arrive; only exclusion ends that). Otherwise it is left
 //    with `needs_exclusion` and the command exits 3 after doing the rest.
+//    A row whose own token was found in step 2 and not proven gone is never
+//    settled, excluded or not (gate review, Doc 10 §4.1 rule 11): it stays
+//    `needs_review`, already listed as `unproven`.
 // 5. One audit row `operator.reconcile_credentials` with the counts.
 //
 // It never prints or stores an accessor; ids and counts only.
@@ -131,10 +134,13 @@ async function settle(
   // 2. Tokens nobody records.
   let unrecordedRevoked = 0;
   const found = new Map<string, string>();
+  // The operation ids of tokens found here whose absence could not be proven.
+  const unproven = new Set<string>();
   for (const token of kept) {
     if (named.has(token.accessor)) continue;
     const proof = await revokeAndVerify(session, token.accessor, correlation());
     if (proof !== "absent") {
+      if (token.meta?.operation_id !== undefined) unproven.add(token.meta.operation_id);
       const credentialId = credentialIdSchema.safeParse(token.meta?.credential_id);
       left.push({
         credentialId: credentialId.success ? credentialId.data : null,
@@ -180,6 +186,8 @@ async function settle(
   let issuancesSettled = 0;
   for (const row of rows) {
     if (row.state !== "needs_review" && row.state !== "issuing") continue;
+    // Its own token is alive as far as anyone can prove: listed in step 2 already.
+    if (unproven.has(row.issuance_operation_id)) continue;
     const accessor = found.get(row.issuance_operation_id);
     if (row.state === "issuing" || (accessor === undefined && !executorsExcluded)) {
       left.push({ credentialId: row.id, reason: "needs_exclusion" });

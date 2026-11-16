@@ -4,6 +4,7 @@
 // (AC-1.11). Whatever stops the drive leaves the operation executing; the
 // tick's driver finishes it. Tokens are compared by status codes only.
 import { randomUUID } from "node:crypto";
+import { readFileSync } from "node:fs";
 import { PassThrough } from "node:stream";
 import { listUnresolved } from "@mykey/db";
 import { machineName } from "@mykey/openbao";
@@ -27,6 +28,8 @@ import {
   successRows,
   type Place,
 } from "../../harness/lifecycle-fixture.ts";
+import { machineFetch, machinePath, type MachineAnswer } from "../../harness/machine.ts";
+import type { Answer } from "../../harness/secrets-fixture.ts";
 import { readAuditLog } from "../../harness/stack.ts";
 
 let f: CredentialsFixture;
@@ -166,6 +169,64 @@ describe("environment archive", () => {
       hold.release();
     }
     expect((await pending).status).toBe(200);
+  });
+
+  // Gate review, Important 2: the archive takes no environment lock (Ruling 46), so
+  // a machine read admitted before the archive's admission is checked again when
+  // it commits; from revoking on it answers nothing.
+  it("a machine read admitted before the archive's admission does not answer after it: 403 action_denied, no entries, no machine.resolve row", async () => {
+    const { place, tokens } = await placeWithCredentials(1);
+    const made = await f.send("POST", `${place.path}/secrets`, {
+      body: { name: "READ", value: "synthetic" },
+    });
+    expect(made.status).toBe(201);
+    const envName = (
+      await f.api.superuser.query<{ name: string }>(
+        "SELECT name FROM app.environment WHERE id = $1",
+        [place.environmentId],
+      )
+    ).rows[0]!.name;
+    let pending: Promise<Answer> | null = null;
+    let admitted!: () => void;
+    const archiveAdmitted = new Promise<void>((resolve) => {
+      admitted = resolve;
+    });
+    let readDone!: () => void;
+    const readFinished = new Promise<void>((resolve) => {
+      readDone = resolve;
+    });
+    f.setFaults(async (point) => {
+      if (point === "after_backend_read" && pending === null) {
+        // The read has its values and still holds the environment's lock.
+        pending = archive(f, place.path);
+        await archiveAdmitted;
+      } else if (point === "archive_after_marker") {
+        admitted();
+        await readFinished;
+      }
+    });
+    let answer: MachineAnswer;
+    try {
+      answer = await machineFetch(
+        { port: f.api.port, ca: readFileSync(f.stack.api.certAuthorityPath) },
+        "POST",
+        machinePath(place.projectId, envName, "resolve"),
+        { token: tokens[0]! },
+      );
+    } finally {
+      readDone();
+    }
+    f.setFaults(null);
+    expect(pending).not.toBeNull();
+    const archived = await pending!;
+    expect([answer.status, answer.code]).toEqual([403, "action_denied"]);
+    expect(answer.body.entries).toBeUndefined();
+    const rows = await f.api.superuser.query(
+      "SELECT 1 FROM audit.event WHERE action = 'machine.resolve' AND request_id = $1",
+      [answer.headers.get("x-request-id")],
+    );
+    expect(rows.rowCount).toBe(0);
+    expect(archived.status).toBe(200);
   });
 
   it("a wrong confirmation → 422; editorA is denied; ownerB gets the hidden 404", async () => {

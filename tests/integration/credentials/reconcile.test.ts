@@ -9,7 +9,16 @@
 import { randomUUID } from "node:crypto";
 import { PassThrough } from "node:stream";
 import { issuerBaoFromDirectory } from "@mykey/api";
-import { appRoleLogin, machineName, type IssuedToken } from "@mykey/openbao";
+import { createPool } from "@mykey/db";
+import {
+  OpenBaoClient,
+  appRoleLogin,
+  machineName,
+  namespaceFor,
+  type IssuedToken,
+} from "@mykey/openbao";
+import { OpenBaoAdmin } from "@mykey/openbao/admin";
+import { reconcileCredentials } from "@mykey/operations/operator";
 import { runOps } from "@mykey/ops";
 import type { OrganizationId } from "@mykey/contracts";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
@@ -148,7 +157,83 @@ async function unresolvedIssuance(
   return { operationId, credentialId };
 }
 
+/**
+ * reconcileCredentials as the command calls it, with the real stores, except
+ * that a revoke of `silent`, and every lookup of it after one, is answered by a
+ * timeout without being sent: the listing still sees the token, it stays alive
+ * in OpenBao and its absence cannot be proven.
+ */
+async function reconcileWithSilent(env: EnvName, silent: string, executorsExcluded: boolean) {
+  const pool = createPool(f.api.database.targets.maintenance, { max: 3 });
+  const organizationId = f.tenants.a.organizationId as OrganizationId;
+  const real = new OpenBaoClient(f.stack.bao, {
+    namespace: namespaceFor(organizationId),
+    token: f.stack.bao.rootToken,
+  });
+  const unanswered = { ok: false as const, kind: "unknown" as const, cause: "timeout" as const };
+  let revokeTried = false;
+  const bao = new Proxy(real, {
+    get(target, property, receiver) {
+      if (property === "tokenRevokeAccessor" || property === "tokenLookupAccessor") {
+        return (accessor: string, ...rest: unknown[]) => {
+          if (accessor === silent && property === "tokenRevokeAccessor") revokeTried = true;
+          return accessor === silent && revokeTried
+            ? Promise.resolve(unanswered)
+            : (target[property] as (...args: unknown[]) => Promise<unknown>).call(
+                target,
+                accessor,
+                ...rest,
+              );
+        };
+      }
+      return Reflect.get(target, property, receiver) as unknown;
+    },
+  });
+  try {
+    return await reconcileCredentials(
+      {
+        pool,
+        admin: new OpenBaoAdmin(f.stack.bao, f.stack.bao.rootToken),
+        bao,
+        requestId: randomUUID(),
+      },
+      {
+        scope: {
+          organizationId,
+          projectId: f.env(env).projectId,
+          environmentId: envId(env),
+        },
+        executorsExcluded,
+      },
+    );
+  } finally {
+    await pool.end();
+  }
+}
+
 describe("ops reconcile-credentials", () => {
+  // Gate review, Critical 1 (Doc 10 §4.1 rule 11): exclusion ends a create that
+  // may still arrive; it never settles a token that was found and not proven gone.
+  it("excluded, but the issuance's own token was found and its revocation is unproven: the row stays needs_review (unproven), the token still works; a run with OpenBao answering settles it", async () => {
+    const { operationId, credentialId } = await unresolvedIssuance("env1b", "after_create_sent");
+    const [token] = await machineAccessors(f, envId("env1b"));
+    expect(token?.meta?.operation_id).toBe(operationId);
+    const result = await reconcileWithSilent("env1b", token!.accessor, true);
+    if (result.kind !== "done") throw new Error(`reconcile answered ${result.kind}`);
+    expect(result.issuancesSettled).toBe(0);
+    expect(result.left.map((entry) => entry.reason)).toEqual(["unproven"]);
+    expect(await stateOf(credentialId)).toBe("needs_review");
+    expect((await operation(operationId))?.state).toBe("uncertain");
+    expect((await machineAccessors(f, envId("env1b"))).length).toBe(1);
+    expect((await f.issue("env1b")).code).toBe("state_conflict");
+
+    const answered = await reconcile("env1b", ["--executors-excluded", "yes"]);
+    expect(answered.code).toBe(0);
+    expect(answered.out).toContain("issuances-settled 1");
+    expect(await stateOf(credentialId)).toBe("revoked");
+    expect(await machineAccessors(f, envId("env1b"))).toEqual([]);
+  });
+
   it("a token with the environment's machine policy that no row names is revoked and counted; an active credential and the AppRole login tokens are left alone", async () => {
     const active = await issueFor(f, "env1a", { ttlSeconds: 600 });
     const stray = await issuerToken("env1a");
@@ -192,14 +277,15 @@ describe("ops reconcile-credentials", () => {
   });
 
   it("a second run changes nothing and says so; it writes one more audit row", async () => {
+    const before = (await auditOf("env1b")).length;
     await issuerToken("env1b");
     expect((await reconcile("env1b")).code).toBe(0);
     const again = await reconcile("env1b");
     expect(again.code).toBe(0);
     expect(again.out).toContain("nothing to change");
     const audit = await auditOf("env1b");
-    expect(audit).toHaveLength(2);
-    expect(audit[1]?.details).toMatchObject({
+    expect(audit).toHaveLength(before + 2);
+    expect(audit.at(-1)?.details).toMatchObject({
       unrecordedRevoked: 0,
       revocationsCompleted: 0,
       issuancesSettled: 0,

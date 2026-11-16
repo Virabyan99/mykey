@@ -32,11 +32,22 @@ export interface Reply {
   noLength?: boolean;
 }
 
+/** One answer, or a sequence answered in order whose last entry repeats. */
+type Answers = Reply | "hang" | readonly (Reply | "hang")[];
+
 export interface ServerScript {
   cert?: "good" | "other-host" | "expired";
-  version?: Reply | "hang";
-  keys?: Reply | "hang";
-  resolve?: Reply | "hang";
+  version?: Answers;
+  keys?: Answers;
+  resolve?: Answers;
+}
+
+/** The answer to the `seen`th request (0-based) of a route. */
+function nth(answers: Answers | undefined, seen: number): Reply | "hang" | undefined {
+  if (answers === undefined || !Array.isArray(answers))
+    return answers as Reply | "hang" | undefined;
+  const list = answers as readonly (Reply | "hang")[];
+  return list[Math.min(seen, list.length - 1)];
 }
 
 export interface CliServer {
@@ -100,6 +111,7 @@ export async function startCliServer(script: ServerScript = {}): Promise<CliServ
         ? paths.expired
         : paths.good;
   const requests: SeenRequest[] = [];
+  const counts = { version: 0, keys: 0, resolve: 0 };
   const server = https.createServer(
     { cert: readFileSync(pair.cert), key: readFileSync(pair.key) },
     (request, response) => {
@@ -113,13 +125,13 @@ export async function startCliServer(script: ServerScript = {}): Promise<CliServ
       const machine = MACHINE.exec(path);
       let reply: Reply | "hang";
       if (request.method === "GET" && path === "/v1/version") {
-        reply = script.version ?? { status: 200, body: goodVersion() };
+        reply = nth(script.version, counts.version++) ?? { status: 200, body: goodVersion() };
       } else if (machine !== null && request.headers.authorization === undefined) {
         reply = errorReply(401, "unauthenticated").reply;
       } else if (request.method === "GET" && machine?.[3] === "keys") {
-        reply = script.keys ?? { status: 200, body: goodKeys() };
+        reply = nth(script.keys, counts.keys++) ?? { status: 200, body: goodKeys() };
       } else if (request.method === "POST" && machine?.[3] === "resolve") {
-        reply = script.resolve ?? { status: 200, body: goodResolve() };
+        reply = nth(script.resolve, counts.resolve++) ?? { status: 200, body: goodResolve() };
       } else {
         reply = errorReply(404, "not_found").reply;
       }
