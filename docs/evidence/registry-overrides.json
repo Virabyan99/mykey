@@ -767,6 +767,12 @@
       "status": "SPIKE_PASS",
       "evidence": ["docs/evidence/session-6/run-6.2.md"],
       "note": "Chained audit segments (closed UTC days, rotated OpenBao files) read back from R2 before verified_at; late rows archived once; audit.purge_archived() the only delete, whole verified days 365 days old; locally and on staging."
+    },
+    {
+      "id": "FR-1.60",
+      "status": "SPIKE_PASS",
+      "evidence": ["docs/evidence/session-6/run-6.3.md"],
+      "note": "Rate limits as pipeline steps (source before the body, session, credential, reveal/import/export/issue per person, machine misses per source); 429 with retry-after; a counter that cannot be written is 503; across two processes; locally."
     }
   ]
 }
