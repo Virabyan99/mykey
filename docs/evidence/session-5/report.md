@@ -287,7 +287,7 @@ Every deviation is a ruling in its run note; these are the ones that change what
 
 - PR #11 (the plan, docs only): about 2 minutes.
 - The CLI matrix (one dispatch): about 64 billed minutes, macOS counted ten times.
-- The gate pull request's one CI run: a full run, about 50 minutes by Session 4's measure. The pull request's checks hold the figure; it is not written back here, because each push costs another run.
+- The gate pull request (#12): **its CI did not run.** GitHub refused every job: "recent account payments have failed or your spending limit needs to be increased" (run 43841366118). The month's included minutes are used up. CI runs once when the owner raises the spending limit or the minutes renew, by hand: `gh workflow run ci --ref session-5`.
 - Pushes to `session-5` without a pull request ran nothing.
 
 ## Open issues (with owner runs)
@@ -297,6 +297,12 @@ Every deviation is a ruling in its run note; these are the ones that change what
 - **The deferred minors** above, each with its run.
 - **The owner's decisions still open:** Actions minutes (items 1 and 5) and production (item 3).
 - **Flakes:** two `unseal` staging tests (KMS-side timing) are watched.
+- **CI of PR #12 has not run** (Actions billing, above). The gate's proof is local and on staging; the pull request's checks are not green until a run.
+- **GitGuardian flags five "generic high entropy secrets" on PR #12.** All five are UUIDs, checked by pattern at the gate:
+  - a project id in `tests/unit/cli/config.test.ts`;
+  - credential ids in `run-5.4-staging-archive.json` and `run-5.8-consumers.json`.
+
+  These are false positives (incidents 40119419–40119421, 40123807, 40123808). Only the owner can dismiss them in the GitGuardian dashboard.
 
 ## What Sessions 6 and 7 must know
 
