@@ -1,7 +1,7 @@
 // Run 6.1 Task B Step 5 (P-107): the served query on 200,000 synthetic rows
 // reads both indexes — the organization's for tenant rows, the subject's
 // partial index for account rows — and never scans the table. The plan's text
-// is written to the evidence directory for the run note.
+// is written to the evidence directory for the run note (MYKEY_WRITE_EVIDENCE=1).
 import { randomUUID } from "node:crypto";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -74,9 +74,12 @@ describe("the served query's plan (P-107)", () => {
       statement.values,
     );
     const plan = result.rows.map((row) => row["QUERY PLAN"]).join("\n");
-    const dir = join(import.meta.dirname, "..", "..", "..", "docs", "evidence", "session-6");
-    mkdirSync(dir, { recursive: true });
-    writeFileSync(join(dir, "audit-explain.txt"), `${plan}\n`);
+    // The run note's copy is written on request only: a suite run leaves the tree clean.
+    if (process.env.MYKEY_WRITE_EVIDENCE === "1") {
+      const dir = join(import.meta.dirname, "..", "..", "..", "docs", "evidence", "session-6");
+      mkdirSync(dir, { recursive: true });
+      writeFileSync(join(dir, "audit-explain.txt"), `${plan}\n`);
+    }
     expect(plan).toContain("event_organization_occurred_idx");
     expect(plan).toContain("event_subject_occurred_idx");
     expect(plan).not.toMatch(/Seq Scan on event/);
