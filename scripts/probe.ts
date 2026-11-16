@@ -225,7 +225,14 @@ async function sinkTest(action: string | undefined): Promise<void> {
   } else throw new Error("sinktest needs up | rows | down");
 }
 
-async function deploy(config: WorkerConfig = workerConfig()): Promise<void> {
+/**
+ * `--no-cron` (Run 6.4 Task D): the Worker without its schedule, so the
+ * watcher's alert can be proven; a plain `deploy` restores it.
+ */
+async function deploy(
+  config: WorkerConfig = workerConfig(),
+  opts: { cron?: boolean } = {},
+): Promise<void> {
   const { zoneId, accountId } = await zoneAndAccount();
   const d1 = config.d1_databases[0];
   if (d1 === undefined) throw new Error("no d1 database in wrangler.jsonc");
@@ -253,9 +260,13 @@ async function deploy(config: WorkerConfig = workerConfig()): Promise<void> {
   await cf(
     "PUT",
     `/accounts/${accountId}/workers/scripts/${config.name}/schedules`,
-    config.triggers.crons.map((cron) => ({ cron })),
+    opts.cron === false ? [] : config.triggers.crons.map((cron) => ({ cron })),
   );
-  say(`worker: crons ${config.triggers.crons.join(", ")}`);
+  say(
+    opts.cron === false
+      ? "worker: crons removed (--no-cron)"
+      : `worker: crons ${config.triggers.crons.join(", ")}`,
+  );
   for (const route of config.routes.filter((r) => r.custom_domain)) {
     await cf("PUT", `/accounts/${accountId}/workers/domains`, {
       hostname: route.pattern,
@@ -348,15 +359,31 @@ async function state(host: string): Promise<void> {
   say(JSON.stringify(await response.json(), null, 2));
 }
 
+/** Run 6.4 (P-117): the on-demand test message through the Worker's sink. */
+async function alertTest(host: string): Promise<void> {
+  const config = workerConfig();
+  const probeHost = config.routes[0]?.pattern;
+  const token = localSecret("read-token", false);
+  const response = await fetch(`https://${probeHost}/v1/test-alert/${host}`, {
+    method: "POST",
+    headers: { authorization: `Bearer ${token}` },
+  });
+  if (response.status !== 204) throw new Error(`alert-test ${host}: HTTP ${response.status}`);
+  say(`alert-test ${host}: sent`);
+}
+
 if (import.meta.main) {
   const [command, argument] = process.argv.slice(2);
   try {
-    if (command === "deploy") await deploy();
+    if (command === "deploy") await deploy(workerConfig(), { cron: argument !== "--no-cron" });
+    else if (command === "alert-test" && argument !== undefined) await alertTest(argument);
     else if (command === "secrets") await secrets();
     else if (command === "state" && argument !== undefined) await state(argument);
     else if (command === "sinktest") await sinkTest(argument);
     else {
-      warn("usage: node scripts/probe.ts deploy | secrets | state <host> | sinktest up|rows|down");
+      warn(
+        "usage: node scripts/probe.ts deploy [--no-cron] | secrets | state <host> | alert-test <host> | sinktest up|rows|down",
+      );
       process.exitCode = 2;
     }
   } catch (error) {

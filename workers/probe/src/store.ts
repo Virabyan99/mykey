@@ -3,6 +3,12 @@
 // runs is never overwritten by it.
 import { initialState, type AlertIntent, type Heartbeat, type HostState } from "./evaluate.ts";
 
+/** An alert intent, or the on-demand test message (condition "test_alert"). */
+export type LoggedAlert = Pick<AlertIntent, "host" | "sinceMs"> & {
+  condition: string;
+  kind: string;
+};
+
 export interface AlertRow {
   host: string;
   condition: string;
@@ -16,22 +22,29 @@ export interface Store {
   load(host: string, nowMs: number): Promise<HostState>;
   saveHeartbeat(state: HostState, nowMs: number): Promise<void>;
   saveEvaluation(state: HostState, nowMs: number): Promise<void>;
-  logAlert(alert: AlertIntent, atMs: number, delivered: boolean): Promise<void>;
+  logAlert(alert: LoggedAlert, atMs: number, delivered: boolean): Promise<void>;
   recentAlerts(host: string, limit: number): Promise<AlertRow[]>;
+  /** Run 6.4 (P-117): when the host was last evaluated (the watcher reads it); null before the first. */
+  evaluatedAt(host: string): Promise<number | null>;
 }
 
-type HeartbeatPart = Pick<HostState, "lastHeartbeatAt" | "lastHeartbeat" | "reportedSince">;
-type EvaluationPart = Pick<HostState, "knownSince" | "failingSince" | "open">;
+type HeartbeatPart = Pick<HostState, "lastHeartbeatAt" | "lastHeartbeat">;
+type EvaluationPart = Pick<
+  HostState,
+  "knownSince" | "failingSince" | "open" | "badSince" | "unknownSince" | "pendingResolved"
+>;
 
 const heartbeatPart = (state: HostState): HeartbeatPart => ({
   lastHeartbeatAt: state.lastHeartbeatAt,
   lastHeartbeat: state.lastHeartbeat,
-  reportedSince: state.reportedSince,
 });
 const evaluationPart = (state: HostState): EvaluationPart => ({
   knownSince: state.knownSince,
   failingSince: state.failingSince,
   open: state.open,
+  badSince: state.badSince,
+  unknownSince: state.unknownSince,
+  pendingResolved: state.pendingResolved,
 });
 
 function combine(
@@ -40,7 +53,15 @@ function combine(
   beat: HeartbeatPart | null,
   evaluation: EvaluationPart | null,
 ): HostState {
-  return { ...initialState(host, nowMs), ...(evaluation ?? {}), ...(beat ?? {}) };
+  // Rows written before Run 6.4 lack the newer fields (and the heartbeat row
+  // may still hold Session 2's reportedSince): the defaults fill them in.
+  const state: HostState & { reportedSince?: unknown } = {
+    ...initialState(host, nowMs),
+    ...(evaluation ?? {}),
+    ...(beat ?? {}),
+  };
+  delete state.reportedSince;
+  return state;
 }
 
 /** In memory: the unit tests' store. `writes` counts every change. */
@@ -48,6 +69,7 @@ export class MemoryStore implements Store {
   readonly heartbeats = new Map<string, HeartbeatPart>();
   readonly evaluations = new Map<string, EvaluationPart>();
   readonly alerts: AlertRow[] = [];
+  readonly evaluatedAtByHost = new Map<string, number>();
   writes = 0;
 
   load(host: string, nowMs: number): Promise<HostState> {
@@ -60,12 +82,16 @@ export class MemoryStore implements Store {
     this.heartbeats.set(state.host, heartbeatPart(state));
     return Promise.resolve();
   }
-  saveEvaluation(state: HostState): Promise<void> {
+  saveEvaluation(state: HostState, nowMs: number): Promise<void> {
     this.writes += 1;
     this.evaluations.set(state.host, evaluationPart(state));
+    this.evaluatedAtByHost.set(state.host, nowMs);
     return Promise.resolve();
   }
-  logAlert(alert: AlertIntent, atMs: number, delivered: boolean): Promise<void> {
+  evaluatedAt(host: string): Promise<number | null> {
+    return Promise.resolve(this.evaluatedAtByHost.get(host) ?? null);
+  }
+  logAlert(alert: LoggedAlert, atMs: number, delivered: boolean): Promise<void> {
     this.writes += 1;
     this.alerts.push({
       host: alert.host,
@@ -139,13 +165,22 @@ export class D1Store implements Store {
       .run();
   }
 
-  async logAlert(alert: AlertIntent, atMs: number, delivered: boolean): Promise<void> {
+  async logAlert(alert: LoggedAlert, atMs: number, delivered: boolean): Promise<void> {
     await this.#db
       .prepare(
         "INSERT INTO alert_log (host, condition, kind, since, at, delivered) VALUES (?, ?, ?, ?, ?, ?)",
       )
       .bind(alert.host, alert.condition, alert.kind, alert.sinceMs, atMs, delivered ? 1 : 0)
       .run();
+  }
+
+  async evaluatedAt(host: string): Promise<number | null> {
+    // host_state.updated_at is written by every evaluation of the host and by nothing else.
+    const row = (await this.#db
+      .prepare("SELECT updated_at FROM host_state WHERE host = ?")
+      .bind(host)
+      .first()) as { updated_at: number } | null;
+    return row === null ? null : row.updated_at;
   }
 
   async recentAlerts(host: string, limit: number): Promise<AlertRow[]> {

@@ -20,5 +20,8 @@
     "HEALTH_GRACE_SECONDS": "180",
     "REPORTED_GRACE_SECONDS": "180",
     "REMINDER_SECONDS": "3600",
+    // LIMITS.backup.freezeAlertSeconds and maxAgeAlertSeconds (Run 6.4, P-116).
+    "CAPTURE_FREEZE_SECONDS": "600",
+    "BACKUP_MAX_AGE_SECONDS": "93600",
   },
 }

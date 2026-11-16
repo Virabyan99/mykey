@@ -12,6 +12,11 @@ export function formatAlert(alert: AlertIntent): string {
   return `MyKey ${alert.host}: ${alert.condition} ${alert.kind} (since ${time} UTC)`;
 }
 
+/** Run 6.4 (P-117): the on-demand message that proves the path to the owner. */
+export function formatTestAlert(host: string): string {
+  return `MyKey ${host}: test_alert`;
+}
+
 /** True only when the sink answered 2xx. A failure is reported, never thrown. */
 export async function deliver(
   sink: SinkConfig,

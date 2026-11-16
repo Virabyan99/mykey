@@ -16,6 +16,8 @@ const LIMITS_HERE: ProbeLimits = {
   healthGraceSeconds: 180,
   reportedGraceSeconds: 180,
   reminderSeconds: 3600,
+  captureFreezeSeconds: 600,
+  backupMaxAgeSeconds: 93_600,
 };
 const T = 1_800_000_000_000;
 const beat = { bootId: "b", sealed: null, kmsReachable: null };
@@ -32,6 +34,8 @@ describe("evaluate", () => {
   it("uses the limits of @mykey/contracts", () => {
     expect(LIMITS_HERE.heartbeatGraceSeconds).toBe(LIMITS.monitoring.heartbeatGraceSeconds);
     expect(LIMITS_HERE.reminderSeconds).toBe(LIMITS.monitoring.alertReminderSeconds);
+    expect(LIMITS_HERE.captureFreezeSeconds).toBe(LIMITS.backup.freezeAlertSeconds);
+    expect(LIMITS_HERE.backupMaxAgeSeconds).toBe(LIMITS.backup.maxAgeAlertSeconds);
   });
 
   it("nothing opens inside the grace period", () => {
