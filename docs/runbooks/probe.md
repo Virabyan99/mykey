@@ -17,7 +17,17 @@ Every message reads `MyKey <host>: <condition> <opened|reminder|resolved> (since
 
 ## Planned work
 
-There is no silence switch. An alert that opens during planned work is expected; it resolves when the work is finished. Keep planned outages short.
+There is no silence switch for planned work. An alert that opens during planned work is expected; it resolves when the work is finished. Keep planned outages short.
+
+## A host not in service yet
+
+A host that is deliberately not serving carries `"inService": false` in `HOSTS` (`workers/probe/wrangler.jsonc`). Production has it since 16 Nov 2026: its gate is closed on purpose and it has no OpenBao, so its `/health` answers down.
+
+- **What changes:** `health_failing` never opens for such a host, and an open one is closed without a message. A "resolved" message would claim the host is healthy.
+- **What still alerts:** every other condition, `heartbeat_missing` included.
+- **Before it existed:** production's `health_failing` repeated every hour from 13 to 16 Nov 2026.
+
+When the host is brought into service, remove the flag (or set it to `true`) and run `node scripts/probe.ts deploy`. If `/health` is still failing then, `health_failing` opens at once with one message.
 
 ## Operating the probe
 

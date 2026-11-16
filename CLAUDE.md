@@ -52,7 +52,7 @@ What exists after Session 5 (details: `docs/evidence/session-5/report.md`, run n
 
   Proven from the release on Linux x64 and arm64 and macOS x64 and arm64 (`cli-matrix.md`, run 43857539084).
 
-- **Staging** runs API `45b5c1f3cc3a` and the matching provisioner, gate open, nothing in review or unresolved. The staging owner is `owner@mykey-staging.invalid` (credentials in `~/.mykey/secrets/hosts/staging/`), with organization `e2350312-…`. **Production** runs the same API with migrations up to `0014` and no gate file (every route `quarantined`; no OpenBao, provisioner or owner there). Production deploys need the owner's permission.
+- **Staging** runs API `45b5c1f3cc3a` and the matching provisioner, gate open, nothing in review or unresolved. The staging owner is `owner@mykey-staging.invalid` (credentials in `~/.mykey/secrets/hosts/staging/`), with organization `e2350312-…`. **Production** runs the same API with migrations up to `0014` and no gate file (every route `quarantined`; no OpenBao, provisioner or owner there). The probe marks it `inService: false`, so its by-design `/health` failure sends no `health_failing`; remove the flag when production goes into service (runbook `probe.md`). Production deploys need the owner's permission.
 - **Evidence registry:** 116 `SPIKE_PASS`, 75 `OPEN`, nothing `PASS`.
 
 Before Sessions 6 ∥ 7 can start:
