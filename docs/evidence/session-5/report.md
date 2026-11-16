@@ -24,7 +24,7 @@ The issues:
 - **A regression of my own, found by the gate.** Session 3's auth tests used `GET /v1/reference` as their "a product route answers" probe. Run 5.9 turned that stub into a real page that needs the served organization and the Scalar asset. Run 5.9 ran only the reference tests, so 14 auth tests failed first in the clean clone. The fix is test-only; see Step 1.
 - **The staging drill's own assumption.** An issuance left unknown has two documented states, and the drill test assumed only one. The product behaved as designed; the test was corrected (Step 5).
 - **The workstation's memory again.** Claude Code stopped two gate jobs at low memory: the first full suite, which ran beside the review agent, and the first consumer rehearsal. Both were run again alone.
-- **Production was not updated.** The owner did not answer, so the default (no) holds.
+- **Production was updated on the owner's yes** (image and migrations `0013`–`0014`); its gate stays not open.
 
 ## Step 1 — the full suite
 
@@ -141,7 +141,12 @@ The evidence files of earlier runs that the staging runs rewrite were restored b
 
 ## Step 6 — production
 
-Not updated, by default: `owner-requests.md` holds no answer to item 3. Production still runs Session 4's API with migrations up to `0012` and no gate file.
+Updated on the owner's yes (`owner-requests.md`, 16 Nov 2026), 09:59–10:05 UTC:
+
+- `push`, `image api` (`45b5c1f3cc3a`, `sha256:e0925d0e…`), `db-init` (applied `0013_credential_lifecycle`, `0014_resource_lifecycle`; job queues present), `up`.
+- **The API started:** one `listening`, 0 restarts. The self-check shows `runtimeLogin: absent` and `issuerLogin: absent`, because production has no OpenBao.
+- **Still absent on production:** the gate file, OpenBao, the provisioner and an owner. Every route answers `503 quarantined` and the probe's `health_failing` stays open until the owner opens its gate.
+- `status`: API, edge and postgres running, `pki-init` exited (it runs once); `gate: absent`; `reviewOpen: 0`; `operationsUnresolved: 0`; `provisioner: absent`.
 
 ## Step 7 — the fresh-context review
 
@@ -295,7 +300,7 @@ Every deviation is a ruling in its run note; these are the ones that change what
 - **macOS** for the CLI (FR-1.51, AC-1.37, PO-8, AGENT-B1): a second matrix dispatch, about 64 minutes, needs the owner's answer.
 - **Rate limits:** unauthenticated machine requests (review Important 3), 60 a minute per credential, and the issuance limits are Run 6.3's.
 - **The deferred minors** above, each with its run.
-- **The owner's decisions still open:** Actions minutes (items 1 and 5) and production (item 3).
+- **The owner's answers (16 Nov):** the repository is public, so Actions minutes no longer count; production yes; merge PR #12. A second CLI matrix run for macOS is now free. It is left to the next session that changes the CLI, or a dispatch by hand.
 - **Flakes:** two `unseal` staging tests (KMS-side timing) are watched.
 - **CI of PR #12 has not run** (Actions billing, above). The gate's proof is local and on staging; the pull request's checks are not green until a run.
 - **GitGuardian flags five "generic high entropy secrets" on PR #12.** All five are UUIDs, checked by pattern at the gate:

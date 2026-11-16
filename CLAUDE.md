@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-MyKey Private is a single-operator secrets service. OpenBao holds secret values and versions; PostgreSQL holds accounts, permissions, operations and audit; a thin CLI starts an application with a complete secret set and no `.env` file. The GitHub repository is `Virabyan99/mykey` (private).
+MyKey Private is a single-operator secrets service. OpenBao holds secret values and versions; PostgreSQL holds accounts, permissions, operations and audit; a thin CLI starts an application with a complete secret set and no `.env` file. The GitHub repository is `Virabyan99/mykey` (public since 16 Nov 2026).
 
 The project is in **Stage 1**, a 14-day plan of nine sessions.
 
@@ -52,7 +52,7 @@ What exists after Session 5 (details: `docs/evidence/session-5/report.md`, run n
 
   Proven on Linux x64 and arm64. **macOS is not proven:** the one matrix run failed on the suite's test certificates.
 
-- **Staging** runs API `45b5c1f3cc3a` and the matching provisioner, gate open, nothing in review or unresolved. The staging owner is `owner@mykey-staging.invalid` (credentials in `~/.mykey/secrets/hosts/staging/`), with organization `e2350312-…`. **Production** was not updated in Session 5: Session 4's API, migrations up to `0012`, no gate file (every route `quarantined`). Production deploys need the owner's permission.
+- **Staging** runs API `45b5c1f3cc3a` and the matching provisioner, gate open, nothing in review or unresolved. The staging owner is `owner@mykey-staging.invalid` (credentials in `~/.mykey/secrets/hosts/staging/`), with organization `e2350312-…`. **Production** runs the same API with migrations up to `0014` and no gate file (every route `quarantined`; no OpenBao, provisioner or owner there). Production deploys need the owner's permission.
 - **Evidence registry:** 112 `SPIKE_PASS`, 79 `OPEN`, nothing `PASS`.
 
 Before Sessions 6 ∥ 7 can start:
@@ -199,10 +199,11 @@ Session 4 (details in its run notes and report):
 - **One heavy job at a time on the workstation.** Two of the integration suite, the staging suite and a Docker build at once exhaust its memory. Workers then fail to start (`0xC0000142`) and suites starve or die. A killed shell can leave vitest processes behind: find them by command line (`Win32_Process`) before starting again.
 - **The API image needs `--build-arg MYKEY_BUILD=$(git rev-parse --short=12 HEAD)`.** Without it the API logs `startup_refused` and restarts in a loop. The probe then raises `health_failing`.
 - **CI's integration job runs in two shards** (`--shard=N/2`, about 16 and 21 min). One job hit the 30-minute limit.
-- **Actions minutes are scarce; the owner wants CI cost at a minimum.** The private repository gets 2,000 minutes a month, and Session 4 used over 1,800 of them. A full run costs about 50 minutes, almost all of it the integration suite.
+- **CI cost:** since 16 Nov 2026 the repository is public, so standard GitHub-hosted runners cost no Actions minutes. Before that, the private repository's 2,000 minutes a month ran out at the Session 5 gate: GitHub refused every job ("spending limit"). A full run takes about 50 minutes of wall time, almost all of it the integration suite.
   - CI runs only on pull requests and by hand (`gh workflow run ci --ref <branch>`), never on a plain push. A pull request whose changes are all under `docs/` or in `.md` files runs only `check` (with the unit tests) and the secret scan.
-  - Prove each run locally. Open the pull request at the gate, not earlier, and push fixes to it in batches: each push to it costs a full run.
-  - `cli-matrix` runs only by hand, once at a gate that changed the CLI. Its macOS minutes count ten times.
+  - Still prove each run locally and open the pull request at the gate: a red CI found late costs a session's time, not money.
+  - `cli-matrix` runs only by hand, at a gate that changed the CLI.
+- **The repository is public.** Everything committed, history included, is visible: never commit a host secret, a credential or a real value (the rules above are unchanged). Host addresses appear in run notes and runbooks; the hosts are protected by the VPN and the firewall, not by the addresses being unknown.
 - **Staging tests go stale.** A route that gains a handler, a container added to a host or a moved credential breaks a staging test written earlier. Run the staging files one at a time. A staging run also rewrites committed evidence files of earlier runs (host scans, drill JSON): restore them before committing.
 - **OpenBao's audit device on staging is about 500 MB**, too large to download in a test. Search it on the host with `countOnHost` (`tests/harness/staging.ts`): the values go on fd 3 and only counts come back, and its controls must be found. Never use `producer | grep -f /dev/stdin`: inside a pipeline grep's stdin is the producer, so the search finds nothing.
 - **PostgreSQL on a host** accepts `pg_dump` only on its socket with the superuser password (`PGPASSWORD="$(cat "$POSTGRES_PASSWORD_FILE")"` inside the container); TCP on loopback is refused by `pg_hba`.

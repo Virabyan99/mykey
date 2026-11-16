@@ -11,4 +11,8 @@ Sent 2026-11-15 in the Session 5 execution chat. Run 5.1 starts without waiting.
 
 ## Answers
 
-(none yet)
+Given 2026-11-16 in the Session 5 execution chat:
+
+- **Items 1 and 5 (Actions minutes):** the owner made the repository public, so Actions minutes no longer count.
+- **Item 3 (production):** yes.
+- **Merge:** the owner asked for PR #12 to be merged.
