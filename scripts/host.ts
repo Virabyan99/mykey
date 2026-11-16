@@ -112,6 +112,7 @@ export const USAGE = `usage: node scripts/host.ts <staging|prod> <command> [--pu
   gate <open|close|status>       the service gate record (P-43); every deploy starts closed
   keys init                      the auth key rings: new files on the workstation, installed on the host
   ops <command> [--flag value]   an operator command (apps/ops) as maintenance, through a tunnel
+  ops-secrets                    role passwords for ops jobs on the host; MYKEY_HOST_NAME in host.env
   quiesce                        gate close, stop api and provisioner, restart OpenBao (staging only)
   resume                         start api and provisioner; the gate stays closed until gate open
 --public uses the public address instead of the VPN (bootstrap always does).`;
@@ -127,7 +128,8 @@ export type HostCommand = { host: HostName; via: Address } & (
         | "status"
         | "bao-init"
         | "quiesce"
-        | "resume";
+        | "resume"
+        | "ops-secrets";
     }
   | { command: "apply"; target: "firewall" | "ssh" }
   | { command: "image"; name: string; tar: string }
@@ -211,6 +213,7 @@ export function parseHostArgs(argv: string[]): HostCommand {
     case "bao-init":
     case "quiesce":
     case "resume":
+    case "ops-secrets":
       if (positional.length !== 0) throw new Error(USAGE);
       return { ...base, command };
     case "apply": {
@@ -1720,7 +1723,46 @@ async function main(argv: string[], log: Logger): Promise<number> {
       return 0;
     case "ops":
       return runOpsOnHost(host, command.argv, address);
+    case "ops-secrets":
+      await runOpsSecrets(host, address, log);
+      return 0;
   }
+}
+
+/** Run 6.2 (P-111): the role passwords ops jobs log in with, where ops-run.sh mounts them. */
+export const OPS_ROLE_SECRETS = {
+  maintenance: "/etc/mykey/secrets/ops/maintenance",
+  backup_reader: "/etc/mykey/secrets/ops/backup_reader",
+} as const;
+
+/**
+ * Installs the workstation's custody copies of the maintenance and
+ * backup_reader passwords for the ops image (owner 1000:1000, mode 0400) and
+ * records MYKEY_HOST_NAME. Values cross on stdin only; names are printed.
+ */
+async function runOpsSecrets(host: HostEntry, address: Address, log: Logger): Promise<void> {
+  for (const [role, path] of Object.entries(OPS_ROLE_SECRETS)) {
+    const file = workstationRoleSecretFile(host.name, role as RoleName);
+    if (!existsSync(file)) throw new Error(`no custody copy of the ${role} password: ${file}`);
+    const value = readFileSync(file, "utf8").trim();
+    if (value === "") throw new Error(`the custody copy of the ${role} password is empty`);
+    registerSecret(value);
+    expectSuccess(
+      await sshExec(host, secretInstallCommand(path, "1000:1000"), {
+        sudo: true,
+        address,
+        secretOutput: true,
+        stdin: value,
+      }),
+      `installing ${path}`,
+    );
+    log.info(`${host.name}: ${path} installed`);
+  }
+  expectSuccess(
+    await sshExec(host, hostEnvSetCommand("MYKEY_HOST_NAME", host.name), { sudo: true, address }),
+    "writing MYKEY_HOST_NAME",
+  );
+  log.info(`${host.name}: MYKEY_HOST_NAME=${host.name}`);
 }
 
 /**

@@ -10,6 +10,7 @@
   "dependencies": {
     "@mykey/audit": "workspace:*",
     "@mykey/auth": "workspace:*",
+    "@mykey/backup": "workspace:*",
     "@mykey/contracts": "workspace:*",
     "@mykey/db": "workspace:*",
     "@mykey/openbao": "workspace:*",

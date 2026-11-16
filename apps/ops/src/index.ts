@@ -9,3 +9,10 @@ export {
   type OpsIo,
 } from "./cli.ts";
 export { outDirectory, writeSecretFile } from "./output.ts";
+export {
+  MissingSetting,
+  OPS_HOSTS,
+  opsEnvFromEnvironment,
+  type HostJobEnv,
+  type OpsHost,
+} from "./host-env.ts";

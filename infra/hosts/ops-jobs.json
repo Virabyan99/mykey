@@ -1,0 +1,15 @@
+{
+  "jobs": {
+    "status-check": {
+      "command": "operations",
+      "role": "maintenance",
+      "secrets": {
+        "/run/mykey/secrets/db-password": "/etc/mykey/secrets/ops/maintenance"
+      },
+      "writable": {},
+      "env": {},
+      "unit": null,
+      "schedule": null
+    }
+  }
+}

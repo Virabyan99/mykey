@@ -125,7 +125,7 @@ export function imageScanArgs(lock: DependenciesLock, key: string, repository?: 
 }
 
 /** Images built from this repository (Run 2.10): built, saved and scanned from the archive. */
-export const OWN_SCANNED_IMAGES = ["api", "provisioner"];
+export const OWN_SCANNED_IMAGES = ["api", "provisioner", "ops"];
 
 /**
  * Trivy over our own image's archive (`<archiveDir>/<name>.tar`). Only the

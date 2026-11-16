@@ -48,6 +48,7 @@
     "@aws-sdk/client-s3": "catalog:",
     "@eslint/js": "10.0.1",
     "@mykey/audit": "workspace:*",
+    "@mykey/backup": "workspace:*",
     "@mykey/auth": "workspace:*",
     "@mykey/contracts": "workspace:*",
     "@mykey/db": "workspace:*",
