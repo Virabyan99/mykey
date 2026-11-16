@@ -43,6 +43,8 @@ export type LogEntry =
     }
   | { event: "unlisted_error"; time: string; requestId: string; routeId: string; code: ErrorCode }
   | { event: "output_invalid"; time: string; requestId: string; routeId: string; status: number }
+  /** Run 6.1 (P-107): a stored audit row whose details fail its schema; served with `{}`. */
+  | { event: "output_invalid"; time: string; requestId: string; routeId: string; eventId: string }
   | { event: "outbox"; time: string; outcome: "failed"; errorClass: string }
   /** Run 5.9: the reference's asset is not in the image; reference.get answers 503. */
   | { event: "reference_asset_missing"; time: string }

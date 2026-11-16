@@ -13,3 +13,4 @@ export {
 } from "./events.ts";
 export { AuditEventInvalid, AuditUnavailable, appendAudit } from "./append.ts";
 export { AUDIT_COVERAGE, type Coverage } from "./coverage.ts";
+export { servedDetails } from "./read.ts";

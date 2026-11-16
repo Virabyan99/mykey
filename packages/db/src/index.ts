@@ -127,3 +127,15 @@ export {
   openCredentialWork,
   type LifecycleStep,
 } from "./repos/lifecycle.ts";
+export {
+  AUDIT_READ_TIMEOUT_MS,
+  AuditReadTimeout,
+  auditListStatement,
+  databaseNowMicros,
+  listAuditEvents,
+  operationStates,
+  projectTargetIds,
+  targetNames,
+  type AuditFilter,
+  type AuditRow,
+} from "./repos/audit-read.ts";

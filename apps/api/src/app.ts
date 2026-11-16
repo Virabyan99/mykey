@@ -25,6 +25,8 @@ import { archiveHandler, reactivateHandler } from "./routes/lifecycle.ts";
 import { machineKeysHandler, machineResolveHandler } from "./routes/machine.ts";
 import { healthHandler } from "./routes/health.ts";
 import { importApplyHandler, importPreviewHandler, importResumeHandler } from "./routes/imports.ts";
+import { activityListHandler } from "./routes/activity.ts";
+import { auditListHandler } from "./routes/audit.ts";
 import { operationsGetHandler, operationsListHandler } from "./routes/operations.ts";
 import { organizationsListHandler } from "./routes/organizations.ts";
 import {
@@ -115,6 +117,8 @@ function handlers(
     "environments.rename": environmentsRenameHandler,
     "operations.get": operationsGetHandler,
     "operations.list": operationsListHandler,
+    "audit.list": auditListHandler,
+    "activity.list": activityListHandler,
     "secrets.list": secretsListHandler,
     "secrets.history": secretsHistoryHandler,
     "secrets.reveal": secretsRevealHandler,

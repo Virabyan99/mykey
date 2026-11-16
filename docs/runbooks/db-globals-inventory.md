@@ -36,6 +36,8 @@ Written in Run 1.7 (2026-11-10) against PostgreSQL 18.6.
 - **Machine credentials (Run 5.1, migration `0013`).** On `app.machine_credential`: the partial unique index `machine_credential_unresolved_issuance_key (environment_id) WHERE state IN ('issuing', 'needs_review')` (an unresolved issuance blocks the next one for its environment) and the index `machine_credential_environment_state_idx (environment_id, state)`. `api_runtime` keeps `UPDATE` on `accessor`, `effective_expires_at`, `state` and `last_used_at` only, and has no `DELETE`.
 - **Archive and reactivate (Run 5.3, migration `0014`).** The function `app.lifecycle_transition(text, uuid, uuid, uuid, text, text)`: `SECURITY DEFINER`, `search_path = pg_catalog, pg_temp`, owned by `migration_owner`, `EXECUTE` for `api_runtime` only (revoked from `PUBLIC`). `api_runtime` loses `UPDATE` on `app.project (state, archive_operation_id)` and `app.environment (state, archive_origin, archive_operation_id)`.
 
+- **The audit view (Run 6.1, migration `0015`).** On `audit.event`: the stored generated column `subject_user_id` (the actor when it is a user, else the target when it is a user) and the partial index `event_subject_occurred_idx (subject_user_id, occurred_at, id) WHERE organization_id IS NULL`. No grant changes: the column is covered by the table's existing grants.
+
 ## Reconstruction order
 
 Runs 2.9 and 6.8 follow this order and record the result of each step.
