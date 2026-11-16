@@ -44,7 +44,9 @@ import {
   type Hosts,
 } from "@mykey/ops/remote";
 import { KEY_RINGS } from "@mykey/auth";
+import { loadR2Credentials } from "@mykey/backup";
 import type { RoleName } from "@mykey/db";
+import { readOpsJobs } from "./ops-jobs.ts";
 
 const REPOSITORY = resolve(import.meta.dirname, "..");
 const FIREWALL = `${REMOTE.hostsDir}/firewall`;
@@ -113,6 +115,8 @@ export const USAGE = `usage: node scripts/host.ts <staging|prod> <command> [--pu
   keys init                      the auth key rings: new files on the workstation, installed on the host
   ops <command> [--flag value]   an operator command (apps/ops) as maintenance, through a tunnel
   ops-secrets                    role passwords for ops jobs on the host; MYKEY_HOST_NAME in host.env
+  r2-install <audit-archive>     the S3 credentials of that job's R2 token, on stdin
+  timers                         install and start the job timers (ops-jobs.json, audit rotation)
   quiesce                        gate close, stop api and provisioner, restart OpenBao (staging only)
   resume                         start api and provisioner; the gate stays closed until gate open
 --public uses the public address instead of the VPN (bootstrap always does).`;
@@ -129,7 +133,8 @@ export type HostCommand = { host: HostName; via: Address } & (
         | "bao-init"
         | "quiesce"
         | "resume"
-        | "ops-secrets";
+        | "ops-secrets"
+        | "timers";
     }
   | { command: "apply"; target: "firewall" | "ssh" }
   | { command: "image"; name: string; tar: string }
@@ -146,6 +151,7 @@ export type HostCommand = { host: HostName; via: Address } & (
   | { command: "gate"; action: GateAction }
   | { command: "keys"; action: "init" }
   | { command: "ops"; argv: string[] }
+  | { command: "r2-install"; name: R2InstallName }
 );
 
 export type GateAction = "open" | "close" | "status";
@@ -214,6 +220,7 @@ export function parseHostArgs(argv: string[]): HostCommand {
     case "quiesce":
     case "resume":
     case "ops-secrets":
+    case "timers":
       if (positional.length !== 0) throw new Error(USAGE);
       return { ...base, command };
     case "apply": {
@@ -330,6 +337,13 @@ export function parseHostArgs(argv: string[]): HostCommand {
         throw new Error("gate needs open, close or status");
       }
       return { ...base, command, action };
+    }
+    case "r2-install": {
+      const [name] = positional;
+      if (positional.length !== 1 || !(name !== undefined && name in R2_INSTALLS)) {
+        throw new Error(`r2-install needs one of: ${Object.keys(R2_INSTALLS).join(", ")}`);
+      }
+      return { ...base, command, name: name as R2InstallName };
     }
     case "maint": {
       const minutes = Number(positional[0]);
@@ -1726,7 +1740,90 @@ async function main(argv: string[], log: Logger): Promise<number> {
     case "ops-secrets":
       await runOpsSecrets(host, address, log);
       return 0;
+    case "r2-install":
+      await runR2Install(host, command.name, address, log);
+      return 0;
+    case "timers":
+      await runTimers(host, address, log);
+      return 0;
   }
+}
+
+/** Run 6.2 (P-112): which R2 token each host job uses, and where its three files go. */
+export const R2_INSTALLS = {
+  "audit-archive": {
+    token: "mykey-audit-archive-upload",
+    directory: "/etc/mykey/secrets/r2-audit-archive",
+  },
+} as const;
+export type R2InstallName = keyof typeof R2_INSTALLS;
+
+/** The three files of a job's R2 credentials, as ops-run.sh mounts them. */
+export function r2InstallFiles(
+  name: R2InstallName,
+): Record<"accountId" | "accessKeyId" | "secretAccessKey", string> {
+  const { directory } = R2_INSTALLS[name];
+  return {
+    accountId: `${directory}/account-id`,
+    accessKeyId: `${directory}/access-key-id`,
+    secretAccessKey: `${directory}/secret-access-key`,
+  };
+}
+
+/** Installs a job's R2 credentials from workstation custody (owner 1000, mode 0400), on stdin. */
+async function runR2Install(
+  host: HostEntry,
+  name: R2InstallName,
+  address: Address,
+  log: Logger,
+): Promise<void> {
+  const credentials = loadR2Credentials(R2_INSTALLS[name].token);
+  registerSecret(credentials.secretAccessKey);
+  const files = r2InstallFiles(name);
+  for (const field of ["accountId", "accessKeyId", "secretAccessKey"] as const) {
+    expectSuccess(
+      await sshExec(host, secretInstallCommand(files[field], "1000:1000"), {
+        sudo: true,
+        address,
+        secretOutput: true,
+        stdin: credentials[field],
+      }),
+      `installing ${files[field]}`,
+    );
+    log.info(`${host.name}: ${files[field]} installed`);
+  }
+}
+
+/** The timers of host jobs: every unit of ops-jobs.json, and the rotation of OpenBao's audit file. */
+export function jobTimers(): string[] {
+  const units = Object.values(readOpsJobs().jobs).flatMap((job) =>
+    job.unit === null ? [] : [job.unit],
+  );
+  return ["mykey-bao-audit-rotate", ...units];
+}
+
+export function timersCommand(units: readonly string[]): string {
+  for (const unit of units) {
+    if (!/^mykey-[a-z0-9-]+$/.test(unit)) throw new Error(`unusable unit name ${unit}`);
+  }
+  const files = units.flatMap((unit) => [
+    `${REMOTE.hostsDir}/systemd/${unit}.service`,
+    `${REMOTE.hostsDir}/systemd/${unit}.timer`,
+  ]);
+  return [
+    `install -m 0644 ${files.join(" ")} /etc/systemd/system/`,
+    "systemctl daemon-reload",
+    `systemctl enable --now ${units.map((unit) => `${unit}.timer`).join(" ")}`,
+  ].join(" && ");
+}
+
+async function runTimers(host: HostEntry, address: Address, log: Logger): Promise<void> {
+  const units = jobTimers();
+  expectSuccess(
+    await sshExec(host, timersCommand(units), { sudo: true, address }),
+    "installing the job timers",
+  );
+  log.info(`${host.name}: timers enabled: ${units.join(", ")}`);
 }
 
 /** Run 6.2 (P-111): the role passwords ops jobs log in with, where ops-run.sh mounts them. */

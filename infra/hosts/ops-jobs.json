@@ -10,6 +10,26 @@
       "env": {},
       "unit": null,
       "schedule": null
+    },
+    "audit-archive": {
+      "command": "audit-archive",
+      "role": "maintenance",
+      "secrets": {
+        "/run/mykey/secrets/db-password": "/etc/mykey/secrets/ops/maintenance",
+        "/run/mykey/secrets/r2/account-id": "/etc/mykey/secrets/r2-audit-archive/account-id",
+        "/run/mykey/secrets/r2/access-key-id": "/etc/mykey/secrets/r2-audit-archive/access-key-id",
+        "/run/mykey/secrets/r2/secret-access-key": "/etc/mykey/secrets/r2-audit-archive/secret-access-key"
+      },
+      "writable": {
+        "/run/mykey/bao-audit": "/var/lib/mykey/bao-audit/rotated"
+      },
+      "env": {
+        "MYKEY_AUDIT_BUCKET": "mykey-audit-archive",
+        "MYKEY_R2_DIR": "/run/mykey/secrets/r2",
+        "MYKEY_BAO_ROTATED_DIR": "/run/mykey/bao-audit"
+      },
+      "unit": "mykey-audit-archive",
+      "schedule": "*-*-* 01:30:00 UTC"
     }
   }
 }

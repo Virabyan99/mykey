@@ -1,0 +1,10 @@
+[Unit]
+Description=MyKey audit archive daily at 01:30 UTC (Run 6.2)
+
+[Timer]
+OnCalendar=*-*-* 01:30:00 UTC
+Persistent=true
+RandomizedDelaySec=0
+
+[Install]
+WantedBy=timers.target
