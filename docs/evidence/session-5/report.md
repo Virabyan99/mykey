@@ -6,7 +6,7 @@
 
 **PASS WITH ISSUES.** All ten runs are done.
 
-**The CLI is proven on two of four platforms.** Linux x64 and arm64 ran the whole CLI suite from the released files. Both macOS runners failed on the test suite's own certificates, not on the CLI. The fix is proven on Linux and under LibreSSL, but it has not run on macOS. A second matrix run needs the owner's answer on Actions minutes (owner-requests item 5). FR-1.51, AC-1.37, PO-8 and AGENT-B1 stay `OPEN`.
+**The CLI is proven on all four platforms** (added after the merge, 16 Nov 2026). At the gate it was two of four: Linux x64 and arm64 passed from the release, and both macOS runners failed on the test suite's own certificates. Once the repository was public, the matrix ran again for `cli-v0.1.1` (`cli-matrix.md`, "The runs of 16 November"). The certificate fix held. One terminal test needed Python's pty instead of BSD `script` on macOS, a test-only change on branch `session-5-macos`. Run 43857539084 then passed 53/53 on Linux x64, Linux arm64, macOS x64 and macOS arm64. FR-1.51, AC-1.37, PO-8 and AGENT-B1 moved to `SPIKE_PASS`.
 
 What now exists, locally on real stores and on staging through the public name:
 
@@ -16,7 +16,7 @@ What now exists, locally on real stores and on staging through the public name:
 - **The CLI.** `secrets keys | run | export` start a process only with the complete, validated set, with no `.env` file. It is released as `cli-v0.1.1` with a tested installer (D-44), and two consumer runbooks are rehearsed against staging.
 - **The reference.** `/v1/openapi.json` and a self-contained Scalar page at `/v1/reference` are served to owner and admin. In Chromium the page makes no third-party request. Breaking changes against `baseline-v1.json` fail `contracts:check`.
 
-**Registry:** nothing is `PASS`. Items at `SPIKE_PASS` went from 83 to 112; `OPEN` items went from 108 to 79.
+**Registry:** nothing is `PASS`. Items at `SPIKE_PASS` went from 83 to 116; `OPEN` items went from 108 to 75 (112 and 79 at the gate, before the macOS run).
 
 The issues:
 
@@ -217,8 +217,8 @@ The plan's nine questions, in short:
 Each run set its own statuses with its run note. At the gate only FR-1.48's note changed; `pnpm run evidence:build` and `pnpm run check` exit 0.
 
 - **This session's items at `SPIKE_PASS`:** FR-1.17, 1.18, 1.39–1.50, 1.52–1.54, 1.79, 1.85; AC-1.11, 1.19–1.22, 1.40, 1.42; PO-2, PO-10, PO-18, PO-20.
-- **`OPEN`**, with `cli-matrix.md`: FR-1.51, AC-1.37, PO-8, AGENT-B1 (macOS not proven).
-- **Totals:** 112 `SPIKE_PASS`, 79 `OPEN`, nothing `PASS`.
+- **After the merge**, with `cli-matrix.md`: FR-1.51, AC-1.37, PO-8, AGENT-B1 at `SPIKE_PASS` (all four targets, run 43857539084).
+- **Totals:** 116 `SPIKE_PASS`, 75 `OPEN`, nothing `PASS`.
 
 ## The fault table (Run 5.2, `fault-table.md`)
 
@@ -297,10 +297,9 @@ Every deviation is a ruling in its run note; these are the ones that change what
 
 ## Open issues (with owner runs)
 
-- **macOS** for the CLI (FR-1.51, AC-1.37, PO-8, AGENT-B1): a second matrix dispatch, about 64 minutes, needs the owner's answer.
 - **Rate limits:** unauthenticated machine requests (review Important 3), 60 a minute per credential, and the issuance limits are Run 6.3's.
 - **The deferred minors** above, each with its run.
-- **The owner's answers (16 Nov):** the repository is public, so Actions minutes no longer count; production yes; merge PR #12. A second CLI matrix run for macOS is now free. It is left to the next session that changes the CLI, or a dispatch by hand.
+- **The owner's answers (16 Nov):** the repository is public, so Actions minutes no longer count; production yes; merge PR #12. The owner then asked for the macOS matrix: done after the merge, all four targets pass.
 - **Flakes:** two `unseal` staging tests (KMS-side timing) are watched.
 - **CI of PR #12 has not run** (Actions billing, above). The gate's proof is local and on staging; the pull request's checks are not green until a run.
 - **GitGuardian flags five "generic high entropy secrets" on PR #12.** All five are UUIDs, checked by pattern at the gate:
@@ -330,7 +329,7 @@ Every deviation is a ruling in its run note; these are the ones that change what
   - the reference at `/v1/reference` to link to.
 - **The browser project and Playwright** (Chromium revision 1248) exist. `pnpm exec playwright install chromium` is needed once per workstation, and CI does not run the project.
 - **Scope valves (Doc 10 §8.2):** neither was used.
-  - Valve 2 (CLI platforms cut to Linux x64 and macOS arm64) was not pulled: all four targets stay in scope, and macOS waits for the second matrix run.
+  - Valve 2 (CLI platforms cut to Linux x64 and macOS arm64) was not pulled: all four targets stayed in scope and are proven.
   - Valve 4 (archive and reactivate removed) was not needed: both exist and are proven.
   - Separately, the CLI took D-44's fallback: the bundle on the pinned Node, not a single executable.
 - **An unknown issuance has two states.** `needs_review` (no token proven) blocks the next issuance. `revoking` (OpenBao made the token, its withdrawal is unproven) is closed to machines and blocks nothing. Both raise `operations_unresolved` until the operator settles them.
