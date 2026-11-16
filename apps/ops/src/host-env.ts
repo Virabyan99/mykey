@@ -2,6 +2,7 @@
 // for a job. Plain settings come from the environment, secrets from the files
 // it mounts; nothing secret is ever an environment value.
 import { readFileSync } from "node:fs";
+import { credentialsFromDirectory, r2Store } from "@mykey/backup";
 import type { OpsEnv } from "./cli.ts";
 
 export class MissingSetting extends Error {
@@ -44,8 +45,26 @@ export function opsEnvFromEnvironment(env: NodeJS.ProcessEnv): HostJobEnv {
     throw new MissingSetting("MYKEY_DB_PASSWORD_FILE", "cannot be read");
   }
   if (password === "") throw new MissingSetting("MYKEY_DB_PASSWORD_FILE", "is empty");
+  // Run 6.2 (P-112): the audit archive's bucket, for the job that names one.
+  const bucket = env.MYKEY_AUDIT_BUCKET;
+  let archive: OpsEnv["archive"];
+  if (bucket !== undefined && bucket !== "") {
+    let credentials;
+    try {
+      credentials = credentialsFromDirectory(required(env, "MYKEY_R2_DIR"));
+    } catch (error) {
+      if (error instanceof MissingSetting) throw error;
+      throw new MissingSetting("MYKEY_R2_DIR", "does not hold the three credential files");
+    }
+    archive = {
+      store: r2Store(credentials, bucket),
+      host,
+      rotatedDir: env.MYKEY_BAO_ROTATED_DIR ?? null,
+    };
+  }
   return {
     host: host as OpsHost,
+    ...(archive === undefined ? {} : { archive }),
     database: {
       host: required(env, "MYKEY_DB_HOST"),
       port,

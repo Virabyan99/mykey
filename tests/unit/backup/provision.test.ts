@@ -103,7 +103,17 @@ describe("provision plan", () => {
       ["fixture-probe-10m", "probe/"],
     ]);
     expect(LOCK_RULES["mykey-staging-pairs"]).toEqual([]);
-    expect(LOCK_RULES["mykey-audit-archive"]).toEqual([]);
+    expect(
+      LOCK_RULES["mykey-audit-archive"].map((rule) => [
+        rule.id,
+        rule.prefix,
+        rule.condition.maxAgeSeconds,
+      ]),
+    ).toEqual([
+      ["audit-prod-365d", "prod/", 31_536_000],
+      ["audit-staging-30d", "staging/", 2_592_000],
+      ["audit-probe-10m", "probe/", 600],
+    ]);
   });
 
   it("compares lock rules by content, not by order or extra fields", () => {

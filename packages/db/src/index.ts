@@ -139,3 +139,21 @@ export {
   type AuditFilter,
   type AuditRow,
 } from "./repos/audit-read.ts";
+export {
+  ARCHIVE_LOCK_SQL,
+  chainProblems,
+  databaseNow,
+  insertSegment,
+  intervalLines,
+  intervalSegments,
+  listSegments,
+  markUploaded,
+  markVerified,
+  nextSegmentInterval,
+  purgeArchived,
+  recountIntervals,
+  sourceSegment,
+  type NewSegment,
+  type SegmentRow,
+  type SegmentStream,
+} from "./repos/audit-archive.ts";

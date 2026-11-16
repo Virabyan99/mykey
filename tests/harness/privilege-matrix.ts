@@ -124,7 +124,15 @@ export const TABLES: Record<string, Expected> = {
   "app.service_control": { api: [S, I], provisioner: [] },
   "app.backup_pair": { api: [S, I], provisioner: [] },
   "app.rate_limit": { api: [S, I, D], provisioner: [] },
-  "audit.event": { api: [S, I], provisioner: [I], maintenance: [S, I, D] },
+  // Run 6.2 (migration 0016): maintenance loses DELETE; retention is audit.purge_archived().
+  "audit.event": { api: [S, I], provisioner: [I], maintenance: [S, I] },
+  // Run 6.2 (migration 0016): the archive job records segments and marks them.
+  "audit.archive_segment": {
+    api: [],
+    provisioner: [],
+    maintenance: [S, I],
+    maintenanceColumns: ["uploaded_at", "verified_at"],
+  },
   "meta.schema_migration": { api: [], provisioner: [] },
   // Schema auth (Run 2.3): the session library's tables and the second factor.
   // UPDATE by column as in app; never id, user_id, created_at, a stored verifier
@@ -222,7 +230,6 @@ export function expectedTablePrivileges(table: string, grantee: string): string[
     case "maintenance":
       if (expected.maintenance !== undefined) return expected.maintenance;
       if (schema === "app") return [S, I, U, D];
-      if (table === "audit.event") return [S, D];
       return [S];
     default:
       return [];
@@ -262,6 +269,9 @@ export function expectedColumnUpdate(row: ColumnRow, grantee: string): boolean {
 export const APP_FUNCTIONS: Record<string, string[]> = {
   "app.mark_environment_review(uuid,uuid)": ["api_runtime"],
   "app.lifecycle_transition(text,uuid,uuid,uuid,text,text)": ["api_runtime"],
+  // Run 6.2 (migration 0016): schema audit's functions are checked the same way.
+  "audit.purge_archived(timestamp with time zone)": ["maintenance"],
+  "audit.refuse_change()": [],
 };
 
 export const SCHEMA_USAGE: Record<string, string[]> = {
@@ -362,10 +372,10 @@ export async function matrixProblems(pool: pg.Pool): Promise<string[]> {
   const functions = await query<{ name: string; owner: string; definer: boolean }>(
     `SELECT n.nspname || '.' || p.proname || '(' ||
               -- Argument types only: parameter names are not part of a function's identity.
-              replace(oidvectortypes(p.proargtypes), ' ', '') || ')' AS name,
+              replace(oidvectortypes(p.proargtypes), ', ', ',') || ')' AS name,
             pg_get_userbyid(p.proowner) AS owner, p.prosecdef AS definer
        FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
-      WHERE n.nspname = 'app'`,
+      WHERE n.nspname IN ('app', 'audit')`,
   );
   const namedFunctions = new Set(Object.keys(APP_FUNCTIONS));
   for (const fn of functions) {

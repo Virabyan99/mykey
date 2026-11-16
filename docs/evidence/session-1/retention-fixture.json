@@ -23,7 +23,35 @@
     },
     {
       "name": "mykey-audit-archive",
-      "lockRules": []
+      "lockRules": [
+        {
+          "id": "audit-probe-10m",
+          "enabled": true,
+          "prefix": "probe/",
+          "condition": {
+            "type": "Age",
+            "maxAgeSeconds": 600
+          }
+        },
+        {
+          "id": "audit-prod-365d",
+          "enabled": true,
+          "prefix": "prod/",
+          "condition": {
+            "type": "Age",
+            "maxAgeSeconds": 31536000
+          }
+        },
+        {
+          "id": "audit-staging-30d",
+          "enabled": true,
+          "prefix": "staging/",
+          "condition": {
+            "type": "Age",
+            "maxAgeSeconds": 2592000
+          }
+        }
+      ]
     },
     {
       "name": "mykey-retention-fixture",

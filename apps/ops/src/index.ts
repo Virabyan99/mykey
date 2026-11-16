@@ -16,3 +16,13 @@ export {
   type HostJobEnv,
   type OpsHost,
 } from "./host-env.ts";
+export {
+  ArchiveBusy,
+  ArchiveStopped,
+  auditArchive,
+  manifestKeyOf,
+  MANIFEST_FORMAT,
+  microsIso,
+  type ArchiveDeps,
+  type ArchiveResult,
+} from "./commands/audit-archive.ts";
