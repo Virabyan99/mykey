@@ -276,6 +276,75 @@ const importPreviewBody = z.strictObject({
   ),
 });
 
+/**
+ * audit.list (Run 6.1, P-107): the organization's audit trail, newest first.
+ * `from` and `to` are RFC 3339 (default: the last 30 days before the first
+ * page's anchor; at most 92 days apart). `action` is one of the served
+ * actions (checked by the handler against @mykey/audit). A cursor is bound to
+ * the filters it was made with: another filter is `409 listing_changed`.
+ */
+const auditId = z.uuid();
+const auditTime = z.iso.datetime({ offset: true });
+export const auditListQuery = z.strictObject({
+  limit: z.int().min(1).max(LIMITS.listing.maxLimit).default(LIMITS.listing.defaultLimit),
+  cursor: z.string().min(1).max(2048).optional(),
+  from: auditTime.optional(),
+  to: auditTime.optional(),
+  action: z
+    .string()
+    .max(48)
+    .regex(/^[a-z]+(?:[._][a-z]+)+$/)
+    .optional(),
+  outcome: z.enum(["success", "denied", "failure", "intent", "unknown"]).optional(),
+  actorKind: z.enum(["user", "machine", "operator", "system", "anonymous"]).optional(),
+  actorId: auditId.optional(),
+  projectId: auditId.optional(),
+  environmentId: auditId.optional(),
+  operationId: auditId.optional(),
+  requestId: auditId.optional(),
+});
+const auditItem = z.strictObject({
+  id: z.uuid(),
+  occurredAt: z.iso.datetime(),
+  actor: z.strictObject({ kind: z.string(), id: z.string().nullable() }),
+  source: z.string().nullable(),
+  action: z.string(),
+  target: z.strictObject({ kind: z.string(), id: z.string().nullable() }).nullable(),
+  outcome: z.string(),
+  requestId: z.string().nullable(),
+  operationId: z.uuid().nullable(),
+  /** Parsed again with the action's own schema on the way out; `{}` when the row fails it. */
+  details: z.record(z.string(), z.union([z.string(), z.number(), z.boolean(), z.null()])),
+});
+export const auditListBody = z.strictObject({
+  items: z.array(auditItem),
+  nextCursor: z.string().nullable(),
+  /** The first page's database time; no row after it is served by this listing. */
+  anchor: z.iso.datetime(),
+});
+
+/** activity.list (Run 6.1, P-108): the product's events, for the workspace's timeline. */
+export const activityListQuery = z.strictObject({
+  limit: z.int().min(1).max(LIMITS.listing.maxLimit).default(LIMITS.listing.defaultLimit),
+  cursor: z.string().min(1).max(2048).optional(),
+  projectId: auditId.optional(),
+  environmentId: auditId.optional(),
+});
+export const activityListBody = z.strictObject({
+  items: z.array(
+    auditItem.extend({
+      /** The operation's state now (read at request time), or null. */
+      operation: z
+        .strictObject({ id: z.uuid(), state: z.enum(OPERATION_STATES), action: z.string() })
+        .nullable(),
+      /** The current name of the project or environment the event targets, or null. */
+      targetName: z.string().nullable(),
+    }),
+  ),
+  nextCursor: z.string().nullable(),
+  anchor: z.iso.datetime(),
+});
+
 /** projects.list and environments.list (Run 3.9, P-59): keyset pages in id order. */
 const pageQuery = z.strictObject({
   limit: z.int().min(1).max(LIMITS.listing.maxLimit).default(LIMITS.listing.defaultLimit),
@@ -703,8 +772,16 @@ export const ROUTES: readonly RouteDef[] = Object.freeze([
     responses: { 200: operationsListBody },
   }),
 
-  define("audit.list", "GET", `${O}/audit`, "human", false, "6.1", { action: "audit.view" }),
-  define("activity.list", "GET", `${O}/activity`, "human", false, "6.1", { action: "audit.view" }),
+  define("audit.list", "GET", `${O}/audit`, "human", false, "6.1", {
+    action: "audit.view",
+    query: auditListQuery,
+    responses: { 200: auditListBody },
+  }),
+  define("activity.list", "GET", `${O}/activity`, "human", false, "6.1", {
+    action: "audit.view",
+    query: activityListQuery,
+    responses: { 200: activityListBody },
+  }),
   define("overview.get", "GET", `${O}/overview`, "human", false, "7.3", { action: "audit.view" }),
   define("credentials.summary", "GET", `${O}/credentials/summary`, "human", false, "7.7", {
     action: "credentials.manage",
