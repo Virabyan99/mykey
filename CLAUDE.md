@@ -50,16 +50,14 @@ What exists after Session 5 (details: `docs/evidence/session-5/report.md`, run n
   - `secrets keys | run | export`: one esbuild bundle on the pinned Node, released as `cli-v0.1.1` with `install.sh` (D-43, D-44);
   - consumer runbooks `consumer-local.md` and `consumer-deploy.md`, with the launch wrapper `tests/fixtures/consumers/secrets-launch.sh`.
 
-  Proven on Linux x64 and arm64. **macOS is not proven:** the one matrix run failed on the suite's test certificates.
+  Proven from the release on Linux x64 and arm64 and macOS x64 and arm64 (`cli-matrix.md`, run 43857539084).
 
 - **Staging** runs API `45b5c1f3cc3a` and the matching provisioner, gate open, nothing in review or unresolved. The staging owner is `owner@mykey-staging.invalid` (credentials in `~/.mykey/secrets/hosts/staging/`), with organization `e2350312-…`. **Production** runs the same API with migrations up to `0014` and no gate file (every route `quarantined`; no OpenBao, provisioner or owner there). Production deploys need the owner's permission.
-- **Evidence registry:** 112 `SPIKE_PASS`, 79 `OPEN`, nothing `PASS`.
+- **Evidence registry:** 116 `SPIKE_PASS`, 75 `OPEN`, nothing `PASS`.
 
 Before Sessions 6 ∥ 7 can start:
 
-- **The owner merges PR `session-5`** and answers the open requests in `docs/evidence/session-5/owner-requests.md`:
-  - Actions minutes: a second CLI matrix run, about 64 minutes, for macOS;
-  - production.
+- **Merged and answered:** PR #12 is merged, production is updated, and the macOS matrix passed (16 Nov 2026).
 - **Plans:** each session needs its plan (`docs/plans/session-6-plan.md`, `session-7-plan.md`) built on the report's "What Sessions 6 and 7 must know". In short:
   - the new audit actions and the machine actor;
   - every rate limit, including unauthenticated machine requests (Run 6.3);
@@ -213,10 +211,11 @@ Session 4 (details in its run notes and report):
 Session 5 (details in its run notes and report):
 
 - **The CLI is tested from Windows only through `pnpm run test:cli`** (a Linux container; about two minutes). Its arguments may hold only letters, digits and `. _ / = -`: use `--testNamePattern=word`, not `-t "two words"`. `--release <dir>` tests a downloaded release with the installed launcher.
-- **A CLI matrix run costs about 64 billed minutes** (four targets; macOS counts ten times) and runs only by hand: `gh workflow run ci --ref <branch> -f jobs=cli-matrix -f cli_release=cli-vX.Y.Z`. The timing API reports 0 for its jobs; estimate from job times. A release is never changed: a CLI fix is a new version (bump `apps/cli/package.json`, the bundle compiles it in).
+- **A CLI matrix run takes about 5 minutes** (four targets; free since the repository is public) and runs only by hand: `gh workflow run ci --ref <branch> -f jobs=cli-matrix -f cli_release=cli-vX.Y.Z`. A release is never changed: a CLI fix is a new version (bump `apps/cli/package.json`, the bundle compiles it in).
 - **Claude Code stops background jobs when memory runs low.** It stopped the gate's suite (beside a review agent) and a consumer rehearsal. Run one heavy job at a time with no agent beside it. The WSL VM keeps its memory after a job: quitting Docker Desktop (or `wsl --shutdown`) frees it. Find orphans by command line afterwards: a stopped shell leaves vitest and fixture containers running.
 - **Tests that only need "a product route answers" use `GET /v1/organizations`** (no action, no scope). `/v1/reference` needs the process organization and the Scalar asset, and `page.test.ts` copies the asset into `apps/api/assets`, so its answer depends on file order.
 - **An unknown issuance has two states.** `needs_review` (no token proven) blocks the next issuance; `revoking` (OpenBao made the token, its withdrawal is unproven) blocks nothing. Where a fault lands decides which; a test must accept both.
+- **macOS has BSD tools.** BSD `script` needs its own stdin to be a terminal and refuses a Node-spawned socket. The CLI's terminal test uses Python's `pty.spawn` on macOS (`MYKEY_TEST_PTY=python` takes that path on Linux). A matrix failure without output is first made to say why, then fixed.
 - **The token sweep** is `tests/staging/token-sweep.staging.test.ts`. Tokens are stored nowhere, so each test searches the tokens it holds, with a control per surface (the provisioner's log names operation ids, not environment ids).
 
 Open issues carried into Sessions 6 ∥ 7 are listed in `docs/evidence/session-5/report.md` ("What Sessions 6 and 7 must know").

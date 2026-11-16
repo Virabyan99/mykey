@@ -716,11 +716,11 @@
       "ownerRun": "5.7",
       "contributingRuns": [],
       "oldSession": "D08-S31",
-      "status": "OPEN",
+      "status": "SPIKE_PASS",
       "evidence": [
         "docs/evidence/session-5/cli-matrix.md"
       ],
-      "note": "cli-v0.1.0 proven on Linux x64 and arm64 from the release (run 43734935509); macOS failed on the suite's LibreSSL test certificates, fixed, not yet re-run there (owner's minutes answer pending)."
+      "note": "cli-v0.1.1 proven from the release on Linux x64 and arm64 and macOS x64 and arm64: project cli 53/53 on each (run 43857539084)."
     },
     {
       "id": "FR-1.52",
@@ -1860,11 +1860,11 @@
       "ownerRun": "5.7",
       "contributingRuns": [],
       "oldSession": "D08-S31",
-      "status": "OPEN",
+      "status": "SPIKE_PASS",
       "evidence": [
         "docs/evidence/session-5/cli-matrix.md"
       ],
-      "note": "Connection refusals pass from the release on Linux x64 and arm64; on macOS every TLS case failed on the test certificates (fixed in tests/cli/certs.ts, not yet re-run on macOS)."
+      "note": "The connection refusals pass from the release on all four targets (run 43857539084)."
     },
     {
       "id": "AC-1.38",
@@ -2279,11 +2279,12 @@
       "ownerRun": "5.7",
       "contributingRuns": [],
       "oldSession": "D08-S31",
-      "status": "OPEN",
+      "status": "SPIKE_PASS",
       "evidence": [
-        "docs/evidence/session-5/cli-matrix.md"
+        "docs/evidence/session-5/cli-matrix.md",
+        "docs/evidence/session-5/run-5.8.md"
       ],
-      "note": "Installer and launcher proven on all four targets, the full suite on Linux only; credential setup and replacement is Run 5.8."
+      "note": "Installer, launcher and the full suite on all four targets from the release (run 43857539084); credential setup and replacement rehearsed against staging (Run 5.8, re-run at the gate)."
     },
     {
       "id": "PO-9",
@@ -2580,11 +2581,11 @@
         "2.8"
       ],
       "oldSession": "D08-S31",
-      "status": "OPEN",
+      "status": "SPIKE_PASS",
       "evidence": [
         "docs/evidence/session-5/cli-matrix.md"
       ],
-      "note": "D-44 decided (SEA is 1.1 and lacks darwin-x64; the bundle on pinned Node); D-24's nine requirements pass on Linux x64 and arm64, on macOS only 8 and 9 so far."
+      "note": "D-44 decided (the bundle on pinned Node); D-24's nine requirements pass on all four targets (run 43857539084)."
     },
     {
       "id": "COST-B1",
