@@ -154,17 +154,23 @@ describe("per source (300)", () => {
   it("is checked before the body is read: a 400 KiB body over the limit is refused unread", async () => {
     await burst(300, () => call("organizations.list", { cookie: null }));
     const before = api.logs.length;
-    const response = await api.request(
-      "POST",
-      `/v1/organizations/${tenants.a.organizationId}/projects`,
-      {
+    // The server closes the connection without reading the body: a client still
+    // writing may see the reset before the answer. The answer is then proven by
+    // the server's own request line.
+    const response = await api
+      .request("POST", `/v1/organizations/${tenants.a.organizationId}/projects`, {
         rawBody: "x".repeat(400 * 1024),
         headers: { "content-type": "application/json", "idempotency-key": crypto.randomUUID() },
         cookie: await tenants.cookie("ownerA"),
-      },
-    );
-    expect(response.status).toBe(429);
-    expect(response.headers.get("connection")).toBe("close");
+      })
+      .catch((error: unknown) => {
+        if ((error as NodeJS.ErrnoException).code === "ECONNRESET") return null;
+        throw error;
+      });
+    if (response !== null) {
+      expect(response.status).toBe(429);
+      expect(response.headers.get("connection")).toBe("close");
+    }
     const line = api.logs
       .slice(before)
       .find(

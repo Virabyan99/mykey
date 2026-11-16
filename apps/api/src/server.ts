@@ -2,6 +2,7 @@
 // required by Doc 06 §2 (the proxy verifies this certificate).
 import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
 import https from "node:https";
 import type { AddressInfo } from "node:net";
 import { serve } from "@hono/node-server";
@@ -15,7 +16,7 @@ import { createHealthCheck, type OpenBaoHealthTarget } from "./health.ts";
 import { issuerBaoFromDirectory, runtimeBaoFromDirectory } from "./runtime-bao.ts";
 import { issuerSelfCheck, runtimeSelfCheck } from "./selfcheck.ts";
 import { createLogger, type LogEntry } from "./log.ts";
-import { continueArchives } from "@mykey/operations";
+import { continueArchives, readCapacity } from "@mykey/operations";
 import { startOperationSweep } from "./operation-sweep.ts";
 import { startOutboxDispatcher } from "./outbox-dispatcher.ts";
 import { startSessionCleanup, startThrottleSweep } from "./throttle-sweep.ts";
@@ -39,6 +40,11 @@ export interface ApiServer {
  * (LIMITS.body.headersMaxBytes), so the pipeline is the one that refuses
  * oversized headers, with the error envelope.
  */
+/** P-115: the capacity record lives beside the gate record, in the same read-only mount. */
+export function capacityPathOf(gatePath: string): string {
+  return join(dirname(gatePath), "capacity.json");
+}
+
 /** P-114: the time a peer has to send its headers. */
 export const HEADERS_TIMEOUT_MS = 10_000;
 
@@ -142,6 +148,8 @@ export async function startServer(config: ServerConfig): Promise<ApiServer> {
     health: () => health.check(),
     log: config.log,
     limiter: createRateLimiter({ pool, ring: keys.rateLimit }),
+    // P-115: the host writes capacity.json beside the gate record (status.sh, every minute).
+    capacity: { read: (nowMs) => readCapacity(capacityPathOf(config.api.gatePath), nowMs) },
     auth: { auth, keys, throttle: createThrottle({ pool, ring: keys.rateLimit }) },
   });
   const server = await listen(app, config);

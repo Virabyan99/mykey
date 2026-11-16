@@ -23,11 +23,12 @@ import { ensureQueues } from "@mykey/operations";
 import { drizzle } from "drizzle-orm/node-postgres";
 import * as OTPAuth from "otpauth";
 import { TEST_ORIGIN, requestTo, sessionCookieOf } from "../../harness/api.ts";
-import { startApiProcess, type ApiProcess } from "../../harness/api-worker.ts";
+import { keepCapacityOk, startApiProcess, type ApiProcess } from "../../harness/api-worker.ts";
 import { prepareDatabase, type TestDatabase } from "../database/setup.ts";
 
 const ROUNDS = 20;
 
+let capacity: { stop(): void } | undefined;
 let db: TestDatabase;
 let directory: string;
 let keys: AuthKeys;
@@ -111,6 +112,8 @@ beforeAll(async () => {
   };
   const tls = { certPath: db.stack.api.certPath, keyPath: db.stack.api.keyPath };
   ca = readFileSync(db.stack.api.certAuthorityPath);
+  // Run 6.3 (P-115): an ok capacity record beside the gate file.
+  capacity = keepCapacityOk(gatePath);
   processes = [
     await startApiProcess(db.targets.api_runtime, { keysDirectory, api, tls }),
     await startApiProcess(db.targets.api_runtime, { keysDirectory, api, tls }),
@@ -165,6 +168,7 @@ beforeAll(async () => {
 }, 300_000);
 
 afterAll(async () => {
+  capacity?.stop();
   for (const process of processes) await process.kill();
   await db.drop();
   rmSync(directory, { recursive: true, force: true });

@@ -11,7 +11,7 @@
 // (app.ts).
 import { createHash } from "node:crypto";
 import { AuditUnavailable } from "@mykey/audit";
-import { LIMITS, ROUTES, type RouteDef } from "@mykey/contracts";
+import { EXPANDING_ROUTES, LIMITS, ROUTES, type RouteDef } from "@mykey/contracts";
 import type { Context, Hono } from "hono";
 import { now } from "../log.ts";
 import { authenticateHuman } from "./authn.ts";
@@ -126,6 +126,19 @@ async function machineStep(
     }
     throw error;
   }
+}
+
+/**
+ * P-115: an expanding mutation under disk pressure. `low` → 507
+ * capacity_exceeded { limit: "disk" }; no usable record → 503.
+ */
+export async function capacityStep(deps: AppDeps): Promise<void> {
+  const reading = await deps.capacity.read(Date.now());
+  if (reading.kind === "ok") return;
+  if (reading.kind === "low") {
+    throw new ApiError("capacity_exceeded", "disk", undefined, { details: { limit: "disk" } });
+  }
+  throw new ApiError("dependency_unavailable", `capacity_${reading.cause}`);
 }
 
 /** What a route with no handler does after every check has passed. */
@@ -363,6 +376,8 @@ async function run(
         return outputResponse(answer, route, requestId, deps);
       }
     }
+    // P-115: after a replay (which adds nothing), before any state is read or written.
+    if (EXPANDING_ROUTES.has(route.id)) await capacityStep(deps);
     if (principal !== null) await admitStates(deps, route, params, principal, requestId, access);
     // Freshness (FR-1.77): last before the handler, after visibility, action and state.
     if (route.auth === "human_fresh_totp" && principal !== null && !principal.fresh) {

@@ -39,13 +39,16 @@ import { drizzle } from "drizzle-orm/node-postgres";
 import * as OTPAuth from "otpauth";
 import { createPool } from "@mykey/db";
 import type { OpenBaoTarget } from "@mykey/openbao";
-import { ensureQueues, type IssuerBao, type RuntimeBao } from "@mykey/operations";
+import { ensureQueues, readCapacity, type IssuerBao, type RuntimeBao } from "@mykey/operations";
 import type pg from "pg";
 import { prepareDatabase, type TestDatabase } from "../integration/database/setup.ts";
 import { getSharedStack, type Stack } from "./stack.ts";
 import { testLimiter, type RateLimitsMode } from "./rate.ts";
 
 export type GateState = "open" | "closed" | "missing" | { raw: string };
+
+/** Run 6.3 (P-115): what the test host's capacity record says; "ok" by default. */
+export type CapacityMode = "ok" | "low" | "missing" | "stale" | "invalid";
 
 export interface TestRoute {
   def: RouteDef;
@@ -210,6 +213,8 @@ export interface TestApi {
    */
   restart(): Promise<TestApi>;
   setGate(state: GateState): void;
+  /** Run 6.3 (P-115): the capacity record every process of this gate directory reads. */
+  setCapacity(mode: CapacityMode): void;
   request(method: string, path: string, init?: RequestInit): Promise<Response>;
   /** Closes everything; fails when a log entry `unlisted_error` was not consumed by its test. */
   close(): Promise<void>;
@@ -268,6 +273,39 @@ export async function startTestApi(opts: StartTestApiOptions = {}): Promise<Test
       renameSync(`${gatePath}.tmp`, gatePath);
     };
     setGate(opts.gate ?? "open");
+    // Run 6.3 (P-115): the capacity record beside the gate, refreshed every
+    // 30 s as the host's heartbeat refreshes it every minute.
+    const capacityPath = join(gateDirectory, "capacity.json");
+    let capacityMode: CapacityMode = "ok";
+    const writeCapacity = (): void => {
+      if (capacityMode === "missing") {
+        rmSync(capacityPath, { force: true });
+        return;
+      }
+      const text =
+        capacityMode === "invalid"
+          ? "{not json"
+          : JSON.stringify({
+              version: 1,
+              observedAt: new Date(
+                Date.now() - (capacityMode === "stale" ? 181_000 : 0),
+              ).toISOString(),
+              state: capacityMode === "low" ? "low" : "ok",
+              volumes: { test: { freeBytes: 2 ** 40, sizeBytes: 2 ** 41, freeInodesPercent: 50 } },
+            });
+      writeFileSync(`${capacityPath}.tmp`, text);
+      renameSync(`${capacityPath}.tmp`, capacityPath);
+    };
+    writeCapacity();
+    const refresher = setInterval(writeCapacity, 30_000);
+    refresher.unref();
+    cleanup.push(() => {
+      clearInterval(refresher);
+    });
+    const setCapacity = (mode: CapacityMode): void => {
+      capacityMode = mode;
+      writeCapacity();
+    };
 
     const pool = createPool(database.targets.api_runtime, { max: 10, queryTimeoutMs: 30_000 });
     cleanup.push(() => pool.end());
@@ -309,6 +347,7 @@ export async function startTestApi(opts: StartTestApiOptions = {}): Promise<Test
         health: () => health.check(),
         log: (entry) => logs.push(entry),
         limiter: testLimiter(pool, keys.rateLimit, opts.rateLimits),
+        capacity: { read: (nowMs) => readCapacity(capacityPath, nowMs) },
         auth: { auth, keys, throttle: createThrottle({ pool, ring: keys.rateLimit }) },
         test: {
           ...(opts.routes === undefined ? {} : { routes: opts.routes }),
@@ -443,6 +482,7 @@ export async function startTestApi(opts: StartTestApiOptions = {}): Promise<Test
           .map((route) => ({ method: route.method, path: route.path }));
       },
       setGate,
+      setCapacity,
       request,
       async close() {
         await release();

@@ -3,7 +3,7 @@ import type { HttpBindings } from "@hono/node-server";
 import type { Auth, AuthKeys, Throttle } from "@mykey/auth";
 import type { Authority, ErrorCode, RouteDef } from "@mykey/contracts";
 import type { OperationRow } from "@mykey/db";
-import type { IssuerBao, RuntimeBao } from "@mykey/operations";
+import type { CapacityReading, IssuerBao, RuntimeBao } from "@mykey/operations";
 import type pg from "pg";
 import type { HealthReading } from "../health.ts";
 import type { LogEntry } from "../log.ts";
@@ -51,6 +51,8 @@ export interface AppDeps {
   log: (entry: LogEntry) => void;
   /** Run 6.3 (P-113): the rate limits; required, every request passes through it. */
   limiter: RateLimiter;
+  /** Run 6.3 (P-115): the host's capacity record, read afresh for every expanding mutation. */
+  capacity: { read(nowMs: number): Promise<CapacityReading> };
   /** The auth module (Run 3.2): Better Auth, the key rings and throttling. */
   auth?: {
     auth: Auth;

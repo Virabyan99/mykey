@@ -17,13 +17,14 @@ import {
   createHealthCheck,
   issuerBaoFromDirectory,
   listen,
+  capacityPathOf,
   runtimeBaoFromDirectory,
   type ApiConfig,
 } from "@mykey/api";
 import { createAuth, createThrottle, loadAuthKeys } from "@mykey/auth";
 import { createPool, type DbTarget } from "@mykey/db";
 import type { OpenBaoTarget } from "@mykey/openbao";
-import { continueArchives } from "@mykey/operations";
+import { continueArchives, readCapacity } from "@mykey/operations";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { testLimiter, type RateLimitsMode } from "./rate.ts";
 
@@ -96,6 +97,8 @@ const app = createApp({
     process.stderr.write(`${JSON.stringify(entry)}\n`);
   },
   limiter: testLimiter(pool, keys.rateLimit, settings.rateLimits),
+  // P-115: the parent test API writes the record beside the shared gate file.
+  capacity: { read: (nowMs) => readCapacity(capacityPathOf(settings.api.gatePath), nowMs) },
   auth: { auth, keys, throttle: createThrottle({ pool, ring: keys.rateLimit }) },
   // TOTP codes are checked at the time a test sends (Run 3.4), as in tests/harness/api.ts.
   test: {

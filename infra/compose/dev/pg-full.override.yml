@@ -1,0 +1,11 @@
+# Run 6.3 Task C (P-115, FR-1.61): PostgreSQL's data on a 300 MiB tmpfs, so
+# that a test can fill it and watch the API refuse without claiming success.
+# Used only by tests/fault/audit/exhaustion.test.ts, on a stack of its own.
+services:
+  postgres:
+    volumes:
+      - type: tmpfs
+        target: /var/lib/postgresql
+        tmpfs:
+          size: 314572800
+          mode: 01777

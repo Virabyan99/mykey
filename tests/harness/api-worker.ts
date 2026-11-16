@@ -3,7 +3,8 @@
 // two API containers (LIMITS.concurrency.apiProcesses). Run 4.2 adds the
 // runtime identity and one fault at one point of the secret protocol.
 import { spawn } from "node:child_process";
-import { resolve } from "node:path";
+import { renameSync, writeFileSync } from "node:fs";
+import { dirname, join, resolve } from "node:path";
 import type { ApiConfig } from "@mykey/api";
 import type { DbTarget } from "@mykey/db";
 import type { OpenBaoTarget } from "@mykey/openbao";
@@ -20,6 +21,35 @@ export interface ApiProcess {
   exited: Promise<number | null>;
   /** Everything the process wrote to stderr so far (its log lines among it). */
   output(): string;
+}
+
+/**
+ * Run 6.3 (P-115): an `ok` capacity record beside `gatePath`, renewed every
+ * 30 s as the host's heartbeat renews it, for suites that write their own gate
+ * file. `stop()` ends the renewal.
+ */
+export function keepCapacityOk(gatePath: string): { stop(): void } {
+  const path = join(dirname(gatePath), "capacity.json");
+  const write = (): void => {
+    writeFileSync(
+      `${path}.tmp`,
+      JSON.stringify({
+        version: 1,
+        observedAt: new Date().toISOString(),
+        state: "ok",
+        volumes: { test: { freeBytes: 2 ** 40, sizeBytes: 2 ** 41, freeInodesPercent: 50 } },
+      }),
+    );
+    renameSync(`${path}.tmp`, path);
+  };
+  write();
+  const timer = setInterval(write, 30_000);
+  timer.unref();
+  return {
+    stop: () => {
+      clearInterval(timer);
+    },
+  };
 }
 
 /**

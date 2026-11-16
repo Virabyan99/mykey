@@ -28,6 +28,7 @@ export {
   type GateReading,
   type GateRecord,
 } from "./gate.ts";
+export { CAPACITY_MAX_AGE_MS, readCapacity, type CapacityReading } from "./capacity.ts";
 export {
   beginOperation,
   intentFingerprint,

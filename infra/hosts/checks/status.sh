@@ -117,6 +117,45 @@ case "$count" in
 *) operations_unresolved=$count ;;
 esac
 
+# Disk pressure (Run 6.3, P-115, D-49): the capacity record the API reads per
+# mutation, written atomically into the gate directory (world-readable: sizes
+# only). Written only by root and only when every volume was measured; a
+# record that is not renewed becomes stale for the API after 180 s, which the
+# API treats as unknown (expanding mutations 503). The thresholds are those of
+# LIMITS.disk, kept equal by tests/unit/hosts/capacity.test.ts.
+DISK_MIN_FREE_PERCENT=15
+DISK_MIN_FREE_BYTES=4294967296
+DISK_MIN_INODES_PERCENT=10
+capacity_volumes='{}'
+capacity_state=ok
+capacity_complete=yes
+measure() { # <name> <path>
+	[ -n "$2" ] && [ -e "$2" ] || return 1
+	line=$(df -B1 --output=size,avail,itotal,iavail "$2" 2>/dev/null | tail -n 1) || return 1
+	# shellcheck disable=SC2086 # the four numbers of df's line
+	set -- "$1" $line
+	[ "$#" -eq 5 ] || return 1
+	inodes=$(awk -v t="$4" -v f="$5" 'BEGIN { if (t == 0) print 100; else printf "%.2f", f * 100 / t }')
+	low=$(awk -v s="$2" -v a="$3" -v i="$inodes" -v p="$DISK_MIN_FREE_PERCENT" -v b="$DISK_MIN_FREE_BYTES" -v n="$DISK_MIN_INODES_PERCENT" 'BEGIN { print ((a * 100 < s * p) || (a < b) || (i < n)) ? "low" : "ok" }')
+	[ "$low" = low ] && capacity_state=low
+	capacity_volumes=$(printf '%s' "$capacity_volumes" | jq -c --arg n "$1" --argjson s "$2" --argjson a "$3" --argjson i "$inodes" '. + { ($n): { freeBytes: $a, sizeBytes: $s, freeInodesPercent: $i } }') || return 1
+}
+volume_path() { docker volume inspect -f '{{.Mountpoint}}' "$1" 2>/dev/null || true; }
+measure postgres "$(volume_path mykey_pgdata)" || capacity_complete=no
+measure openbao "$(volume_path mykey_baodata)" || capacity_complete=no
+measure bao-audit "$(volume_path mykey_baoaudit)" || capacity_complete=no
+measure docker "$(docker info -f '{{.DockerRootDir}}' 2>/dev/null || true)" || capacity_complete=no
+measure bao-rotated /var/lib/mykey/bao-audit/rotated || capacity_complete=no
+if [ "$(id -u)" = 0 ] && [ -d /etc/mykey/gate ] && [ "$capacity_complete" = yes ]; then
+	capacity_tmp=$(mktemp /etc/mykey/gate/.capacity.XXXXXX)
+	if jq -n --arg time "$time" --arg state "$capacity_state" --argjson volumes "$capacity_volumes" '{ version: 1, observedAt: $time, state: $state, volumes: $volumes }' >"$capacity_tmp" &&
+		chmod 0644 "$capacity_tmp" && mv -f "$capacity_tmp" /etc/mykey/gate/capacity.json; then
+		:
+	else
+		rm -f "$capacity_tmp"
+	fi
+fi
+
 # The provisioner container's health (Run 3.8): healthy, unhealthy, or absent.
 provisioner=absent
 if health=$(docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{end}}' mykey-provisioner-1 2>/dev/null); then

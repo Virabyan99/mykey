@@ -71,6 +71,7 @@ export {
   configFromEnvironment,
   listen,
   API_CONNECTIONS,
+  capacityPathOf,
   HEADERS_TIMEOUT_MS,
   startServer,
   type ApiServer,
