@@ -737,6 +737,30 @@
         "docs/evidence/session-5/reference-capture.json"
       ],
       "note": "Local Scalar under the page's CSP in Chromium: zero violations, zero third-party attempts; the asset under Node's permission model loads with a covering grant, null when refused. Staging at the gate."
+    },
+    {
+      "id": "FR-1.56",
+      "status": "SPIKE_PASS",
+      "evidence": ["docs/evidence/session-6/run-6.1.md"],
+      "note": "Audit coverage is a table checked both ways; one journey leaves a row for every action whose writer exists (PENDING_WRITERS for Runs 6.2-6.9); api rows carry their response's request id."
+    },
+    {
+      "id": "FR-1.58",
+      "status": "SPIKE_PASS",
+      "evidence": ["docs/evidence/session-6/run-6.1.md"],
+      "note": "Owners and admins read the tenant trail and current members' account rows; no foreign, global or anonymous row; filters, stable keyset pages, bound cursors; invalid details served empty and logged."
+    },
+    {
+      "id": "FR-1.59",
+      "status": "SPIKE_PASS",
+      "evidence": ["docs/evidence/session-6/run-6.1.md"],
+      "note": "The request id is the API's own and is on every audit row of a request; an incoming x-request-id is neither echoed nor logged; activity items carry the operation's current state."
+    },
+    {
+      "id": "FR-1.80",
+      "status": "SPIKE_PASS",
+      "evidence": ["docs/evidence/session-6/run-6.1.md"],
+      "note": "Canary sweep over the API, PostgreSQL and OpenBao logs, audit rows and error bodies, with controls; log fields checked by format; no diagnostic flags; core dumps off."
     }
   ]
 }
