@@ -43,6 +43,7 @@ import { ensureQueues, type IssuerBao, type RuntimeBao } from "@mykey/operations
 import type pg from "pg";
 import { prepareDatabase, type TestDatabase } from "../integration/database/setup.ts";
 import { getSharedStack, type Stack } from "./stack.ts";
+import { testLimiter, type RateLimitsMode } from "./rate.ts";
 
 export type GateState = "open" | "closed" | "missing" | { raw: string };
 
@@ -98,6 +99,8 @@ export interface StartTestApiOptions {
   faults?: () => FaultHook | undefined;
   /** An import's time budget per request (Run 4.7), read on every request. */
   importBudgetMs?: () => number | undefined;
+  /** Run 6.3: the product's rate limits, or (default) limits that never refuse. */
+  rateLimits?: RateLimitsMode;
 }
 
 export type FaultHook = (point: string, operationId: string) => void | Promise<void>;
@@ -305,6 +308,7 @@ export async function startTestApi(opts: StartTestApiOptions = {}): Promise<Test
         config,
         health: () => health.check(),
         log: (entry) => logs.push(entry),
+        limiter: testLimiter(pool, keys.rateLimit, opts.rateLimits),
         auth: { auth, keys, throttle: createThrottle({ pool, ring: keys.rateLimit }) },
         test: {
           ...(opts.routes === undefined ? {} : { routes: opts.routes }),

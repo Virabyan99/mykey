@@ -21,7 +21,8 @@ import type { UserPrincipal as Principal } from "./authn.ts";
 import { admitStates, authorize, deny } from "./authz.ts";
 import { checkOrigin, hasMixedCredentials, needsOriginCheck } from "./origin.ts";
 import { headerBytes, readBody } from "./body.ts";
-import { authenticateMachine, hasSelector } from "./machine.ts";
+import { MISSED_LOOKUP, authenticateMachine, hasSelector } from "./machine.ts";
+import { ROUTE_CLASS_LIMIT, SESSION_EXEMPT, windowSecondsLeft, type RateScope } from "./rate.ts";
 import { requestSource } from "./source.ts";
 import {
   ApiError,
@@ -74,6 +75,56 @@ export function intentOf(
 function hasBodyBytes(headers: Headers): boolean {
   const length = headers.get("content-length");
   return headers.get("transfer-encoding") !== null || (length !== null && length !== "0");
+}
+
+/** One rate step (P-113): a refusal is logged with its scope, never its subject. */
+export async function rateStep(
+  deps: AppDeps,
+  requestId: string,
+  scope: RateScope,
+  subject: string,
+): Promise<void> {
+  try {
+    await deps.limiter.hit(scope, subject);
+  } catch (error) {
+    if (error instanceof ApiError && error.code === "rate_limited") {
+      deps.log({ event: "rate_limited", time: now(), requestId, scope });
+    }
+    throw error;
+  }
+}
+
+/**
+ * Machine authentication under the miss limit (P-113): a source at the limit
+ * of unattributable tokens is refused before OpenBao is asked; a refusal that
+ * cost a lookup is counted after it.
+ */
+async function machineStep(
+  deps: AppDeps,
+  c: Context<ApiEnv>,
+  params: Record<string, string>,
+  route: RouteDef,
+  requestId: string,
+  source: string,
+): ReturnType<typeof authenticateMachine> {
+  const misses = await deps.limiter.count("rl:machine-miss", source);
+  if (misses >= deps.limiter.limit("rl:machine-miss")) {
+    deps.log({ event: "rate_limited", time: now(), requestId, scope: "rl:machine-miss" });
+    throw new ApiError("rate_limited", "rl:machine-miss", {
+      "retry-after": String(windowSecondsLeft(Date.now())),
+    });
+  }
+  try {
+    return await authenticateMachine(deps, c.env.incoming.rawHeaders, params, route, requestId);
+  } catch (error) {
+    if (error instanceof ApiError && error.reason === MISSED_LOOKUP) {
+      // Counted; this request still answers 401 (the next one meets the check above).
+      await deps.limiter.hit("rl:machine-miss", source).catch((counted: unknown) => {
+        if (!(counted instanceof ApiError && counted.code === "rate_limited")) throw counted;
+      });
+    }
+    throw error;
+  }
 }
 
 /** What a route with no handler does after every check has passed. */
@@ -216,15 +267,25 @@ async function run(
     if (needsOriginCheck(route) && !checkOrigin(headers, deps.config.baseUrl)) {
       throw new ApiError("origin_rejected");
     }
+    const source = requestSource(
+      c.env.incoming.socket.remoteAddress,
+      c.req.header("x-forwarded-for"),
+      deps.config.trustedProxy,
+    );
     // Authentication before strict validation: an anonymous caller learns nothing from a 422.
     const principal = human ? await authenticateHuman(deps, headers) : null;
+    // P-113: the session limit, but for the routes that reduce exposure.
+    if (principal !== null && !SESSION_EXEMPT.has(route.id)) {
+      await rateStep(deps, requestId, "rl:session", principal.sessionId);
+    }
     // A machine request (P-93): the token, its catalog row, its own path; then
     // no selector. No Origin, no authorize (the binding is the authorization),
     // no replay, no freshness, no validation.
     const params = c.req.param();
     const machine = machineRoute
-      ? await authenticateMachine(deps, c.env.incoming.rawHeaders, params, route, requestId)
+      ? await machineStep(deps, c, params, route, requestId, source)
       : null;
+    if (machine !== null) await rateStep(deps, requestId, "rl:credential", machine.credentialId);
     if (machine !== null && hasSelector(c.req.url, raw)) throw new ApiError("forbidden_selector");
     const clock = deps.test?.clock?.(headers);
     const query = machineRoute ? undefined : validateQuery(route, new URL(c.req.url).searchParams);
@@ -233,6 +294,11 @@ async function run(
       principal === null
         ? { scope: null, authority: null, resolved: null }
         : await authorize(deps, route, params, principal, requestId);
+    // P-113: the route's own class, per person, after authorization.
+    const routeClass = ROUTE_CLASS_LIMIT[route.id];
+    if (routeClass !== undefined && principal !== null) {
+      await rateStep(deps, requestId, routeClass.scope, principal.userId);
+    }
     // A mutation (P-58): its key first; a request already made answers its
     // stored outcome before the state and freshness checks (Doc 06 §6.2 step 1).
     let idempotencyKey: string | null = null;
@@ -302,11 +368,7 @@ async function run(
     const result = await handler(
       {
         requestId,
-        source: requestSource(
-          c.env.incoming.socket.remoteAddress,
-          c.req.header("x-forwarded-for"),
-          deps.config.trustedProxy,
-        ),
+        source,
         route,
         body,
         query,

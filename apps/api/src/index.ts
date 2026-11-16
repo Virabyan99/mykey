@@ -17,6 +17,16 @@ export { authenticateHuman, type Principal, type UserPrincipal } from "./pipelin
 export { authenticateMachine, type MachinePrincipal } from "./pipeline/machine.ts";
 export { parseStrictJson, readAuthBody, readBody } from "./pipeline/body.ts";
 export { createLargeGate, type LargeGate } from "./large.ts";
+export {
+  RATE_SCOPES,
+  ROUTE_CLASS_LIMIT,
+  SESSION_EXEMPT,
+  createRateLimiter,
+  scopeLimit,
+  windowSecondsLeft,
+  type RateLimiter,
+  type RateScope,
+} from "./pipeline/rate.ts";
 export { readDeps, recheckOf, refusedOf } from "./routes/secrets.ts";
 export {
   credentialDeps,

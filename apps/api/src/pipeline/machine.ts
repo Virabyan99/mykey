@@ -73,9 +73,13 @@ interface CatalogRow {
   organization_state: string;
 }
 
+/** The reason of a refusal after OpenBao was asked about a token nobody can attribute (P-113). */
+export const MISSED_LOOKUP = "missed_lookup";
+
 function unattributable(deps: AppDeps, requestId: string, cause: "header" | "token" | "catalog") {
   deps.log({ event: "machine_unauthenticated", time: now(), requestId, cause });
-  return new ApiError("unauthenticated");
+  // Only a refusal that cost a lookup counts against the source (rl:machine-miss).
+  return new ApiError("unauthenticated", cause === "header" ? undefined : MISSED_LOOKUP);
 }
 
 /** A parent's state as the machine routes answer it (P-93). */

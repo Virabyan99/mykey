@@ -34,6 +34,7 @@ const FIXTURES: { [K in LogEntry["event"]]: Extract<LogEntry, { event: K }>[] } 
   ],
   health_down: [{ event: "health_down", time: TIME, requestId: ID, cause: "timeout", code: null }],
   gate_closed: [{ event: "gate_closed", time: TIME, requestId: ID, cause: "missing" }],
+  rate_limited: [{ event: "rate_limited", time: TIME, requestId: ID, scope: "rl:source" }],
   unhandled: [
     {
       event: "unhandled",

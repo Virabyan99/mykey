@@ -10,6 +10,7 @@ import type { LogEntry } from "../log.ts";
 import type { UserPrincipal } from "./authn.ts";
 import type { MachinePrincipal } from "./machine.ts";
 import type { Scope } from "./authz.ts";
+import type { RateLimiter } from "./rate.ts";
 
 export interface ApiConfig {
   /** The public origin, e.g. https://mykey-staging.nomikey.com. */
@@ -48,6 +49,8 @@ export interface AppDeps {
   config: ApiConfig;
   health: () => Promise<HealthReading>;
   log: (entry: LogEntry) => void;
+  /** Run 6.3 (P-113): the rate limits; required, every request passes through it. */
+  limiter: RateLimiter;
   /** The auth module (Run 3.2): Better Auth, the key rings and throttling. */
   auth?: {
     auth: Auth;

@@ -210,6 +210,8 @@ export async function createSecretsFixture(
     routes?: readonly { def: RouteDef; handler: Handler }[];
     /** Run 6.1: override files of the private stack (with `private`). */
     stackOverrides?: readonly string[];
+    /** Run 6.3: the product's rate limits in both processes (default: never refusing). */
+    rateLimits?: "product";
   } = {},
 ): Promise<SecretsFixture> {
   const directory = mkdtempSync(join(tmpdir(), "mykey-secrets-"));
@@ -235,6 +237,7 @@ export async function createSecretsFixture(
           await beforeHandler?.(routeId, info);
         },
         importBudgetMs: () => importBudget ?? undefined,
+        ...(opts.rateLimits === undefined ? {} : { rateLimits: opts.rateLimits }),
         routes: [{ def: TEST_READ_ROUTE, handler: testReadHandler() }, ...(opts.routes ?? [])],
       };
     },
@@ -296,6 +299,7 @@ export async function createSecretsFixture(
       openBao: relayTarget,
       secretsDirectory,
       ...(fault === undefined ? {} : { faults: fault }),
+      ...(opts.rateLimits === undefined ? {} : { rateLimits: opts.rateLimits }),
       ...extra,
     });
   let second: ApiProcess | null = opts.processes === 2 ? await startSecond() : null;

@@ -14,7 +14,8 @@ import { readGate } from "./pipeline/gate.ts";
 import { checkOrigin } from "./pipeline/origin.ts";
 import { errorResponse } from "./pipeline/respond.ts";
 import { requestSource } from "./pipeline/source.ts";
-import { mountRoute, mountRouteDef } from "./pipeline/route.ts";
+import { mountRoute, mountRouteDef, rateStep } from "./pipeline/route.ts";
+import { ApiError } from "./pipeline/context.ts";
 import {
   credentialsIssueHandler,
   credentialsListHandler,
@@ -174,8 +175,32 @@ export function createApp(deps: AppDeps): Hono<ApiEnv> {
     if (gate !== null && !gate.open) {
       deps.log({ event: "gate_closed", time: now(), requestId, cause: gate.cause });
       c.res = errorResponse("quarantined", requestId);
-    } else {
+    } else if (isHealth) {
       await next();
+    } else {
+      // P-113: the source limit, before anything of the request is read.
+      const refusal = await rateStep(
+        deps,
+        requestId,
+        "rl:source",
+        requestSource(
+          c.env.incoming.socket.remoteAddress,
+          c.req.header("x-forwarded-for"),
+          deps.config.trustedProxy,
+        ),
+      ).then(
+        () => null,
+        (error: unknown) => (error instanceof ApiError ? error : null),
+      );
+      if (refusal === null) {
+        await next();
+      } else {
+        // The body stays unread: the connection closes after the answer.
+        c.res = errorResponse(refusal.code, requestId, {
+          ...refusal.headers,
+          connection: "close",
+        });
+      }
     }
     c.res.headers.set("x-request-id", requestId);
     c.res.headers.set("cache-control", "no-store");

@@ -25,6 +25,7 @@ import { createPool, type DbTarget } from "@mykey/db";
 import type { OpenBaoTarget } from "@mykey/openbao";
 import { continueArchives } from "@mykey/operations";
 import { drizzle } from "drizzle-orm/node-postgres";
+import { testLimiter, type RateLimitsMode } from "./rate.ts";
 
 export type FaultAction = "crash" | "hang" | "throw" | "terminate_lock";
 
@@ -36,6 +37,7 @@ interface Settings {
   runtime?: { openBao: OpenBaoTarget; secretsDirectory: string };
   fault?: { point: string; action: FaultAction };
   archiveTick?: { intervalMs: number; staleSeconds: number };
+  rateLimits?: RateLimitsMode;
 }
 
 const lines = createInterface({ input: process.stdin })[Symbol.asyncIterator]();
@@ -93,6 +95,7 @@ const app = createApp({
   log: (entry) => {
     process.stderr.write(`${JSON.stringify(entry)}\n`);
   },
+  limiter: testLimiter(pool, keys.rateLimit, settings.rateLimits),
   auth: { auth, keys, throttle: createThrottle({ pool, ring: keys.rateLimit }) },
   // TOTP codes are checked at the time a test sends (Run 3.4), as in tests/harness/api.ts.
   test: {

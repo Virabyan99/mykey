@@ -16,7 +16,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { startServer, type ApiConfig, type ApiServer, type LogEntry } from "@mykey/api";
 import { generateKeyFiles } from "@mykey/auth";
 import { ROUTES, errorEnvelopeSchema } from "@mykey/contracts";
-import { ROLE_NAMES, applyRoles, type DbTarget, type RoleName } from "@mykey/db";
+import { ROLE_NAMES, applyRoles, migrate, type DbTarget, type RoleName } from "@mykey/db";
 import type { z } from "zod";
 import {
   baoFetch,
@@ -127,6 +127,16 @@ describe("API health stub", () => {
       },
       passwords,
     );
+
+    // Run 6.3 (P-113): every request but /health is counted in app.rate_limit first.
+    await migrate({
+      host: stack.pg.host,
+      port: stack.pg.port,
+      database: stack.pg.database,
+      user: "migration_owner",
+      password: passwords.migration_owner,
+      caCertPath: stack.pg.caCertPath,
+    });
 
     relay = net.createServer((client) => {
       const upstream = net.connect({ host: stack.pg.host, port: stack.pg.port });

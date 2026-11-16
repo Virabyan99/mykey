@@ -39,6 +39,8 @@ export function startApiProcess(
     faults?: { point: string; action: FaultAction };
     /** Run 5.3: the tick's archive driver every `intervalMs`. */
     archiveTick?: { intervalMs: number; staleSeconds: number };
+    /** Run 6.3: the product's rate limits (default: limits that never refuse). */
+    rateLimits?: "product" | "wide";
   },
 ): Promise<ApiProcess> {
   return new Promise((resolveStart, reject) => {
@@ -90,6 +92,7 @@ export function startApiProcess(
         : { runtime: { openBao: opts.openBao, secretsDirectory: opts.secretsDirectory } }),
       ...(opts.faults === undefined ? {} : { fault: opts.faults }),
       ...(opts.archiveTick === undefined ? {} : { archiveTick: opts.archiveTick }),
+      ...(opts.rateLimits === undefined ? {} : { rateLimits: opts.rateLimits }),
     };
     child.stdin.write(`${JSON.stringify(settings)}\n`);
   });

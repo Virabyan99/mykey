@@ -20,6 +20,7 @@ import { startOperationSweep } from "./operation-sweep.ts";
 import { startOutboxDispatcher } from "./outbox-dispatcher.ts";
 import { startSessionCleanup, startThrottleSweep } from "./throttle-sweep.ts";
 import type { ApiConfig, ApiEnv } from "./pipeline/context.ts";
+import { createRateLimiter } from "./pipeline/rate.ts";
 
 export interface ListenOptions {
   hostname: string;
@@ -121,6 +122,7 @@ export async function startServer(config: ServerConfig): Promise<ApiServer> {
     config: config.api,
     health: () => health.check(),
     log: config.log,
+    limiter: createRateLimiter({ pool, ring: keys.rateLimit }),
     auth: { auth, keys, throttle: createThrottle({ pool, ring: keys.rateLimit }) },
   });
   const server = await listen(app, config);

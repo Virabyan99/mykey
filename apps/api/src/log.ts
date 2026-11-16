@@ -62,6 +62,8 @@ export type LogEntry =
       cause: "header" | "token" | "catalog";
     }
   | { event: "machine_last_used"; time: string; outcome: "failed"; errorClass: string }
+  /** Run 6.3 (P-113): a request refused by a rate limit; the scope only, never the subject. */
+  | { event: "rate_limited"; time: string; requestId: string; scope: string }
   | { event: "listening"; port: number }
   | { event: "startup_refused"; missing: string }
   | {
@@ -152,6 +154,8 @@ const FORMATS: Readonly<Record<string, (value: string) => boolean>> = {
   missing: (v) => v === "configuration" || API_SETTINGS.includes(v),
   runtimeLogin: (v) => ENUM.test(v),
   issuerLogin: (v) => ENUM.test(v),
+  /** Run 6.3: a rate scope (`rl:source`, `rl:machine-miss`, …). */
+  scope: (v) => /^rl:[a-z-]{1,32}$/.test(v),
 };
 
 const INVALID = "[invalid]";

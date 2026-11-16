@@ -44,6 +44,8 @@ describe("LIMITS", () => {
         authFailuresPerAccount: 5,
         authFailureWindowSeconds: 900,
         authDelaySeconds: 900,
+        machineMissesPerSourcePerMinute: 30,
+        credentialIssuePerMinute: 5,
       },
       concurrency: { httpPerProcess: 64, largePerProcess: 2, apiProcesses: 2, provisionerJobs: 2 },
       db: { apiPool: 20, provisionerPool: 6, opsPool: 4, maxConnections: 100 },
