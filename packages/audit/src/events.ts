@@ -174,11 +174,165 @@ export const AUDIT_DETAILS = {
   }),
   /** Run 4.1: the operator expired terminal operation records (P-65). */
   "operator.operations_expire": z.strictObject({ expired: z.int().nonnegative() }),
+  /** Run 6.1 (P-105): a session ended by its user. */
+  "auth.sign_out": z.strictObject({}),
+  /** Run 6.1 (P-105): sessions ended by their user (one, or every one). */
+  "auth.session_revoke": z.strictObject({ revokedSessions: z.int().nonnegative() }),
+  /** Run 6.1 (P-105): spent TOTP steps and recovery rows removed. Counts only. */
+  "operator.auth_cleanup": z.strictObject({
+    steps: z.int().nonnegative(),
+    recoveryRows: z.int().nonnegative(),
+  }),
+  /** Run 6.2 (P-112): one archived segment of a stream. */
+  "system.audit_archive": z.strictObject({
+    stream: z.enum(["app", "openbao"]),
+    sequence: z.int().positive(),
+    rows: z.int().nonnegative(),
+  }),
+  /** Run 6.2 (P-112): rows older than the retention purged, inside verified intervals. */
+  "system.audit_purge": z.strictObject({
+    rows: z.int().nonnegative(),
+    intervals: z.int().nonnegative(),
+  }),
+  /** Run 6.5 (P-120): the capture of a pair; intent, success or failure. */
+  "system.backup_capture": z.strictObject({ pairId: z.uuid() }),
+  "system.backup_eligible": z.strictObject({ pairId: z.uuid() }),
+  "system.backup_invalidated": z.strictObject({
+    pairId: z.uuid(),
+    reason: z.enum(["deadline", "access_reduction", "verification", "aborted"]),
+  }),
+  /** Run 6.6 (P-121): the retention job's counts. */
+  "system.backup_cleanup": z.strictObject({
+    deleted: z.int().nonnegative(),
+    kept: z.int().nonnegative(),
+    refused: z.int().nonnegative(),
+  }),
+  /** Run 6.7 (P-122): the gate. */
+  "operator.gate_open": z.strictObject({
+    gateEpoch: z.int().nonnegative(),
+    origin: z.enum(["fresh_install", "restore"]),
+  }),
+  "operator.gate_close": z.strictObject({ gateEpoch: z.int().nonnegative() }),
+  /** Run 6.7 (P-124): a restore, written into the restored database. */
+  "operator.restore_begin": z.strictObject({ pairId: z.uuid() }),
+  "operator.restore_invalidate": z.strictObject({
+    sessions: z.int().nonnegative(),
+    accounts: z.int().nonnegative(),
+    credentials: z.int().nonnegative(),
+    namespaces: z.int().nonnegative(),
+  }),
+  "operator.restore_verify": z.strictObject({
+    checks: z.int().nonnegative(),
+    failed: z.int().nonnegative(),
+  }),
+  /** Run 6.9 (P-127): a release deployed; the build id only. */
+  "operator.deploy": z.strictObject({
+    build: z
+      .string()
+      .max(40)
+      .regex(/^[0-9a-f]{7,40}$/),
+  }),
 } as const;
 
 export type AuditAction = keyof typeof AUDIT_DETAILS;
 
 export const AUDIT_ACTIONS = Object.freeze(Object.keys(AUDIT_DETAILS) as AuditAction[]);
+
+/**
+ * Run 6.1 (P-106, FR-1.58): whose row an action is.
+ * - `tenant`: written with the organization; served to its owners and admins.
+ * - `account`: written without an organization; served to an organization
+ *   whose member the row's subject user (actor, else target) is now.
+ * - `global`: the infrastructure's; written without an organization, never
+ *   served by the API (the operator reads it with `psql` as `maintenance`).
+ * `appendAudit` refuses an organization id on a global or account action and
+ * its absence on a tenant action — except `access.denied`, see below.
+ */
+export type AuditScope = "tenant" | "account" | "global";
+
+export const AUDIT_SCOPE: Readonly<Record<AuditAction, AuditScope>> = Object.freeze({
+  "operator.bootstrap": "tenant",
+  "operator.reset_initiate": "account",
+  "auth.reset_complete": "account",
+  "auth.reset_failed": "account",
+  "auth.sign_in": "account",
+  "auth.totp_enroll": "account",
+  "auth.totp_activate": "account",
+  "auth.mfa_complete": "account",
+  "auth.step_up": "account",
+  "auth.recovery_regenerate": "account",
+  "auth.password_change": "account",
+  "auth.throttled": "global",
+  "access.denied": "tenant",
+  "operator.organization_provision": "tenant",
+  "project.create": "tenant",
+  "project.rename": "tenant",
+  "environment.create": "tenant",
+  "environment.rename": "tenant",
+  "project.archive": "tenant",
+  "environment.archive": "tenant",
+  "project.reactivate": "tenant",
+  "environment.reactivate": "tenant",
+  "system.environment_provision": "tenant",
+  "system.drift_detected": "tenant",
+  "secret.create": "tenant",
+  "secret.update": "tenant",
+  "secret.delete": "tenant",
+  "secret.undelete": "tenant",
+  "secret.restore": "tenant",
+  "secret.reveal": "tenant",
+  "secret.export": "tenant",
+  "import.preview": "tenant",
+  "import.apply": "tenant",
+  "import.resume": "tenant",
+  "system.operation_stuck": "tenant",
+  "operator.reconcile_operation": "tenant",
+  "operator.reconcile_environment": "tenant",
+  "credential.issue": "tenant",
+  "credential.revoke": "tenant",
+  "machine.keys": "tenant",
+  "machine.resolve": "tenant",
+  "operator.reconcile_credentials": "tenant",
+  "operator.operations_expire": "global",
+  "auth.sign_out": "account",
+  "auth.session_revoke": "account",
+  "operator.auth_cleanup": "global",
+  "system.audit_archive": "global",
+  "system.audit_purge": "global",
+  "system.backup_capture": "global",
+  "system.backup_eligible": "global",
+  "system.backup_invalidated": "global",
+  "system.backup_cleanup": "global",
+  "operator.gate_open": "global",
+  "operator.gate_close": "global",
+  "operator.restore_begin": "global",
+  "operator.restore_invalidate": "global",
+  "operator.restore_verify": "global",
+  "operator.deploy": "global",
+} satisfies Record<AuditAction, AuditScope>);
+
+/**
+ * A denial is the organization's row when the caller is its member; a
+ * request against an organization the caller does not belong to names none
+ * (the hidden 404 must not attribute it) and is then the caller's account row.
+ */
+export const ACCOUNT_WITHOUT_ORGANIZATION: ReadonlySet<AuditAction> = new Set(["access.denied"]);
+
+/** The actions an organization's audit view may serve (P-107): tenant and account. */
+export const SERVED_ACTIONS: readonly AuditAction[] = Object.freeze(
+  AUDIT_ACTIONS.filter((action) => AUDIT_SCOPE[action] !== "global"),
+);
+
+/** The product's actions, for the workspace's activity timeline (P-108). */
+export const ACTIVITY_ACTIONS: readonly AuditAction[] = Object.freeze(
+  AUDIT_ACTIONS.filter(
+    (action) =>
+      /^(project|environment|secret|import|credential|machine)\./.test(action) ||
+      action === "system.operation_stuck" ||
+      action === "system.drift_detected" ||
+      action === "system.environment_provision",
+  ),
+);
 
 export type AuditDetails = Record<string, string | number | boolean | null>;
 

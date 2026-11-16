@@ -106,11 +106,17 @@ describe("import.resume", () => {
       });
       expect(sha256(shown.body.value as string)).toBe(sha256(value));
     }
-    const audit = await f.api.superuser.query<{ outcome: string }>(
-      "SELECT outcome FROM audit.event WHERE action = 'import.apply' AND operation_id = $1 ORDER BY occurred_at",
+    // Run 6.1 (P-105): the resume writes its own rows; the apply's intent is not repeated.
+    const audit = await f.api.superuser.query<{ action: string; outcome: string }>(
+      `SELECT action, outcome FROM audit.event
+        WHERE action LIKE 'import.%' AND operation_id = $1 ORDER BY occurred_at, id`,
       [parentId],
     );
-    expect(audit.rows.map((row) => row.outcome)).toEqual(["intent", "success"]);
+    expect(audit.rows.map((row) => `${row.action} ${row.outcome}`)).toEqual([
+      "import.apply intent",
+      "import.resume intent",
+      "import.resume success",
+    ]);
   });
 
   it("other bytes → 422", async () => {

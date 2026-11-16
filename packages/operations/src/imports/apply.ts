@@ -117,15 +117,19 @@ function valuesOf(bytes: Uint8Array): Map<string, string> {
   return new Map(parsed.entries.map((entry) => [entry.name, entry.value]));
 }
 
+/** Which request an audit row of an import belongs to (Run 6.1, P-105). */
+type ImportAuditAction = "import.apply" | "import.resume";
+
 function auditImport(
   db: pg.PoolClient,
   run: { scope: EnvironmentScope; userId: UserId; requestId: string },
   operationId: OperationId,
   outcome: "intent" | "success" | "unknown",
   details: Record<string, number>,
+  action: ImportAuditAction,
 ): Promise<string> {
   return appendAudit(db, {
-    action: "import.apply",
+    action,
     actor: { kind: "user", id: run.userId },
     source: "api",
     organizationId: run.scope.organizationId,
@@ -185,7 +189,14 @@ export async function applyImport(deps: EffectDeps, request: ApplyRequest): Prom
         throw new Refusal(refused("validation_failed"));
       }
       await insertImportEntries(tx, parentId, claim.entries);
-      await auditImport(tx, request, parentId, "intent", { entries: claim.entries.length });
+      await auditImport(
+        tx,
+        request,
+        parentId,
+        "intent",
+        { entries: claim.entries.length },
+        "import.apply",
+      );
       return { entries: claim.entries.length };
     });
   } catch (error) {
@@ -194,7 +205,7 @@ export async function applyImport(deps: EffectDeps, request: ApplyRequest): Prom
     throw error;
   }
   if ("replay" in accepted) return { kind: "replay", operation: accepted.replay };
-  return runEntries(deps, request, parentId, valuesOf(request.bytes), started);
+  return runEntries(deps, request, parentId, valuesOf(request.bytes), started, "import.apply");
 }
 
 /**
@@ -230,11 +241,24 @@ export async function resumeImport(
   if (!sameMac(fileHmac(deps.ring, request.bytes, file.hmacKeyId).mac, file.fileHmac)) {
     return refused("validation_failed");
   }
-  if (!(await claimResume(deps.pool, row.id, deps.bootId))) {
+  // Run 6.1 (P-105): the claim and the resume's intent row are one transaction.
+  let claimed: boolean;
+  try {
+    claimed = await onMainPool(deps.pool, async (tx) => {
+      if (!(await claimResume(tx, row.id, deps.bootId))) return false;
+      const entries = await importResult(tx, row.id);
+      await auditImport(tx, request, row.id, "intent", entries.counts, "import.resume");
+      return true;
+    });
+  } catch (error) {
+    if (error instanceof AuditUnavailable) return refused("audit_unavailable");
+    throw error;
+  }
+  if (!claimed) {
     const now = await findOperation(deps.pool, row.id);
     return now === null ? refused("not_found") : { kind: "waiting", operation: now };
   }
-  return runEntries(deps, request, row.id, valuesOf(request.bytes), started);
+  return runEntries(deps, request, row.id, valuesOf(request.bytes), started, "import.resume");
 }
 
 /** What one entry came to. */
@@ -263,9 +287,10 @@ async function runEntries(
   parentId: OperationId,
   values: Map<string, string>,
   started: number,
+  action: ImportAuditAction,
 ): Promise<ImportOutcome> {
   try {
-    return await runEntriesOf(deps, run, parentId, values, started);
+    return await runEntriesOf(deps, run, parentId, values, started, action);
   } catch {
     return { kind: "unknown", operationId: parentId };
   }
@@ -277,6 +302,7 @@ async function runEntriesOf(
   parentId: OperationId,
   values: Map<string, string>,
   started: number,
+  action: ImportAuditAction,
 ): Promise<ImportOutcome> {
   const fromRow = async (): Promise<ImportOutcome> => {
     const row = await findOperation(deps.pool, parentId);
@@ -306,6 +332,7 @@ async function runEntriesOf(
             parentId,
             "unknown",
             (await importResult(tx, parentId)).counts,
+            action,
           );
         }
         return row;
@@ -326,7 +353,7 @@ async function runEntriesOf(
       { state: allApplied(result) ? "succeeded" : "partial", result: { ...result } },
       LIMITS.operation.terminalRetentionDays,
     );
-    if (row !== null) await auditImport(tx, run, parentId, "success", result.counts);
+    if (row !== null) await auditImport(tx, run, parentId, "success", result.counts, action);
     return row;
   });
   return finished === null ? fromRow() : { kind: "finished", operation: finished };
