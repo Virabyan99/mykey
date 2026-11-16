@@ -367,7 +367,15 @@ describe("secrets run", () => {
       { CHILD_MODE: "wait" },
       { keepStdinOpen: true, through: underTerminal },
     );
-    await until("the child", () => existsSync(marker));
+    await until("the child", () => existsSync(marker) || cli.peek().exited).catch(() => undefined);
+    if (!existsSync(marker)) {
+      // Say why (the macOS runners hit this in the matrix): the wrapper's state and output.
+      const seen = cli.peek();
+      cli.kill("SIGKILL");
+      throw new Error(
+        `no child under the terminal; wrapper ${seen.exited ? "exited" : "still running"}; stdout ${JSON.stringify(seen.stdout.slice(-600))}; stderr ${JSON.stringify(seen.stderr.slice(-600))}`,
+      );
+    }
     cli.write("\u0003");
     await until("SIGINT at the child", () => readMarker().signals.SIGINT >= 1);
     await sleep(500);

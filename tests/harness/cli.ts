@@ -26,6 +26,8 @@ export interface StartedCli {
   kill(signal: NodeJS.Signals): void;
   write(text: string): void;
   end(): void;
+  /** What was printed so far, with the token masked: for a failure message only. */
+  peek(): { stdout: string; stderr: string; exited: boolean };
   result: Promise<CliResult>;
 }
 
@@ -65,6 +67,10 @@ export function startCli(args: string[], opts: StartOptions = {}): StartedCli {
   });
   let stdout = "";
   let stderr = "";
+  let exited = false;
+  child.on("exit", () => (exited = true));
+  const mask = (text: string): string =>
+    secrets.reduce((masked, secret) => masked.replaceAll(secret, "[token]"), text);
   child.stdout.setEncoding("utf8").on("data", (chunk: string) => (stdout += chunk));
   child.stderr.setEncoding("utf8").on("data", (chunk: string) => (stderr += chunk));
   child.stdin.on("error", () => undefined);
@@ -90,6 +96,7 @@ export function startCli(args: string[], opts: StartOptions = {}): StartedCli {
     kill: (signal) => child.kill(signal),
     write: (text) => child.stdin.write(text),
     end: () => child.stdin.end(),
+    peek: () => ({ stdout: mask(stdout), stderr: mask(stderr), exited }),
     result,
   };
 }
