@@ -120,6 +120,16 @@ async function discard(request: Request, bytes: number): Promise<void> {
 }
 
 /**
+ * Run 6.3 (P-114): a large route refused before its body was read drains it
+ * like an oversized declared body: read and dropped (never kept, never
+ * counted) up to DISCARD_MAX_BYTES, so the peer gets the answer, not a reset.
+ */
+export async function drainBody(request: Request): Promise<void> {
+  if (request.bodyUsed) return;
+  await discard(request, DISCARD_MAX_BYTES).catch(() => undefined);
+}
+
+/**
  * Reads at most `limit` bytes of the body; one byte more is a refusal. Reports
  * every byte it read through `counted`, so the request log can show it.
  */

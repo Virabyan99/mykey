@@ -385,7 +385,7 @@ export const auditArchiveCommand: OpsCommand = {
       io.stderr.write("audit-archive: runs as a host job (ops-run.sh audit-archive)\n");
       return EXIT.failed;
     }
-    const pool = createPool(io.env.database, { max: 3 });
+    const pool = createPool(io.env.database, { max: LIMITS.db.opsPool });
     try {
       const result = await auditArchive({ pool, ...archive });
       io.stdout.write(

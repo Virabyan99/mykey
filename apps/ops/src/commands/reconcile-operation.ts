@@ -8,7 +8,7 @@
 // operator's statement that no API process can still send the change
 // (`host.ts <host> quiesce`). Never prints a value.
 import { randomUUID } from "node:crypto";
-import { operationIdSchema } from "@mykey/contracts";
+import { LIMITS, operationIdSchema } from "@mykey/contracts";
 import { createPool, findOperation } from "@mykey/db";
 import { OpenBaoClient, namespaceFor } from "@mykey/openbao";
 import { Busy } from "@mykey/operations";
@@ -49,7 +49,7 @@ export const reconcileOperationCommand: OpsCommand = {
       );
       return EXIT.failed;
     }
-    const pool = createPool(database, { max: 2 });
+    const pool = createPool(database, { max: LIMITS.db.opsPool });
     try {
       const row = await findOperation(pool, parsed.data);
       if (row === null) {

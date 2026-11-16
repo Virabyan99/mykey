@@ -39,6 +39,9 @@ export interface ApiServer {
  * (LIMITS.body.headersMaxBytes), so the pipeline is the one that refuses
  * oversized headers, with the error envelope.
  */
+/** P-114: the time a peer has to send its headers. */
+export const HEADERS_TIMEOUT_MS = 10_000;
+
 export function listen(app: Hono<ApiEnv>, options: ListenOptions): Promise<ApiServer> {
   return new Promise((resolve, reject) => {
     const server = serve(
@@ -52,6 +55,12 @@ export function listen(app: Hono<ApiEnv>, options: ListenOptions): Promise<ApiSe
           key: readFileSync(options.tls.keyPath),
           minVersion: "TLSv1.2",
           maxHeaderSize: 64 * 1024,
+          // Run 6.3 (P-114): a request must have arrived whole within 30 s, its
+          // headers within 10 s; checked every second, so a silent peer frees
+          // its in-flight and large slots on time.
+          requestTimeout: LIMITS.deadlines.requestMs,
+          headersTimeout: HEADERS_TIMEOUT_MS,
+          connectionsCheckingInterval: 1000,
         },
       },
       (info: AddressInfo) => {
@@ -88,15 +97,25 @@ export interface ServerConfig extends ListenOptions {
 /** P-66: of the process's connections, this many are dedicated lock connections. */
 export const LOCK_POOL_SIZE = 8;
 
+/**
+ * Run 6.3 (P-114): every connection one API process can open — its pool, its
+ * lock pool and the health check's one — adds up to LIMITS.db.apiPool.
+ */
+export const API_CONNECTIONS = {
+  pool: LIMITS.db.apiPool - LOCK_POOL_SIZE - 1,
+  lockPool: LOCK_POOL_SIZE,
+  health: 1,
+} as const;
+
 export async function startServer(config: ServerConfig): Promise<ApiServer> {
   const health = createHealthCheck(config.database, config.openbao);
   const pool = createPool(config.database, {
-    max: LIMITS.db.apiPool - LOCK_POOL_SIZE,
+    max: API_CONNECTIONS.pool,
     queryTimeoutMs: LIMITS.deadlines.requestMs,
   });
   // One connection per secret action or value read, holding the environment's lock (P-66).
   const lockPool = createPool(config.database, {
-    max: LOCK_POOL_SIZE,
+    max: API_CONNECTIONS.lockPool,
     queryTimeoutMs: LIMITS.deadlines.largeRequestMs,
   });
   const keys = loadAuthKeys(config.keysDirectory);

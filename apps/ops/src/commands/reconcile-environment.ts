@@ -5,7 +5,7 @@
 // refused (an operation unresolved, OpenBao unreadable, the environment busy);
 // exit 2 for an unknown environment. Never prints a value.
 import { randomUUID } from "node:crypto";
-import { environmentIdSchema, type OrganizationId, type ProjectId } from "@mykey/contracts";
+import { LIMITS, environmentIdSchema, type OrganizationId, type ProjectId } from "@mykey/contracts";
 import { createPool } from "@mykey/db";
 import { OpenBaoClient, namespaceFor } from "@mykey/openbao";
 import { reconcileEnvironment } from "@mykey/operations/operator";
@@ -35,7 +35,7 @@ export const reconcileEnvironmentCommand: OpsCommand = {
       );
       return EXIT.failed;
     }
-    const pool = createPool(database, { max: 2 });
+    const pool = createPool(database, { max: LIMITS.db.opsPool });
     try {
       const found = await pool.query<{ organization_id: OrganizationId; project_id: ProjectId }>(
         "SELECT organization_id, project_id FROM app.environment WHERE id = $1",

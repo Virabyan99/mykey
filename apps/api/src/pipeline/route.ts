@@ -20,7 +20,7 @@ import { replayAnswer, sameIntent, type Intent } from "@mykey/operations";
 import type { UserPrincipal as Principal } from "./authn.ts";
 import { admitStates, authorize, deny } from "./authz.ts";
 import { checkOrigin, hasMixedCredentials, needsOriginCheck } from "./origin.ts";
-import { headerBytes, readBody } from "./body.ts";
+import { drainBody, headerBytes, readBody } from "./body.ts";
 import { MISSED_LOOKUP, authenticateMachine, hasSelector } from "./machine.ts";
 import { ROUTE_CLASS_LIMIT, SESSION_EXEMPT, windowSecondsLeft, type RateScope } from "./rate.ts";
 import { requestSource } from "./source.ts";
@@ -34,6 +34,7 @@ import {
 import { checkDetails, errorResponse, jsonResponse } from "./respond.ts";
 import { notReplayable } from "../routes/credentials.ts";
 import { validateBody, validateQuery } from "./validate.ts";
+import { createLargeGate, type LargeGate } from "../large.ts";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
@@ -233,14 +234,29 @@ function outputResponse(
   return jsonResponse(result.status, parsed.data, result.headers);
 }
 
+/**
+ * Run 6.3 (P-114, M-5): the routes that read or write up to a whole
+ * environment. For them authentication, the session or credential limit and
+ * the large slot come before the body is read.
+ */
+export const LARGE_ROUTES: ReadonlySet<string> = new Set([
+  "import.preview",
+  "import.apply",
+  "import.resume",
+  "export.create",
+  "machine.resolve",
+]);
+
 async function run(
   c: Context<ApiEnv>,
   route: RouteDef,
   handler: Handler,
   deps: AppDeps,
+  large: LargeGate,
 ): Promise<Response> {
   const requestId = c.get("requestId");
   c.set("routePattern", route.path);
+  let slot = false;
   try {
     if (headerBytes(c.env.incoming.rawHeaders) > LIMITS.body.headersMaxBytes) {
       throw new ApiError("malformed_request");
@@ -250,13 +266,16 @@ async function run(
     };
     const machineRoute = route.auth === "machine";
     // A machine route takes no body; any JSON it is sent is read only to be refused as a selector.
-    const raw = await readBody(
-      c.req.raw,
-      machineRoute && route.method !== "GET" && hasBodyBytes(c.req.raw.headers)
-        ? { ...route, request: { ...route.request, body: "pending" } }
-        : route,
-      counted,
-    );
+    const readRaw = () =>
+      readBody(
+        c.req.raw,
+        machineRoute && route.method !== "GET" && hasBodyBytes(c.req.raw.headers)
+          ? { ...route, request: { ...route.request, body: "pending" } }
+          : route,
+        counted,
+      );
+    const early = LARGE_ROUTES.has(route.id);
+    let raw = early ? undefined : await readRaw();
     const headers = c.req.raw.headers;
     const human = route.auth === "human" || route.auth === "human_fresh_totp";
     // One kind of credential per request, refused before any database read.
@@ -286,6 +305,12 @@ async function run(
       ? await machineStep(deps, c, params, route, requestId, source)
       : null;
     if (machine !== null) await rateStep(deps, requestId, "rl:credential", machine.credentialId);
+    if (early) {
+      // P-114: a slot, or busy at once; only then the body.
+      if (!large.enter()) throw new ApiError("busy");
+      slot = true;
+      raw = await readRaw();
+    }
     if (machine !== null && hasSelector(c.req.url, raw)) throw new ApiError("forbidden_selector");
     const clock = deps.test?.clock?.(headers);
     const query = machineRoute ? undefined : validateQuery(route, new URL(c.req.url).searchParams);
@@ -385,7 +410,13 @@ async function run(
     );
     return outputResponse(result, route, requestId, deps);
   } catch (error) {
+    // P-114: a large route refused before its body was read drains it first.
+    if (LARGE_ROUTES.has(route.id) && hasBodyBytes(c.req.raw.headers)) {
+      await drainBody(c.req.raw);
+    }
     return failureResponse(error, route, requestId, deps);
+  } finally {
+    if (slot) large.leave();
   }
 }
 
@@ -395,8 +426,9 @@ export function mountRouteDef(
   deps: AppDeps,
   route: RouteDef,
   handler: Handler | null,
+  large: LargeGate = createLargeGate(LIMITS.concurrency.largePerProcess),
 ): void {
-  app.on(route.method, route.path, (c) => run(c, route, handler ?? terminal, deps));
+  app.on(route.method, route.path, (c) => run(c, route, handler ?? terminal, deps, large));
 }
 
 /** Mounts the contract route `routeId`; a null handler gives the terminal 404. */
@@ -405,6 +437,7 @@ export function mountRoute(
   deps: AppDeps,
   routeId: string,
   handler: Handler | null,
+  large?: LargeGate,
 ): void {
-  mountRouteDef(app, deps, routeById(routeId), handler);
+  mountRouteDef(app, deps, routeById(routeId), handler, large);
 }

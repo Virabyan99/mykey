@@ -17,6 +17,7 @@ export { authenticateHuman, type Principal, type UserPrincipal } from "./pipelin
 export { authenticateMachine, type MachinePrincipal } from "./pipeline/machine.ts";
 export { parseStrictJson, readAuthBody, readBody } from "./pipeline/body.ts";
 export { createLargeGate, type LargeGate } from "./large.ts";
+export { createInflightGate, type InflightGate } from "./pipeline/inflight.ts";
 export {
   RATE_SCOPES,
   ROUTE_CLASS_LIMIT,
@@ -69,6 +70,8 @@ export {
   MissingSetting,
   configFromEnvironment,
   listen,
+  API_CONNECTIONS,
+  HEADERS_TIMEOUT_MS,
   startServer,
   type ApiServer,
   type ListenOptions,

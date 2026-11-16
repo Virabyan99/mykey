@@ -63,6 +63,8 @@ function machineRead(
       client: reader,
       alive: async () => (await reader.tokenLookupSelf()).ok,
     },
+    // P-114: one keys or resolve at a time per credential, across processes.
+    exclusive: machine.credentialId,
     audit: async (tx, read) => {
       await appendAudit(tx, {
         action,

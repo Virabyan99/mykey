@@ -643,8 +643,24 @@ export async function expectIndexMatchesBackend(
   expect(await idleAdvisoryLocks(fixture), "advisory locks of idle connections").toBe(0);
 }
 
-/** Advisory locks held by a connection that is idle (a lock that outlived its request). */
+/**
+ * Advisory locks held by a connection that is idle (a lock that outlived its
+ * request). Run 6.3 (D-49): a complete read leaves its environment's read
+ * cool-down behind for 1.5 s on purpose; those must be gone within 3 s, and
+ * only then is everything counted.
+ */
 export async function idleAdvisoryLocks(fixture: SecretsFixture): Promise<number> {
+  const deadline = Date.now() + 3000;
+  for (;;) {
+    const cooling = await fixture.api.superuser.query<{ count: number }>(
+      `SELECT count(*)::int AS count FROM pg_locks
+        WHERE locktype = 'advisory' AND objsubid = 2
+          AND classid = (hashtext('mykey.read-cooldown')::bigint & 4294967295)::oid`,
+    );
+    if ((cooling.rows[0]?.count ?? 0) === 0) break;
+    if (Date.now() > deadline) break; // counted below: a cool-down that outlived 3 s is a leak
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
   const result = await fixture.api.superuser.query<{ count: number }>(
     `SELECT count(*)::int AS count FROM pg_locks l JOIN pg_stat_activity a USING (pid)
       WHERE l.locktype = 'advisory' AND a.state = 'idle' AND a.datname = current_database()`,

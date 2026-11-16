@@ -8,7 +8,8 @@ import { Hono, type Context } from "hono";
 import { routePath } from "hono/route";
 import { now } from "./log.ts";
 import { headerBytes, readAuthBody } from "./pipeline/body.ts";
-import { createLargeGate, type LargeGate } from "./large.ts";
+import { HELD_BY_PIPELINE, createLargeGate, type LargeGate } from "./large.ts";
+import { createInflightGate } from "./pipeline/inflight.ts";
 import type { ApiEnv, AppDeps, Handler } from "./pipeline/context.ts";
 import { readGate } from "./pipeline/gate.ts";
 import { checkOrigin } from "./pipeline/origin.ts";
@@ -102,7 +103,7 @@ function mountAuth(app: Hono<ApiEnv>, deps: AppDeps, module: NonNullable<AppDeps
 
 /** The handlers that exist; every other contract route ends in the terminal 404. */
 function handlers(
-  large: LargeGate,
+  held: LargeGate,
   served: () => OpenApiDocument,
   page: () => ReferencePage | null,
 ): Partial<Record<string, Handler>> {
@@ -128,10 +129,10 @@ function handlers(
     "secrets.delete": secretsDeleteHandler,
     "secrets.undelete": secretsUndeleteHandler,
     "secrets.restore": secretsRestoreHandler,
-    "import.preview": importPreviewHandler(large),
-    "import.apply": importApplyHandler(large),
-    "import.resume": importResumeHandler(large),
-    "export.create": exportCreateHandler(large),
+    "import.preview": importPreviewHandler(held),
+    "import.apply": importApplyHandler(held),
+    "import.resume": importResumeHandler(held),
+    "export.create": exportCreateHandler(held),
     "credentials.list": credentialsListHandler,
     "credentials.issue": credentialsIssueHandler,
     "credentials.revoke": credentialsRevokeHandler,
@@ -140,7 +141,7 @@ function handlers(
     "projects.reactivate": reactivateHandler,
     "environments.reactivate": reactivateHandler,
     "machine.keys": machineKeysHandler,
-    "machine.resolve": machineResolveHandler(large),
+    "machine.resolve": machineResolveHandler(held),
     "session.activity": sessionActivityHandler,
     "auth.reset.complete": resetCompleteHandler,
     "openapi.get": openapiGetHandler(served),
@@ -160,6 +161,45 @@ export function handledRouteIds(): ReadonlySet<string> {
 
 export function createApp(deps: AppDeps): Hono<ApiEnv> {
   const app = new Hono<ApiEnv>();
+  const inflight = createInflightGate(LIMITS.concurrency.httpPerProcess);
+
+  /** The gate, then the source limit, then the route (P-43, P-113). */
+  const admitted = async (c: Context<ApiEnv>, next: () => Promise<void>, requestId: string) => {
+    // The gate is the first check of every request, matched or not (P-43).
+    // GET /health is the one exception: it reports the gate instead of refusing.
+    const isHealth = c.req.method === "GET" && c.req.path === "/health";
+    const gate = isHealth ? null : readGate(deps.config.gatePath, deps.config.hostInstanceId);
+    if (gate !== null && !gate.open) {
+      deps.log({ event: "gate_closed", time: now(), requestId, cause: gate.cause });
+      c.res = errorResponse("quarantined", requestId);
+      return;
+    }
+    if (isHealth) {
+      await next();
+      return;
+    }
+    // P-113: the source limit, before anything of the request is read.
+    const refusal = await rateStep(
+      deps,
+      requestId,
+      "rl:source",
+      requestSource(
+        c.env.incoming.socket.remoteAddress,
+        c.req.header("x-forwarded-for"),
+        deps.config.trustedProxy,
+      ),
+    ).then(
+      () => null,
+      (error: unknown) =>
+        error instanceof ApiError ? error : new ApiError("dependency_unavailable"),
+    );
+    if (refusal !== null) {
+      // The body stays unread: the connection closes after the answer.
+      c.res = errorResponse(refusal.code, requestId, { ...refusal.headers, connection: "close" });
+      return;
+    }
+    await next();
+  };
 
   app.use(async (c, next) => {
     const started = performance.now();
@@ -168,38 +208,15 @@ export function createApp(deps: AppDeps): Hono<ApiEnv> {
     c.set("requestId", requestId);
     c.set("routePattern", null);
     c.set("bodyBytesRead", 0);
-    // The gate is the first step of every request, matched or not (P-43).
-    // GET /health is the one exception: it reports the gate instead of refusing.
-    const isHealth = c.req.method === "GET" && c.req.path === "/health";
-    const gate = isHealth ? null : readGate(deps.config.gatePath, deps.config.hostInstanceId);
-    if (gate !== null && !gate.open) {
-      deps.log({ event: "gate_closed", time: now(), requestId, cause: gate.cause });
-      c.res = errorResponse("quarantined", requestId);
-    } else if (isHealth) {
-      await next();
+    // P-114: the in-flight gate, before anything else; the 65th request is
+    // refused at once, its body unread, and the connection closes.
+    if (!inflight.enter()) {
+      c.res = errorResponse("busy", requestId, { connection: "close" });
     } else {
-      // P-113: the source limit, before anything of the request is read.
-      const refusal = await rateStep(
-        deps,
-        requestId,
-        "rl:source",
-        requestSource(
-          c.env.incoming.socket.remoteAddress,
-          c.req.header("x-forwarded-for"),
-          deps.config.trustedProxy,
-        ),
-      ).then(
-        () => null,
-        (error: unknown) => (error instanceof ApiError ? error : null),
-      );
-      if (refusal === null) {
-        await next();
-      } else {
-        // The body stays unread: the connection closes after the answer.
-        c.res = errorResponse(refusal.code, requestId, {
-          ...refusal.headers,
-          connection: "close",
-        });
+      try {
+        await admitted(c, next, requestId);
+      } finally {
+        inflight.leave();
       }
     }
     c.res.headers.set("x-request-id", requestId);
@@ -223,8 +240,10 @@ export function createApp(deps: AppDeps): Hono<ApiEnv> {
   // The document this build serves and its page (Run 5.9): computed once, from the handlers it has.
   let served: OpenApiDocument = { paths: {} };
   let page: ReferencePage | null = null;
+  // Run 6.3 (P-114): the pipeline takes the large slot before the body; the handlers take none.
+  const large = createLargeGate(LIMITS.concurrency.largePerProcess);
   const known = handlers(
-    createLargeGate(LIMITS.concurrency.largePerProcess),
+    HELD_BY_PIPELINE,
     () => served,
     () => page,
   );
@@ -235,8 +254,10 @@ export function createApp(deps: AppDeps): Hono<ApiEnv> {
   const asset = loadScalarAsset(deps.config.referenceAssetDirectory ?? DEFAULT_ASSET_DIRECTORY);
   if (asset === null) deps.log({ event: "reference_asset_missing", time: now() });
   else page = buildReferencePage(asset, served);
-  for (const route of ROUTES) mountRoute(app, deps, route.id, known[route.id] ?? null);
-  for (const entry of deps.test?.routes ?? []) mountRouteDef(app, deps, entry.def, entry.handler);
+  for (const route of ROUTES) mountRoute(app, deps, route.id, known[route.id] ?? null, large);
+  for (const entry of deps.test?.routes ?? []) {
+    mountRouteDef(app, deps, entry.def, entry.handler, large);
+  }
   // After the contract routes: the auth module closes the rest of /v1/auth with a 404.
   if (deps.auth !== undefined) mountAuth(app, deps, deps.auth);
 

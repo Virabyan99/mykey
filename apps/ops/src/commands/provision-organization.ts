@@ -5,7 +5,7 @@
 // overwritten. Run it again after any stop: it is the reconciliation too.
 // Exit 0 active, 1 retry (an unclear answer), 2 refused or already running,
 // 3 review.
-import { organizationIdSchema } from "@mykey/contracts";
+import { LIMITS, organizationIdSchema } from "@mykey/contracts";
 import { createPool } from "@mykey/db";
 import { OpenBaoAdmin } from "@mykey/openbao/admin";
 import { provisionOrganization } from "@mykey/operations/operator";
@@ -25,7 +25,7 @@ export const provisionOrganizationCommand: OpsCommand = {
       io.stderr.write("provision-organization: run through host.ts <host> ops (no OpenBao)\n");
       return EXIT.failed;
     }
-    const pool = createPool(database, { max: 3 });
+    const pool = createPool(database, { max: LIMITS.db.opsPool });
     try {
       const result = await provisionOrganization(
         {

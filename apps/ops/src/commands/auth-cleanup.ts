@@ -1,3 +1,4 @@
+import { LIMITS } from "@mykey/contracts";
 // ops auth-cleanup   (Run 3.5): removes used TOTP steps older than a day,
 // consumed recovery codes and codes of retired enrollments. Prints the counts.
 import { cleanUpFactors } from "@mykey/auth/operator";
@@ -12,7 +13,7 @@ export const authCleanupCommand: OpsCommand = {
       io.stderr.write("auth-cleanup: run through host.ts <host> ops (no database)\n");
       return EXIT.failed;
     }
-    const pool = createPool(io.env.database, { max: 1 });
+    const pool = createPool(io.env.database, { max: LIMITS.db.opsPool });
     try {
       const removed = await cleanUpFactors(pool);
       io.stdout.write(`steps ${String(removed.steps)} codes ${String(removed.codes)}\n`);

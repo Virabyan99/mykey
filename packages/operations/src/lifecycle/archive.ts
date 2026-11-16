@@ -52,7 +52,7 @@ import type pg from "pg";
 import { intentFingerprint, sameIntent, type Intent } from "../replay.ts";
 import type { CredentialDeps } from "../credentials/issue.ts";
 import { revokeAndVerify } from "../credentials/verify.ts";
-import type { RuntimeBao } from "../runtime.ts";
+import type { IssuerSession, RuntimeBao } from "../runtime.ts";
 import { Busy, inTransaction, withEnvironmentLock } from "../secrets/lock.ts";
 
 export const ARCHIVE_FAULT_POINTS = [
@@ -111,6 +111,9 @@ class Refusal extends Error {
     };
   }
 }
+
+/** P-114: an issuer session is reused while it is younger than this (it lives 60 s). */
+const ISSUER_REUSE_MS = (LIMITS.machineToken.issuerSessionSeconds - 15) * 1000;
 
 const AUDIT: Record<(typeof ARCHIVE_ACTIONS)[number], AuditAction> = {
   "projects.archive": "project.archive",
@@ -303,57 +306,75 @@ export async function driveArchive(
     await deps.faults?.(point, operationId);
   };
   let revokedHere = 0;
-  for (const environment of scope.environments) {
-    const done = await (async (): Promise<boolean> => {
-      try {
-        return await withEnvironmentLock(deps.lockPool, environment.lockKey, async (locked) => {
-          // A credential that became active meanwhile (an issuance finalized before admission) closes too.
-          const closedNow = await closeCredentials(locked.client, environment);
-          if (closedNow > 0) {
-            await locked.client.query(
-              `UPDATE app.operation
+  // P-114: one issuer session for as many environments as fit in its first
+  // 45 s (it lives LIMITS.machineToken.issuerSessionSeconds); then a new one.
+  let session: { data: IssuerSession; openedAt: number } | null = null;
+  const issuerSession = async (): Promise<IssuerSession | null> => {
+    if (session !== null && Date.now() - session.openedAt < ISSUER_REUSE_MS) return session.data;
+    if (session !== null) {
+      await session.data.close();
+      session = null;
+    }
+    const opened = await deps.issuer.open(scope.organizationId);
+    if (!opened?.ok) return null;
+    session = { data: opened.data, openedAt: Date.now() };
+    return opened.data;
+  };
+  try {
+    for (const environment of scope.environments) {
+      const done = await (async (): Promise<boolean> => {
+        try {
+          return await withEnvironmentLock(deps.lockPool, environment.lockKey, async (locked) => {
+            // A credential that became active meanwhile (an issuance finalized before admission) closes too.
+            const closedNow = await closeCredentials(locked.client, environment);
+            if (closedNow > 0) {
+              await locked.client.query(
+                `UPDATE app.operation
                   SET expected = jsonb_set(expected, '{closed}',
                                  to_jsonb(coalesce((expected->>'closed')::int, 0) + $2))
                 WHERE id = $1`,
-              [operationId, closedNow],
-            );
-          }
-          const work = await openCredentialWork(locked.client, environment);
-          if (work.revoking.length > 0) {
-            const opened = await deps.issuer.open(scope.organizationId);
-            if (!opened?.ok) return false;
-            try {
+                [operationId, closedNow],
+              );
+            }
+            const work = await openCredentialWork(locked.client, environment);
+            if (work.revoking.length > 0) {
               for (const credential of work.revoking) {
                 if (credential.accessor === null) return false;
-                const proof = await revokeAndVerify(opened.data, credential.accessor, {
-                  operationId,
-                  dispatchId: randomUUID(),
-                });
-                if (proof !== "absent") return false;
-                await inTransaction(locked.client, async (tx) => {
-                  if (await moveCredential(tx, credential.id, ["revoking"], "revoked")) {
-                    await settleRevocations(
-                      tx,
-                      credential.id,
-                      LIMITS.operation.terminalRetentionDays,
-                    );
-                  }
-                });
-                revokedHere += 1;
-                if (revokedHere === 1) await fault("archive_after_revoke_sent");
+                const issuer = await issuerSession();
+                if (issuer === null) return false;
+                {
+                  const proof = await revokeAndVerify(issuer, credential.accessor, {
+                    operationId,
+                    dispatchId: randomUUID(),
+                  });
+                  if (proof !== "absent") return false;
+                  await inTransaction(locked.client, async (tx) => {
+                    if (await moveCredential(tx, credential.id, ["revoking"], "revoked")) {
+                      await settleRevocations(
+                        tx,
+                        credential.id,
+                        LIMITS.operation.terminalRetentionDays,
+                      );
+                    }
+                  });
+                  revokedHere += 1;
+                  if (revokedHere === 1) await fault("archive_after_revoke_sent");
+                }
               }
-            } finally {
-              await opened.data.close();
             }
-          }
-          return work.blocking === 0;
-        });
-      } catch (error) {
-        if (error instanceof Busy) return false;
-        throw error;
-      }
-    })();
-    if (!done) return "waiting";
+            return work.blocking === 0;
+          });
+        } catch (error) {
+          if (error instanceof Busy) return false;
+          throw error;
+        }
+      })();
+      if (!done) return "waiting";
+    }
+  } finally {
+    // A null session was never opened; the cast undoes the narrowing of the closure's writes.
+    const open = session as { data: IssuerSession } | null;
+    if (open !== null) await open.data.close();
   }
 
   // Every credential of the scope is revoked: finish, once.

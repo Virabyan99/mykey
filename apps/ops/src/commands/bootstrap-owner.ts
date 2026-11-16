@@ -1,3 +1,4 @@
+import { LIMITS } from "@mykey/contracts";
 // ops bootstrap-owner --email <address>   (Run 3.2, D-27)
 //
 // The password is read from stdin (one line) and never printed. Prints the
@@ -24,7 +25,7 @@ export const bootstrapOwnerCommand: OpsCommand = {
       return EXIT.failed;
     }
     const password = await readSecretLine(io.stdin);
-    const pool = createPool(database, { max: 2 });
+    const pool = createPool(database, { max: LIMITS.db.opsPool });
     try {
       const auth = createAuth({
         db: drizzle(pool),

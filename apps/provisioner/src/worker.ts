@@ -4,7 +4,7 @@
 import { randomUUID } from "node:crypto";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
-import type { OrganizationId } from "@mykey/contracts";
+import { LIMITS, type OrganizationId } from "@mykey/contracts";
 import { createPool } from "@mykey/db";
 import { namespaceFor } from "@mykey/openbao";
 import { ProvisionerClient } from "@mykey/openbao/provisioner";
@@ -27,6 +27,9 @@ export type ProvisionerLog =
 /** How long a job waits before it looks at a closed gate again. */
 const GATE_RETRY_SECONDS = 30;
 
+/** Run 6.3 (P-114): the provisioner's one pool, from LIMITS.db. */
+export const PROVISIONER_CONNECTIONS = LIMITS.db.provisionerPool;
+
 export interface StartOptions {
   log: (entry: ProvisionerLog) => void;
   /** Test-only: stops the process at a point of the environment job. */
@@ -39,7 +42,7 @@ export async function startProvisioner(
   opts: StartOptions,
 ): Promise<{ stop(): Promise<void>; sweepNow(): Promise<void> }> {
   const bootId = opts.bootId ?? randomUUID();
-  const pool = createPool(config.database, { max: 4 });
+  const pool = createPool(config.database, { max: PROVISIONER_CONNECTIONS });
   const clientFor: EnvironmentDeps["clientFor"] = (organizationId: OrganizationId) => {
     const credential = readCredential(config.secretsDirectory);
     if (credential?.organizationId !== organizationId) {

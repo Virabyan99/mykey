@@ -1,3 +1,4 @@
+import { LIMITS } from "@mykey/contracts";
 // ops operations-expire   (Run 4.1, P-65): terminal operations whose replay
 // record has expired get a tombstone and lose their fingerprint, expected
 // state and result; the rows stay. Unfinished operations never expire. One
@@ -16,7 +17,7 @@ export const operationsExpireCommand: OpsCommand = {
       io.stderr.write("operations-expire: run through host.ts <host> ops (no database)\n");
       return EXIT.failed;
     }
-    const pool = createPool(io.env.database, { max: 1 });
+    const pool = createPool(io.env.database, { max: LIMITS.db.opsPool });
     try {
       const expired = await withTransaction(pool, async (tx) => {
         const count = await expireOperations(tx);

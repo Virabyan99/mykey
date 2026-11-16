@@ -130,3 +130,37 @@ describe("a counter table that refuses", () => {
     expect(served.status, served.code ?? "").toBe(200);
   }, 120_000);
 });
+
+describe("one request at a time per credential (P-114)", () => {
+  it("a second keys or resolve of the same credential while one runs is 503 busy at once, without waiting for the environment's lock", async () => {
+    let release!: () => void;
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let reached!: () => void;
+    const first = new Promise<void>((resolve) => {
+      reached = resolve;
+    });
+    f.setFaults(async (point) => {
+      if (point !== "after_backend_read") return;
+      reached();
+      await held;
+    });
+    try {
+      const running = machineCall(f, "resolve", { token: a.token });
+      await first;
+      for (const route of ["resolve", "keys"] as const) {
+        const started = performance.now();
+        const second = await machineCall(f, route, { token: a.token });
+        expect([second.status, second.code], route).toEqual([503, "busy"]);
+        expect(performance.now() - started, route).toBeLessThan(1500);
+      }
+      release();
+      expect((await running).status).toBe(200);
+    } finally {
+      release();
+      f.setFaults(null);
+    }
+    expect((await machineCall(f, "resolve", { token: a.token })).status).toBe(200);
+  }, 120_000);
+});
