@@ -225,6 +225,61 @@ describe("import.apply", () => {
     expect(await revealDigest("env1b", moved)).toBe(sha256(otherValue));
   });
 
+  // M-2 (P-103, FR-1.36 "Recheck even unchanged entries"): an unchanged entry is
+  // compared with its index row under the lock. When the key moved it ends as a
+  // changed entry does: that entry conflict, the rest applied, partial.
+  it("an unchanged entry whose key changed after the preview → conflict, the rest applied, 200 partial", async () => {
+    const [same, first, second] = [unique(), unique(), unique()];
+    const kept = valueOf("kept");
+    const current = await created("env1b", same, kept);
+    const text = fileOf([same, kept], [first, valueOf("1")], [second, valueOf("2")]);
+    const previewId = await previewed("env1b", text);
+    const otherValue = valueOf("owner-update");
+    expect((await f.update("env1b", same, otherValue, current)).status).toBe(200);
+    const answer = await apply("env1b", previewId, text);
+    expect(answer.status).toBe(200);
+    expect(answer.body.state).toBe("partial");
+    expect(resultOf(answer).entries.map((entry) => entry.outcome)).toEqual([
+      "conflict",
+      "created",
+      "created",
+    ]);
+    expect(await revealDigest("env1b", same)).toBe(sha256(otherValue));
+  });
+
+  it("the same at resume: an unchanged entry whose key moved while the import waited → conflict", async () => {
+    const [created1, same, last] = [unique(), unique(), unique()];
+    const kept = valueOf("kept");
+    const current = await created("env1b", same, kept);
+    const text = fileOf([created1, valueOf("1")], [same, kept], [last, valueOf("3")]);
+    const previewId = await previewed("env1b", text);
+    f.setImportBudget(0);
+    const parked = await apply("env1b", previewId, text);
+    expect(parked.status).toBe(202);
+    const parentId = parked.body.operationId as string;
+    expect((await entriesOf(parentId)).map((entry) => entry.outcome)).toEqual([
+      "created",
+      null,
+      null,
+    ]);
+    const otherValue = valueOf("owner-update");
+    expect((await f.update("env1b", same, otherValue, current)).status).toBe(200);
+    f.setImportBudget(null);
+    const resumed = await f.send(
+      "POST",
+      `${f.env("env1b").path}/import-operations/${parentId}/resume`,
+      { text },
+    );
+    expect(resumed.status).toBe(200);
+    expect(resumed.body.state).toBe("partial");
+    expect(resultOf(resumed).entries.map((entry) => entry.outcome)).toEqual([
+      "created",
+      "conflict",
+      "created",
+    ]);
+    expect(await revealDigest("env1b", same)).toBe(sha256(otherValue));
+  });
+
   it("a name created between preview and apply → conflict", async () => {
     const name = unique();
     const text = fileOf([name, valueOf("import")]);

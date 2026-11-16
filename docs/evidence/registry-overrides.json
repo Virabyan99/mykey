@@ -69,8 +69,8 @@
     {
       "id": "PO-2",
       "status": "SPIKE_PASS",
-      "evidence": ["docs/evidence/session-2/run-2.2.md"],
-      "note": "G-BAO: fixed-role orphan issuance by a 60 s issuer on the local stack; overrides refused. PASS needs the product's issuer."
+      "evidence": ["docs/evidence/session-2/run-2.2.md", "docs/evidence/session-5/run-5.4.md"],
+      "note": "G-BAO: fixed-role orphan issuance by a 60 s issuer on the local stack; overrides refused. Run 5.4: with the product's issuer, the issued token's native scope is its environment's read only (native-scope.md). PASS needs the integrated proof at the gate."
     },
     {
       "id": "PO-5",
@@ -533,6 +533,210 @@
       "status": "SPIKE_PASS",
       "evidence": ["docs/evidence/session-4/run-4.9.md"],
       "note": "Export → import → export is byte-identical with awkward values, on the local stack (12 values incl. 64 KiB) and on staging (20 names)."
+    },
+    {
+      "id": "FR-1.39",
+      "status": "SPIKE_PASS",
+      "evidence": ["docs/evidence/session-5/run-5.1.md"],
+      "note": "Issuance with a marker under the environment's lock: issuer session, credential issuing + operation executing committed before the one create, the token checked and delivered only after accessor, expiry and active are committed; failures after the marker deliver nothing."
+    },
+    {
+      "id": "FR-1.41",
+      "status": "SPIKE_PASS",
+      "evidence": ["docs/evidence/session-5/run-5.1.md"],
+      "note": "The token is shown once in the 201; the inventory lists the catalog's view newest first with no accessor or token; no token bytes in PostgreSQL, logs, audit, jobs or OpenBao's audit device."
+    },
+    {
+      "id": "FR-1.42",
+      "status": "SPIKE_PASS",
+      "evidence": ["docs/evidence/session-5/run-5.2.md"],
+      "note": "Revocation denied in the product first (revoking committed before OpenBao is asked) and called revoked only after a lookup proved the token gone; an unproven revocation stays revoking and a new request finishes it; local, fault table and staging."
+    },
+    {
+      "id": "FR-1.43",
+      "status": "SPIKE_PASS",
+      "evidence": ["docs/evidence/session-5/run-5.2.md"],
+      "note": "An unknown issuance blocks the environment until the sweep and ops reconcile-credentials revoke every unrecorded token and settle it (with executor exclusion when its token was not found); replay never returns a token; the lost-delivery procedure in machine-credentials.md; staging drill."
+    },
+    {
+      "id": "AC-1.40",
+      "status": "SPIKE_PASS",
+      "evidence": ["docs/evidence/session-5/fault-table.md", "docs/evidence/session-5/run-5.2.md"],
+      "note": "The fault table of issuance and revocation: the response lost at every boundary never leaves a working token nobody knows about once the operator has run; no replay creates a second token; three passes in a row."
+    },
+    {
+      "id": "FR-1.17",
+      "status": "SPIKE_PASS",
+      "evidence": ["docs/evidence/session-5/run-5.3.md", "docs/evidence/session-5/run-5.4.md"],
+      "note": "Archive closes the scope first, revokes and verifies every credential, then says archived; an unfinished archive stays executing and the tick finishes it; transitions through one guarded function; local, fault table and staging (Run 5.4: both tokens refused, both accessors 400 on the host)."
+    },
+    {
+      "id": "FR-1.18",
+      "status": "SPIKE_PASS",
+      "evidence": ["docs/evidence/session-5/run-5.3.md", "docs/evidence/session-5/run-5.4.md"],
+      "note": "Reactivation reads only: machine policy and token role against the digest, names against the index, every credential revoked and each accessor 400; a failure changes nothing (503, rejected); no token comes back; local and staging (Run 5.4: old tokens still 401, a new token resolves)."
+    },
+    {
+      "id": "AC-1.11",
+      "status": "SPIKE_PASS",
+      "evidence": ["docs/evidence/session-5/run-5.3.md", "docs/evidence/session-5/fault-table.md"],
+      "note": "50 rounds of issuance racing an archive (both orders met) leave no usable token; 20 rounds of environment create racing a project archive never leave an active or pending environment under an archived project; three passes in a row."
+    },
+    {
+      "id": "PO-18",
+      "status": "SPIKE_PASS",
+      "evidence": ["docs/evidence/session-5/run-5.3.md", "docs/evidence/session-5/fault-table.md"],
+      "note": "Issuance races and archive under interruption: a process killed at each archive point is finished by another process's tick with one success audit row; the request and the tick at once finish once."
+    },
+    {
+      "id": "FR-1.44",
+      "status": "SPIKE_PASS",
+      "evidence": ["docs/evidence/session-5/run-5.4.md"],
+      "note": "Machine keys and resolve: bearer authentication by lookup-self with the presented token, the catalog row and the path's own scope; reads made with the token itself; a dead token mid-read is 401 and closes nothing; current values only; local and on staging through the public name."
+    },
+    {
+      "id": "FR-1.45",
+      "status": "SPIKE_PASS",
+      "evidence": ["docs/evidence/session-5/run-5.4.md", "docs/evidence/session-5/native-scope.md"],
+      "note": "The residual asserted as it is: an older undeleted version answers 200 directly in OpenBao with the machine token, no product request returns it; written in machine-credentials.md and D-42."
+    },
+    {
+      "id": "FR-1.40",
+      "status": "SPIKE_PASS",
+      "evidence": ["docs/evidence/session-5/run-5.4.md", "docs/evidence/session-5/native-scope.md"],
+      "note": "A product-issued token used directly against OpenBao: read and list of its own path and lookup-self only; every write, delete, other scope, token create, renew and system path denied with a root control; lookup-self answers in another namespace with the token's own record (finding, nothing readable)."
+    },
+    {
+      "id": "AC-1.19",
+      "status": "SPIKE_PASS",
+      "evidence": ["docs/evidence/session-5/run-5.4.md"],
+      "note": "resolve returns exactly the live set of one generation by digest, keys the live names; the reads use the presented token (API with a refused runtime identity still answers 200); selectors refused; on staging the digests equal the owner's export."
+    },
+    {
+      "id": "FR-1.46",
+      "status": "SPIKE_PASS",
+      "evidence": ["docs/evidence/session-5/run-5.5.md"],
+      "note": "One token source (SECRETS_MACHINE_TOKEN or --token-stdin for keys/export), never a flag or argument; two or none are usage errors; no output repeats the token; Linux container evidence (four platforms in Run 5.7)."
+    },
+    {
+      "id": "FR-1.47",
+      "status": "SPIKE_PASS",
+      "evidence": ["docs/evidence/session-5/run-5.5.md"],
+      "note": "secrets keys prints the live names only after the whole answer passed the validator; the CLI's client against the real API (digests equal the owner's export); Linux evidence."
+    },
+    {
+      "id": "FR-1.79",
+      "status": "SPIKE_PASS",
+      "evidence": ["docs/evidence/session-5/run-5.5.md"],
+      "note": "HTTP URL, untrusted/other-host/expired certificates, unsafe runtime settings, redirects and another API major each fail with their exit code before any credential is sent; Linux evidence (AC-1.37 on the four runners in Run 5.7)."
+    },
+    {
+      "id": "FR-1.48",
+      "status": "SPIKE_PASS",
+      "evidence": ["docs/evidence/session-5/run-5.6.md"],
+      "note": "run: the complete validated set before the spawn, no SECRETS_* in the child, collisions refused without --override, size checked, no shell, stdin to the child, signals forwarded once (terminal and not), status preserved; Linux container and staging; macOS not proven (the matrix's macOS jobs failed on the suite's test certificates and did not run again: cli-matrix.md)."
+    },
+    {
+      "id": "FR-1.49",
+      "status": "SPIKE_PASS",
+      "evidence": ["docs/evidence/session-5/run-5.6.md"],
+      "note": "21 damaged or refused answers each launch nothing with their exit code and leave HOME, TMPDIR, XDG_* and the working directory empty; a signal before the spawn starts nothing; after revocation on staging run exits 77 and starts nothing."
+    },
+    {
+      "id": "FR-1.50",
+      "status": "SPIKE_PASS",
+      "evidence": ["docs/evidence/session-5/run-5.6.md"],
+      "note": "export: one new 0600 file (O_EXCL|O_NOFOLLOW, no chmod) whose parsed digests are the set, or nothing; links, existing paths and group-writable directories refused; cleanup only of the file it created; Linux container and staging."
+    },
+    {
+      "id": "AC-1.20",
+      "status": "SPIKE_PASS",
+      "evidence": ["docs/evidence/session-5/run-5.6.md"],
+      "note": "Argument vectors, collisions, stdin, size limits, pre-spawn cancellation and signals without double forwarding on Linux; the Next.js/FastAPI fixtures are Run 5.8 and the four platforms Run 5.7."
+    },
+    {
+      "id": "AC-1.21",
+      "status": "SPIKE_PASS",
+      "evidence": ["docs/evidence/session-5/run-5.6.md"],
+      "note": "Export target safety on Linux: existing file, link at the target or in the path, group-writable directory, umask 000 and 277, an incomplete response creates no file, cleanup by identity."
+    },
+    {
+      "id": "FR-1.51",
+      "status": "OPEN",
+      "evidence": ["docs/evidence/session-5/cli-matrix.md"],
+      "note": "cli-v0.1.0 proven on Linux x64 and arm64 from the release (run 43734935509); macOS failed on the suite's LibreSSL test certificates, fixed, not yet re-run there (owner's minutes answer pending)."
+    },
+    {
+      "id": "AC-1.37",
+      "status": "OPEN",
+      "evidence": ["docs/evidence/session-5/cli-matrix.md"],
+      "note": "Connection refusals pass from the release on Linux x64 and arm64; on macOS every TLS case failed on the test certificates (fixed in tests/cli/certs.ts, not yet re-run on macOS)."
+    },
+    {
+      "id": "PO-8",
+      "status": "OPEN",
+      "evidence": ["docs/evidence/session-5/cli-matrix.md"],
+      "note": "Installer and launcher proven on all four targets, the full suite on Linux only; credential setup and replacement is Run 5.8."
+    },
+    {
+      "id": "AGENT-B1",
+      "status": "OPEN",
+      "evidence": ["docs/evidence/session-5/cli-matrix.md"],
+      "note": "D-44 decided (SEA is 1.1 and lacks darwin-x64; the bundle on pinned Node); D-24's nine requirements pass on Linux x64 and arm64, on macOS only 8 and 9 so far."
+    },
+    {
+      "id": "FR-1.85",
+      "status": "SPIKE_PASS",
+      "evidence": ["docs/evidence/session-5/run-5.8.md"],
+      "note": "Setup and rotation from consumer-local.md and consumer-deploy.md, every block rehearsed against staging from a clean machine and a Docker host, both fixtures; no token in history, arguments, images, inspect, tree or output."
+    },
+    {
+      "id": "PO-20",
+      "status": "SPIKE_PASS",
+      "evidence": ["docs/evidence/session-5/run-5.8.md"],
+      "note": "Credential setup and replacement (rotation, after a restore) for a workstation and a first deployment, Next.js and FastAPI fixtures, staging; the four-platform part is PO-8 (macOS open)."
+    },
+    {
+      "id": "AC-1.42",
+      "status": "SPIKE_PASS",
+      "evidence": ["docs/evidence/session-5/run-5.8.md"],
+      "note": "The synthetic consumer rehearsal of D-03: installation, endpoint check, protected token supply, launch, rotation and the restore replacement against staging."
+    },
+    {
+      "id": "FR-1.52",
+      "status": "SPIKE_PASS",
+      "evidence": ["docs/evidence/session-5/run-5.9.md"],
+      "note": "OpenAPI 3.1 from the runtime schemas, served reduced to the handled routes (each reaches a handler); breaking changes against baseline-v1.json fail contracts:check. The auth-route inventory is Session 3's auth:contract:check."
+    },
+    {
+      "id": "FR-1.53",
+      "status": "SPIKE_PASS",
+      "evidence": ["docs/evidence/session-5/run-5.9.md"],
+      "note": "OpenBao-shaped aliases, method override, X-Vault-Token and X-Vault-Namespace reach no handler and no OpenBao audit entry; the document lists no token administration."
+    },
+    {
+      "id": "FR-1.54",
+      "status": "SPIKE_PASS",
+      "evidence": [
+        "docs/evidence/session-5/run-5.9.md",
+        "docs/evidence/session-5/reference-capture.json"
+      ],
+      "note": "Document and read-only Scalar for a fully authenticated owner or admin; no execution, telemetry, CDN or third-party request in the captured browser session (D-45; Scalar kept)."
+    },
+    {
+      "id": "AC-1.22",
+      "status": "SPIKE_PASS",
+      "evidence": ["docs/evidence/session-5/run-5.9.md"],
+      "note": "OpenAPI matches validation; breaking change detected; the reference requires role and MFA and cannot execute or egress. The web mapping waits for Session 7."
+    },
+    {
+      "id": "PO-10",
+      "status": "SPIKE_PASS",
+      "evidence": [
+        "docs/evidence/session-5/run-5.9.md",
+        "docs/evidence/session-5/reference-capture.json"
+      ],
+      "note": "Local Scalar under the page's CSP in Chromium: zero violations, zero third-party attempts; the asset under Node's permission model loads with a covering grant, null when refused. Staging at the gate."
     }
   ]
 }

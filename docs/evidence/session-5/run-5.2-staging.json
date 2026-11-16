@@ -1,0 +1,49 @@
+{
+  "project": {
+    "name": "s5-credentials-b773dc",
+    "id": "bc6aa4ce-fa2c-44e3-a309-c8a261acafad",
+    "environments": ["47e601bd-06b6-45df-bb09-2b6ecbfb9174", "e89fa798-f915-4823-9543-167b3807dca3"]
+  },
+  "journey": {
+    "credentialId": "4041e244-be2a-46d2-8adb-7c88746a1c96",
+    "at": "2026-11-15T09:16:23.838Z"
+  },
+  "search": {
+    "apiLog": {
+      "found": 0,
+      "controls": 1
+    },
+    "dump": {
+      "found": 0,
+      "controls": 1
+    },
+    "access": {
+      "found": 0,
+      "controls": 1
+    }
+  },
+  "attempt1": {
+    "pausedAt": "2026-11-15T09:16:37.817Z",
+    "answers": {
+      "201": 90,
+      "503 busy": 16,
+      "503 outcome_unknown": 2,
+      "409 state_conflict": 4
+    }
+  },
+  "caught": {
+    "attempts": 1,
+    "operations": {
+      "e89fa798-f915-4823-9543-167b3807dca3": "8bb8b56f-faaf-49b7-afa5-b87fc172a3fd",
+      "47e601bd-06b6-45df-bb09-2b6ecbfb9174": "b3e93075-e35e-4027-bab6-fcc4f0a93144"
+    }
+  },
+  "alert": {
+    "delivered": "2026-11-15T09:18:27.289Z"
+  },
+  "quiesced": "2026-11-15T09:18:45.619Z",
+  "reconciled e89fa798-f915-4823-9543-167b3807dca3": "unrecorded-revoked 0 revocations-completed 0 issuances-settled 1",
+  "reconciled 47e601bd-06b6-45df-bb09-2b6ecbfb9174": "unrecorded-revoked 0 revocations-completed 0 issuances-settled 1",
+  "resumed": "2026-11-15T09:19:41.542Z",
+  "cleared": "2026-11-15T09:19:44.070Z"
+}

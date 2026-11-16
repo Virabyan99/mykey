@@ -23,7 +23,9 @@ export {
   insertOperation,
   listOperations,
   listUnresolved,
+  liveRevocation,
   settleOperation,
+  settleRevocations,
   toOperationRow,
   touchOperation,
   type Finish,
@@ -103,3 +105,25 @@ export {
   type EnvironmentRow,
   type ProjectRow,
 } from "./repos/resources.ts";
+export {
+  activateCredential,
+  blockingIssuance,
+  findCredentialByAccessor,
+  findCredentialByOperation,
+  insertIssuing,
+  listCredentials,
+  lockCredential,
+  moveCredential,
+  touchLastUsed,
+  type CredentialRow,
+  type CredentialState,
+} from "./repos/credentials.ts";
+export {
+  ARCHIVE_ACTIONS,
+  archiveScope,
+  closeCredentials,
+  finishArchiveOperation,
+  lifecycleTransition,
+  openCredentialWork,
+  type LifecycleStep,
+} from "./repos/lifecycle.ts";

@@ -1,22 +1,12 @@
-/** The CLI binary name and token variable fixed by decision D-08. */
-export const CLI_NAME = "secrets";
-export const MACHINE_TOKEN_VARIABLE = "SECRETS_MACHINE_TOKEN";
-
-/** Stage 1 targets (Doc 10 §4.2). Native Windows is out of scope. */
-export const SUPPORTED_TARGETS = [
-  "linux-x64",
-  "linux-arm64",
-  "darwin-x64",
-  "darwin-arm64",
-] as const;
-
-export function currentTarget(
-  platform: string = process.platform,
-  arch: string = process.arch,
-): string {
-  return `${platform}-${arch}`;
-}
-
-export function isSupportedTarget(target: string): boolean {
-  return (SUPPORTED_TARGETS as readonly string[]).includes(target);
-}
+// The CLI's modules, for the tests and the integration client test. The
+// executable's entry is main.ts (bundled into dist/secrets.mjs).
+export * from "./identity.ts";
+export * from "./errors.ts";
+export * from "./args.ts";
+export * from "./config.ts";
+export * from "./guard.ts";
+export * from "./token.ts";
+export * from "./validate.ts";
+export * from "./client.ts";
+export * from "./run.ts";
+export * from "./export.ts";

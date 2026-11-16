@@ -7,11 +7,14 @@ import {
   REQUIRED_BINARIES,
   REQUIRED_IMAGES,
   REQUIRED_NPM,
+  cliReleaseProblems,
   collectPinnedVersions,
   composeImageProblems,
   consistencyProblems,
+  consumerFixtureProblems,
   digestProblems,
   dockerfileProblems,
+  fixtureDockerfiles,
   ownDockerfiles,
   forbiddenComponents,
   listFiles,
@@ -51,11 +54,17 @@ describe("dependency pins", () => {
 
   // Run 2.10: a release archive run on a host (okms-cli, Run 2.7) is pinned like an image.
   it("requires every binary, each with an exact version and a SHA-256", () => {
-    expect(REQUIRED_BINARIES).toEqual(["okms-cli"]);
+    expect(REQUIRED_BINARIES).toEqual([
+      "okms-cli",
+      "node-linux-x64",
+      "node-linux-arm64",
+      "node-darwin-x64",
+      "node-darwin-arm64",
+    ]);
     expect(digestProblems(lock)).toEqual([]);
     const missing = clone();
     delete (missing as { binaries?: unknown }).binaries;
-    expect(missingRequiredKeys(missing)).toEqual(["binaries.okms-cli"]);
+    expect(missingRequiredKeys(missing)).toEqual(REQUIRED_BINARIES.map((key) => `binaries.${key}`));
     const bad = clone();
     bad.binaries!["okms-cli"]!.sha256 = "abc";
     bad.binaries!["okms-cli"]!.version = "0.6.0-rc.1";
@@ -170,6 +179,26 @@ describe("dependency pins", () => {
     expect(dockerfileProblems("ARG BASE\nFROM ${BASE}\n", lock, "variable")).toHaveLength(1);
   });
 
+  it("the consumer fixtures (Run 5.8): FROM pinned by digest, packages exactly the lock's", () => {
+    const dockerfiles = fixtureDockerfiles(root);
+    expect(dockerfiles.map((file) => file.replaceAll("\\", "/").split("/").at(-2))).toEqual([
+      "fastapi-app",
+      "next-app",
+    ]);
+    expect(consumerFixtureProblems(root, lock)).toEqual([]);
+
+    const drifted = clone();
+    drifted.npm.next = { ...drifted.npm.next!, version: "0.0.1" };
+    drifted.python.uvicorn = { ...drifted.python.uvicorn!, version: "0.0.1" };
+    const found = consumerFixtureProblems(root, drifted);
+    expect(found.some((problem) => problem.includes("next"))).toBe(true);
+    expect(found.some((problem) => problem.includes("uvicorn"))).toBe(true);
+
+    const missing = clone();
+    delete missing.npm["react-dom"];
+    expect(consumerFixtureProblems(root, missing).some((p) => p.includes("react-dom"))).toBe(true);
+  });
+
   it("the node image is required in the lock and is scanned", () => {
     expect(REQUIRED_IMAGES).toContain("node");
     expect(SCANNED_IMAGES).toContain("node");
@@ -251,6 +280,19 @@ describe("dependency pins", () => {
     expect(problems.some((p) => p.includes(".node-version"))).toBe(true);
     expect(problems.some((p) => p.includes("typescript"))).toBe(true);
     expect(problems.some((p) => p.includes("zod"))).toBe(true);
+  });
+
+  it("the CLI installer's Node archives are pinned and agree with the template (Run 5.7)", () => {
+    for (const target of ["linux-x64", "linux-arm64", "darwin-x64", "darwin-arm64"]) {
+      expect(REQUIRED_BINARIES).toContain(`node-${target}`);
+    }
+    expect(cliReleaseProblems(root, lock)).toEqual([]);
+    const older = clone();
+    older.binaries!["node-darwin-x64"]!.version = "24.0.0";
+    expect(cliReleaseProblems(root, older).join(" ")).toContain("node-darwin-x64");
+    const renamed = clone();
+    renamed.binaries!["node-linux-arm64"]!.asset = "node-linux-arm64.tgz";
+    expect(cliReleaseProblems(root, renamed).join(" ")).toContain("node-linux-arm64");
   });
 
   it("the whole repository verifies", () => {

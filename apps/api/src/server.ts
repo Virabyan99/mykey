@@ -12,9 +12,10 @@ import { drizzle } from "drizzle-orm/node-postgres";
 import type { Hono } from "hono";
 import { createApp } from "./app.ts";
 import { createHealthCheck, type OpenBaoHealthTarget } from "./health.ts";
-import { runtimeBaoFromDirectory } from "./runtime-bao.ts";
-import { runtimeSelfCheck } from "./selfcheck.ts";
+import { issuerBaoFromDirectory, runtimeBaoFromDirectory } from "./runtime-bao.ts";
+import { issuerSelfCheck, runtimeSelfCheck } from "./selfcheck.ts";
 import { createLogger, type LogEntry } from "./log.ts";
+import { continueArchives } from "@mykey/operations";
 import { startOperationSweep } from "./operation-sweep.ts";
 import { startOutboxDispatcher } from "./outbox-dispatcher.ts";
 import { startSessionCleanup, startThrottleSweep } from "./throttle-sweep.ts";
@@ -78,7 +79,7 @@ export interface ServerConfig extends ListenOptions {
   api: ApiConfig;
   /** The key files of the auth module (read-only mount on a host). */
   keysDirectory: string;
-  /** The runtime credential files (organization-id, runtime-role-id, runtime-secret-id). */
+  /** The credential files (organization-id, runtime-role-id, runtime-secret-id, issuer-role-id, issuer-secret-id). */
   secretsDirectory?: string;
   log: (entry: LogEntry) => void;
 }
@@ -99,18 +100,24 @@ export async function startServer(config: ServerConfig): Promise<ApiServer> {
   });
   const keys = loadAuthKeys(config.keysDirectory);
   const auth = createAuth({ db: drizzle(pool), keys, baseURL: config.api.baseUrl });
+  const issuer =
+    config.openbao === undefined
+      ? undefined
+      : issuerBaoFromDirectory(config.openbao, config.secretsDirectory ?? "/run/mykey/secrets");
+  const bootId = randomUUID();
   const app = createApp({
     pool,
     lockPool,
-    ...(config.openbao === undefined
+    ...(config.openbao === undefined || issuer === undefined
       ? {}
       : {
           bao: runtimeBaoFromDirectory(
             config.openbao,
             config.secretsDirectory ?? "/run/mykey/secrets",
           ),
+          issuer,
         }),
-    bootId: randomUUID(),
+    bootId,
     config: config.api,
     health: () => health.check(),
     log: config.log,
@@ -120,7 +127,12 @@ export async function startServer(config: ServerConfig): Promise<ApiServer> {
   const dispatcher = startOutboxDispatcher(pool, config.log);
   const sweep = startThrottleSweep(pool, config.log);
   const sessionCleanup = startSessionCleanup(pool, config.log);
-  const operationSweep = startOperationSweep(pool, config.log);
+  // Run 5.3 (P-91): the tick also drives the archives whose request could not finish them.
+  const operationSweep = startOperationSweep(pool, config.log, {
+    ...(issuer === undefined
+      ? {}
+      : { archives: () => continueArchives({ pool, lockPool, issuer, bootId }) }),
+  });
   return {
     port: server.port,
     async close() {
@@ -225,6 +237,11 @@ if (import.meta.main) {
   log({
     event: "selfcheck",
     runtimeLogin: await runtimeSelfCheck(
+      settings.openbao,
+      settings.secretsDirectory ?? "/run/mykey/secrets",
+    ).catch(() => "unreachable" as const),
+    // Run 5.1 (P-85): the issuer credential logs in and revokes itself; it does not gate /health.
+    issuerLogin: await issuerSelfCheck(
       settings.openbao,
       settings.secretsDirectory ?? "/run/mykey/secrets",
     ).catch(() => "unreachable" as const),

@@ -1,7 +1,7 @@
 // The one envelope builder (Doc 06 §9). The message of an error comes from the
 // table below, keyed by code — never from an exception — so no internal text
 // can reach a client. Every response carries Cache-Control: no-store.
-import { ERROR_CODES, type ErrorCode } from "@mykey/contracts";
+import { CREDENTIAL_STATES, ERROR_CODES, type ErrorCode } from "@mykey/contracts";
 import { z } from "zod";
 
 export const ERROR_MESSAGES: Readonly<Record<ErrorCode, string>> = Object.freeze({
@@ -62,6 +62,11 @@ const DETAILS: Partial<Record<ErrorCode, z.ZodType<Record<string, unknown>>>> = 
     state: z.enum(["live", "deleted"]),
   }),
   capacity_exceeded: z.object({ limit: z.enum(["names", "bytes", "response"]) }),
+  // Run 5.1 (P-88): which credential the replayed issuance made, and its state now.
+  credential_not_replayable: z.object({
+    credentialId: z.uuid(),
+    state: z.enum(CREDENTIAL_STATES),
+  }),
 };
 
 /** The details of `code` as they may be sent; `valid` is false when some were dropped as invalid. */

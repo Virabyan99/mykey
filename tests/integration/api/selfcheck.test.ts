@@ -5,7 +5,7 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { runtimeSelfCheck } from "@mykey/api";
+import { issuerSelfCheck, runtimeSelfCheck } from "@mykey/api";
 import { OpenBaoAdmin } from "@mykey/openbao/admin";
 import { createOrgFixture, type OrgFixture } from "../../harness/org-fixture.ts";
 import { getSharedStack, type Stack } from "../../harness/stack.ts";
@@ -56,5 +56,31 @@ describe("runtime self-check", () => {
         directory,
       ),
     ).toBe("unreachable");
+  });
+});
+
+// Run 5.1 (P-85): the issuer credential beside it, checked the same way.
+describe("issuer self-check", () => {
+  it("absent without its files; ok with them; refused with a wrong secret id", async () => {
+    const admin = new OpenBaoAdmin(stack.bao, stack.bao.rootToken);
+    const issuerDirectory = mkdtempSync(join(tmpdir(), "mykey-selfcheck-issuer-"));
+    try {
+      writeFileSync(join(issuerDirectory, "organization-id"), org.organizationId);
+      expect(await issuerSelfCheck(stack.bao, issuerDirectory)).toBe("absent");
+      const { roleId } = await admin.readRoleId(org.namespace, "issuer");
+      writeFileSync(join(issuerDirectory, "issuer-role-id"), roleId);
+      writeFileSync(
+        join(issuerDirectory, "issuer-secret-id"),
+        (await admin.newSecretId(org.namespace, "issuer")).secretId,
+      );
+      expect(await issuerSelfCheck(stack.bao, issuerDirectory)).toBe("ok");
+      writeFileSync(
+        join(issuerDirectory, "issuer-secret-id"),
+        "00000000-0000-4000-8000-000000000000",
+      );
+      expect(await issuerSelfCheck(stack.bao, issuerDirectory)).toBe("refused");
+    } finally {
+      rmSync(issuerDirectory, { recursive: true, force: true });
+    }
   });
 });

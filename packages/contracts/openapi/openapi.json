@@ -467,6 +467,7 @@
             "name": "Idempotency-Key",
             "in": "header",
             "required": true,
+            "description": "A key the client chooses for this request. The same key with the same request replays the recorded answer, a rejection included, so a rejected request is retried with a new key. The same key with another request is 409 idempotency_conflict.",
             "schema": {
               "type": "string",
               "minLength": 1
@@ -627,6 +628,7 @@
             "name": "Idempotency-Key",
             "in": "header",
             "required": true,
+            "description": "A key the client chooses for this request. The same key with the same request replays the recorded answer, a rejection included, so a rejected request is retried with a new key. The same key with another request is 409 idempotency_conflict.",
             "schema": {
               "type": "string",
               "minLength": 1
@@ -787,6 +789,7 @@
             "name": "Idempotency-Key",
             "in": "header",
             "required": true,
+            "description": "A key the client chooses for this request. The same key with the same request replays the recorded answer, a rejection included, so a rejected request is retried with a new key. The same key with another request is 409 idempotency_conflict.",
             "schema": {
               "type": "string",
               "minLength": 1
@@ -819,7 +822,78 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/OperationResponse"
+                  "type": "object",
+                  "properties": {
+                    "operationId": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    "state": {
+                      "type": "string",
+                      "enum": [
+                        "accepted",
+                        "executing",
+                        "awaiting_input",
+                        "uncertain",
+                        "succeeded",
+                        "partial",
+                        "rejected"
+                      ]
+                    },
+                    "statusUrl": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "replayExpiresAt": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "format": "date-time",
+                          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "result": {
+                      "type": "object",
+                      "properties": {
+                        "state": {
+                          "type": "string",
+                          "enum": [
+                            "archived",
+                            "revoking"
+                          ]
+                        },
+                        "environments": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        "credentialsRevoked": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        }
+                      },
+                      "required": [
+                        "state",
+                        "environments",
+                        "credentialsRevoked"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "operationId",
+                    "state",
+                    "statusUrl",
+                    "replayExpiresAt",
+                    "result"
+                  ],
+                  "additionalProperties": false
                 }
               }
             }
@@ -947,6 +1021,7 @@
             "name": "Idempotency-Key",
             "in": "header",
             "required": true,
+            "description": "A key the client chooses for this request. The same key with the same request replays the recorded answer, a rejection included, so a rejected request is retried with a new key. The same key with another request is 409 idempotency_conflict.",
             "schema": {
               "type": "string",
               "minLength": 1
@@ -979,7 +1054,69 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/OperationResponse"
+                  "type": "object",
+                  "properties": {
+                    "operationId": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    "state": {
+                      "type": "string",
+                      "enum": [
+                        "accepted",
+                        "executing",
+                        "awaiting_input",
+                        "uncertain",
+                        "succeeded",
+                        "partial",
+                        "rejected"
+                      ]
+                    },
+                    "statusUrl": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "replayExpiresAt": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "format": "date-time",
+                          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "result": {
+                      "type": "object",
+                      "properties": {
+                        "state": {
+                          "type": "string",
+                          "const": "active"
+                        },
+                        "environments": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        }
+                      },
+                      "required": [
+                        "state",
+                        "environments"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "operationId",
+                    "state",
+                    "statusUrl",
+                    "replayExpiresAt",
+                    "result"
+                  ],
+                  "additionalProperties": false
                 }
               }
             }
@@ -1308,6 +1445,7 @@
             "name": "Idempotency-Key",
             "in": "header",
             "required": true,
+            "description": "A key the client chooses for this request. The same key with the same request replays the recorded answer, a rejection included, so a rejected request is retried with a new key. The same key with another request is 409 idempotency_conflict.",
             "schema": {
               "type": "string",
               "minLength": 1
@@ -1476,6 +1614,7 @@
             "name": "Idempotency-Key",
             "in": "header",
             "required": true,
+            "description": "A key the client chooses for this request. The same key with the same request replays the recorded answer, a rejection included, so a rejected request is retried with a new key. The same key with another request is 409 idempotency_conflict.",
             "schema": {
               "type": "string",
               "minLength": 1
@@ -1644,6 +1783,7 @@
             "name": "Idempotency-Key",
             "in": "header",
             "required": true,
+            "description": "A key the client chooses for this request. The same key with the same request replays the recorded answer, a rejection included, so a rejected request is retried with a new key. The same key with another request is 409 idempotency_conflict.",
             "schema": {
               "type": "string",
               "minLength": 1
@@ -1676,7 +1816,78 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/OperationResponse"
+                  "type": "object",
+                  "properties": {
+                    "operationId": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    "state": {
+                      "type": "string",
+                      "enum": [
+                        "accepted",
+                        "executing",
+                        "awaiting_input",
+                        "uncertain",
+                        "succeeded",
+                        "partial",
+                        "rejected"
+                      ]
+                    },
+                    "statusUrl": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "replayExpiresAt": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "format": "date-time",
+                          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "result": {
+                      "type": "object",
+                      "properties": {
+                        "state": {
+                          "type": "string",
+                          "enum": [
+                            "archived",
+                            "revoking"
+                          ]
+                        },
+                        "environments": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        "credentialsRevoked": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        }
+                      },
+                      "required": [
+                        "state",
+                        "environments",
+                        "credentialsRevoked"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "operationId",
+                    "state",
+                    "statusUrl",
+                    "replayExpiresAt",
+                    "result"
+                  ],
+                  "additionalProperties": false
                 }
               }
             }
@@ -1812,6 +2023,7 @@
             "name": "Idempotency-Key",
             "in": "header",
             "required": true,
+            "description": "A key the client chooses for this request. The same key with the same request replays the recorded answer, a rejection included, so a rejected request is retried with a new key. The same key with another request is 409 idempotency_conflict.",
             "schema": {
               "type": "string",
               "minLength": 1
@@ -1844,7 +2056,69 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/OperationResponse"
+                  "type": "object",
+                  "properties": {
+                    "operationId": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    "state": {
+                      "type": "string",
+                      "enum": [
+                        "accepted",
+                        "executing",
+                        "awaiting_input",
+                        "uncertain",
+                        "succeeded",
+                        "partial",
+                        "rejected"
+                      ]
+                    },
+                    "statusUrl": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "replayExpiresAt": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "format": "date-time",
+                          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "result": {
+                      "type": "object",
+                      "properties": {
+                        "state": {
+                          "type": "string",
+                          "const": "active"
+                        },
+                        "environments": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        }
+                      },
+                      "required": [
+                        "state",
+                        "environments"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "operationId",
+                    "state",
+                    "statusUrl",
+                    "replayExpiresAt",
+                    "result"
+                  ],
+                  "additionalProperties": false
                 }
               }
             }
@@ -2196,6 +2470,7 @@
             "name": "Idempotency-Key",
             "in": "header",
             "required": true,
+            "description": "A key the client chooses for this request. The same key with the same request replays the recorded answer, a rejection included, so a rejected request is retried with a new key. The same key with another request is 409 idempotency_conflict.",
             "schema": {
               "type": "string",
               "minLength": 1
@@ -2901,6 +3176,7 @@
             "name": "Idempotency-Key",
             "in": "header",
             "required": true,
+            "description": "A key the client chooses for this request. The same key with the same request replays the recorded answer, a rejection included, so a rejected request is retried with a new key. The same key with another request is 409 idempotency_conflict.",
             "schema": {
               "type": "string",
               "minLength": 1
@@ -3099,6 +3375,7 @@
             "name": "Idempotency-Key",
             "in": "header",
             "required": true,
+            "description": "A key the client chooses for this request. The same key with the same request replays the recorded answer, a rejection included, so a rejected request is retried with a new key. The same key with another request is 409 idempotency_conflict.",
             "schema": {
               "type": "string",
               "minLength": 1
@@ -3287,6 +3564,7 @@
             "name": "Idempotency-Key",
             "in": "header",
             "required": true,
+            "description": "A key the client chooses for this request. The same key with the same request replays the recorded answer, a rejection included, so a rejected request is retried with a new key. The same key with another request is 409 idempotency_conflict.",
             "schema": {
               "type": "string",
               "minLength": 1
@@ -3485,6 +3763,7 @@
             "name": "Idempotency-Key",
             "in": "header",
             "required": true,
+            "description": "A key the client chooses for this request. The same key with the same request replays the recorded answer, a rejection included, so a rejected request is retried with a new key. The same key with another request is 409 idempotency_conflict.",
             "schema": {
               "type": "string",
               "minLength": 1
@@ -4039,6 +4318,7 @@
             "name": "Idempotency-Key",
             "in": "header",
             "required": true,
+            "description": "A key the client chooses for this request. The same key with the same request replays the recorded answer, a rejection included, so a rejected request is retried with a new key. The same key with another request is 409 idempotency_conflict.",
             "schema": {
               "type": "string",
               "minLength": 1
@@ -4527,6 +4807,26 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
           }
         ],
         "responses": {
@@ -4536,7 +4836,113 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "x-mykey-pending": true
+                  "properties": {
+                    "credentials": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "credentialId": {
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "projectId": {
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                          },
+                          "environmentId": {
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                          },
+                          "state": {
+                            "type": "string",
+                            "enum": [
+                              "issuing",
+                              "active",
+                              "revoking",
+                              "revoked",
+                              "expired",
+                              "needs_review"
+                            ]
+                          },
+                          "issuedBy": {
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                          },
+                          "issuedAt": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "format": "date-time",
+                                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "expiresAt": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "format": "date-time",
+                                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "expiringSoon": {
+                            "type": "boolean"
+                          },
+                          "lastUsedAt": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "format": "date-time",
+                                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          }
+                        },
+                        "required": [
+                          "credentialId",
+                          "name",
+                          "projectId",
+                          "environmentId",
+                          "state",
+                          "issuedBy",
+                          "issuedAt",
+                          "expiresAt",
+                          "expiringSoon",
+                          "lastUsedAt"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "nextCursor": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "credentials",
+                    "nextCursor"
+                  ],
+                  "additionalProperties": false
                 }
               }
             }
@@ -4583,6 +4989,16 @@
           },
           "409": {
             "description": "Conflict. Codes: listing_changed, state_conflict.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable content. Codes: validation_failed.",
             "content": {
               "application/json": {
                 "schema": {
@@ -4650,6 +5066,7 @@
             "name": "Idempotency-Key",
             "in": "header",
             "required": true,
+            "description": "A key the client chooses for this request. The same key with the same request replays the recorded answer, a rejection included, so a rejected request is retried with a new key. The same key with another request is 409 idempotency_conflict.",
             "schema": {
               "type": "string",
               "minLength": 1
@@ -4689,7 +5106,114 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "x-mykey-pending": true
+                  "properties": {
+                    "operationId": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    "credential": {
+                      "type": "object",
+                      "properties": {
+                        "credentialId": {
+                          "type": "string",
+                          "format": "uuid",
+                          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "projectId": {
+                          "type": "string",
+                          "format": "uuid",
+                          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                        },
+                        "environmentId": {
+                          "type": "string",
+                          "format": "uuid",
+                          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                        },
+                        "state": {
+                          "type": "string",
+                          "enum": [
+                            "issuing",
+                            "active",
+                            "revoking",
+                            "revoked",
+                            "expired",
+                            "needs_review"
+                          ]
+                        },
+                        "issuedBy": {
+                          "type": "string",
+                          "format": "uuid",
+                          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                        },
+                        "issuedAt": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "format": "date-time",
+                              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "expiresAt": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "format": "date-time",
+                              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "expiringSoon": {
+                          "type": "boolean"
+                        },
+                        "lastUsedAt": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "format": "date-time",
+                              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        }
+                      },
+                      "required": [
+                        "credentialId",
+                        "name",
+                        "projectId",
+                        "environmentId",
+                        "state",
+                        "issuedBy",
+                        "issuedAt",
+                        "expiresAt",
+                        "expiringSoon",
+                        "lastUsedAt"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "token": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": [
+                    "operationId",
+                    "credential",
+                    "token"
+                  ],
+                  "additionalProperties": false
                 }
               }
             }
@@ -4833,6 +5357,7 @@
             "name": "Idempotency-Key",
             "in": "header",
             "required": true,
+            "description": "A key the client chooses for this request. The same key with the same request replays the recorded answer, a rejection included, so a rejected request is retried with a new key. The same key with another request is 409 idempotency_conflict.",
             "schema": {
               "type": "string",
               "minLength": 1
@@ -4865,7 +5390,69 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/OperationResponse"
+                  "type": "object",
+                  "properties": {
+                    "operationId": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    "state": {
+                      "type": "string",
+                      "enum": [
+                        "accepted",
+                        "executing",
+                        "awaiting_input",
+                        "uncertain",
+                        "succeeded",
+                        "partial",
+                        "rejected"
+                      ]
+                    },
+                    "statusUrl": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "replayExpiresAt": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "format": "date-time",
+                          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "result": {
+                      "type": "object",
+                      "properties": {
+                        "credentialId": {
+                          "type": "string",
+                          "format": "uuid",
+                          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                        },
+                        "state": {
+                          "type": "string",
+                          "const": "revoked"
+                        }
+                      },
+                      "required": [
+                        "credentialId",
+                        "state"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "operationId",
+                    "state",
+                    "statusUrl",
+                    "replayExpiresAt",
+                    "result"
+                  ],
+                  "additionalProperties": false
                 }
               }
             }
@@ -6069,10 +6656,9 @@
           "200": {
             "description": "OK",
             "content": {
-              "application/json": {
+              "text/html": {
                 "schema": {
-                  "type": "object",
-                  "x-mykey-pending": true
+                  "type": "string"
                 }
               }
             }
@@ -6099,6 +6685,16 @@
           },
           "403": {
             "description": "Forbidden. Codes: action_denied.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found. Codes: not_found.",
             "content": {
               "application/json": {
                 "schema": {
@@ -6146,7 +6742,15 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "x-mykey-pending": true
+                  "properties": {
+                    "openapi": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "openapi"
+                  ],
+                  "additionalProperties": {}
                 }
               }
             }
@@ -6173,6 +6777,16 @@
           },
           "403": {
             "description": "Forbidden. Codes: action_denied.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found. Codes: not_found.",
             "content": {
               "application/json": {
                 "schema": {
@@ -6239,7 +6853,47 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "x-mykey-pending": true
+                  "properties": {
+                    "apiMajor": {
+                      "type": "integer",
+                      "exclusiveMinimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "environmentId": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    "generation": {
+                      "type": "string",
+                      "maxLength": 20,
+                      "pattern": "^(0|[1-9][0-9]*)$"
+                    },
+                    "count": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "names": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "complete": {
+                      "type": "boolean",
+                      "const": true
+                    }
+                  },
+                  "required": [
+                    "apiMajor",
+                    "environmentId",
+                    "generation",
+                    "count",
+                    "names",
+                    "complete"
+                  ],
+                  "additionalProperties": false
                 }
               }
             }
@@ -6285,7 +6939,7 @@
             }
           },
           "409": {
-            "description": "Conflict. Codes: environment_changed.",
+            "description": "Conflict. Codes: environment_changed, key_under_review.",
             "content": {
               "application/json": {
                 "schema": {
@@ -6305,7 +6959,7 @@
             }
           },
           "503": {
-            "description": "Service unavailable. Codes: busy, quarantined, dependency_unavailable, backend_sealed, backend_inconsistent.",
+            "description": "Service unavailable. Codes: busy, quarantined, dependency_unavailable, audit_unavailable, backend_sealed, backend_inconsistent.",
             "content": {
               "application/json": {
                 "schema": {
@@ -6364,9 +7018,9 @@
                       "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
                     },
                     "generation": {
-                      "type": "integer",
-                      "minimum": 0,
-                      "maximum": 9007199254740991
+                      "type": "string",
+                      "maxLength": 20,
+                      "pattern": "^(0|[1-9][0-9]*)$"
                     },
                     "count": {
                       "type": "integer",
@@ -6472,6 +7126,16 @@
           },
           "503": {
             "description": "Service unavailable. Codes: busy, quarantined, dependency_unavailable, audit_unavailable, backend_sealed, backend_inconsistent.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "507": {
+            "description": "Insufficient storage. Codes: capacity_exceeded.",
             "content": {
               "application/json": {
                 "schema": {

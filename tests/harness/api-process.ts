@@ -7,11 +7,15 @@
 // lock pool; with `fault` the secret protocol meets one fault at one point:
 // `crash` (SIGKILL of this process), `hang` (never returns), `throw`, or
 // `terminate_lock` (the lock connection is terminated by PostgreSQL).
+//
+// Run 5.3: with `archiveTick` it runs the tick's archive driver
+// (`continueArchives`) every `intervalMs`, as the API's sweep does.
 import { randomUUID } from "node:crypto";
 import { createInterface } from "node:readline";
 import {
   createApp,
   createHealthCheck,
+  issuerBaoFromDirectory,
   listen,
   runtimeBaoFromDirectory,
   type ApiConfig,
@@ -19,6 +23,7 @@ import {
 import { createAuth, createThrottle, loadAuthKeys } from "@mykey/auth";
 import { createPool, type DbTarget } from "@mykey/db";
 import type { OpenBaoTarget } from "@mykey/openbao";
+import { continueArchives } from "@mykey/operations";
 import { drizzle } from "drizzle-orm/node-postgres";
 
 export type FaultAction = "crash" | "hang" | "throw" | "terminate_lock";
@@ -30,6 +35,7 @@ interface Settings {
   tls: { certPath: string; keyPath: string };
   runtime?: { openBao: OpenBaoTarget; secretsDirectory: string };
   fault?: { point: string; action: FaultAction };
+  archiveTick?: { intervalMs: number; staleSeconds: number };
 }
 
 const lines = createInterface({ input: process.stdin })[Symbol.asyncIterator]();
@@ -66,15 +72,21 @@ async function meet(point: string): Promise<void> {
   }
 }
 
+const bootId = randomUUID();
+const issuer =
+  settings.runtime === undefined
+    ? undefined
+    : issuerBaoFromDirectory(settings.runtime.openBao, settings.runtime.secretsDirectory);
 const app = createApp({
   pool,
   ...(lockPool === undefined ? {} : { lockPool }),
-  ...(settings.runtime === undefined
+  ...(settings.runtime === undefined || issuer === undefined
     ? {}
     : {
         bao: runtimeBaoFromDirectory(settings.runtime.openBao, settings.runtime.secretsDirectory),
+        issuer,
       }),
-  bootId: randomUUID(),
+  bootId,
   config: settings.api,
   health: () => health.check(),
   // Log lines go to stderr, so a test can search them for values (rule 2).
@@ -94,7 +106,35 @@ const app = createApp({
 const server = await listen(app, { hostname: "127.0.0.1", port: 0, tls: settings.tls });
 process.stdout.write(`${JSON.stringify({ port: server.port })}\n`);
 
+const tick = settings.archiveTick;
+let ticking = false;
+const timer =
+  tick === undefined || issuer === undefined || lockPool === undefined
+    ? undefined
+    : setInterval(() => {
+        if (ticking) return;
+        ticking = true;
+        continueArchives(
+          {
+            pool,
+            lockPool,
+            issuer,
+            bootId,
+            ...(fault === undefined ? {} : { faults: (point: string) => meet(point) }),
+          },
+          { staleSeconds: tick.staleSeconds },
+        )
+          .catch((error: unknown) => {
+            const line = { event: "archive_tick_failed", error: String(error) };
+            process.stderr.write(`${JSON.stringify(line)}\n`);
+          })
+          .finally(() => {
+            ticking = false;
+          });
+      }, tick.intervalMs);
+
 const stop = (): void => {
+  if (timer !== undefined) clearInterval(timer);
   void server
     .close()
     .then(() => health.close())

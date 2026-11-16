@@ -73,13 +73,15 @@ describe("operator-initiated reset", () => {
   it("blocks the account at once: sessions end, the password no longer signs in, the epoch rises", async () => {
     const live = await signInComplete(api, owner, { source: "198.51.100.252" });
     expect(
-      (await api.request("GET", "/v1/reference", { cookie: live.cookie, headers: from() })).status,
-    ).toBe(204);
+      (await api.request("GET", "/v1/organizations", { cookie: live.cookie, headers: from() }))
+        .status,
+    ).toBe(200);
     const before = await accountRow();
     const result = await initiateReset(operator(), { email: owner.email, kind: "password" });
     expect(result.outcome).toBe("issued");
     expect(
-      (await api.request("GET", "/v1/reference", { cookie: live.cookie, headers: from() })).status,
+      (await api.request("GET", "/v1/organizations", { cookie: live.cookie, headers: from() }))
+        .status,
     ).toBe(401);
     const signIn = await api.request("POST", "/v1/auth/sign-in/email", {
       body: { email: owner.email, password: owner.password },

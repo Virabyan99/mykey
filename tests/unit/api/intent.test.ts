@@ -2,13 +2,13 @@
 // enter the fingerprint as their SHA-256 digest inside the canonical text, so
 // a 1 MiB file is not canonicalised byte by byte. The canonical text is only
 // ever HMAC'd; nothing of it is stored.
-import { intentOf, type Principal } from "@mykey/api";
+import { intentOf, type UserPrincipal } from "@mykey/api";
 import { ROUTES, type UserId } from "@mykey/contracts";
 import { intentFingerprint } from "@mykey/operations";
 import { describe, expect, it } from "vitest";
 
 const route = ROUTES.find((candidate) => candidate.id === "import.apply")!;
-const principal = { userId: "00000000-0000-4000-8000-000000000001" as UserId } as Principal;
+const principal = { userId: "00000000-0000-4000-8000-000000000001" as UserId } as UserPrincipal;
 const params = { org: "o", project: "p", env: "e", preview: "v" };
 const ring = { current: "k1", keys: { k1: new Uint8Array(32).fill(7) } };
 

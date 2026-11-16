@@ -25,9 +25,16 @@ RUN pnpm install --frozen-lockfile --prod --filter "@mykey/api..."
 # workspace root (a dev dependency there), so a production install carries them
 # and their esbuild and vite. Nothing the API runs imports them (its start-up
 # refusal loads every module first); they go, with the Go binaries Trivy flags.
+# Since Run 5.9 the same holds for its optional peer vue (in the workspace through
+# the reference's @scalar/api-reference) and what only vue brings. Exact versions
+# where the API has another version of the same package.
 RUN rm -rf node_modules/.pnpm/esbuild@* node_modules/.pnpm/@esbuild+* \
       node_modules/.pnpm/@esbuild-kit+* node_modules/.pnpm/drizzle-kit@* \
-      node_modules/.pnpm/vite@* node_modules/.pnpm/vitest@* node_modules/.pnpm/@vitest+*
+      node_modules/.pnpm/vite@* node_modules/.pnpm/vitest@* node_modules/.pnpm/@vitest+* \
+      node_modules/.pnpm/vue@* node_modules/.pnpm/@vue+* node_modules/.pnpm/@babel+* \
+      node_modules/.pnpm/typescript@6.0.3 node_modules/.pnpm/csstype@3.2.3 \
+      node_modules/.pnpm/entities@7.0.1 node_modules/.pnpm/estree-walker@2.0.2 \
+      node_modules/.pnpm/magic-string@0.30.21
 COPY packages/contracts/src packages/contracts/src
 COPY packages/db/src packages/db/src
 COPY packages/audit/src packages/audit/src
@@ -36,12 +43,31 @@ COPY packages/openbao/src packages/openbao/src
 COPY packages/auth/src packages/auth/src
 COPY apps/api/src apps/api/src
 
+# The API reference's asset (Run 5.9, P-101): the standalone build of the pinned
+# development dependency @scalar/api-reference. Only that one file and its
+# version note leave this stage; nothing else of the package reaches the image.
+FROM node@sha256:a34ab6d7f6f4813f4d0c5469d74685604b962fbdbf5793a7bc7b4998ecb867c8 AS reference
+WORKDIR /app
+RUN corepack enable
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY packages/contracts/package.json packages/contracts/
+COPY packages/db/package.json packages/db/
+COPY packages/audit/package.json packages/audit/
+COPY packages/operations/package.json packages/operations/
+COPY packages/openbao/package.json packages/openbao/
+COPY packages/auth/package.json packages/auth/
+COPY apps/api/package.json apps/api/
+RUN pnpm install --frozen-lockfile --ignore-scripts --filter "@mykey/api"
+COPY scripts/reference-asset.ts scripts/
+RUN node scripts/reference-asset.ts
+
 FROM node@sha256:a34ab6d7f6f4813f4d0c5469d74685604b962fbdbf5793a7bc7b4998ecb867c8
 ARG MYKEY_BUILD
 ENV NODE_ENV=production
 ENV MYKEY_BUILD=${MYKEY_BUILD}
 WORKDIR /app
 COPY --from=build /app /app
+COPY --from=reference /app/apps/api/assets /app/apps/api/assets
 # The `node` user of the image. The compose file repeats it.
 USER 1000:1000
 EXPOSE 8443

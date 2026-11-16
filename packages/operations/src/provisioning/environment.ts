@@ -2,7 +2,6 @@
 // operation, then compare-then-act for the environment's KV scope, machine
 // policy and token role, then one transaction that makes it active. A
 // difference is never overwritten; an unclear answer is retried by the queue.
-import { createHash } from "node:crypto";
 import { randomUUID } from "node:crypto";
 import { appendAudit } from "@mykey/audit";
 import {
@@ -14,9 +13,10 @@ import {
 } from "@mykey/contracts";
 import { withTransaction } from "@mykey/db";
 import { machineName, machineTokenRole, renderMachinePolicy } from "@mykey/openbao";
-import type { ProvisionerClient, ReadableTokenRole } from "@mykey/openbao/provisioner";
+import type { ProvisionerClient } from "@mykey/openbao/provisioner";
 import type pg from "pg";
 import { isDeepStrictEqual } from "node:util";
+import { policyDigest, readableRole } from "./digest.ts";
 import { kvConfigOf } from "./plan.ts";
 
 export const ENVIRONMENT_STEPS = ["kv-scope", "machine-policy", "token-role"] as const;
@@ -54,23 +54,7 @@ export class ProvisionRetry extends Error {
 
 const STALE_CLAIM_SECONDS = 60;
 
-/** The digest of an environment's two objects, as the sweep recomputes it. */
-export function policyDigest(policy: string, tokenRole: ReadableTokenRole): string {
-  const fields = Object.keys(tokenRole).sort();
-  const role = Object.fromEntries(
-    fields.map((field) => [field, tokenRole[field as keyof ReadableTokenRole]]),
-  );
-  return createHash("sha256")
-    .update(JSON.stringify({ policy, tokenRole: role }))
-    .digest("hex");
-}
-
-/** The machine token role as OpenBao reads it back (`token_num_uses` 0 is omitted). */
-export function readableRole(environmentId: EnvironmentId): ReadableTokenRole {
-  const role: Partial<ReturnType<typeof machineTokenRole>> = machineTokenRole(environmentId);
-  delete role.token_num_uses;
-  return role as ReadableTokenRole;
-}
+export { policyDigest, readableRole } from "./digest.ts";
 
 interface Claimed {
   organizationId: OrganizationId;

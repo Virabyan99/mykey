@@ -8,27 +8,43 @@ import { OpenBaoClient, appRoleLogin, namespaceFor, type OpenBaoTarget } from "@
 
 export type SelfCheck = "ok" | "refused" | "unreachable" | "absent";
 
-function readCredential(directory: string) {
+function readCredential(directory: string, identity: "runtime" | "issuer" = "runtime") {
   try {
     const read = (name: string) => readFileSync(join(directory, name), "utf8").trim();
     const organizationId = organizationIdSchema.safeParse(read("organization-id"));
     if (!organizationId.success) return null;
     return {
       organizationId: organizationId.data,
-      roleId: read("runtime-role-id"),
-      secretId: read("runtime-secret-id"),
+      roleId: read(`${identity}-role-id`),
+      secretId: read(`${identity}-secret-id`),
     };
   } catch {
     return null;
   }
 }
 
-export async function runtimeSelfCheck(
+export function runtimeSelfCheck(
   openbao: OpenBaoTarget | undefined,
   secretsDirectory: string,
 ): Promise<SelfCheck> {
+  return selfCheck(openbao, secretsDirectory, "runtime");
+}
+
+/** Run 5.1 (P-85): the same for the issuer credential. */
+export function issuerSelfCheck(
+  openbao: OpenBaoTarget | undefined,
+  secretsDirectory: string,
+): Promise<SelfCheck> {
+  return selfCheck(openbao, secretsDirectory, "issuer");
+}
+
+async function selfCheck(
+  openbao: OpenBaoTarget | undefined,
+  secretsDirectory: string,
+  identity: "runtime" | "issuer",
+): Promise<SelfCheck> {
   if (openbao === undefined) return "absent";
-  const credential = readCredential(secretsDirectory);
+  const credential = readCredential(secretsDirectory, identity);
   if (credential === null) return "absent";
   const namespace = namespaceFor(credential.organizationId);
   const login = await appRoleLogin(openbao, namespace, credential.roleId, credential.secretId);

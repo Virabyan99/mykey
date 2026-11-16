@@ -3,6 +3,7 @@
 // Run: node scripts/pins-verify.ts
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { join, relative, resolve } from "node:path";
+import { TARGETS as CLI_TARGETS, renderInstaller } from "../infra/release/cli/build-release.ts";
 
 export interface ImagePin {
   image: string;
@@ -31,7 +32,14 @@ export interface DependenciesLock {
 }
 
 /** Binaries every checkout must pin (Run 2.10). */
-export const REQUIRED_BINARIES = ["okms-cli"];
+export const REQUIRED_BINARIES = [
+  "okms-cli",
+  // The CLI installer's runtime (Run 5.7, D-44).
+  "node-linux-x64",
+  "node-linux-arm64",
+  "node-darwin-x64",
+  "node-darwin-arm64",
+];
 
 export const REQUIRED_IMAGES = [
   "postgres",
@@ -77,6 +85,7 @@ export const REQUIRED_ACTIONS = [
   "actions/setup-node",
   "pnpm/action-setup",
   "actions/setup-python",
+  "actions/upload-artifact",
 ];
 export const FORBIDDEN_COMPONENTS = [
   "redis",
@@ -401,6 +410,83 @@ export function consistencyProblems(root: string, lock: DependenciesLock): strin
   return problems;
 }
 
+/**
+ * The CLI installer (Run 5.7): rendering infra/release/cli/install.sh.template
+ * with the lock must work (each Node archive at the pinned Node version, named
+ * as nodejs.org names it) and must carry every pinned sum.
+ */
+export function cliReleaseProblems(root: string, lock: DependenciesLock): string[] {
+  const template = readFileSync(join(root, "infra/release/cli/install.sh.template"), "utf8");
+  try {
+    const rendered = renderInstaller(template, {
+      version: "0.0.0",
+      cliSha256: "0".repeat(64),
+      lock: { node: lock.node, binaries: lock.binaries ?? {} },
+    });
+    return CLI_TARGETS.filter(
+      (target) => !rendered.includes(lock.binaries?.[`node-${target}`]?.sha256 ?? "missing"),
+    ).map((target) => `install.sh.template does not carry binaries.node-${target}.sha256`);
+  } catch (error) {
+    return [`CLI installer: ${(error as Error).message}`];
+  }
+}
+
+const CONSUMER_FIXTURES = "tests/fixtures/consumers";
+
+/** The Dockerfile of every consumer fixture (Run 5.8): test-only images, never deployed. */
+export function fixtureDockerfiles(root: string): string[] {
+  const directory = join(root, CONSUMER_FIXTURES);
+  if (!existsSync(directory)) return [];
+  return readdirSync(directory)
+    .sort()
+    .map((fixture) => join(directory, fixture, "Dockerfile"))
+    .filter((file) => existsSync(file));
+}
+
+/**
+ * The consumer fixtures' packages are exactly the lock's: the Next.js fixture's
+ * direct dependencies against `npm`, the FastAPI fixture's fastapi and uvicorn
+ * (version and wheel sum in requirements.txt) against `python`.
+ */
+export function consumerFixtureProblems(root: string, lock: DependenciesLock): string[] {
+  const problems: string[] = [];
+  const nextDir = join(root, CONSUMER_FIXTURES, "next-app");
+  if (existsSync(join(nextDir, "package.json"))) {
+    const manifest = JSON.parse(readFileSync(join(nextDir, "package.json"), "utf8")) as Manifest;
+    for (const [name, version] of Object.entries(manifest.dependencies ?? {})) {
+      const pin = lock.npm[name];
+      if (pin === undefined)
+        problems.push(`${CONSUMER_FIXTURES}/next-app: ${name} is not in lock npm`);
+      else if (pin.version !== version) {
+        problems.push(
+          `${CONSUMER_FIXTURES}/next-app: ${name} ${version} is not lock npm ${pin.version}`,
+        );
+      }
+    }
+  }
+  const requirements = join(root, CONSUMER_FIXTURES, "fastapi-app", "requirements.txt");
+  if (existsSync(requirements)) {
+    const text = readFileSync(requirements, "utf8");
+    for (const name of ["fastapi", "uvicorn"]) {
+      const pin = lock.python[name];
+      if (pin === undefined) {
+        problems.push(`${CONSUMER_FIXTURES}/fastapi-app: ${name} is not in lock python`);
+        continue;
+      }
+      const entry = new RegExp(
+        `^${name}==([^\\s\\\\]+)[\\s\\\\]+--hash=sha256:([0-9a-f]{64})`,
+        "m",
+      ).exec(text);
+      if (entry?.[1] !== pin.version || entry[2] !== pin.sha256) {
+        problems.push(
+          `${CONSUMER_FIXTURES}/fastapi-app: requirements.txt ${name} is not lock python ${pin.version} with its sum`,
+        );
+      }
+    }
+  }
+  return problems;
+}
+
 export function verifyPins(root: string): string[] {
   const lock = loadLock(root);
   const problems = [
@@ -409,7 +495,12 @@ export function verifyPins(root: string): string[] {
     ...versionLineProblems(lock),
     ...digestProblems(lock),
     ...consistencyProblems(root, lock),
+    ...cliReleaseProblems(root, lock),
+    ...consumerFixtureProblems(root, lock),
   ];
+  for (const file of fixtureDockerfiles(root)) {
+    problems.push(...dockerfileProblems(readFileSync(file, "utf8"), lock, relative(root, file)));
+  }
   for (const file of listFiles(join(root, "infra/compose"), /\.ya?ml$/)) {
     problems.push(...composeImageProblems(readFileSync(file, "utf8"), lock, relative(root, file)));
   }

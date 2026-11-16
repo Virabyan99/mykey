@@ -12,6 +12,8 @@ export default defineConfig(
     "tests/fixtures/",
     "packages/contracts/openapi/",
     "packages/db/migrations/",
+    // Scalar's build, copied by `pnpm run reference:asset` (Run 5.9); not ours to lint.
+    "apps/api/assets/",
   ]),
   js.configs.recommended,
   tseslint.configs.strictTypeChecked,

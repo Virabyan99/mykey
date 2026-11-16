@@ -3,11 +3,12 @@ import type { HttpBindings } from "@hono/node-server";
 import type { Auth, AuthKeys, Throttle } from "@mykey/auth";
 import type { Authority, ErrorCode, RouteDef } from "@mykey/contracts";
 import type { OperationRow } from "@mykey/db";
-import type { RuntimeBao } from "@mykey/operations";
+import type { IssuerBao, RuntimeBao } from "@mykey/operations";
 import type pg from "pg";
 import type { HealthReading } from "../health.ts";
 import type { LogEntry } from "../log.ts";
-import type { Principal } from "./authn.ts";
+import type { UserPrincipal } from "./authn.ts";
+import type { MachinePrincipal } from "./machine.ts";
 import type { Scope } from "./authz.ts";
 
 export interface ApiConfig {
@@ -21,6 +22,8 @@ export interface ApiConfig {
   hostInstanceId: string;
   /** The edge proxy's address; only its X-Forwarded-For is believed (P-47, Run 3.3). */
   trustedProxy: string | null;
+  /** Where scalar.js and scalar.json are (Run 5.9); default apps/api/assets. */
+  referenceAssetDirectory?: string;
 }
 
 export interface TestRouteEntry {
@@ -38,6 +41,8 @@ export interface AppDeps {
   lockPool?: pg.Pool;
   /** The organization's runtime identity in OpenBao (P-62, D-34). */
   bao?: RuntimeBao;
+  /** The organization's issuer identity (Run 5.1, P-85): one session per credential step. */
+  issuer?: IssuerBao;
   /** A UUID per process start: the executor id of the operations it runs. */
   bootId: string;
   config: ApiConfig;
@@ -59,7 +64,7 @@ export interface AppDeps {
     /** These contract routes answer through the stub although they have a handler (Run 4.2). */
     stubRoutes?: ReadonlySet<string>;
     /** Runs after freshness, before a real handler (Run 4.1): a state change after the pipeline. */
-    beforeHandler?: (routeId: string) => Promise<void>;
+    beforeHandler?: (routeId: string, info: { handled: boolean }) => Promise<void>;
     /** Fault hooks of the secret protocol (Run 4.2, FAULT_POINTS). */
     faults?: (point: string, operationId: string) => Promise<void>;
     /** The time TOTP codes are checked at, from a request header. */
@@ -76,7 +81,10 @@ export interface ApiContext {
   body: unknown;
   query: unknown;
   params: Record<string, string>;
-  principal: Principal | null;
+  /** The person of a human route; null on every other route. */
+  principal: UserPrincipal | null;
+  /** The credential of a machine route (Run 5.4, P-93); null on every other route. */
+  machine: MachinePrincipal | null;
   /** The resolved organization, project and environment of a scoped human route (Run 3.7). */
   scope: Scope | null;
   /** The caller's authority in that organization, read on this request. */
@@ -94,7 +102,15 @@ export interface HandlerResult {
   body: unknown;
   /** Extra response headers (a session cookie, Run 3.6). */
   headers?: Record<string, string>;
-  /** Only for a route whose response kind is "dotenv-attachment" (Run 4.9): the body as sent. */
+  /**
+   * Run 5.4 (P-94): the JSON body is serialized once into a buffer and sent
+   * with its content-length (the machine routes).
+   */
+  buffered?: boolean;
+  /**
+   * Only for a route whose response kind is "dotenv-attachment" (Run 4.9) or
+   * "html-document" (Run 5.9): the body as sent.
+   */
   raw?: { bytes: Uint8Array; contentType: string };
 }
 

@@ -21,7 +21,7 @@ import {
   type ProjectScope,
   type Resolved,
 } from "@mykey/db";
-import type { Principal } from "./authn.ts";
+import type { UserPrincipal as Principal } from "./authn.ts";
 import { ApiError, type AppDeps } from "./context.ts";
 import { checkStates } from "./states.ts";
 
@@ -81,8 +81,13 @@ export async function authorize(
   principal: Principal,
   requestId: string,
 ): Promise<Access> {
-  if (route.scope === "none") return { scope: null, authority: null, resolved: null };
   const base = { route, principal, requestId };
+  if (route.scope === "none") {
+    if (route.action === null) return { scope: null, authority: null, resolved: null };
+    return authorizeService(deps, route, principal, (organizationId) =>
+      deny(deps, { ...base, reason: "hidden", code: "not_found", organizationId, targetId: null }),
+    );
+  }
   const named = [params.env, params.project, params.org, params.operation];
   const deepest = named.find((id) => id !== undefined) ?? null;
   const hidden = (organizationId: string | null) =>
@@ -135,6 +140,29 @@ export async function authorize(
     ...(environmentId === undefined ? {} : { environmentId }),
   } as Scope;
   return { scope, authority, resolved };
+}
+
+/**
+ * Service scope (Run 5.9, P-101): a human route with an action whose path
+ * names no organization is about the service this process runs for, so it is
+ * authorized against the process's own organization (`deps.bao`), never one
+ * taken from the request. No such organization: 503. `decide` answers; a
+ * caller who is not a member is hidden like everyone else.
+ */
+async function authorizeService(
+  deps: AppDeps,
+  route: RouteDef,
+  principal: Principal,
+  hidden: (organizationId: string | null) => Promise<never>,
+): Promise<Access> {
+  const organizationId = deps.bao?.organizationId() ?? null;
+  if (organizationId === null) throw new ApiError("dependency_unavailable");
+  const resolved = await resolveAccess(deps.pool, principal.userId, { organizationId });
+  const { authority } = resolved;
+  if (authority === null || resolved.organization === null) return hidden(null);
+  const decision = decide(authority, {}, route.action);
+  if (decision !== "allow") return hidden(organizationId);
+  return { scope: { organizationId } as Scope, authority, resolved };
 }
 
 /** The action of the route that made an operation; `resources.manage` when no route has its id. */

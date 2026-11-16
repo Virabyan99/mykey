@@ -17,10 +17,11 @@ import { now } from "../log.ts";
 import { authenticateHuman } from "./authn.ts";
 import { findOperationByKey, hasTombstone } from "@mykey/db";
 import { replayAnswer, sameIntent, type Intent } from "@mykey/operations";
-import type { Principal } from "./authn.ts";
+import type { UserPrincipal as Principal } from "./authn.ts";
 import { admitStates, authorize, deny } from "./authz.ts";
 import { checkOrigin, hasMixedCredentials, needsOriginCheck } from "./origin.ts";
 import { headerBytes, readBody } from "./body.ts";
+import { authenticateMachine, hasSelector } from "./machine.ts";
 import { requestSource } from "./source.ts";
 import {
   ApiError,
@@ -30,6 +31,7 @@ import {
   type HandlerResult,
 } from "./context.ts";
 import { checkDetails, errorResponse, jsonResponse } from "./respond.ts";
+import { notReplayable } from "../routes/credentials.ts";
 import { validateBody, validateQuery } from "./validate.ts";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
@@ -66,6 +68,12 @@ export function intentOf(
         ? { sha256: createHash("sha256").update(body).digest("hex") }
         : body,
   };
+}
+
+/** A request that declares body bytes (a length above zero, or chunks). */
+function hasBodyBytes(headers: Headers): boolean {
+  const length = headers.get("content-length");
+  return headers.get("transfer-encoding") !== null || (length !== null && length !== "0");
 }
 
 /** What a route with no handler does after every check has passed. */
@@ -120,9 +128,10 @@ function outputResponse(
   deps: AppDeps,
 ): Response {
   const schema = route.responses[result.status];
-  // An attachment (Run 4.9): the bytes as they are, their length, no transformation.
-  if (schema === "dotenv-attachment" || result.raw !== undefined) {
-    if (schema !== "dotenv-attachment" || result.raw === undefined) {
+  // An attachment (Run 4.9) or a page (Run 5.9): the bytes as they are, their length.
+  const rawKind = schema === "dotenv-attachment" || schema === "html-document";
+  if (rawKind || result.raw !== undefined) {
+    if (!rawKind || result.raw === undefined) {
       deps.log({
         event: "output_invalid",
         time: now(),
@@ -162,6 +171,14 @@ function outputResponse(
     });
     return errorResponse("dependency_unavailable", requestId);
   }
+  if (result.buffered === true) {
+    const bytes = Buffer.from(JSON.stringify(parsed.data), "utf8");
+    const headers = new Headers(result.headers);
+    headers.set("content-type", "application/json; charset=utf-8");
+    headers.set("cache-control", "no-store");
+    headers.set("content-length", String(bytes.length));
+    return new Response(bytes, { status: result.status, headers });
+  }
   return jsonResponse(result.status, parsed.data, result.headers);
 }
 
@@ -177,9 +194,18 @@ async function run(
     if (headerBytes(c.env.incoming.rawHeaders) > LIMITS.body.headersMaxBytes) {
       throw new ApiError("malformed_request");
     }
-    const raw = await readBody(c.req.raw, route, (bytes) => {
+    const counted = (bytes: number) => {
       c.set("bodyBytesRead", c.get("bodyBytesRead") + bytes);
-    });
+    };
+    const machineRoute = route.auth === "machine";
+    // A machine route takes no body; any JSON it is sent is read only to be refused as a selector.
+    const raw = await readBody(
+      c.req.raw,
+      machineRoute && route.method !== "GET" && hasBodyBytes(c.req.raw.headers)
+        ? { ...route, request: { ...route.request, body: "pending" } }
+        : route,
+      counted,
+    );
     const headers = c.req.raw.headers;
     const human = route.auth === "human" || route.auth === "human_fresh_totp";
     // One kind of credential per request, refused before any database read.
@@ -192,10 +218,17 @@ async function run(
     }
     // Authentication before strict validation: an anonymous caller learns nothing from a 422.
     const principal = human ? await authenticateHuman(deps, headers) : null;
-    const clock = deps.test?.clock?.(headers);
-    const query = validateQuery(route, new URL(c.req.url).searchParams);
-    const body = validateBody(route, raw);
+    // A machine request (P-93): the token, its catalog row, its own path; then
+    // no selector. No Origin, no authorize (the binding is the authorization),
+    // no replay, no freshness, no validation.
     const params = c.req.param();
+    const machine = machineRoute
+      ? await authenticateMachine(deps, c.env.incoming.rawHeaders, params, route, requestId)
+      : null;
+    if (machine !== null && hasSelector(c.req.url, raw)) throw new ApiError("forbidden_selector");
+    const clock = deps.test?.clock?.(headers);
+    const query = machineRoute ? undefined : validateQuery(route, new URL(c.req.url).searchParams);
+    const body = machineRoute ? undefined : validateBody(route, raw);
     const access =
       principal === null
         ? { scope: null, authority: null, resolved: null }
@@ -228,6 +261,9 @@ async function run(
           throw new ApiError("idempotency_conflict");
         }
         const answer = replayAnswer(route, stored);
+        if ("error" in answer && answer.error === "credential_not_replayable") {
+          throw await notReplayable(deps.pool, stored.id);
+        }
         if ("error" in answer) {
           throw new ApiError(answer.error, "replay", undefined, {
             ...(answer.operationId === undefined ? {} : { operationId: answer.operationId }),
@@ -261,7 +297,8 @@ async function run(
       await deps.test.stubs(route.id);
       return new Response(null, { status: 204 });
     }
-    await deps.test?.beforeHandler?.(route.id);
+    // `handled`: false for the terminal 404 of a route this build has no handler for (Run 5.9).
+    await deps.test?.beforeHandler?.(route.id, { handled: handler !== terminal });
     const result = await handler(
       {
         requestId,
@@ -275,6 +312,7 @@ async function run(
         query,
         params,
         principal,
+        machine,
         scope: access.scope,
         authority: access.authority,
         operation: access.operation ?? null,

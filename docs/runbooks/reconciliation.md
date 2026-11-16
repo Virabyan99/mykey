@@ -74,6 +74,27 @@ MSYS_NO_PATHCONV=1 node scripts/host.ts <host> ops reconcile-environment --envir
 
 It needs no exclusion: the environment's lock and the empty slot prove that no change is in flight.
 
+## Credentials
+
+Machine credential work (`credentials.issue`, `credentials.revoke`) is unresolved like a secret change and raises the same alert. The sweep turns a stale issuance into `uncertain` with its credential `needs_review`, and a stale revocation into `uncertain` with its credential left `revoking` (Run 5.2, P-90, D-40). These are settled per environment, not per operation; `reconcile-operation` answers `not_unresolved` for them.
+
+Run without exclusion first. It revokes every token of the environment that no live row names (an issuance whose token turns up this way is settled), finishes every `revoking` row, and settles what the backend proves:
+
+```sh
+MSYS_NO_PATHCONV=1 node scripts/host.ts <host> ops reconcile-credentials --environment <environmentId>
+```
+
+When it exits 3 with `left <credentialId> needs_exclusion`, an issuance was sent but its token was not found: it may still arrive (D-20). Exclude the executors, then settle:
+
+```sh
+MSYS_NO_PATHCONV=1 node scripts/host.ts <host> quiesce
+MSYS_NO_PATHCONV=1 node scripts/host.ts <host> ops reconcile-credentials --environment <environmentId> --executors-excluded yes
+MSYS_NO_PATHCONV=1 node scripts/host.ts <host> resume
+MSYS_NO_PATHCONV=1 node scripts/host.ts <host> gate open
+```
+
+With exclusion, a `needs_review` credential becomes `revoked` and its issuance `rejected` (`dependency_unavailable`); a new issuance for the environment is then accepted. The outputs and the rest are in `machine-credentials.md`.
+
 ## Never
 
 - Edit `app.operation`, `app.secret_index`, `app.effect_slot` or an environment's state by hand.

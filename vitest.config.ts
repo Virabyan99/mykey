@@ -48,6 +48,32 @@ export default defineConfig({
         test: {
           name: "cli",
           include: ["tests/cli/**/*.test.ts"],
+          // POSIX only (P-97): on Windows, `pnpm run test:cli` runs it in Linux.
+          globalSetup: ["tests/cli/setup.ts"],
+          testTimeout: 60_000,
+        },
+      },
+      {
+        // Run 5.8: the consumer fixtures and the rehearsed consumer runbooks
+        // (staging over its public name); run through `pnpm run test:consumers`.
+        test: {
+          name: "consumers",
+          include: ["tests/consumers/**/*.test.ts"],
+          testTimeout: 600_000,
+          hookTimeout: 1_800_000,
+          fileParallelism: false,
+        },
+      },
+      {
+        // Run 5.9: the reference in Chromium (Playwright) against a local test API;
+        // `pnpm exec playwright install chromium` first.
+        test: {
+          name: "browser",
+          include: ["tests/browser/**/*.test.ts"],
+          globalSetup: ["tests/harness/global-setup.ts"],
+          testTimeout: 120_000,
+          hookTimeout: 300_000,
+          fileParallelism: false,
         },
       },
       {

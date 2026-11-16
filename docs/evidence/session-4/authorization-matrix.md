@@ -5,7 +5,7 @@ Written by `tests/integration/authz/matrix.test.ts`. A = the request passed ever
 cell also has its `access.denied` audit row with the reason checked. `operations.get` here
 names a random id (H for everyone); its own rows are in the test's operation table.
 
-Cells: 924 — A 312, D 142, H 470. Mismatches: 0.
+Cells: 924 — A 302, D 142, H 480. Mismatches: 0.
 
 | Route                   | User       | Target | Result |
 | ----------------------- | ---------- | ------ | ------ |
@@ -921,15 +921,15 @@ Cells: 924 — A 312, D 142, H 470. Mismatches: 0.
 | session.activity        | ownerB     | -      | A      |
 | reference.get           | ownerA     | -      | A      |
 | reference.get           | adminA     | -      | A      |
-| reference.get           | editorA    | -      | A      |
-| reference.get           | readerA    | -      | A      |
-| reference.get           | envEditorA | -      | A      |
-| reference.get           | ungrantedA | -      | A      |
-| reference.get           | ownerB     | -      | A      |
+| reference.get           | editorA    | -      | H      |
+| reference.get           | readerA    | -      | H      |
+| reference.get           | envEditorA | -      | H      |
+| reference.get           | ungrantedA | -      | H      |
+| reference.get           | ownerB     | -      | H      |
 | openapi.get             | ownerA     | -      | A      |
 | openapi.get             | adminA     | -      | A      |
-| openapi.get             | editorA    | -      | A      |
-| openapi.get             | readerA    | -      | A      |
-| openapi.get             | envEditorA | -      | A      |
-| openapi.get             | ungrantedA | -      | A      |
-| openapi.get             | ownerB     | -      | A      |
+| openapi.get             | editorA    | -      | H      |
+| openapi.get             | readerA    | -      | H      |
+| openapi.get             | envEditorA | -      | H      |
+| openapi.get             | ungrantedA | -      | H      |
+| openapi.get             | ownerB     | -      | H      |

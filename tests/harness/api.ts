@@ -15,6 +15,7 @@ import { join } from "node:path";
 import {
   createApp,
   createHealthCheck,
+  issuerBaoFromDirectory,
   listen,
   runtimeBaoFromDirectory,
   startOutboxDispatcher,
@@ -38,7 +39,7 @@ import { drizzle } from "drizzle-orm/node-postgres";
 import * as OTPAuth from "otpauth";
 import { createPool } from "@mykey/db";
 import type { OpenBaoTarget } from "@mykey/openbao";
-import { ensureQueues, type RuntimeBao } from "@mykey/operations";
+import { ensureQueues, type IssuerBao, type RuntimeBao } from "@mykey/operations";
 import type pg from "pg";
 import { prepareDatabase, type TestDatabase } from "../integration/database/setup.ts";
 import { getSharedStack, type Stack } from "./stack.ts";
@@ -79,13 +80,18 @@ export interface StartTestApiOptions {
   /** Runs inside the stub after the id is recorded; the stub answers when it settles (Run 3.7). */
   stubHook?: (routeId: string) => Promise<void> | void;
   /** Runs after freshness and before a real handler (Run 4.1): state changed after the pipeline. */
-  beforeHandler?: (routeId: string) => Promise<void>;
+  beforeHandler?: (routeId: string, info: { handled: boolean }) => Promise<void>;
   /**
    * The API's OpenBao identity (Run 4.2): the runtime credential files in
    * `secretsDirectory`, OpenBao at `openBao()` (read on every call, so a test
    * can point the API elsewhere), and a lock pool of 8.
    */
   runtime?: { openBao: () => OpenBaoTarget; secretsDirectory: string };
+  /**
+   * Run 5.9: without `runtime`, the organization the process serves (service
+   * scope, P-101); its RuntimeBao gives no OpenBao client. Read on every call.
+   */
+  processOrganization?: () => string | null;
   /** The auth keys (default: fresh ephemeral ones); shared with a child API process. */
   keys?: AuthKeys;
   /** Fault hooks of the secret protocol (Run 4.2), read on every call. */
@@ -99,15 +105,43 @@ export type FaultHook = (point: string, operationId: string) => void | Promise<v
 /** A RuntimeBao whose OpenBao target is read on every call (one cached reader per target). */
 function switchableRuntime(runtime: NonNullable<StartTestApiOptions["runtime"]>): RuntimeBao {
   const readers = new Map<string, RuntimeBao>();
+  const reader = (): RuntimeBao => {
+    const target = runtime.openBao();
+    let found = readers.get(target.url);
+    if (found === undefined) {
+      found = runtimeBaoFromDirectory(target, runtime.secretsDirectory);
+      readers.set(target.url, found);
+    }
+    return found;
+  };
   return {
-    clientFor(organizationId) {
+    clientFor: (organizationId) => reader().clientFor(organizationId),
+    organizationId: () => reader().organizationId(),
+    withToken: (organizationId, token) => reader().withToken(organizationId, token),
+  };
+}
+
+/** Run 5.9: a RuntimeBao that names the process's organization and gives no OpenBao client. */
+function organizationOnly(organization: () => string | null): RuntimeBao {
+  return {
+    clientFor: () => null,
+    organizationId: () => organization() as ReturnType<RuntimeBao["organizationId"]>,
+    withToken: () => null,
+  };
+}
+
+/** Run 5.1: the issuer identity from the same directory, its OpenBao target read on every call. */
+function switchableIssuer(runtime: NonNullable<StartTestApiOptions["runtime"]>): IssuerBao {
+  const issuers = new Map<string, IssuerBao>();
+  return {
+    open(organizationId) {
       const target = runtime.openBao();
-      let reader = readers.get(target.url);
-      if (reader === undefined) {
-        reader = runtimeBaoFromDirectory(target, runtime.secretsDirectory);
-        readers.set(target.url, reader);
+      let issuer = issuers.get(target.url);
+      if (issuer === undefined) {
+        issuer = issuerBaoFromDirectory(target, runtime.secretsDirectory);
+        issuers.set(target.url, issuer);
       }
-      return reader.clientFor(organizationId);
+      return issuer.open(organizationId);
     },
   };
 }
@@ -239,7 +273,13 @@ export async function startTestApi(opts: StartTestApiOptions = {}): Promise<Test
         ? undefined
         : createPool(database.targets.api_runtime, { max: 8, queryTimeoutMs: 30_000 });
     if (lockPool !== undefined) cleanup.push(() => lockPool.end());
-    const bao = opts.runtime === undefined ? undefined : switchableRuntime(opts.runtime);
+    const bao =
+      opts.runtime !== undefined
+        ? switchableRuntime(opts.runtime)
+        : opts.processOrganization === undefined
+          ? undefined
+          : organizationOnly(opts.processOrganization);
+    const issuer = opts.runtime === undefined ? undefined : switchableIssuer(opts.runtime);
     let bootId = randomUUID();
     const health = createHealthCheck(database.targets.api_runtime);
     cleanup.push(() => health.close());
@@ -260,6 +300,7 @@ export async function startTestApi(opts: StartTestApiOptions = {}): Promise<Test
         pool,
         ...(lockPool === undefined ? {} : { lockPool }),
         ...(bao === undefined ? {} : { bao }),
+        ...(issuer === undefined ? {} : { issuer }),
         bootId,
         config,
         health: () => health.check(),

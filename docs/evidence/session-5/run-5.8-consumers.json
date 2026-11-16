@@ -1,0 +1,50 @@
+{
+  "project": {
+    "name": "s5-consumers-b91ea1",
+    "id": "507065af-52b2-48f6-837a-d59a63a8da05",
+    "environment": "7aa1ecb7-1051-4e9f-98c2-df71b38f6ecb"
+  },
+  "local-next": {
+    "credentials": [
+      "4b448209-2fab-4f3d-b6cb-e338e32a6d76",
+      "99b8875e-1ec4-4e75-9a40-9f7fb10d3954",
+      "9d3437f7-5e9d-4d61-a634-94cbb36fe5eb"
+    ],
+    "blocks": 11,
+    "elapsedMs": 105647,
+    "argumentControl": "found",
+    "historyControl": "found",
+    "refusals": "78 each, nothing started"
+  },
+  "local-fastapi": {
+    "credentials": [
+      "1806eaa0-999c-4b96-a0a4-a8320083aa71",
+      "28af4002-54e6-4247-9075-ba501d85d459",
+      "e0c91877-f1c1-45b3-b30c-3cb1484cde2a"
+    ],
+    "blocks": 11,
+    "elapsedMs": 153825,
+    "argumentControl": "found",
+    "historyControl": "found",
+    "refusals": "78 each, nothing started"
+  },
+  "deploy-next": {
+    "credentials": ["a4343a67-c406-4813-8401-4e1860488c42", "7564598f-260d-46f0-9e46-db48dd05bc6c"],
+    "blocks": 9,
+    "inspect": "token file path only",
+    "controls": "inspect, arguments, history, image, image history: found"
+  },
+  "deploy-fastapi": {
+    "credentials": ["cff7a866-e5b5-4d09-b80d-ea2a8cafbb5e", "c0f90bde-2056-4959-9361-4353f7f98163"],
+    "blocks": 9,
+    "inspect": "token file path only",
+    "controls": "inspect, arguments, history, image, image history: found"
+  },
+  "searches": {
+    "tree": 0,
+    "captured": 0,
+    "tokens": 10,
+    "controls": "found"
+  },
+  "archived": 200
+}

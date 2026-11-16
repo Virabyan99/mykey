@@ -81,20 +81,33 @@ export const TABLES: Record<string, Expected> = {
   "app.membership": { api: [S], provisioner: [] },
   "app.project": {
     api: [S, I],
-    apiNoColumns: ["review_reason"],
+    // Run 5.3 (migration 0014): state and archive columns only through app.lifecycle_transition.
+    apiNoColumns: ["review_reason", "state", "archive_operation_id"],
     provisioner: [S],
     provisionerColumns: ["state", "review_reason"],
   },
   "app.environment": {
     api: [S, I],
-    apiNoColumns: ["kv_ready", "policy_digest", "review_reason"],
+    apiNoColumns: [
+      "kv_ready",
+      "policy_digest",
+      "review_reason",
+      "state",
+      "archive_origin",
+      "archive_operation_id",
+    ],
     provisioner: [S],
     provisionerColumns: ["state", "kv_ready", "policy_digest", "review_reason"],
   },
   "app.access_grant": { api: [S, I], provisioner: [] },
   "app.secret_index": { api: [S, I], provisioner: [] },
   "app.secret_version_event": { api: [S, I], provisioner: [] },
-  "app.machine_credential": { api: [S, I], provisioner: [] },
+  // Run 5.1 (migration 0013): what an issuance writes at insert is never changed.
+  "app.machine_credential": {
+    api: [S, I],
+    provisioner: [],
+    apiNoColumns: ["name", "issuance_operation_id", "requested_expires_at", "issued_by"],
+  },
   "app.operation": {
     api: [S, I],
     provisioner: [S, I, U],
@@ -248,6 +261,7 @@ export function expectedColumnUpdate(row: ColumnRow, grantee: string): boolean {
  */
 export const APP_FUNCTIONS: Record<string, string[]> = {
   "app.mark_environment_review(uuid,uuid)": ["api_runtime"],
+  "app.lifecycle_transition(text,uuid,uuid,uuid,text,text)": ["api_runtime"],
 };
 
 export const SCHEMA_USAGE: Record<string, string[]> = {

@@ -37,6 +37,8 @@ export function startApiProcess(
     openBao?: OpenBaoTarget;
     secretsDirectory?: string;
     faults?: { point: string; action: FaultAction };
+    /** Run 5.3: the tick's archive driver every `intervalMs`. */
+    archiveTick?: { intervalMs: number; staleSeconds: number };
   },
 ): Promise<ApiProcess> {
   return new Promise((resolveStart, reject) => {
@@ -87,6 +89,7 @@ export function startApiProcess(
         ? {}
         : { runtime: { openBao: opts.openBao, secretsDirectory: opts.secretsDirectory } }),
       ...(opts.faults === undefined ? {} : { fault: opts.faults }),
+      ...(opts.archiveTick === undefined ? {} : { archiveTick: opts.archiveTick }),
     };
     child.stdin.write(`${JSON.stringify(settings)}\n`);
   });

@@ -75,6 +75,11 @@ function parameters(route: RouteDef): Json[] {
       name: "Idempotency-Key",
       in: "header",
       required: true,
+      // M-6 (P-103, FR-1.83): a stored rejection is final and replays as recorded.
+      description:
+        "A key the client chooses for this request. The same key with the same request " +
+        "replays the recorded answer, a rejection included, so a rejected request is " +
+        "retried with a new key. The same key with another request is 409 idempotency_conflict.",
       schema: { type: "string", minLength: 1 },
     });
   }
@@ -98,6 +103,9 @@ function requestBody(route: RouteDef): Json | undefined {
 
 function successResponse(status: string, body: ResponseBody): Json {
   const description = statusText(status);
+  if (body === "html-document") {
+    return { description, content: { "text/html": { schema: { type: "string" } } } };
+  }
   if (body === "dotenv-attachment") {
     return {
       description,

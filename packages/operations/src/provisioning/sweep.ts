@@ -10,7 +10,7 @@ import { machineName, renderMachinePolicy } from "@mykey/openbao";
 import type { ProvisionerClient } from "@mykey/openbao/provisioner";
 import type pg from "pg";
 import { isDeepStrictEqual } from "node:util";
-import { policyDigest, readableRole } from "./environment.ts";
+import { policyDigest, readableRole } from "./digest.ts";
 import { APPROLE_NAMES, configDigest, kvConfigOf, kvMountOf, organizationPlan } from "./plan.ts";
 
 export type DriftObject =

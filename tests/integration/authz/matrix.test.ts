@@ -93,6 +93,8 @@ const MATRIX: Record<FixtureUser, Record<TargetName, Record<Level, string>>> = {
 const TARGETS: readonly TargetName[] = ["p1/e1a", "p1/e1b", "p2/e2a", "B"];
 
 function expected(user: FixtureUser, target: TargetName, route: RouteDef): Outcome {
+  // Service scope (Run 5.9): the reference is for the owner and admins of the process's organization (A).
+  if (route.action === "reference.read") return user === "ownerA" || user === "adminA" ? "A" : "H";
   if (route.scope === "none") return "A";
   // The path holds a random operation id: absent, so hidden (the operation rows are below).
   if (route.scope === "operation") return "H";
@@ -154,7 +156,10 @@ async function verdict(route: RouteDef, response: Response, reachedBefore: numbe
 }
 
 beforeAll(async () => {
-  api = await startTestApi({ stubs: "all" });
+  api = await startTestApi({
+    stubs: "all",
+    processOrganization: () => tenants.a.organizationId,
+  });
   tenants = await createTenants(api);
   for (const user of FIXTURE_USERS) cookies.set(user, await tenants.cookie(user));
 }, 300_000);
@@ -241,6 +246,23 @@ const OPERATION_ROWS: Record<
   ungrantedA: { own: "H", member: "H", foreign: "H", absent: "H" },
   ownerB: { own: "A", member: "H", foreign: "H", absent: "H" },
 };
+
+describe("machine routes (Run 5.4, P-93)", () => {
+  it("both machine routes with each of the seven users' sessions → 401: a session is never a machine credential", async () => {
+    const machine = ROUTES.filter((route) => route.auth === "machine");
+    expect(machine.map((route) => route.id).sort()).toEqual(["machine.keys", "machine.resolve"]);
+    for (const route of machine) {
+      const path = route.path.replace(":project", tenants.a.project1).replace(":envName", "dev");
+      for (const user of FIXTURE_USERS) {
+        const response = await api.request(route.method, path, { cookie: cookies.get(user)! });
+        expect([response.status, (await errorOf(response)).code], `${route.id} ${user}`).toEqual([
+          401,
+          "unauthenticated",
+        ]);
+      }
+    }
+  });
+});
 
 describe("operations.get rows", () => {
   async function operationBy(user: FixtureUser, inB = false): Promise<string> {

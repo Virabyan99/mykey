@@ -18,6 +18,7 @@ import {
   isOrganizationNamespace,
   isSecretPath,
 } from "./paths.ts";
+import type { MachineTokenRole } from "./policies.ts";
 
 export interface OpenBaoTarget {
   url: string;
@@ -57,6 +58,14 @@ export interface TokenInfo {
   ttlSeconds: number;
   explicitMaxTtlSeconds: number;
   namespacePath: string;
+  /** The lifetime the token was created with (`creation_ttl`): where 2.7.2 shows a cap (D-18). */
+  creationTtlSeconds: number;
+  numUses: number;
+  /** RFC 3339; null for a token that never expires (root). */
+  expireTime: string | null;
+  issueTime: string | null;
+  /** The `meta` given at creation (Run 5.1); null when none. */
+  meta: Record<string, string> | null;
 }
 
 export interface IssuedToken {
@@ -289,9 +298,26 @@ function readIssuedToken(body: unknown): IssuedToken | null {
   return { token, accessor, ttlSeconds: ttl };
 }
 
+/** A string, or null when absent or null; undefined when it is something else. */
+function optionalString(value: unknown): string | null | undefined {
+  if (value === undefined || value === null) return null;
+  return typeof value === "string" ? value : undefined;
+}
+
+function readMeta(value: unknown): Record<string, string> | null | undefined {
+  if (value === undefined || value === null) return null;
+  if (typeof value !== "object" || Array.isArray(value)) return undefined;
+  const entries = Object.entries(value as Record<string, unknown>);
+  if (!entries.every(([, inner]) => typeof inner === "string")) return undefined;
+  return Object.fromEntries(entries) as Record<string, string>;
+}
+
 function readTokenInfo(body: unknown): TokenInfo | null {
   const data = record(record(body).data);
   const policies = data.policies;
+  const expireTime = optionalString(data.expire_time);
+  const issueTime = optionalString(data.issue_time);
+  const meta = readMeta(data.meta);
   const info = {
     accessor: data.accessor,
     policies: Array.isArray(policies) ? policies : undefined,
@@ -301,6 +327,11 @@ function readTokenInfo(body: unknown): TokenInfo | null {
     ttlSeconds: data.ttl,
     explicitMaxTtlSeconds: data.explicit_max_ttl,
     namespacePath: data.namespace_path,
+    creationTtlSeconds: data.creation_ttl,
+    numUses: data.num_uses,
+    expireTime,
+    issueTime,
+    meta,
   };
   if (
     typeof info.accessor !== "string" ||
@@ -310,7 +341,12 @@ function readTokenInfo(body: unknown): TokenInfo | null {
     typeof info.type !== "string" ||
     !isNumber(info.ttlSeconds) ||
     !isNumber(info.explicitMaxTtlSeconds) ||
-    typeof info.namespacePath !== "string"
+    typeof info.namespacePath !== "string" ||
+    !isNumber(info.creationTtlSeconds) ||
+    !isNumber(info.numUses) ||
+    expireTime === undefined ||
+    issueTime === undefined ||
+    meta === undefined
   ) {
     return null;
   }
@@ -482,11 +518,17 @@ export class OpenBaoClient {
     role: string,
     ttlSeconds: number,
     c: Correlation,
+    meta?: Record<string, string>,
   ): Promise<BaoResult<IssuedToken>> {
     if (!isMachineName(role)) throw new Error("invalid machine name");
     requireTtl(ttlSeconds);
     const outcome = await this.#call("POST", `auth/token/create/${role}`, {
-      body: { ttl: `${ttlSeconds}s`, policies: [role], no_default_policy: true },
+      body: {
+        ttl: `${ttlSeconds}s`,
+        policies: [role],
+        no_default_policy: true,
+        ...(meta === undefined ? {} : { meta: { ...meta } }),
+      },
       correlation: c,
     });
     return resultOf(outcome, readIssuedToken, "change");
@@ -507,6 +549,37 @@ export class OpenBaoClient {
       correlation: c,
     });
     return toNull(resultOf(outcome, noContent, "change"));
+  }
+
+  /**
+   * Run 5.3 (P-92): the machine policy's text, read with the issuer's session
+   * (`sys/policies/acl/machine-env-*` is readable by it).
+   */
+  async readMachinePolicy(name: string): Promise<BaoResult<string>> {
+    if (!isMachineName(name)) throw new Error("invalid machine name");
+    return resultOf(await this.#call("GET", `sys/policies/acl/${name}`), (body) => {
+      const policy = record(record(body).data).policy;
+      return typeof policy === "string" ? policy : null;
+    });
+  }
+
+  /** Run 5.3 (P-92): the machine token role as OpenBao reads it back (the fields of D-18). */
+  async readMachineTokenRole(
+    name: string,
+  ): Promise<BaoResult<Omit<MachineTokenRole, "token_num_uses">>> {
+    if (!isMachineName(name)) throw new Error("invalid machine name");
+    return resultOf(await this.#call("GET", `auth/token/roles/${name}`), (body) => {
+      const data = record(record(body).data);
+      return {
+        allowed_policies: data.allowed_policies,
+        orphan: data.orphan,
+        renewable: data.renewable,
+        token_no_default_policy: data.token_no_default_policy,
+        token_explicit_max_ttl: data.token_explicit_max_ttl,
+        token_type: data.token_type,
+        token_period: data.token_period,
+      } as Omit<MachineTokenRole, "token_num_uses">;
+    });
   }
 
   async tokenRevokeSelf(): Promise<BaoResult<null>> {

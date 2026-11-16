@@ -31,7 +31,11 @@ export type AuthClass = "public" | "human" | "human_fresh_totp" | "machine" | "r
 export const PENDING = "pending";
 
 export type RequestBody = z.ZodType | "raw-dotenv" | typeof PENDING;
-export type ResponseBody = z.ZodType | "dotenv-attachment" | typeof PENDING;
+/**
+ * A JSON schema, or a raw body: `dotenv-attachment` (Run 4.9) and
+ * `html-document` (Run 5.9, the API reference: one self-contained page).
+ */
+export type ResponseBody = z.ZodType | "dotenv-attachment" | "html-document" | typeof PENDING;
 
 export interface RouteDef {
   readonly id: string;
@@ -60,6 +64,9 @@ export const DENIED_ALIASES: readonly { readonly method: HttpMethod; readonly pa
   Object.freeze([Object.freeze({ method: "GET", path: "/v1/operations/:id/status" } as const)]);
 
 // ---------------------------------------------------------------- body schemas
+
+/** The OpenAPI document of this build (Run 5.9): an object; its shape is OpenAPI's. */
+const openApiDocumentBody = z.looseObject({ openapi: z.string() });
 
 const projectName = z
   .string()
@@ -124,18 +131,38 @@ const organizationsBody = z.strictObject({
   ),
 });
 
+/** The API's major version (Doc 06 §9): a client refuses any other. */
+export const API_MAJOR = 1;
+
 const versionBody = z.strictObject({
-  apiMajor: z.literal(1),
+  apiMajor: z.literal(API_MAJOR),
   /** The commit the image was built from. */
   build: z.string().regex(/^[0-9a-f]{7,40}$/),
 });
 
+/** An environment's metadata generation (a bigint): a decimal string, as in the cursors. */
+const generationText = z
+  .string()
+  .max(20)
+  .regex(/^(0|[1-9][0-9]*)$/);
+
+/** machine.resolve (Run 5.4, P-94): every live value of one generation, or nothing. */
 const resolveBody = z.strictObject({
   apiMajor: z.int().positive(),
   environmentId: environmentIdSchema,
-  generation: z.int().nonnegative(),
+  generation: generationText,
   count: z.int().nonnegative(),
   entries: z.array(z.strictObject({ name: z.string(), value: z.string() })),
+  complete: z.literal(true),
+});
+
+/** machine.keys (Run 5.4, P-94): the live names of one generation, bytewise order; never a value. */
+const keysBody = z.strictObject({
+  apiMajor: z.int().positive(),
+  environmentId: environmentIdSchema,
+  generation: generationText,
+  count: z.int().nonnegative(),
+  names: z.array(z.string()),
   complete: z.literal(true),
 });
 
@@ -304,6 +331,59 @@ const operationsListBody = z.strictObject({
   nextCursor: z.string().nullable(),
 });
 
+/**
+ * A machine credential as the inventory shows it (Run 5.1, P-86): never the
+ * token, never its accessor. `state` is the stored state, except that an
+ * `active` credential past its expiry shows as `expired`; `issuedAt` is the
+ * completion time of the issuance.
+ */
+export const CREDENTIAL_STATES = [
+  "issuing",
+  "active",
+  "revoking",
+  "revoked",
+  "expired",
+  "needs_review",
+] as const;
+const credentialView = z.strictObject({
+  credentialId: z.uuid(),
+  name: z.string(),
+  projectId: z.uuid(),
+  environmentId: z.uuid(),
+  state: z.enum(CREDENTIAL_STATES),
+  issuedBy: z.uuid(),
+  issuedAt: z.iso.datetime().nullable(),
+  expiresAt: z.iso.datetime().nullable(),
+  expiringSoon: z.boolean(),
+  lastUsedAt: z.iso.datetime().nullable(),
+});
+/** credentials.issue (FR-1.41, P-88): the one response of the contract that holds a token. */
+const credentialIssuedBody = z.strictObject({
+  operationId: z.uuid(),
+  credential: credentialView,
+  token: z.string().min(1),
+});
+/** credentials.revoke (Run 5.2, P-89): the envelope of a revocation proven in the backend. */
+const credentialRevokedBody = operationResponseSchema.extend({
+  result: z.strictObject({ credentialId: z.uuid(), state: z.literal("revoked") }),
+});
+/** projects.archive, environments.archive (Run 5.3, P-91): what the archive closed. */
+const archivedBody = operationResponseSchema.extend({
+  result: z.strictObject({
+    state: z.enum(["archived", "revoking"]),
+    environments: z.int().nonnegative(),
+    credentialsRevoked: z.int().nonnegative(),
+  }),
+});
+/** projects.reactivate, environments.reactivate (Run 5.3, P-92). */
+const reactivatedBody = operationResponseSchema.extend({
+  result: z.strictObject({ state: z.literal("active"), environments: z.int().nonnegative() }),
+});
+const credentialsListBody = z.strictObject({
+  credentials: z.array(credentialView),
+  nextCursor: z.string().nullable(),
+});
+
 // ----------------------------------------------------------------- error lists
 
 // The quarantine gate is the first step of every request (Doc 06 §9: even /v1/version).
@@ -460,11 +540,13 @@ export const ROUTES: readonly RouteDef[] = Object.freeze([
   define("projects.archive", "POST", `${P}/archive`, "human", true, "5.3", {
     action: "resources.manage",
     body: confirmedBody,
+    responses: { 200: archivedBody },
     errors: ["state_conflict", ...BACKEND],
   }),
   define("projects.reactivate", "POST", `${P}/reactivate`, "human", true, "5.3", {
     action: "resources.manage",
     body: confirmedBody,
+    responses: { 200: reactivatedBody },
     errors: ["state_conflict", ...BACKEND],
   }),
 
@@ -487,11 +569,13 @@ export const ROUTES: readonly RouteDef[] = Object.freeze([
   define("environments.archive", "POST", `${E}/archive`, "human", true, "5.3", {
     action: "resources.manage",
     body: confirmedBody,
+    responses: { 200: archivedBody },
     errors: ["state_conflict", ...BACKEND],
   }),
   define("environments.reactivate", "POST", `${E}/reactivate`, "human", true, "5.3", {
     action: "resources.manage",
     body: confirmedBody,
+    responses: { 200: reactivatedBody },
     errors: ["state_conflict", ...BACKEND],
   }),
 
@@ -572,6 +656,8 @@ export const ROUTES: readonly RouteDef[] = Object.freeze([
 
   define("credentials.list", "GET", `${E}/credentials`, "human", false, "5.1", {
     action: "credentials.manage",
+    query: pageQuery,
+    responses: { 200: credentialsListBody },
   }),
   define("credentials.issue", "POST", `${E}/credentials`, "human_fresh_totp", true, "5.1", {
     action: "credentials.manage",
@@ -584,7 +670,7 @@ export const ROUTES: readonly RouteDef[] = Object.freeze([
         .default(LIMITS.machineToken.maxTtlSeconds),
     }),
     completed: 201,
-    responses: { 201: PENDING },
+    responses: { 201: credentialIssuedBody },
     errors: ["credential_not_replayable", "state_conflict", ...BACKEND],
   }),
   define(
@@ -594,7 +680,12 @@ export const ROUTES: readonly RouteDef[] = Object.freeze([
     "human",
     true,
     "5.2",
-    { action: "credentials.manage", body: confirmedBody, errors: ["state_conflict", ...BACKEND] },
+    {
+      action: "credentials.manage",
+      body: confirmedBody,
+      responses: { 200: credentialRevokedBody },
+      errors: ["state_conflict", ...BACKEND],
+    },
   ),
 
   // Status stays readable while a project or environment is in review (P-63, D-35):
@@ -629,14 +720,30 @@ export const ROUTES: readonly RouteDef[] = Object.freeze([
     responses: { 200: z.strictObject({ next: z.enum(["sign_in", "enroll"]) }) },
     errors: ["audit_unavailable"],
   }),
-  define("reference.get", "GET", "/v1/reference", "human", false, "5.9", { action: null }),
-  define("openapi.get", "GET", "/v1/openapi.json", "human", false, "5.9", { action: null }),
+  // Run 5.9 (P-101): the process's own organization is the scope (no :org in
+  // the path); owner and admins see them, everyone else gets the hidden 404.
+  define("reference.get", "GET", "/v1/reference", "human", false, "5.9", {
+    action: "reference.read",
+    responses: { 200: "html-document" },
+    errors: ["not_found", "dependency_unavailable"],
+  }),
+  define("openapi.get", "GET", "/v1/openapi.json", "human", false, "5.9", {
+    action: "reference.read",
+    responses: { 200: openApiDocumentBody },
+    errors: ["not_found", "dependency_unavailable"],
+  }),
 
+  // Run 5.4 (P-93, P-94): no query and no body schema — a selector is refused
+  // before validation (forbidden_selector).
   define("machine.keys", "GET", `${M}/keys`, "machine", false, "5.4", {
-    errors: ["environment_changed", ...BACKEND],
+    responses: { 200: keysBody },
+    errors: ["environment_changed", ...VALUE_READ],
   }),
   define("machine.resolve", "POST", `${M}/resolve`, "machine", false, "5.4", {
     responses: { 200: resolveBody },
-    errors: ["environment_changed", ...VALUE_READ],
+    errors: ["environment_changed", "capacity_exceeded", ...VALUE_READ],
   }),
 ]);
+
+/** The two machine bodies, for the CLI's validator (Run 5.5, P-96). */
+export { keysBody as machineKeysBody, resolveBody as machineResolveBody };

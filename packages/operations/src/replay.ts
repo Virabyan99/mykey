@@ -172,6 +172,10 @@ export function replayAnswer(route: RouteDef, row: OperationRow): ReplayAnswer {
     case "awaiting_input":
       return { status: 202, body: operationResponse(row) };
     case "succeeded":
+      // P-88 (FR-1.43): a token is shown once; a replayed issuance never shows it again.
+      if (route.id === "credentials.issue") {
+        return { error: "credential_not_replayable", operationId: row.id };
+      }
       return { status: 201 in route.responses ? 201 : 200, body: operationResponse(row) };
     case "partial":
       return { status: 200, body: operationResponse(row) };

@@ -1,0 +1,37 @@
+{
+  "project": {
+    "name": "s5-archive-9226ec",
+    "id": "ee5da81f-2fad-43c1-b240-52150b56dd5d",
+    "environments": [
+      {
+        "id": "1b1914b3-b355-4343-b938-5ada40279737",
+        "name": "development"
+      },
+      {
+        "id": "414e32d4-6dc2-4512-93bf-a81272cc95b1",
+        "name": "drill"
+      }
+    ]
+  },
+  "journey": {
+    "credentials": ["5e3db840-8867-4553-bc13-69d5a49769c3", "b4d5624c-ba70-4c22-b972-5d16256a5ee5"],
+    "archive": {
+      "state": "archived",
+      "credentialsRevoked": 2
+    },
+    "archiveMs": 878,
+    "refusedWhileArchived": [
+      [401, "unauthenticated"],
+      [401, "unauthenticated"],
+      [401, "unauthenticated"],
+      [401, "unauthenticated"]
+    ],
+    "accessorsOnHostArchived": [400, 400],
+    "refusedAfterReactivation": [
+      [401, "unauthenticated"],
+      [401, "unauthenticated"]
+    ],
+    "freshCredential": "b82937da-d1fc-4f08-9ad9-94c39be566c8",
+    "freshResolve": 200
+  }
+}

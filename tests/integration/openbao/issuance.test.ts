@@ -9,16 +9,25 @@
 //
 // Tokens, accessors and secret ids are never printed.
 import { randomBytes, randomUUID } from "node:crypto";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import net from "node:net";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
+import { issuerBaoFromDirectory } from "@mykey/api";
 import { LIMITS } from "@mykey/contracts";
 import {
   OpenBaoClient,
   appRoleLogin,
+  machineTokenRole,
   type Correlation,
   type IssuedToken,
+  type OpenBaoTarget,
   type TokenInfo,
 } from "@mykey/openbao";
 import { OpenBaoAdmin } from "@mykey/openbao/admin";
+import { revokeAndVerify } from "@mykey/operations";
+import { startTlsRelay } from "../../harness/tls-relay.ts";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
   authOf,
@@ -795,3 +804,218 @@ describe("machine-token issuance by the issuer through a fixed token role", () =
     expect((await accessors(a.namespace)).has(lost)).toBe(false);
   });
 });
+
+// Run 5.1 Task A: what the product's issuance reads about a token, and the
+// issuer session of P-85 (login → the step's calls → revoke-self).
+describe("token metadata, lifetime and issuer sessions (Run 5.1)", () => {
+  const directories: string[] = [];
+
+  /** A directory as the host delivers it to the API, with A's issuer credential. */
+  async function issuerDirectory(
+    opts: { secretId?: string; files?: boolean } = {},
+  ): Promise<string> {
+    const directory = mkdtempSync(join(tmpdir(), "mykey-issuer-"));
+    directories.push(directory);
+    if (opts.files === false) return directory;
+    const credential = await a.credential("issuer");
+    writeFileSync(join(directory, "organization-id"), a.organizationId);
+    writeFileSync(join(directory, "issuer-role-id"), credential.roleId);
+    writeFileSync(join(directory, "issuer-secret-id"), opts.secretId ?? credential.secretId);
+    return directory;
+  }
+
+  afterAll(() => {
+    for (const directory of directories) rmSync(directory, { recursive: true, force: true });
+  });
+
+  it("meta given at creation comes back from lookup-accessor and lookup-self", async () => {
+    const meta = { credential_id: randomUUID(), operation_id: randomUUID() };
+    const issuer = typed(await a.login("issuer"));
+    const created = await issuer.tokenCreateFromRole(role(a), 600, correlation(), meta);
+    if (!created.ok) throw new Error("issuance failed");
+    const byAccessor = await issuer.tokenLookupAccessor(created.data.accessor);
+    const bySelf = await typed(created.data.token).tokenLookupSelf();
+    expect(byAccessor.ok && bySelf.ok).toBe(true);
+    if (!byAccessor.ok || !bySelf.ok) return;
+    for (const seen of [byAccessor.data, bySelf.data]) {
+      expect(seen.meta).toEqual(meta);
+      expect(seen).toMatchObject({
+        orphan: true,
+        renewable: false,
+        type: "service",
+        policies: [role(a)],
+      });
+    }
+    // Control: a token made without meta reads back none.
+    const plain = await issuer.tokenCreateFromRole(role(a), 600, correlation());
+    if (!plain.ok) throw new Error("issuance failed");
+    const plainInfo = await issuer.tokenLookupAccessor(plain.data.accessor);
+    expect(plainInfo.ok && plainInfo.data.meta).toBeNull();
+    await issuer.tokenRevokeSelf();
+    await rootRevokeAccessor(created.data.accessor);
+    await rootRevokeAccessor(plain.data.accessor);
+  });
+
+  it("TokenInfo carries creation ttl, uses, expiry and issue time", async () => {
+    const { issued, info } = await issue(120);
+    expect(info.creationTtlSeconds).toBe(120);
+    expect(info.numUses).toBe(0);
+    expect(info.issueTime).not.toBeNull();
+    expect(info.expireTime).not.toBeNull();
+    const lifetime = (Date.parse(info.expireTime!) - Date.parse(info.issueTime!)) / 1000;
+    expect(lifetime).toBeGreaterThanOrEqual(118);
+    expect(lifetime).toBeLessThanOrEqual(122);
+    await rootRevokeAccessor(issued.accessor);
+  });
+
+  it("a role whose maximum is shorter gives a shorter token", async () => {
+    const roleName = role(a);
+    const changed = await call(root, "POST", `auth/token/roles/${roleName}`, {
+      body: { ...machineTokenRole(a.environments[0]!.id), token_explicit_max_ttl: 60 },
+    });
+    expect(changed.status).toBe(204);
+    try {
+      const { issued, info } = await issue(120);
+      expect(info.creationTtlSeconds).toBe(60);
+      await rootRevokeAccessor(issued.accessor);
+    } finally {
+      await admin.putTokenRole(a.namespace, roleName, machineTokenRole(a.environments[0]!.id));
+    }
+    // Control: restored, the same request gives 120.
+    const { issued, info } = await issue(120);
+    expect(info.creationTtlSeconds).toBe(120);
+    await rootRevokeAccessor(issued.accessor);
+  });
+
+  it("issuerBaoFromDirectory: a session, closed; no files; a wrong secret id", async () => {
+    const issuer = issuerBaoFromDirectory(stack.bao, await issuerDirectory());
+    const opened = await issuer.open(a.organizationId);
+    expect(opened?.ok).toBe(true);
+    if (opened?.ok !== true) return;
+    const session = opened.data;
+    const { issued } = await issue(600);
+    expect((await session.client.tokenLookupAccessor(issued.accessor)).ok).toBe(true);
+    await session.close();
+    expect(await session.client.tokenLookupAccessor(issued.accessor)).toEqual({
+      ok: false,
+      kind: "denied",
+      status: 403,
+    });
+    // close() never throws, also a second time.
+    await session.close();
+    await rootRevokeAccessor(issued.accessor);
+    // Another organization than the directory's: this process holds no issuer for it.
+    expect(await issuer.open(b.organizationId)).toBeNull();
+
+    const empty = issuerBaoFromDirectory(stack.bao, await issuerDirectory({ files: false }));
+    expect(await empty.open(a.organizationId)).toBeNull();
+
+    const wrong = issuerBaoFromDirectory(
+      stack.bao,
+      await issuerDirectory({ secretId: randomUUID() }),
+    );
+    const refused = await wrong.open(a.organizationId);
+    expect(refused).not.toBeNull();
+    expect(refused?.ok).toBe(false);
+  });
+
+  describe("revokeAndVerify", () => {
+    async function session(target: OpenBaoTarget = stack.bao) {
+      const opened = await issuerBaoFromDirectory(target, await issuerDirectory()).open(
+        a.organizationId,
+      );
+      if (opened?.ok !== true) throw new Error("issuer session failed");
+      return opened.data;
+    }
+
+    it("an accessor already revoked is absent; one OpenBao cannot place is unproven", async () => {
+      const { issued } = await issue(600);
+      await rootRevokeAccessor(issued.accessor);
+      const s = await session();
+      try {
+        // A revocation sent again (P-89): the accessor no longer exists.
+        expect(await revokeAndVerify(s, issued.accessor, correlation())).toBe("absent");
+        // Observed: a string that was never an accessor of this namespace does not
+        // answer 400, so nothing proves its absence.
+        expect(await revokeAndVerify(s, randomBytes(12).toString("base64url"), correlation())).toBe(
+          "unproven",
+        );
+      } finally {
+        await s.close();
+      }
+    });
+
+    it("a live token is absent afterwards and denied", async () => {
+      const { issued } = await issue(600);
+      expect(await readsSeed(issued.token)).toBe(200);
+      const s = await session();
+      try {
+        expect(await revokeAndVerify(s, issued.accessor, correlation())).toBe("absent");
+      } finally {
+        await s.close();
+      }
+      expect(await readsSeed(issued.token)).toBe(403);
+    });
+
+    it("OpenBao unreachable before the call: not_sent", async () => {
+      const { issued } = await issue(600);
+      const s = await session();
+      // The session's token, on a client whose connection is never made.
+      const closed = {
+        client: new OpenBaoClient(
+          {
+            url: `https://127.0.0.1:${String(await freePort())}`,
+            caCertPath: stack.bao.caCertPath,
+          },
+          { namespace: a.namespace, token: "unused-token" },
+        ),
+        close: () => s.close(),
+      };
+      try {
+        expect(await revokeAndVerify(closed, issued.accessor, correlation())).toBe("not_sent");
+      } finally {
+        await s.close();
+      }
+      // Control: nothing was revoked.
+      expect(await readsSeed(issued.token)).toBe(200);
+      await rootRevokeAccessor(issued.accessor);
+    });
+
+    it("answers that never come back: unproven", async () => {
+      const { issued } = await issue(600);
+      const baoUrl = new URL(stack.bao.url);
+      const relay = await startTlsRelay({ host: baoUrl.hostname, port: Number(baoUrl.port) });
+      try {
+        const s = await session({
+          url: `https://127.0.0.1:${String(relay.port)}`,
+          caCertPath: stack.bao.caCertPath,
+        });
+        relay.setMode("drop");
+        try {
+          expect(await revokeAndVerify(s, issued.accessor, correlation())).toBe("unproven");
+        } finally {
+          relay.setMode("pass");
+          await s.close();
+        }
+      } finally {
+        await relay.close();
+      }
+      // The revoke itself reached OpenBao: the token is dead although nothing said so.
+      expect(await readsSeed(issued.token)).toBe(403);
+      const lookup = await rootLookupAccessor(issued.accessor);
+      expect(lookup.status).toBe(400);
+    });
+  });
+});
+
+async function freePort(): Promise<number> {
+  const server = net.createServer();
+  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const port = (server.address() as net.AddressInfo).port;
+  await new Promise<void>((resolve) => {
+    server.close(() => {
+      resolve();
+    });
+  });
+  return port;
+}

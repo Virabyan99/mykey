@@ -75,13 +75,24 @@ export interface SecretsFixture {
   /** In-process API faults (null clears). */
   setFaults(hook: FaultHook | null): void;
   /** Runs after the pipeline, before the handler (the admission recheck; null clears). */
-  setBeforeHandler(hook: ((routeId: string) => Promise<void>) | null): void;
+  setBeforeHandler(
+    hook: ((routeId: string, info: { handled: boolean }) => Promise<void>) | null,
+  ): void;
   /** The in-process API's import budget per request in ms (null: the product's). */
   setImportBudget(ms: number | null): void;
   /** Where the in-process API reaches OpenBao: through the relay, or a closed port. */
   setBao(target: "relay" | "closed"): void;
+  /**
+   * Run 5.2: the relay's next connections go to a closed port (true) or to
+   * OpenBao again (false): a call through it is never made (status 0), while a
+   * client already logged in keeps its target.
+   */
+  setUpstreamClosed(closed: boolean): Promise<void>;
   /** Restarts the second process with a fault (or none). */
-  restartSecond(fault?: { point: string; action: FaultAction }): Promise<ApiProcess>;
+  restartSecond(
+    fault?: { point: string; action: FaultAction },
+    opts?: { archiveTick?: { intervalMs: number; staleSeconds: number } },
+  ): Promise<ApiProcess>;
   send(
     method: string,
     path: string,
@@ -129,6 +140,8 @@ export interface SecretsFixture {
     env: EnvName,
     name: string,
   ): Promise<{ currentVersion: number; versions: BackendVersion[] } | null>;
+  /** Where the API's credential files are (runtime and issuer). */
+  secretsDirectory: string;
   /** The operator client of A's namespace (root token): for writing past the product. */
   operatorBao(): OpenBaoClient;
   /** Requests the audit device recorded that change KV and carry this operation id. */
@@ -188,7 +201,14 @@ async function closedPort(): Promise<number> {
 }
 
 export async function createSecretsFixture(
-  opts: { private?: boolean; processes?: 1 | 2 } = {},
+  opts: {
+    private?: boolean;
+    processes?: 1 | 2;
+    /** Run 5.4: "broken" delivers a runtime secret id OpenBao refuses. */
+    runtime?: "ok" | "broken";
+    /** More test-only routes (Run 5.1). */
+    routes?: readonly { def: RouteDef; handler: Handler }[];
+  } = {},
 ): Promise<SecretsFixture> {
   const directory = mkdtempSync(join(tmpdir(), "mykey-secrets-"));
   const secretsDirectory = join(directory, "secrets");
@@ -198,7 +218,7 @@ export async function createSecretsFixture(
   generateKeyFiles(keysDirectory);
   let current: OpenBaoTarget | null = null;
   let faults: FaultHook | null = null;
-  let beforeHandler: ((routeId: string) => Promise<void>) | null = null;
+  let beforeHandler: ((routeId: string, info: { handled: boolean }) => Promise<void>) | null = null;
   let importBudget: number | null = null;
   const fx = await createProvisioningFixture({
     shared: opts.private !== true,
@@ -208,17 +228,19 @@ export async function createSecretsFixture(
         runtime: { openBao: () => current ?? stack.bao, secretsDirectory },
         keys: loadAuthKeys(keysDirectory),
         faults: () => faults ?? undefined,
-        beforeHandler: async (routeId: string) => {
-          await beforeHandler?.(routeId);
+        beforeHandler: async (routeId: string, info: { handled: boolean }) => {
+          await beforeHandler?.(routeId, info);
         },
         importBudgetMs: () => importBudget ?? undefined,
-        routes: [{ def: TEST_READ_ROUTE, handler: testReadHandler() }],
+        routes: [{ def: TEST_READ_ROUTE, handler: testReadHandler() }, ...(opts.routes ?? [])],
       };
     },
   });
   const { api, stack, tenants } = fx;
   // Asked per connection: OpenBao restarted by a fault test may come back on another port.
+  let upstreamClosed: number | null = null;
   const relay = await startTlsRelay(() => {
+    if (upstreamClosed !== null) return { host: "127.0.0.1", port: upstreamClosed };
     const baoUrl = new URL(stack.bao.url);
     return { host: baoUrl.hostname, port: Number(baoUrl.port) };
   }, "pass");
@@ -244,11 +266,20 @@ export async function createSecretsFixture(
   // The runtime credential, delivered the way the host delivers it.
   writeFileSync(join(secretsDirectory, "organization-id"), tenants.a.organizationId);
   writeFileSync(join(secretsDirectory, "runtime-role-id"), fx.credentials.runtime.roleId);
-  writeFileSync(join(secretsDirectory, "runtime-secret-id"), fx.credentials.runtime.secretId);
+  writeFileSync(
+    join(secretsDirectory, "runtime-secret-id"),
+    opts.runtime === "broken" ? randomUUID() : fx.credentials.runtime.secretId,
+  );
+  // Run 5.1 (P-85): the issuer credential beside it, as the host installs it.
+  writeFileSync(join(secretsDirectory, "issuer-role-id"), fx.credentials.issuer.roleId);
+  writeFileSync(join(secretsDirectory, "issuer-secret-id"), fx.credentials.issuer.secretId);
 
   const tls = { certPath: stack.api.certPath, keyPath: stack.api.keyPath };
   const ca = readFileSync(stack.api.certAuthorityPath);
-  const startSecond = (fault?: { point: string; action: FaultAction }) =>
+  const startSecond = (
+    fault?: { point: string; action: FaultAction },
+    extra: { archiveTick?: { intervalMs: number; staleSeconds: number } } = {},
+  ) =>
     startApiProcess(api.database.targets.api_runtime, {
       keysDirectory,
       api: {
@@ -262,6 +293,7 @@ export async function createSecretsFixture(
       openBao: relayTarget,
       secretsDirectory,
       ...(fault === undefined ? {} : { faults: fault }),
+      ...extra,
     });
   let second: ApiProcess | null = opts.processes === 2 ? await startSecond() : null;
 
@@ -287,6 +319,7 @@ export async function createSecretsFixture(
       return second;
     },
     env: ids,
+    secretsDirectory,
     setBeforeHandler(hook) {
       beforeHandler = hook;
     },
@@ -299,9 +332,12 @@ export async function createSecretsFixture(
     setBao(target) {
       current = target === "relay" ? relayTarget : closedTarget;
     },
-    async restartSecond(fault) {
+    async setUpstreamClosed(closed) {
+      upstreamClosed = closed ? await closedPort() : null;
+    },
+    async restartSecond(fault, extra) {
       await second?.kill();
-      second = await startSecond(fault);
+      second = await startSecond(fault, extra);
       return second;
     },
     async send(method, path, init = {}) {
@@ -522,7 +558,6 @@ function testReadHandler(): Handler {
       if (scope === null || principal === null) throw new Error("test.read without a scope");
       const outcome = await readEnvironment(readDeps(deps), {
         scope,
-        userId: principal.userId,
         routeId: ctx.route.id,
         requestId: ctx.requestId,
         recheck: recheckOf(ctx, principal.userId, scope),

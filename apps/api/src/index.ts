@@ -1,4 +1,4 @@
-export { createApp } from "./app.ts";
+export { createApp, handledRouteIds } from "./app.ts";
 export {
   HEALTH_DEADLINE_MS,
   classifyFailure,
@@ -13,10 +13,17 @@ export {
   startOutboxDispatcher,
   type OutboxDispatcher,
 } from "./outbox-dispatcher.ts";
-export { authenticateHuman, type Principal } from "./pipeline/authn.ts";
+export { authenticateHuman, type Principal, type UserPrincipal } from "./pipeline/authn.ts";
+export { authenticateMachine, type MachinePrincipal } from "./pipeline/machine.ts";
 export { parseStrictJson, readAuthBody, readBody } from "./pipeline/body.ts";
 export { createLargeGate, type LargeGate } from "./large.ts";
 export { readDeps, recheckOf, refusedOf } from "./routes/secrets.ts";
+export {
+  credentialDeps,
+  credentialView,
+  credentialsIssueHandler,
+  credentialsListHandler,
+} from "./routes/credentials.ts";
 export { exportHeaders, safeFileName } from "./routes/export.ts";
 export { checkOrigin, hasMixedCredentials, needsOriginCheck } from "./pipeline/origin.ts";
 export { checkStates } from "./pipeline/states.ts";
@@ -57,6 +64,6 @@ export {
   type ListenOptions,
   type ServerConfig,
 } from "./server.ts";
-export { runtimeSelfCheck, type SelfCheck } from "./selfcheck.ts";
+export { issuerSelfCheck, runtimeSelfCheck, type SelfCheck } from "./selfcheck.ts";
 export { readCursor, signCursor, type CursorFields, type MacRing } from "./pipeline/cursor.ts";
-export { runtimeBaoFromDirectory } from "./runtime-bao.ts";
+export { issuerBaoFromDirectory, runtimeBaoFromDirectory } from "./runtime-bao.ts";

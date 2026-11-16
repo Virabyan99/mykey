@@ -17,9 +17,15 @@ const HANDLED = new Set([
   "projects.list",
   "projects.create",
   "projects.rename",
+  "projects.archive",
   "environments.list",
   "environments.create",
   "environments.rename",
+  "environments.archive",
+  "projects.reactivate",
+  "environments.reactivate",
+  "machine.keys",
+  "machine.resolve",
   "operations.get",
   "operations.list",
   "secrets.list",
@@ -34,8 +40,13 @@ const HANDLED = new Set([
   "import.apply",
   "import.resume",
   "export.create",
+  "credentials.list",
+  "credentials.issue",
+  "credentials.revoke",
   "session.activity",
   "auth.reset.complete",
+  "openapi.get",
+  "reference.get",
 ]);
 
 /** A valid body for every contract route that takes one. */
@@ -78,13 +89,16 @@ function concretePath(route: RouteDef): string {
 }
 
 let api: TestApi;
+/** The organization the API serves (Run 5.9, service scope): the owner's. */
+let processOrganization: string | null = null;
 /** An mfa_complete session: human routes answer only that (Run 3.4). */
 let cookie: string;
 
 beforeAll(async () => {
-  api = await startTestApi();
+  api = await startTestApi({ processOrganization: () => processOrganization });
   const owner = await enrollOwner(api, await seedOwner(api));
   cookie = owner.cookie;
+  processOrganization = owner.organizationId;
   target = await activeTarget(api, owner.organizationId);
 });
 

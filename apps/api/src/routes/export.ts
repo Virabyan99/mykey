@@ -56,7 +56,6 @@ export function exportCreateHandler(large: LargeGate): Handler {
       if (scope === null || principal === null) throw new ApiError("dependency_unavailable");
       const outcome = await readEnvironment(readDeps(deps), {
         scope,
-        userId: principal.userId,
         routeId: ctx.route.id,
         requestId: ctx.requestId,
         recheck: recheckOf(ctx, principal.userId, scope),

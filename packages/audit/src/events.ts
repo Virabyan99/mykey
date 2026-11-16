@@ -77,6 +77,11 @@ export const AUDIT_DETAILS = {
   "project.rename": z.strictObject({ nameLength: z.int().min(1).max(64) }),
   "environment.create": z.strictObject({ nameLength: z.int().min(1).max(64) }),
   "environment.rename": z.strictObject({ nameLength: z.int().min(1).max(64) }),
+  /** Run 5.3 (P-91, P-92): how many environments the archive or reactivation covers. */
+  "project.archive": z.strictObject({ environments: z.int().nonnegative() }),
+  "environment.archive": z.strictObject({ environments: z.int().nonnegative() }),
+  "project.reactivate": z.strictObject({ environments: z.int().nonnegative() }),
+  "environment.reactivate": z.strictObject({ environments: z.int().nonnegative() }),
   /** Run 3.8: the provisioner finished an environment, or sent it to review. */
   "system.environment_provision": z.strictObject({
     outcome: z.enum(["active", "review"]),
@@ -129,6 +134,43 @@ export const AUDIT_DETAILS = {
   "operator.reconcile_environment": z.strictObject({
     names: z.int().nonnegative(),
     changed: z.int().nonnegative(),
+  }),
+  /**
+   * Run 5.1 (P-95): machine credentials. Target is the environment; the
+   * credential's id is in details, its name by length only (as a project's).
+   * Never an accessor, a token or a digest of one.
+   */
+  "credential.issue": z.strictObject({
+    credentialId: z.uuid(),
+    nameLength: z.int().min(1).max(64),
+    ttlSeconds: z.int().positive(),
+  }),
+  "credential.revoke": z.strictObject({ credentialId: z.uuid() }),
+  /**
+   * Run 5.4 (P-94, P-95): a machine read of its environment. Actor: the
+   * credential. The number of names and the generation; never a name.
+   */
+  "machine.keys": z.strictObject({
+    names: z.int().nonnegative(),
+    generation: z
+      .string()
+      .max(20)
+      .regex(/^(0|[1-9][0-9]*)$/),
+  }),
+  "machine.resolve": z.strictObject({
+    names: z.int().nonnegative(),
+    generation: z
+      .string()
+      .max(20)
+      .regex(/^(0|[1-9][0-9]*)$/),
+  }),
+  /** Run 5.2 (P-90): the operator settled an environment's credentials. Counts only. */
+  "operator.reconcile_credentials": z.strictObject({
+    unrecordedRevoked: z.int().nonnegative(),
+    revocationsCompleted: z.int().nonnegative(),
+    issuancesSettled: z.int().nonnegative(),
+    left: z.int().nonnegative(),
+    executorsExcluded: z.boolean(),
   }),
   /** Run 4.1: the operator expired terminal operation records (P-65). */
   "operator.operations_expire": z.strictObject({ expired: z.int().nonnegative() }),

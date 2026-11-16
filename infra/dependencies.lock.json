@@ -58,12 +58,30 @@
       "releaseUrl": "https://nodejs.org/en/blog/release/v24.22.2",
       "advisoriesChecked": "2026-11-11"
     },
+    "node-glibc": {
+      "image": "node",
+      "tag": "24.22.2",
+      "variant": "bookworm-slim",
+      "digest": "sha256:01d566e8d94d8c619591d78652babfccd3c6992a3dffa9ed5ab39e11cf6c70e9",
+      "releaseUrl": "https://nodejs.org/en/blog/release/v24.22.2",
+      "advisoriesChecked": "2026-11-15",
+      "note": "Test-only (Run 5.5, P-97): `pnpm run test:cli` runs project cli in it on a Windows workstation. The CLI refuses a Linux without glibc, so the Alpine image cannot host it. Never deployed, not in the image scan. Also the Next.js consumer fixture's base (Run 5.8)."
+    },
     "nmap": {
       "image": "instrumentisto/nmap",
       "tag": "7.98",
       "digest": "sha256:96f6ed194519b62421a1a1c57809e65a7f94d2aa1c8c25676f247e5e148c0827",
       "releaseUrl": "https://nmap.org/changelog.html",
       "advisoriesChecked": "2026-11-11"
+    },
+    "python": {
+      "image": "python",
+      "tag": "3.13.18",
+      "variant": "slim-trixie",
+      "digest": "sha256:e48f59cdba69a3cbd9ed2cf0f348d90d45a8d350d98134cf1070bc106ee9ed90",
+      "releaseUrl": "https://www.python.org/downloads/release/python-31318/",
+      "advisoriesChecked": "2026-11-15",
+      "note": "Consumer fixture only (Run 5.8, P-100): the FastAPI fixture's base. Never deployed, not in the image scan."
     }
   },
   "npm": {
@@ -81,6 +99,11 @@
       "version": "4.10.2",
       "advisoriesChecked": "2026-11-10",
       "note": ""
+    },
+    "esbuild": {
+      "version": "0.28.2",
+      "advisoriesChecked": "2026-11-15",
+      "note": "Bundles the CLI (Run 5.5, P-96); build only, never `serve` (GHSA-67mh-4wv8-2f99 concerned the dev server of <=0.24.2). The version already in the lockfile (vite, drizzle-kit)."
     },
     "eslint": {
       "version": "10.14.0",
@@ -164,13 +187,13 @@
     },
     "react": {
       "version": "19.3.1",
-      "advisoriesChecked": "2026-11-10",
-      "note": "catalog only until Run 7.1"
+      "advisoriesChecked": "2026-11-15",
+      "note": "Consumer fixture only (Run 5.8, P-100): tests/fixtures/consumers/next-app; never part of the product."
     },
     "react-dom": {
       "version": "19.3.1",
-      "advisoriesChecked": "2026-11-10",
-      "note": "catalog only until Run 7.1"
+      "advisoriesChecked": "2026-11-15",
+      "note": "Consumer fixture only (Run 5.8, P-100): tests/fixtures/consumers/next-app; never part of the product."
     },
     "@tanstack/react-query": {
       "version": "5.107.1",
@@ -180,7 +203,7 @@
     "@scalar/api-reference": {
       "version": "1.77.0",
       "advisoriesChecked": "2026-11-10",
-      "note": "catalog only until Run 5.9; needs Node >=22"
+      "note": "Development dependency of apps/api (Run 5.9): scripts/reference-asset.ts copies its dist/browser/standalone.js into the image's apps/api/assets; nothing else of it reaches the image. Needs Node >=22"
     },
     "@scalar/openapi-parser": {
       "version": "0.29.20",
@@ -196,6 +219,16 @@
       "version": "16.4.6",
       "advisoriesChecked": "2026-11-10",
       "note": "test-only loader for the dotenv compatibility evidence"
+    },
+    "next": {
+      "version": "16.4.6",
+      "advisoriesChecked": "2026-11-15",
+      "note": "Consumer fixture only (Run 5.8, P-100): tests/fixtures/consumers/next-app; never part of the product. OSV: no advisory for 16.4.6; npm audit of the fixture lock: 0."
+    },
+    "playwright": {
+      "version": "1.64.1",
+      "advisoriesChecked": "2026-11-16",
+      "note": "Test only: project browser (Run 5.9, the reference capture). Its Chromium is the build playwright-core 1.64.1 names (browsers.json: chromium revision 1248, Chrome for Testing 156.0.8078.4), installed by `pnpm exec playwright install chromium`, never by pnpm install. 1.65.x is younger than two weeks. npm audit of a lock with 1.64.1: 0."
     }
   },
   "binaries": {
@@ -207,12 +240,56 @@
       "licence": "Apache-2.0",
       "advisoriesChecked": "2026-11-12",
       "note": "operator tool for OVHcloud KMS (Run 2.7); ghcr.io/ovh/okms-cli refuses anonymous pulls, so the release archive is pinned and run in the pinned restic image"
+    },
+    "node-linux-x64": {
+      "version": "24.22.2",
+      "asset": "node-v24.22.2-linux-x64.tar.gz",
+      "sha256": "361718c444e49af2ca5a110c83ba6a8901143f23ab285ebbef0341f391f482a9",
+      "releaseUrl": "https://nodejs.org/dist/v24.22.2/",
+      "licence": "MIT",
+      "advisoriesChecked": "2026-11-15",
+      "note": "The CLI's runtime, installed by install.sh (Run 5.7, D-44); sum from https://nodejs.org/dist/v24.22.2/SHASUMS256.txt over HTTPS"
+    },
+    "node-linux-arm64": {
+      "version": "24.22.2",
+      "asset": "node-v24.22.2-linux-arm64.tar.gz",
+      "sha256": "95c264150aceb7f3437a29fd6984924f5f8d1511ea3cbd6c508b83f6c555dae2",
+      "releaseUrl": "https://nodejs.org/dist/v24.22.2/",
+      "licence": "MIT",
+      "advisoriesChecked": "2026-11-15",
+      "note": "The CLI's runtime, installed by install.sh (Run 5.7, D-44); sum from https://nodejs.org/dist/v24.22.2/SHASUMS256.txt over HTTPS"
+    },
+    "node-darwin-x64": {
+      "version": "24.22.2",
+      "asset": "node-v24.22.2-darwin-x64.tar.gz",
+      "sha256": "d5e336d588c45be0c37dbd52cc29895593009ca4997a77a1fd02815131ed0e52",
+      "releaseUrl": "https://nodejs.org/dist/v24.22.2/",
+      "licence": "MIT",
+      "advisoriesChecked": "2026-11-15",
+      "note": "The CLI's runtime, installed by install.sh (Run 5.7, D-44); sum from https://nodejs.org/dist/v24.22.2/SHASUMS256.txt over HTTPS"
+    },
+    "node-darwin-arm64": {
+      "version": "24.22.2",
+      "asset": "node-v24.22.2-darwin-arm64.tar.gz",
+      "sha256": "aa9549349e47dffaa42dcf95d6e06ade8c4bdafc980979883b88767670df385a",
+      "releaseUrl": "https://nodejs.org/dist/v24.22.2/",
+      "licence": "MIT",
+      "advisoriesChecked": "2026-11-15",
+      "note": "The CLI's runtime, installed by install.sh (Run 5.7, D-44); sum from https://nodejs.org/dist/v24.22.2/SHASUMS256.txt over HTTPS"
     }
   },
   "python": {
     "python-dotenv": {
       "version": "1.2.4",
       "sha256": "42269a8a5b3fd54ffa6f3d84b18abed50064717576b4ecf03dc4a55d8aa04fdc"
+    },
+    "fastapi": {
+      "version": "0.163.1",
+      "sha256": "68f2d8050f5c3583121c0d203046cc7def5c16a7d6c43a0e7707a8ea610fe2d3"
+    },
+    "uvicorn": {
+      "version": "0.54.0",
+      "sha256": "505bdb0f318731d45f1f712071fc781a8981f6847a31c902c9f5e652d4f67faf"
     }
   },
   "actions": {
@@ -231,6 +308,10 @@
     "actions/setup-python": {
       "sha": "6d4fd22b20465ccc0f7354476588e8df7c9ca0e0",
       "tag": "v7.1.0"
+    },
+    "actions/upload-artifact": {
+      "sha": "cf430e030ddbb5b0abf93d22962f4752f3646cd9",
+      "tag": "v7.0.2"
     }
   }
 }

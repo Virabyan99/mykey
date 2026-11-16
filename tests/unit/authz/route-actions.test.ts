@@ -45,8 +45,8 @@ const ROW: Record<string, readonly [Action | null, RouteScope, StateClass]> = {
   "credentials.summary": ["credentials.manage", "organization", "metadata_read"],
   "metrics.get": ["audit.view", "organization", "metadata_read"],
   "session.activity": [null, "none", "none"],
-  "reference.get": [null, "none", "metadata_read"],
-  "openapi.get": [null, "none", "metadata_read"],
+  "reference.get": ["reference.read", "none", "metadata_read"],
+  "openapi.get": ["reference.read", "none", "metadata_read"],
 };
 
 const isHuman = (auth: string) => auth === "human" || auth === "human_fresh_totp";

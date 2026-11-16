@@ -28,10 +28,11 @@ const from = (): Record<string, string> => {
 };
 
 beforeAll(async () => {
-  // export.create answers through the stub: this API has no runtime identity (Run 4.9).
+  // export.create and the credential starts answer through the stub: this API has no runtime or
+  // issuer identity (Runs 4.9, 5.1, 5.2).
   api = await startTestApi({
     stubs: true,
-    stubRoutes: ["export.create"],
+    stubRoutes: ["export.create", "credentials.issue", "credentials.revoke"],
     config: { trustedProxy: "127.0.0.1" },
   });
   owner = await enrollOwner(api, await seedOwner(api), { source: "198.51.100.251" });

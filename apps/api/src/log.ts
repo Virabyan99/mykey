@@ -44,13 +44,30 @@ export type LogEntry =
   | { event: "unlisted_error"; time: string; requestId: string; routeId: string; code: ErrorCode }
   | { event: "output_invalid"; time: string; requestId: string; routeId: string; status: number }
   | { event: "outbox"; time: string; outcome: "failed"; errorClass: string }
+  /** Run 5.9: the reference's asset is not in the image; reference.get answers 503. */
+  | { event: "reference_asset_missing"; time: string }
   | { event: "throttle_sweep"; time: string; outcome: "failed"; errorClass: string }
   | { event: "session_cleanup"; time: string; outcome: "failed"; errorClass: string }
   | { event: "operation_sweep"; time: string; outcome: "failed"; errorClass: string }
   | { event: "operation_sweep"; time: string; uncertain: string[]; rejected: string[] }
+  /** Run 5.3: archives the tick finished, by operation id only. */
+  | { event: "archive_continue"; time: string; archived: string[] }
+  /** Run 5.4 (P-93): a machine token nobody can attribute; counted here, never audited. */
+  | {
+      event: "machine_unauthenticated";
+      time: string;
+      requestId: string;
+      cause: "header" | "token" | "catalog";
+    }
+  | { event: "machine_last_used"; time: string; outcome: "failed"; errorClass: string }
   | { event: "listening"; port: number }
   | { event: "startup_refused"; missing: string }
-  | { event: "selfcheck"; runtimeLogin: "ok" | "refused" | "unreachable" | "absent" };
+  | {
+      event: "selfcheck";
+      runtimeLogin: "ok" | "refused" | "unreachable" | "absent";
+      /** Run 5.1 (P-85). */
+      issuerLogin?: "ok" | "refused" | "unreachable" | "absent";
+    };
 
 const DENIED_KEYS = new Set([
   "authorization",

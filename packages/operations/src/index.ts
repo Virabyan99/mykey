@@ -39,7 +39,39 @@ export {
   type Intent,
   type ReplayAnswer,
 } from "./replay.ts";
-export type { RuntimeBao } from "./runtime.ts";
+export type { IssuerBao, IssuerSession, RuntimeBao } from "./runtime.ts";
+export {
+  CREDENTIAL_FAULT_POINTS,
+  issueCredential,
+  type CredentialDeps,
+  type CredentialFaultPoint,
+  type IssueOutcome,
+  type IssueRequest,
+} from "./credentials/issue.ts";
+export { revokeCredential, type RevokeOutcome, type RevokeRequest } from "./credentials/revoke.ts";
+export {
+  ARCHIVE_FAULT_POINTS,
+  beginArchive,
+  continueArchives,
+  driveArchive,
+  type ArchiveDriveDeps,
+  type ArchiveFaultPoint,
+  type ArchiveRequest,
+  type ArchiveStart,
+  type LifecycleDeps,
+} from "./lifecycle/archive.ts";
+export { reactivate, type ReactivateOutcome } from "./lifecycle/reactivate.ts";
+export {
+  CREDENTIAL_ACTIONS,
+  sweepCredentials,
+  type CredentialSweepResult,
+} from "./credentials/sweep.ts";
+export {
+  checkIssuedToken,
+  revokeAndVerify,
+  type RevokeProof,
+  type TokenFault,
+} from "./credentials/verify.ts";
 export { Busy, withEnvironmentLock, type Locked } from "./secrets/lock.ts";
 export {
   FAULT_POINTS,
@@ -85,6 +117,8 @@ export {
 } from "./imports/apply.ts";
 export {
   readEnvironment,
+  readEnvironmentNames,
+  type EnvironmentNamesOutcome,
   type EnvironmentRead,
   type EnvironmentReadOutcome,
   type EnvironmentReadRequest,
