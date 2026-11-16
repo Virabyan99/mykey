@@ -28,6 +28,8 @@ const COLUMNS = [
   "outcome",
   "request_id",
   "source_category",
+  // Run 6.1 (P-106): generated from actor and target, never written.
+  "subject_user_id",
   "target_id",
   "target_kind",
 ];

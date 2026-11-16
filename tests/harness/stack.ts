@@ -71,6 +71,18 @@ function run(
   });
 }
 
+/** Run 6.1: a project's override files (infra/compose/dev/*.override.yml), kept beside its state. */
+const overridesFile = (project: string): string =>
+  join(stackDirectory(project), "compose-overrides.json");
+
+function overridesOf(project: string): string[] {
+  const file = overridesFile(project);
+  if (!existsSync(file)) return [];
+  return (JSON.parse(readFileSync(file, "utf8")) as string[]).map((name) =>
+    join(REPOSITORY, "infra/compose/dev", name),
+  );
+}
+
 function compose(
   project: string,
   args: string[],
@@ -79,7 +91,15 @@ function compose(
 ): Promise<string> {
   return run(
     "docker",
-    ["compose", "-p", project, "-f", COMPOSE_FILE, ...args],
+    [
+      "compose",
+      "-p",
+      project,
+      "-f",
+      COMPOSE_FILE,
+      ...overridesOf(project).flatMap((file) => ["-f", file]),
+      ...args,
+    ],
     // The Compose file needs the state directory even for commands that do not start anything.
     { MYKEY_STACK_DIR: stackDirectory(project), ...env },
     maxBuffer,
@@ -278,10 +298,15 @@ function attach(state: StackState): Stack {
 export async function startStack(opts?: {
   project?: string;
   fixedPorts?: boolean;
+  /** Run 6.1: override files of infra/compose/dev (by file name), applied to every command. */
+  overrides?: readonly string[];
 }): Promise<Stack> {
   const project = opts?.project ?? `${TEST_PROJECT_PREFIX}${randomBytes(4).toString("hex")}`;
   const directory = stackDirectory(project);
   mkdirSync(directory, { recursive: true });
+  if (opts?.overrides !== undefined && opts.overrides.length > 0) {
+    writeFileSync(overridesFile(project), JSON.stringify(opts.overrides));
+  }
 
   const passwordFile = join(directory, "pg-superuser-password");
   if (!existsSync(passwordFile)) {
@@ -449,6 +474,17 @@ export async function killService(stack: Stack, service: "postgres" | "openbao")
   await compose(stack.project, ["kill", service]);
 }
 
+/** Run 6.1: runs a command inside a running service's container; answers its stdout. */
+export function execInService(
+  stack: Stack,
+  service: "postgres" | "openbao",
+  argv: readonly string[],
+  opts: { user?: string } = {},
+): Promise<string> {
+  const user = opts.user === undefined ? [] : ["-u", opts.user];
+  return compose(stack.project, ["exec", "-T", ...user, service, ...argv]);
+}
+
 /** Whether the service's container is running (not stopped, killed or paused). */
 export async function serviceRunning(
   stack: Stack,
@@ -584,6 +620,20 @@ export async function pgDump(stack: Stack, database: string): Promise<string> {
 }
 
 /** The PostgreSQL container's log since `since` (RFC 3339). Returned, never printed. */
+/** Run 6.1: a service container's log (stdout and stderr) since `since`. */
+export function serviceLog(
+  stack: Stack,
+  service: "postgres" | "openbao",
+  since: string,
+): Promise<string> {
+  return compose(
+    stack.project,
+    ["logs", "--no-color", "--since", since, service],
+    undefined,
+    64 * 1024 * 1024,
+  );
+}
+
 export async function postgresLog(stack: Stack, since: string): Promise<string> {
   return compose(
     stack.project,

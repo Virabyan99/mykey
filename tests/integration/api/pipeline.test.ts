@@ -56,15 +56,16 @@ const echo: Handler = async (ctx, deps) => {
           [id],
         );
         await appendAudit(tx, {
-          action: "operator.bootstrap",
+          // Run 6.1 (P-106): a global action, written without an organization.
+          action: "operator.operations_expire",
           actor: { kind: "system", id: null },
           source: "system",
           organizationId: null,
-          target: { kind: "organization", id },
+          target: null,
           outcome: "success",
           requestId: ctx.requestId,
           operationId: null,
-          details: {},
+          details: { expired: 0 },
         });
       });
       return { status: 200, body: { ok: true } };

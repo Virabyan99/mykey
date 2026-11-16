@@ -7,7 +7,7 @@ export {
   type HealthCheck,
   type HealthReading,
 } from "./health.ts";
-export { createLogger, redactEntry, type LogEntry } from "./log.ts";
+export { API_SETTINGS, conformEntry, createLogger, redactEntry, type LogEntry } from "./log.ts";
 export {
   DISPATCH_INTERVAL_MS,
   startOutboxDispatcher,

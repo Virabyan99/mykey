@@ -99,10 +99,80 @@ export function redactEntry(value: unknown): unknown {
   return value;
 }
 
-/** A logger that writes one redacted JSON line per entry. */
+/**
+ * The settings a refused start may name (Run 6.1, P-109): the names
+ * `server.ts` reads, and nothing else (a unit test compares the two).
+ */
+export const API_SETTINGS: readonly string[] = Object.freeze([
+  "MYKEY_API_PORT",
+  "MYKEY_API_TLS_CERT_FILE",
+  "MYKEY_API_TLS_KEY_FILE",
+  "MYKEY_BAO_CA_FILE",
+  "MYKEY_BASE_URL",
+  "MYKEY_BUILD",
+  "MYKEY_DB_CA_FILE",
+  "MYKEY_DB_HOST",
+  "MYKEY_DB_PASSWORD_FILE",
+  "MYKEY_DB_PORT",
+  "MYKEY_GATE_PATH",
+  "MYKEY_HOST_INSTANCE_ID",
+]);
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+const ENUM = /^[a-z][a-z0-9_]{0,40}$/;
+
+/**
+ * The third defence (Run 6.1, P-109, FR-1.80): every string field has a
+ * format by its name, and a value outside it is written as "[invalid]". A
+ * string under a name that has no format is invalid too: a field nobody
+ * designed cannot carry a value into the log.
+ */
+const FORMATS: Readonly<Record<string, (value: string) => boolean>> = {
+  event: (v) => ENUM.test(v),
+  time: (v) => /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,6})?Z$/.test(v),
+  requestId: (v) => UUID.test(v),
+  eventId: (v) => UUID.test(v),
+  method: (v) => /^[A-Z]{3,7}$/.test(v),
+  /** A route pattern of the app: lower-case segments, `:param` and `*`. */
+  path: (v) => /^(\/([a-z0-9._-]+|:[a-zA-Z]+|\*))+$|^\/$/.test(v),
+  /** Addresses as received: hex digits, dots and colons (commas and spaces in a list); bounded. */
+  peer: (v) => v.length <= 64 && /^[0-9a-f:.]+$/i.test(v),
+  forwardedFor: (v) => v.length <= 256 && /^[0-9a-f:., ]+$/i.test(v),
+  forwardedProto: (v) => v === "http" || v === "https",
+  cause: (v) => ENUM.test(v),
+  code: (v) => ENUM.test(v),
+  outcome: (v) => ENUM.test(v),
+  routeId: (v) => /^[a-z]+(\.[a-z]+)+$/.test(v),
+  /** A JavaScript class name, or `typeof`'s answer. */
+  errorClass: (v) => /^[A-Za-z][A-Za-z0-9]{0,63}$/.test(v),
+  where: (v) => ENUM.test(v),
+  uncertain: (v) => UUID.test(v),
+  rejected: (v) => UUID.test(v),
+  archived: (v) => UUID.test(v),
+  missing: (v) => v === "configuration" || API_SETTINGS.includes(v),
+  runtimeLogin: (v) => ENUM.test(v),
+  issuerLogin: (v) => ENUM.test(v),
+};
+
+const INVALID = "[invalid]";
+
+/** A copy of `value` in which every string outside its field's format is "[invalid]". */
+export function conformEntry(value: unknown, key = ""): unknown {
+  if (value === REDACTED) return value;
+  if (typeof value === "string") return FORMATS[key]?.(value) === true ? value : INVALID;
+  if (Array.isArray(value)) return value.map((item: unknown) => conformEntry(item, key));
+  if (typeof value === "object" && value !== null) {
+    return Object.fromEntries(
+      Object.entries(value).map(([name, child]) => [name, conformEntry(child, name)]),
+    );
+  }
+  return value;
+}
+
+/** A logger that writes one redacted, conformed JSON line per entry. */
 export function createLogger(write: (line: string) => void): (entry: LogEntry) => void {
   return (entry) => {
-    write(`${JSON.stringify(redactEntry(entry))}\n`);
+    write(`${JSON.stringify(conformEntry(redactEntry(entry)))}\n`);
   };
 }
 

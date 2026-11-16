@@ -26,6 +26,7 @@
     "stack:status": "node scripts/stack.ts status",
     "contracts:openapi": "node scripts/contracts-openapi.ts",
     "reference:asset": "node scripts/reference-asset.ts",
+    "audit:coverage": "node scripts/audit-coverage.ts",
     "contracts:check": "node scripts/contracts-openapi.ts --check && node scripts/contracts-compat.ts",
     "authority:matrix": "node scripts/authority-matrix.ts",
     "authority:check": "node scripts/authority-matrix.ts --check",
@@ -46,6 +47,7 @@
   "devDependencies": {
     "@aws-sdk/client-s3": "catalog:",
     "@eslint/js": "10.0.1",
+    "@mykey/audit": "workspace:*",
     "@mykey/auth": "workspace:*",
     "@mykey/contracts": "workspace:*",
     "@mykey/db": "workspace:*",

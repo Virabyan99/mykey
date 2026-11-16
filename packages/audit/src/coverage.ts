@@ -135,3 +135,30 @@ export const AUDIT_COVERAGE: {
   readonly ops: Readonly<Record<string, Coverage>>;
   readonly timers: Readonly<Record<string, Coverage>>;
 } = Object.freeze({ routes, auth, ops, timers });
+
+const SECTIONS = [
+  ["routes", "Routes of the route table"],
+  ["auth", "Paths of the auth module"],
+  ["ops", "Operator commands and host tooling"],
+  ["timers", "Timers of the API and the provisioner"],
+] as const;
+
+/**
+ * The coverage table as the Markdown list `docs/runbooks/audit.md` holds
+ * between its coverage markers (written by `pnpm run audit:coverage`).
+ */
+export function renderCoverage(): string {
+  const lines: string[] = [];
+  for (const [key, title] of SECTIONS) {
+    lines.push(`### ${title}`, "");
+    for (const [id, entry] of Object.entries(AUDIT_COVERAGE[key])) {
+      const what =
+        "actions" in entry
+          ? entry.actions.map((action) => `\`${action}\``).join(", ")
+          : `nothing — ${entry.none}`;
+      lines.push(`- \`${id}\`: ${what}`);
+    }
+    lines.push("");
+  }
+  return lines.join("\n");
+}

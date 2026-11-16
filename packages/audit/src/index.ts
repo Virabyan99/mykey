@@ -12,5 +12,5 @@ export {
   type AuditScope,
 } from "./events.ts";
 export { AuditEventInvalid, AuditUnavailable, appendAudit } from "./append.ts";
-export { AUDIT_COVERAGE, type Coverage } from "./coverage.ts";
+export { AUDIT_COVERAGE, renderCoverage, type Coverage } from "./coverage.ts";
 export { servedDetails } from "./read.ts";

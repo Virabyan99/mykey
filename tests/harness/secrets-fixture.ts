@@ -208,6 +208,8 @@ export async function createSecretsFixture(
     runtime?: "ok" | "broken";
     /** More test-only routes (Run 5.1). */
     routes?: readonly { def: RouteDef; handler: Handler }[];
+    /** Run 6.1: override files of the private stack (with `private`). */
+    stackOverrides?: readonly string[];
   } = {},
 ): Promise<SecretsFixture> {
   const directory = mkdtempSync(join(tmpdir(), "mykey-secrets-"));
@@ -222,6 +224,7 @@ export async function createSecretsFixture(
   let importBudget: number | null = null;
   const fx = await createProvisioningFixture({
     shared: opts.private !== true,
+    ...(opts.stackOverrides === undefined ? {} : { stackOverrides: opts.stackOverrides }),
     api: (stack) => {
       current = stack.bao;
       return {

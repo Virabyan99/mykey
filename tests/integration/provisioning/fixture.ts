@@ -84,9 +84,16 @@ export async function createProvisioningFixture(
     beforeHandler?: (routeId: string) => Promise<void>;
     /** Further options of the test API (Run 4.2: the runtime identity, keys, faults). */
     api?: (stack: Stack) => Partial<StartTestApiOptions>;
+    /** Run 6.1: override files of a private stack (infra/compose/dev). */
+    stackOverrides?: readonly string[];
   } = {},
 ): Promise<ProvisioningFixture> {
-  const stack = opts.shared === true ? await getSharedStack() : await startStack();
+  const stack =
+    opts.shared === true
+      ? await getSharedStack()
+      : await startStack(
+          opts.stackOverrides === undefined ? {} : { overrides: opts.stackOverrides },
+        );
   const api = await startTestApi({
     ...opts.api?.(stack),
     stack,

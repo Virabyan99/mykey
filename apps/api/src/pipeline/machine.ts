@@ -146,7 +146,11 @@ export async function authenticateMachine(
 
   const self = await reader.tokenLookupSelf();
   if (!self.ok) {
-    if (self.kind === "denied" || (self.kind === "invalid" && self.status >= 400)) {
+    // A 5xx (OpenBao's audit device cannot write, Run 6.1) says nothing about the token.
+    if (
+      self.kind === "denied" ||
+      (self.kind === "invalid" && self.status >= 400 && self.status < 500)
+    ) {
       throw unattributable(deps, requestId, "token");
     }
     if (self.kind === "sealed") throw new ApiError("backend_sealed");

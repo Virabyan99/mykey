@@ -92,3 +92,13 @@ describe("the audit coverage table (P-105)", () => {
     expect(short).toEqual([]);
   });
 });
+
+describe("the audit runbook (P-105)", () => {
+  it("holds the coverage list as rendered from the table (pnpm run audit:coverage)", async () => {
+    const { RUNBOOK, withCoverage } = await import("../../../scripts/audit-coverage.ts");
+    const text = readFileSync(RUNBOOK, "utf8");
+    expect(withCoverage(text) === text, "audit.md is stale: run pnpm run audit:coverage").toBe(
+      true,
+    );
+  });
+});
