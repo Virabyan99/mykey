@@ -13,3 +13,9 @@ ebd03634b9a217641010e7718745f5b2292ed884:docs/runbooks/kms-and-unseal.md:generic
 # synthetic UUID that compose interpolates; it is no credential. Reviewed false positive.
 7fb5c39380c1d6e4c15276e56e637b7c0c71a77e:tests/integration/hosts/compose.test.ts:generic-api-key:55
 7fb5c39380c1d6e4c15276e56e637b7c0c71a77e:tests/integration/hosts/compose.test.ts:generic-api-key:232
+
+# Session 5 gate: two UUIDs read as generic keys because of the names next to them. SECRETS_PROJECT
+# in the CLI config test is a synthetic project id; freshCredential in the archive drill's evidence
+# is a credential id (a catalog row id, never a token). Reviewed false positives.
+ceeebde38137c10631a3d7b48e6833100de16036:tests/unit/cli/config.test.ts:generic-api-key:102
+98ceaf97406e1114e392a41032c1ab50ff176f7d:docs/evidence/session-5/run-5.4-staging-archive.json:generic-api-key:34
