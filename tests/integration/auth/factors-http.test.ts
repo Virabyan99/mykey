@@ -18,6 +18,8 @@ import {
 } from "../../harness/api.ts";
 
 let api: TestApi;
+/** The organization the API serves (Run 5.9, service scope): the enrolled owner's. */
+let processOrganization: string | null = null;
 let sources = 0;
 /** A fresh forwarded source per request: these tests are not about the per-source limit. */
 const from = (): Record<string, string> => {
@@ -27,11 +29,15 @@ const from = (): Record<string, string> => {
 
 beforeAll(async () => {
   api = await startTestApi({
+    processOrganization: () => processOrganization,
     stubs: true,
     // Secret, import, export, credential and lifecycle routes answer through the stub even once
     // handled: this API has no runtime or issuer identity (Runs 4.2, 4.7, 4.9, 5.1–5.3).
+    // reference.get too: its answer depends on the Scalar asset on disk (200 or 503),
+    // which tests/integration/reference/page.test.ts proves (Run 5.9).
     stubRoutes: ROUTES.filter(
       (route) =>
+        route.id === "reference.get" ||
         route.id.startsWith("secrets.") ||
         route.id.startsWith("import.") ||
         route.id === "export.create" ||
@@ -126,6 +132,7 @@ describe("product routes are closed to incomplete sessions (Task A)", () => {
 
   beforeAll(async () => {
     enrolled = await enrollOwner(api, await seedOwner(api), { source: "198.51.100.251" });
+    processOrganization = enrolled.organizationId;
     target = await activeTarget(api, enrolled.organizationId);
   });
 
@@ -159,6 +166,7 @@ describe("product routes are closed to incomplete sessions (Task A)", () => {
       "environments.list",
       "environments.create",
       "environments.rename",
+      "openapi.get", // Run 5.9 (reference.get stays stubbed here: see stubRoutes)
     ];
     const stubbed = HUMAN.filter(
       (route) => !handled.includes(route.id) && route.scope !== "operation",

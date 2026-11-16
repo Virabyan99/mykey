@@ -38,7 +38,7 @@ beforeEach(async () => {
 
 const complete = () => signInComplete(api, owner, { source: "198.51.100.252" });
 const product = (cookie: string) =>
-  api.request("GET", "/v1/reference", { cookie, headers: from() });
+  api.request("GET", "/v1/organizations", { cookie, headers: from() });
 const change = (cookie: string, currentPassword: string, newPassword: string) =>
   api.request("POST", "/v1/auth/change-password", {
     body: { currentPassword, newPassword },
@@ -79,7 +79,7 @@ describe("password change", () => {
     expect(response.status).toBe(403);
     expect(await codeOf(response)).toBe("fresh_verification_required");
     expect(await snapshot()).toEqual(before);
-    expect((await product(other.cookie)).status).toBe(204);
+    expect((await product(other.cookie)).status).toBe(200);
 
     const signedIn = await signIn(owner.password);
     const byRecovery = await api.request("POST", "/v1/auth/recovery/verify", {
@@ -136,7 +136,7 @@ describe("password change", () => {
     expect(after.epoch).toBe(before.epoch + 1);
     expect(after.sessions).toBe(1);
     expect((await product(other.cookie)).status).toBe(401);
-    expect((await product(mine.cookie)).status).toBe(204);
+    expect((await product(mine.cookie)).status).toBe(200);
     expect((await signIn(owner.password)).status).toBe(401);
     expect((await signIn(fresh)).status).toBe(200);
     owner = { ...owner, password: fresh };
@@ -182,7 +182,7 @@ describe("password change", () => {
       ),
     ).rejects.toThrow("killed before commit");
     expect(await snapshot()).toEqual(before);
-    expect((await product(other.cookie)).status).toBe(204);
+    expect((await product(other.cookie)).status).toBe(200);
   });
 
   it("five wrong current passwords lock the password phase", async () => {

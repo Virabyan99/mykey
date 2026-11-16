@@ -36,9 +36,9 @@ beforeEach(async () => {
 
 const complete = () => signInComplete(api, owner, { source: "198.51.100.252" });
 
-/** GET reference.get: a human route without scope whose stub answers 204 once every check passed. */
+/** GET organizations.list: a human route without action or scope; 200 once every session check passed. */
 const product = (cookie: string) =>
-  api.request("GET", "/v1/reference", { cookie, headers: from() });
+  api.request("GET", "/v1/organizations", { cookie, headers: from() });
 const getSession = async (cookie: string): Promise<unknown> =>
   (await api.request("GET", "/v1/auth/get-session", { cookie, headers: from() })).json();
 const signal = (cookie: string) =>
@@ -69,7 +69,7 @@ describe("one validity decision (Task A)", () => {
   it("absolute: at 12 h − 5 s a product route answers; at 12 h + 1 s it is 401 and the row is gone", async () => {
     const live = await complete();
     await age(live.sessionId, "authenticated_at", 43_200 - 5);
-    expect((await product(live.cookie)).status).toBe(204);
+    expect((await product(live.cookie)).status).toBe(200);
     const dead = await complete();
     await age(dead.sessionId, "authenticated_at", 43_200 + 1);
     // Only the absolute limit can be the reason: activity is fresh.
@@ -83,7 +83,7 @@ describe("one validity decision (Task A)", () => {
   it("idle: at 30 min − 5 s it answers; at 30 min + 1 s it is 401 and the row is gone", async () => {
     const live = await complete();
     await age(live.sessionId, "last_user_activity_at", 1_800 - 5);
-    expect((await product(live.cookie)).status).toBe(204);
+    expect((await product(live.cookie)).status).toBe(200);
     const dead = await complete();
     await age(dead.sessionId, "last_user_activity_at", 1_800 + 1);
     expect((await product(dead.cookie)).status).toBe(401);
@@ -96,7 +96,7 @@ describe("one validity decision (Task A)", () => {
     await age(session.sessionId, "last_user_activity_at", 600);
     const before = await activityText(session.sessionId);
     for (let i = 0; i < 20; i += 1) {
-      expect((await product(session.cookie)).status).toBe(204);
+      expect((await product(session.cookie)).status).toBe(200);
       expect(await getSession(session.cookie)).not.toBeNull();
     }
     expect(await activityText(session.sessionId)).toBe(before);
@@ -192,7 +192,7 @@ describe("one validity decision (Task A)", () => {
     expect((await product(epoch.cookie)).status).toBe(401);
     expect(await getSession(epoch.cookie)).toBeNull();
     // Control: a new sign-in works on the new epoch.
-    expect((await product((await complete()).cookie)).status).toBe(204);
+    expect((await product((await complete()).cookie)).status).toBe(200);
   });
 });
 
@@ -244,7 +244,7 @@ describe("list and revoke (Task B)", () => {
     const other = await complete();
     expect((await revoke(mine.cookie, other.sessionId)).status).toBe(200);
     expect((await product(other.cookie)).status).toBe(401);
-    expect((await product(mine.cookie)).status).toBe(204);
+    expect((await product(mine.cookie)).status).toBe(200);
   });
 
   it("an id of another user is the same 404 as an absent one, and ends nothing", async () => {
@@ -261,7 +261,7 @@ describe("list and revoke (Task B)", () => {
     };
     expect(await body(foreign)).toEqual(await body(absent));
     // Control: the stranger's session still answers.
-    expect((await product(theirs.cookie)).status).toBe(204);
+    expect((await product(theirs.cookie)).status).toBe(200);
   });
 
   it("revoke-all ends every session, this one included", async () => {
@@ -290,7 +290,7 @@ describe("list and revoke (Task B)", () => {
       "mfa_incomplete",
     );
     expect((await revoke(passwordOnly, victim.sessionId)).status).toBe(401);
-    expect((await product(victim.cookie)).status).toBe(204);
+    expect((await product(victim.cookie)).status).toBe(200);
   });
 });
 
