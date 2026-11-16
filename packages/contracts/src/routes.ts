@@ -599,12 +599,12 @@ export const ROUTES: readonly RouteDef[] = Object.freeze([
     action: "resources.manage",
     body: nameBody(projectName),
     completed: 201,
-    errors: ["already_exists"],
+    errors: ["capacity_exceeded", "already_exists"],
   }),
   define("projects.rename", "PATCH", P, "human", true, "3.9", {
     action: "resources.manage",
     body: nameBody(projectName),
-    errors: ["already_exists", "state_conflict"],
+    errors: ["capacity_exceeded", "already_exists", "state_conflict"],
   }),
   define("projects.archive", "POST", `${P}/archive`, "human", true, "5.3", {
     action: "resources.manage",
@@ -616,7 +616,7 @@ export const ROUTES: readonly RouteDef[] = Object.freeze([
     action: "resources.manage",
     body: confirmedBody,
     responses: { 200: reactivatedBody },
-    errors: ["state_conflict", ...BACKEND],
+    errors: ["capacity_exceeded", "state_conflict", ...BACKEND],
   }),
 
   define("environments.list", "GET", `${P}/environments`, "human", false, "3.9", {
@@ -628,12 +628,12 @@ export const ROUTES: readonly RouteDef[] = Object.freeze([
     action: "resources.manage",
     body: nameBody(environmentName),
     completed: 201,
-    errors: ["already_exists", "state_conflict", ...BACKEND],
+    errors: ["capacity_exceeded", "already_exists", "state_conflict", ...BACKEND],
   }),
   define("environments.rename", "PATCH", E, "human", true, "3.9", {
     action: "resources.manage",
     body: nameBody(environmentName),
-    errors: ["already_exists", "state_conflict"],
+    errors: ["capacity_exceeded", "already_exists", "state_conflict"],
   }),
   define("environments.archive", "POST", `${E}/archive`, "human", true, "5.3", {
     action: "resources.manage",
@@ -645,7 +645,7 @@ export const ROUTES: readonly RouteDef[] = Object.freeze([
     action: "resources.manage",
     body: confirmedBody,
     responses: { 200: reactivatedBody },
-    errors: ["state_conflict", ...BACKEND],
+    errors: ["capacity_exceeded", "state_conflict", ...BACKEND],
   }),
 
   define("secrets.list", "GET", `${E}/secrets`, "human", false, "4.3", {
@@ -678,7 +678,7 @@ export const ROUTES: readonly RouteDef[] = Object.freeze([
   define("secrets.delete", "POST", `${E}/secrets/:name/delete`, "human", true, "4.4", {
     action: "secrets.write",
     body: deleteBody,
-    errors: VERSIONED,
+    errors: ["capacity_exceeded", ...VERSIONED],
   }),
   define("secrets.undelete", "POST", `${E}/secrets/:name/undelete`, "human", true, "4.4", {
     action: "secrets.write",
@@ -740,7 +740,7 @@ export const ROUTES: readonly RouteDef[] = Object.freeze([
     }),
     completed: 201,
     responses: { 201: credentialIssuedBody },
-    errors: ["credential_not_replayable", "state_conflict", ...BACKEND],
+    errors: ["capacity_exceeded", "credential_not_replayable", "state_conflict", ...BACKEND],
   }),
   define(
     "credentials.revoke",
@@ -795,7 +795,7 @@ export const ROUTES: readonly RouteDef[] = Object.freeze([
   define("auth.reset.complete", "POST", "/v1/auth/reset/complete", "reset_flow", false, "3.6", {
     body: resetCompleteBody,
     responses: { 200: z.strictObject({ next: z.enum(["sign_in", "enroll"]) }) },
-    errors: ["audit_unavailable"],
+    errors: ["capacity_exceeded", "audit_unavailable"],
   }),
   // Run 5.9 (P-101): the process's own organization is the scope (no :org in
   // the path); owner and admins see them, everyone else gets the hidden 404.

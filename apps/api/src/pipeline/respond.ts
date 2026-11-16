@@ -61,7 +61,7 @@ const DETAILS: Partial<Record<ErrorCode, z.ZodType<Record<string, unknown>>>> = 
     currentStateTag: z.string().min(1).max(64),
     state: z.enum(["live", "deleted"]),
   }),
-  capacity_exceeded: z.object({ limit: z.enum(["names", "bytes", "response"]) }),
+  capacity_exceeded: z.object({ limit: z.enum(["names", "bytes", "response", "disk"]) }),
   // Run 5.1 (P-88): which credential the replayed issuance made, and its state now.
   credential_not_replayable: z.object({
     credentialId: z.uuid(),

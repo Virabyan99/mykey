@@ -594,6 +594,16 @@
                 }
               }
             }
+          },
+          "507": {
+            "description": "Insufficient storage. Codes: capacity_exceeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
           }
         }
       }
@@ -748,6 +758,16 @@
           },
           "503": {
             "description": "Service unavailable. Codes: busy, quarantined, dependency_unavailable, outcome_unknown, audit_unavailable, backend_inconsistent.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "507": {
+            "description": "Insufficient storage. Codes: capacity_exceeded.",
             "content": {
               "application/json": {
                 "schema": {
@@ -1210,6 +1230,16 @@
                 }
               }
             }
+          },
+          "507": {
+            "description": "Insufficient storage. Codes: capacity_exceeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
           }
         }
       }
@@ -1572,6 +1602,16 @@
                 }
               }
             }
+          },
+          "507": {
+            "description": "Insufficient storage. Codes: capacity_exceeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
           }
         }
       }
@@ -1734,6 +1774,16 @@
           },
           "503": {
             "description": "Service unavailable. Codes: busy, quarantined, dependency_unavailable, outcome_unknown, audit_unavailable, backend_inconsistent.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "507": {
+            "description": "Insufficient storage. Codes: capacity_exceeded.",
             "content": {
               "application/json": {
                 "schema": {
@@ -2205,6 +2255,16 @@
           },
           "503": {
             "description": "Service unavailable. Codes: busy, quarantined, dependency_unavailable, outcome_unknown, audit_unavailable, backend_inconsistent, backend_sealed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "507": {
+            "description": "Insufficient storage. Codes: capacity_exceeded.",
             "content": {
               "application/json": {
                 "schema": {
@@ -3506,6 +3566,16 @@
           },
           "503": {
             "description": "Service unavailable. Codes: busy, quarantined, dependency_unavailable, outcome_unknown, audit_unavailable, backend_inconsistent, backend_sealed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "507": {
+            "description": "Insufficient storage. Codes: capacity_exceeded.",
             "content": {
               "application/json": {
                 "schema": {
@@ -5300,6 +5370,16 @@
           },
           "503": {
             "description": "Service unavailable. Codes: busy, quarantined, dependency_unavailable, outcome_unknown, audit_unavailable, backend_inconsistent, backend_sealed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "507": {
+            "description": "Insufficient storage. Codes: capacity_exceeded.",
             "content": {
               "application/json": {
                 "schema": {
@@ -7146,6 +7226,16 @@
           },
           "503": {
             "description": "Service unavailable. Codes: busy, quarantined, dependency_unavailable, audit_unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "507": {
+            "description": "Insufficient storage. Codes: capacity_exceeded.",
             "content": {
               "application/json": {
                 "schema": {
