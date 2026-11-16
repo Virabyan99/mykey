@@ -1,6 +1,6 @@
 # Audit trail
 
-Written in Run 6.1 (P-105 – P-110, D-46). What MyKey records, who may read it, and what an audit outage looks like. Archive and retention are added in Run 6.2.
+Written in Run 6.1 (P-105 – P-110, D-46); archive and retention in Run 6.2 (P-112, D-48). What MyKey records, who may read it, how it leaves the host, and what an audit outage looks like.
 
 ## Two trails
 
@@ -123,6 +123,30 @@ Requests refused before a principal is known (401, malformed requests, origin, q
 - `provisioner/worker`: `system.environment_provision`, `system.drift_detected`
 
 <!-- coverage:end -->
+
+## Archive and retention (Run 6.2, D-48)
+
+- **Every night on each host:** `mykey-bao-audit-rotate.timer` (01:15 UTC) rotates OpenBao's file, and `mykey-audit-archive.timer` (01:30 UTC) runs `ops-run.sh audit-archive -- audit-archive` in the ops image. Both catch up after a boot (`Persistent=true`). Status: `systemctl status mykey-audit-archive.service`; the journal holds counts only.
+- **What lands in R2** (bucket `mykey-audit-archive`, under `<host>/`):
+  - `app/<yyyy>/<mm>/segment-<sequence>.ndjson.gz` with its `.manifest.json`, one per closed UTC day, plus a supplementary segment for rows committed late;
+  - `openbao/…/segment-<sequence>.log.gz`, one per rotated file.
+
+  The lock rules are `prod/` 365 days, `staging/` 30 days and `probe/` 600 s.
+
+- **The chain:** `SELECT sequence, stream, from_at, row_count, verified_at, purged_at FROM audit.archive_segment ORDER BY sequence DESC LIMIT 20;` as `maintenance`. `verified_at` is set only after the object and its manifest were read back and compared.
+- **A failed run** (exit 1) leaves what it did. Read the reason in `journalctl -u mykey-audit-archive.service`:
+  - `chain is broken`: a row of `audit.archive_segment` was changed by hand. Compare it with its manifest in R2 and repair the row; never delete an object.
+  - `reads back differently`: R2 or the network changed bytes. Run the job again; a segment that cannot be rebuilt as recorded stops it again, and the operator decides.
+  - `fewer rows than archived`: rows left `audit.event` outside the purge. This is an incident.
+  - A rotated file that is never shipped stays in `/var/lib/mykey/bao-audit/rotated/`. Nothing is deleted before it is verified.
+- **Retention:** the job calls `audit.purge_archived(now − 365 days)`. Only whole days whose segments are all verified, and whose row count equals the archived rows, are removed. Each call writes `system.audit_purge { rows, intervals }`. Nobody can `DELETE`, `UPDATE` or `TRUNCATE` `audit.event` directly; the function is the only way.
+- **By hand, once:** on the host, `sudo systemctl start mykey-bao-audit-rotate.service` and then `sudo systemctl start mykey-audit-archive.service` (each returns when its run has ended).
+- **Install on a host:**
+  - `host.ts <host> image ops <tar>`;
+  - `host.ts <host> ops-secrets`;
+  - `host.ts <host> r2-install audit-archive`;
+  - `host.ts <host> push`;
+  - `host.ts <host> timers`.
 
 ## What an outage looks like
 

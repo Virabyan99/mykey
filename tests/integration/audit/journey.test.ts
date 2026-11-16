@@ -24,7 +24,8 @@ import {
   reconcileOperation,
   type ReconcileDeps,
 } from "@mykey/operations/operator";
-import { runOps, type OpsEnv } from "@mykey/ops";
+import { directoryStore } from "@mykey/backup";
+import { auditArchive, runOps, type OpsEnv } from "@mykey/ops";
 import { signInComplete } from "../../harness/api.ts";
 import {
   createCredentialsFixture,
@@ -207,9 +208,6 @@ describe("the missing writers (Task A)", () => {
 
 /** Actions whose writer arrives in a later run of Session 6; Run 6.9 leaves this list empty. */
 const PENDING_WRITERS: readonly AuditAction[] = [
-  // Run 6.2 (P-112).
-  "system.audit_archive",
-  "system.audit_purge",
   // Runs 6.5, 6.6 (P-119 – P-121).
   "system.backup_capture",
   "system.backup_eligible",
@@ -288,7 +286,20 @@ describe("one journey through every writer (Task C)", () => {
       await empty.drop();
     }
     try {
-      // Operator: operation expiry.
+      // Operator: operation expiry; the audit archive (Run 6.2) over a local
+      // store, with one row two days old so that a closed day exists.
+      await f.api.superuser.query(
+        `INSERT INTO audit.event (id, occurred_at, actor_kind, source_category, action, outcome, details)
+         VALUES (gen_random_uuid(), now() - interval '2 days', 'system', 'system',
+                 'operator.operations_expire', 'success', '{"expired": 0}'::jsonb)`,
+      );
+      const archived = await auditArchive({
+        pool: f.api.database.pool("maintenance"),
+        store: directoryStore(mkdtempSync(join(tmpdir(), "mykey-journey-archive-"))),
+        host: "test",
+        rotatedDir: null,
+      });
+      expect(archived.segments).toBeGreaterThanOrEqual(1);
       expect(await ops(["operations-expire"])).toBe(0);
 
       // Resources.
