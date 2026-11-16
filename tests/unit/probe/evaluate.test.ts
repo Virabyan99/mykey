@@ -193,4 +193,55 @@ describe("operations_unresolved (Run 4.5)", () => {
       expect(step(state, T + 10 * S, true).alerts).toEqual([]);
     }
   });
+
+  // After Session 5: production is deliberately not serving (no gate, no OpenBao);
+  // its health_failing sent an hourly reminder for days. A host marked
+  // `inService: false` gets no health_failing; every other condition is unchanged.
+  describe("a host not in service", () => {
+    const quiet = { inService: false };
+
+    it("a failing /health opens nothing and reminds nothing; heartbeat_missing still opens", () => {
+      let state = recordHeartbeat(initialState("prod", T), T, beat);
+      for (let minute = 1; minute <= 300; minute += 1) {
+        const now = T + minute * 60 * S;
+        if (minute < 200) state = recordHeartbeat(state, now, beat);
+        const { next, alerts } = evaluate(now, state, false, LIMITS_HERE, quiet);
+        expect(alerts.map((a) => a.condition)).not.toContain("health_failing");
+        expect(next.open.health_failing).toBeUndefined();
+        state = next;
+        for (const alert of alerts) state = markDelivered(state, alert, now);
+      }
+      expect(Object.keys(state.open)).toEqual(["heartbeat_missing"]);
+    });
+
+    it("an open health_failing is closed without a message (it is not resolved), and opens again once in service", () => {
+      let state = recordHeartbeat(initialState("prod", T), T, beat);
+      // /health fails from 60 s; after the 180 s grace health_failing opens and is delivered.
+      state = step(recordHeartbeat(state, T + 60 * S, beat), T + 60 * S, false).state;
+      const opened = step(recordHeartbeat(state, T + 240 * S, beat), T + 241 * S, false);
+      expect(opened.alerts).toEqual([
+        { host: "prod", condition: "health_failing", kind: "opened", sinceMs: T + 60 * S },
+      ]);
+      state = opened.state;
+      expect(state.open.health_failing?.lastAlertAt).toBe(T + 241 * S);
+      const marked = evaluate(
+        T + 301 * S,
+        recordHeartbeat(state, T + 300 * S, beat),
+        false,
+        LIMITS_HERE,
+        quiet,
+      );
+      expect(marked.alerts).toEqual([]);
+      expect(marked.next.open.health_failing).toBeUndefined();
+      const back = evaluate(
+        T + 361 * S,
+        recordHeartbeat(marked.next, T + 360 * S, beat),
+        false,
+        LIMITS_HERE,
+      );
+      expect(back.alerts).toEqual([
+        { host: "prod", condition: "health_failing", kind: "opened", sinceMs: T + 60 * S },
+      ]);
+    });
+  });
 });

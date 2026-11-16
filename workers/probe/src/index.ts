@@ -35,6 +35,8 @@ export interface ProbeEnv {
 interface HostEntry {
   name: string;
   hostname: string;
+  /** false: the host is deliberately not serving yet; no health_failing (evaluate). Default true. */
+  inService?: boolean;
 }
 
 const notFound = (): Response => new Response("not found", { status: 404 });
@@ -168,7 +170,7 @@ export async function runEvaluation(env: ProbeEnv, store: Store, nowMs: number):
   for (const host of hostsOf(env)) {
     const probeOk = await probeHealth(host.hostname);
     const state = await store.load(host.name, nowMs);
-    const result = evaluate(nowMs, state, probeOk, limits);
+    const result = evaluate(nowMs, state, probeOk, limits, { inService: host.inService !== false });
     let next = result.next;
     for (const alert of result.alerts) {
       const delivered = await deliver(sink, formatAlert(alert));

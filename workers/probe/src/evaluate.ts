@@ -128,11 +128,18 @@ function bad(
   }
 }
 
+/**
+ * `inService: false` (a host that is deliberately not serving yet, such as a
+ * production host with its gate closed): health_failing never opens, and an
+ * open one is closed without a message, because "resolved" would claim the
+ * host is healthy. Every other condition is evaluated as usual.
+ */
 export function evaluate(
   nowMs: number,
   state: HostState,
   probeOk: boolean,
   limits: ProbeLimits,
+  opts: { inService?: boolean } = {},
 ): { next: HostState; alerts: AlertIntent[] } {
   const next: HostState = {
     ...state,
@@ -141,6 +148,12 @@ export function evaluate(
   };
   const alerts: AlertIntent[] = [];
   for (const condition of CONDITIONS) {
+    if (condition === "health_failing" && opts.inService === false) {
+      next.open = Object.fromEntries(
+        Object.entries(next.open).filter(([name]) => name !== condition),
+      );
+      continue;
+    }
     const since = bad(condition, nowMs, next, limits);
     const open = next.open[condition];
     if (since !== null) {
