@@ -427,10 +427,28 @@ describe("secrets run", () => {
   });
 });
 
-/** The CLI's command line run under a pseudo-terminal (`script`; Linux and macOS differ). */
+/**
+ * Python's pty.spawn: the CLI as the session leader of a new pseudo-terminal,
+ * the test's stdin copied to it; exits with the CLI's status.
+ */
+const PTY_SPAWN = [
+  "import os, pty, sys",
+  "status = pty.spawn(sys.argv[1:])",
+  "sys.exit(os.waitstatus_to_exitcode(status))",
+].join("\n");
+
+/**
+ * The CLI's command line run under a pseudo-terminal. Linux: util-linux
+ * `script`. macOS: Python's pty module, because BSD `script` needs its own
+ * stdin to be a terminal and refuses the test's socket ("tcgetattr/ioctl:
+ * Operation not supported on socket", matrix run 43856083484).
+ * MYKEY_TEST_PTY=python takes the macOS path on Linux too.
+ */
 function underTerminal(cli: string[]): [string, string[]] {
   const quote = (value: string): string => `'${value.replaceAll("'", "'\\''")}'`;
-  if (process.platform === "darwin") return ["script", ["-q", "/dev/null", ...cli]];
+  if (process.platform === "darwin" || process.env.MYKEY_TEST_PTY === "python") {
+    return ["python3", ["-c", PTY_SPAWN, ...cli]];
+  }
   // `exec`: no shell stays between the terminal and the CLI (a waiting sh would
   // die of the terminal's SIGINT itself).
   return ["script", ["-qec", `exec ${cli.map(quote).join(" ")}`, "/dev/null"]];
