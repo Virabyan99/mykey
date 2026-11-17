@@ -199,12 +199,14 @@ esac
 backup=null
 expected=false
 [ "${MYKEY_BACKUP_EXPECTED:-no}" = yes ] && expected=true
-if newest=$(pg_read "SELECT coalesce(to_char(max(capture_started_at) AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS.MS\"Z\"'), 'none') FROM app.backup_pair WHERE validation_status = 'eligible';"); then
-	case "$newest" in
-	none) backup=$(jq -n --argjson e "$expected" '{expected: $e, newestEligibleCaptureAt: null}') ;;
-	[0-9][0-9][0-9][0-9]-*) backup=$(jq -n --argjson e "$expected" --arg n "$newest" '{expected: $e, newestEligibleCaptureAt: $n}') ;;
-	esac
-fi
+newest=$(pg_read "SELECT coalesce(to_char(max(capture_started_at) AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS.MS\"Z\"'), 'none') FROM app.backup_pair WHERE validation_status = 'eligible';") || newest=
+# Drill hook (alerts.staging.test.ts): the newest eligible capture as the drill
+# states it ("none" or a time), in place of the database's.
+[ -r "$HOOKS/backup-newest.override" ] && newest=$(head -n 1 "$HOOKS/backup-newest.override")
+case "$newest" in
+none) backup=$(jq -n --argjson e "$expected" '{expected: $e, newestEligibleCaptureAt: null}') ;;
+[0-9][0-9][0-9][0-9]-*) backup=$(jq -n --argjson e "$expected" --arg n "$newest" '{expected: $e, newestEligibleCaptureAt: $n}') ;;
+esac
 
 # Audit (P-116): failing when the API's last health_down named audit, when
 # OpenBao's audit directory takes no byte, when an archive unit failed, or when

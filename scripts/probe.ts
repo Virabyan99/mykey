@@ -164,7 +164,19 @@ async function migrate(accountId: string, databaseId: string, directory: string)
  * D1, watching a host that does not exist, alerting a webhook that answers
  * 404 (a path of the real probe). No custom domain; read through D1.
  */
-function sinkTestConfig(): WorkerConfig {
+/**
+ * Run 6.4 Task C step 2 (AC-1.25): the three hosts the sink-test Worker
+ * watches with `sinktest up --outside` — a name that does not resolve, a name
+ * of our zone that points at staging and is not in its certificate
+ * (`drill-dns up`), and staging itself (its API stopped by the drill).
+ */
+export const OUTSIDE_HOSTS = [
+  { name: "nodns", hostname: "mykey-drill-nodns.nomikey.com" },
+  { name: "badcert", hostname: "mykey-drill-badcert.nomikey.com" },
+  { name: "staging", hostname: "mykey-staging.nomikey.com" },
+] as const;
+
+function sinkTestConfig(outside = false): WorkerConfig {
   const base = workerConfig();
   const probeHost = base.routes[0]?.pattern ?? "";
   return {
@@ -177,15 +189,17 @@ function sinkTestConfig(): WorkerConfig {
     })),
     vars: {
       ...base.vars,
-      HOSTS: JSON.stringify([{ name: "nowhere", hostname: "mykey-nowhere.nomikey.com" }]),
+      HOSTS: JSON.stringify(
+        outside ? OUTSIDE_HOSTS : [{ name: "nowhere", hostname: "mykey-nowhere.nomikey.com" }],
+      ),
       SINK: "webhook",
       WEBHOOK_URL: `https://${probeHost}/v1/sink-test`,
     },
   };
 }
 
-async function sinkTest(action: string | undefined): Promise<void> {
-  const config = sinkTestConfig();
+async function sinkTest(action: string | undefined, outside = false): Promise<void> {
+  const config = sinkTestConfig(outside);
   const { accountId } = await zoneAndAccount();
   const d1Name = config.d1_databases[0]?.database_name ?? "";
   if (action === "up") {
@@ -388,6 +402,34 @@ async function state(host: string): Promise<void> {
   say(JSON.stringify(await response.json(), null, 2));
 }
 
+/**
+ * Run 6.4 Task C step 2: an A record `mykey-drill-badcert` → staging's public
+ * address, not proxied, so the probe meets staging's certificate under a name
+ * it does not hold. `down` removes it.
+ */
+async function drillDns(action: string | undefined): Promise<void> {
+  const { zoneId } = await zoneAndAccount();
+  const name = OUTSIDE_HOSTS[1].hostname;
+  const found = await cf<{ id: string }[]>("GET", `/zones/${zoneId}/dns_records?name=${name}`);
+  if (action === "up") {
+    if (found.length > 0) {
+      say(`dns: ${name} exists`);
+      return;
+    }
+    await cf("POST", `/zones/${zoneId}/dns_records`, {
+      type: "A",
+      name,
+      content: loadHosts().staging.publicIp,
+      ttl: 60,
+      proxied: false,
+    });
+    say(`dns: ${name} created`);
+  } else if (action === "down") {
+    for (const record of found) await cf("DELETE", `/zones/${zoneId}/dns_records/${record.id}`);
+    say(`dns: ${name} removed (${String(found.length)})`);
+  } else throw new Error("drill-dns needs up | down");
+}
+
 /** Run 6.4 (P-117): the on-demand test message through the Worker's sink. */
 async function alertTest(host: string): Promise<void> {
   const config = workerConfig();
@@ -408,10 +450,12 @@ if (import.meta.main) {
     else if (command === "alert-test" && argument !== undefined) await alertTest(argument);
     else if (command === "secrets") await secrets();
     else if (command === "state" && argument !== undefined) await state(argument);
-    else if (command === "sinktest") await sinkTest(argument);
+    else if (command === "sinktest")
+      await sinkTest(argument, process.argv.slice(4).includes("--outside"));
+    else if (command === "drill-dns") await drillDns(argument);
     else {
       warn(
-        "usage: node scripts/probe.ts deploy [--no-cron] | secrets | state <host> | alert-test <host> | sinktest up|rows|down",
+        "usage: node scripts/probe.ts deploy [--no-cron] | secrets | state <host> | alert-test <host> | sinktest up|rows|down [--outside] | drill-dns up|down",
       );
       process.exitCode = 2;
     }
