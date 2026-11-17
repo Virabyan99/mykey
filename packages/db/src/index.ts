@@ -157,3 +157,24 @@ export {
   type SegmentRow,
   type SegmentStream,
 } from "./repos/audit-archive.ts";
+export {
+  CAPTURE_SQLSTATE,
+  captureMode,
+  invalidateCapture,
+  invalidationsBetween,
+  isCaptureRefusal,
+  setCaptureMode,
+  type CaptureMode,
+  type InvalidationReason,
+} from "./repos/capture.ts";
+export {
+  crossedByReduction,
+  expireCandidates,
+  findPair,
+  insertCandidate,
+  markEligible,
+  markIneligible,
+  newestEligible,
+  type PairRow,
+  type PairStatus,
+} from "./repos/pairs.ts";

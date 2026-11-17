@@ -3,7 +3,7 @@
 // a pass. Nothing it deletes is still counted: the longest window is 15 minutes
 // and a lock lasts 15 minutes.
 import { cleanUpSessions } from "@mykey/auth";
-import { sweepCounters } from "@mykey/db";
+import { captureMode, sweepCounters } from "@mykey/db";
 import type pg from "pg";
 import { now, type LogEntry } from "./log.ts";
 
@@ -19,14 +19,17 @@ export function startSessionCleanup(
   log: (entry: LogEntry) => void,
 ): { stop(): void } {
   const pass = (): void => {
-    cleanUpSessions(pool).catch((error: unknown) => {
-      log({
-        event: "session_cleanup",
-        time: now(),
-        outcome: "failed",
-        errorClass: error instanceof Error ? error.constructor.name : typeof error,
+    // P-118: the clean-up waits while a pair is captured.
+    captureMode(pool)
+      .then(({ mode }) => (mode === "idle" ? cleanUpSessions(pool) : 0))
+      .catch((error: unknown) => {
+        log({
+          event: "session_cleanup",
+          time: now(),
+          outcome: "failed",
+          errorClass: error instanceof Error ? error.constructor.name : typeof error,
+        });
       });
-    });
   };
   pass();
   const timer = setInterval(pass, SESSION_CLEANUP_INTERVAL_MS);

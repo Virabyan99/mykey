@@ -14,7 +14,7 @@
 import { timingSafeEqual } from "node:crypto";
 import { appendAudit } from "@mykey/audit";
 import { LIMITS, type UserId } from "@mykey/contracts";
-import { withTransaction, type Queryable } from "@mykey/db";
+import { invalidateCapture, isCaptureRefusal, withTransaction, type Queryable } from "@mykey/db";
 import { makeSignature } from "better-auth/crypto";
 import type pg from "pg";
 import type { Auth } from "./auth.ts";
@@ -132,7 +132,12 @@ export async function resolveSession(deps: SessionDeps, headers: Headers): Promi
         ? "challenge"
         : null;
   if (expired !== null) {
-    await deps.pool.query("DELETE FROM auth.session WHERE id = $1", [row.id]);
+    // P-118: while a pair is captured the tidy-up is refused; the session is denied all the same.
+    await deps.pool
+      .query("DELETE FROM auth.session WHERE id = $1", [row.id])
+      .catch((error: unknown) => {
+        if (!isCaptureRefusal(error)) throw error;
+      });
     return { ok: false, reason: expired };
   }
   // A reset challenge lives while its account waits for the new factor (P-51).
@@ -257,6 +262,7 @@ export async function revokeSession(
   requestId: string,
 ): Promise<boolean> {
   return withTransaction(pool, async (tx) => {
+    await invalidateCapture(tx, "session_revoke");
     const result = await tx.query("DELETE FROM auth.session WHERE id = $1 AND user_id = $2", [
       sessionId,
       userId,
@@ -274,6 +280,7 @@ export async function revokeAllSessions(
   requestId: string,
 ): Promise<number> {
   return withTransaction(pool, async (tx) => {
+    await invalidateCapture(tx, "session_revoke");
     const result = await tx.query("DELETE FROM auth.session WHERE user_id = $1", [userId]);
     const count = result.rowCount ?? 0;
     await auditEnded(tx, userId, requestId, { kind: "revoke", count });
@@ -291,6 +298,7 @@ export async function signOutSession(
   requestId: string,
 ): Promise<boolean> {
   return withTransaction(deps.pool, async (tx) => {
+    await invalidateCapture(tx, "sign_out");
     const result = await tx.query<{ user_id: UserId }>(
       "DELETE FROM auth.session WHERE token = ANY ($1::text[]) RETURNING user_id",
       [sessionVerifierCandidates(deps.keys.sessionLookup, token)],

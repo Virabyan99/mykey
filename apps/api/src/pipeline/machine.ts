@@ -28,7 +28,7 @@ import {
   type ProjectId,
   type RouteDef,
 } from "@mykey/contracts";
-import type { EnvironmentScope } from "@mykey/db";
+import { isCaptureRefusal, type EnvironmentScope } from "@mykey/db";
 import type { OpenBaoClient } from "@mykey/openbao";
 import { now } from "../log.ts";
 import { ApiError, type AppDeps } from "./context.ts";
@@ -123,6 +123,8 @@ async function touch(deps: AppDeps, credentialId: CredentialId): Promise<void> {
       [credentialId],
     );
   } catch (error) {
+    // P-118: skipped while a pair is captured.
+    if (isCaptureRefusal(error)) return;
     deps.log({
       event: "machine_last_used",
       time: now(),

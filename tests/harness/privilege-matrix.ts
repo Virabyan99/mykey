@@ -121,8 +121,35 @@ export const TABLES: Record<string, Expected> = {
   "app.outbox": { api: [S, I], provisioner: [S, I, U] },
   "app.import_preview": { api: [S, I, D], provisioner: [] },
   "app.import_entry": { api: [S, I], provisioner: [] },
-  "app.service_control": { api: [S, I], provisioner: [] },
-  "app.backup_pair": { api: [S, I], provisioner: [] },
+  // Run 6.5 (migration 0017, P-118): only maintenance changes the control row;
+  // the API keeps UPDATE (updated_at) for the FOR SHARE lock alone, and writes
+  // no pair and no invalidation (app.capture_invalidate() does).
+  "app.service_control": {
+    api: [S],
+    provisioner: [S],
+    apiNoColumns: ["capture_mode", "epoch", "owner", "pair_id"],
+  },
+  "app.backup_pair": {
+    api: [S],
+    provisioner: [],
+    apiNoColumns: [
+      "capture_started_at",
+      "boundary",
+      "artifact_hashes",
+      "schema_revision",
+      "release_commit",
+      "key_refs",
+      "validation_status",
+      "eligible_until",
+      "host",
+      "object_key",
+      "manifest_sha256",
+      "invalid_reason",
+      "verified_at",
+      "deleted_at",
+    ],
+  },
+  "app.backup_invalidation": { api: [], provisioner: [], apiNoColumns: ["at", "reason", "txid"] },
   "app.rate_limit": { api: [S, I, D], provisioner: [] },
   // Run 6.2 (migration 0016): maintenance loses DELETE; retention is audit.purge_archived().
   "audit.event": { api: [S, I], provisioner: [I], maintenance: [S, I] },
@@ -268,6 +295,10 @@ export function expectedColumnUpdate(row: ColumnRow, grantee: string): boolean {
  */
 export const APP_FUNCTIONS: Record<string, string[]> = {
   "app.mark_environment_review(uuid,uuid)": ["api_runtime"],
+  // Run 6.5 (migration 0017): the reduction's pass, the barrier and the control-row guard.
+  "app.capture_invalidate(text)": ["api_runtime"],
+  "app.capture_barrier()": [],
+  "app.service_control_guard()": [],
   "app.lifecycle_transition(text,uuid,uuid,uuid,text,text)": ["api_runtime"],
   // Run 6.2 (migration 0016): schema audit's functions are checked the same way.
   "audit.purge_archived(timestamp with time zone)": ["maintenance"],

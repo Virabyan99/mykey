@@ -30,6 +30,7 @@ import {
   type IndexRow,
   type OperationRow,
   type Queryable,
+  isCaptureRefusal,
 } from "@mykey/db";
 import { secretPath, type BaoFailure, type OpenBaoClient } from "@mykey/openbao";
 import type pg from "pg";
@@ -483,10 +484,6 @@ async function underLock(
         }
         return { replay: found } as const;
       }
-      const capture = await tx.query<{ capture_mode: string }>(
-        "SELECT capture_mode FROM app.service_control FOR SHARE",
-      );
-      if (capture.rows[0]?.capture_mode !== "idle") throw new Refusal(refused("busy"));
       const code = await request.recheck(tx);
       if (code !== null) throw new Refusal(refused(code));
       const slot = await slotOf(tx, scope);
@@ -553,10 +550,6 @@ async function underLock(
         stepId,
         dispatchId,
       ]);
-      const capture = await tx.query<{ capture_mode: string }>(
-        "SELECT capture_mode FROM app.service_control FOR SHARE",
-      );
-      if (capture.rows[0]?.capture_mode !== "idle") throw new Refusal(refused("busy"));
       if (!deps.gateOpen()) throw new Refusal(refused("quarantined"));
     });
   } catch (error) {
@@ -567,6 +560,7 @@ async function underLock(
     }
     if (error instanceof Refusal) return reject(error.outcome.code);
     if (error instanceof AuditUnavailable) return reject("audit_unavailable");
+    if (isCaptureRefusal(error)) return reject("busy");
     // The marker may or may not have committed; nothing was sent either way.
     return reject("dependency_unavailable");
   }

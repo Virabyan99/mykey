@@ -15,7 +15,13 @@ import { readGate } from "./pipeline/gate.ts";
 import { checkOrigin } from "./pipeline/origin.ts";
 import { errorResponse } from "./pipeline/respond.ts";
 import { requestSource } from "./pipeline/source.ts";
-import { capacityStep, mountRoute, mountRouteDef, rateStep } from "./pipeline/route.ts";
+import {
+  capacityStep,
+  captureStep,
+  mountRoute,
+  mountRouteDef,
+  rateStep,
+} from "./pipeline/route.ts";
 import { ApiError } from "./pipeline/context.ts";
 import {
   credentialsIssueHandler,
@@ -197,6 +203,18 @@ export function createApp(deps: AppDeps): Hono<ApiEnv> {
       // The body stays unread: the connection closes after the answer.
       c.res = errorResponse(refusal.code, requestId, { ...refusal.headers, connection: "close" });
       return;
+    }
+    // P-118: the auth module's paths that write, while a pair is captured.
+    if (c.req.path.startsWith("/v1/auth/")) {
+      const closed = await captureStep(deps, `${c.req.method} ${c.req.path}`, c.req.method).then(
+        () => null,
+        (error: unknown) =>
+          error instanceof ApiError ? error : new ApiError("dependency_unavailable"),
+      );
+      if (closed !== null) {
+        c.res = errorResponse(closed.code, requestId, closed.headers, closed.extra);
+        return;
+      }
     }
     // P-115: the auth module's expanding paths (enrolment, password change) under disk pressure.
     if (EXPANDING_ROUTES.has(`${c.req.method} ${c.req.path}`)) {

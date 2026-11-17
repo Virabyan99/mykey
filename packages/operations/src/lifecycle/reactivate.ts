@@ -254,10 +254,6 @@ export async function reactivate(
         if (found === null) throw new Error("operation key exists but its row was not found");
         return replayOf(found);
       }
-      const capture = await tx.query<{ capture_mode: string }>(
-        "SELECT capture_mode FROM app.service_control FOR SHARE",
-      );
-      if (capture.rows[0]?.capture_mode !== "idle") throw new Refusal("busy");
       if (!deps.gateOpen()) throw new Refusal("quarantined");
       // The rows in the order every admission takes them (organization, project,
       // environment; the target FOR UPDATE); then authority and the states, re-read.

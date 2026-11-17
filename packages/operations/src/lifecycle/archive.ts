@@ -47,6 +47,7 @@ import {
   withTransaction,
   type EnvironmentScope,
   type OperationRow,
+  invalidateCapture,
 } from "@mykey/db";
 import type pg from "pg";
 import { intentFingerprint, sameIntent, type Intent } from "../replay.ts";
@@ -164,6 +165,8 @@ export async function beginArchive(
   let admitted: OperationRow | { replay: OperationRow };
   try {
     admitted = await withTransaction(deps.pool, async (tx) => {
+      // P-118: an archive reduces access; while a pair is captured it records that and proceeds.
+      await invalidateCapture(tx, "archive");
       const { digest, keyId } = intentFingerprint(deps.ring, request.intent);
       const inserted = await insertOperation(tx, {
         ...key,
@@ -186,10 +189,6 @@ export async function beginArchive(
         }
         return { replay: found };
       }
-      const capture = await tx.query<{ capture_mode: string }>(
-        "SELECT capture_mode FROM app.service_control FOR SHARE",
-      );
-      if (capture.rows[0]?.capture_mode !== "idle") throw new Refusal("busy");
       if (!deps.gateOpen()) throw new Refusal("quarantined");
       // The rows in the order every admission takes them — organization (share),
       // project, environment, the target FOR UPDATE — so a concurrent create,
@@ -326,16 +325,20 @@ export async function driveArchive(
         try {
           return await withEnvironmentLock(deps.lockPool, environment.lockKey, async (locked) => {
             // A credential that became active meanwhile (an issuance finalized before admission) closes too.
-            const closedNow = await closeCredentials(locked.client, environment);
-            if (closedNow > 0) {
-              await locked.client.query(
-                `UPDATE app.operation
-                  SET expected = jsonb_set(expected, '{closed}',
-                                 to_jsonb(coalesce((expected->>'closed')::int, 0) + $2))
-                WHERE id = $1`,
-                [operationId, closedNow],
-              );
-            }
+            // P-118: one transaction, so the invalidation that lets it pass a capture covers both writes.
+            await inTransaction(locked.client, async (tx) => {
+              await invalidateCapture(tx, "archive");
+              const closedNow = await closeCredentials(tx, environment);
+              if (closedNow > 0) {
+                await tx.query(
+                  `UPDATE app.operation
+                    SET expected = jsonb_set(expected, '{closed}',
+                                   to_jsonb(coalesce((expected->>'closed')::int, 0) + $2))
+                  WHERE id = $1`,
+                  [operationId, closedNow],
+                );
+              }
+            });
             const work = await openCredentialWork(locked.client, environment);
             if (work.revoking.length > 0) {
               for (const credential of work.revoking) {
@@ -349,6 +352,7 @@ export async function driveArchive(
                   });
                   if (proof !== "absent") return false;
                   await inTransaction(locked.client, async (tx) => {
+                    await invalidateCapture(tx, "archive");
                     if (await moveCredential(tx, credential.id, ["revoking"], "revoked")) {
                       await settleRevocations(
                         tx,
@@ -379,6 +383,7 @@ export async function driveArchive(
 
   // Every credential of the scope is revoked: finish, once.
   const finished = await withTransaction(deps.pool, async (tx) => {
+    await invalidateCapture(tx, "archive");
     const moved = await lifecycleTransition(tx, {
       kind: scope.kind,
       organizationId: scope.organizationId,

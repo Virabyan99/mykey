@@ -254,11 +254,21 @@ describe("the unresolved count (status.sh)", () => {
       join(import.meta.dirname, "../../../infra/hosts/checks/status.sh"),
       "utf8",
     );
-    const statement = /operations_unresolved=.*?-c\s*\\?\s*"([^"]+)"/s.exec(script)?.[1];
-    expect(statement, "status.sh reads the unresolved operations").toBeDefined();
+    // Run 6.4 (M-3): status.sh runs the statement from a file of its own.
+    expect(script, "status.sh reads the unresolved operations").toContain(
+      "sql/operations-unresolved.sql",
+    );
+    const statement = readFileSync(
+      join(import.meta.dirname, "../../../infra/hosts/checks/sql/operations-unresolved.sql"),
+      "utf8",
+    )
+      .split("\n")
+      .filter((line) => !line.startsWith("--"))
+      .join("\n")
+      .trim();
     const count = async (db: Queryable): Promise<number> => {
       const result = await db.query<Record<string, string>>(
-        (statement ?? "").replace(/^BEGIN READ ONLY;\s*/, "").replace(/;\s*COMMIT;\s*$/, ""),
+        statement.replace(/^BEGIN READ ONLY;\s*/, "").replace(/;\s*COMMIT;\s*$/, ""),
       );
       return Number(Object.values(result.rows[0] ?? {})[0]);
     };

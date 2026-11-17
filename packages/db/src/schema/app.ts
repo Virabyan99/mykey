@@ -528,12 +528,43 @@ export const backupPair = appSchema.table(
     validationStatus: text("validation_status").notNull(),
     eligibleUntil: timestamptz("eligible_until"),
     createdAt: timestamptz("created_at").notNull().defaultNow(),
+    // Run 6.5 (P-119, migration 0017): where the pair lives and what became of it.
+    host: text("host"),
+    objectKey: text("object_key"),
+    manifestSha256: text("manifest_sha256"),
+    invalidReason: text("invalid_reason"),
+    verifiedAt: timestamptz("verified_at"),
+    deletedAt: timestamptz("deleted_at"),
   },
   (t) => [
     check(
       "backup_pair_validation_status_check",
       oneOf(t.validationStatus, ["candidate", "eligible", "ineligible", "expired"]),
     ),
+    index("backup_pair_host_status_idx").on(t.host, t.validationStatus, t.captureStartedAt),
+  ],
+);
+
+/**
+ * Run 6.5 (P-118, migration 0017): an action that reduced access while the
+ * mode was not idle. Written only by app.capture_invalidate(); `txid` is the
+ * writing transaction, which the barrier trigger lets through.
+ */
+export const backupInvalidation = appSchema.table(
+  "backup_invalidation",
+  {
+    id: uuid("id").primaryKey(),
+    at: timestamptz("at").notNull().defaultNow(),
+    reason: text("reason").notNull(),
+    txid: bigint("txid", { mode: "bigint" }).notNull(),
+  },
+  (t) => [
+    check(
+      "backup_invalidation_reason_check",
+      oneOf(t.reason, ["sign_out", "session_revoke", "credential_revoke", "archive"]),
+    ),
+    index("backup_invalidation_at_idx").on(t.at),
+    index("backup_invalidation_txid_idx").on(t.txid),
   ],
 );
 

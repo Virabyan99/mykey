@@ -11,12 +11,12 @@
 // (app.ts).
 import { createHash } from "node:crypto";
 import { AuditUnavailable } from "@mykey/audit";
-import { EXPANDING_ROUTES, LIMITS, ROUTES, type RouteDef } from "@mykey/contracts";
+import { closedByCapture, EXPANDING_ROUTES, LIMITS, ROUTES, type RouteDef } from "@mykey/contracts";
 import type { Context, Hono } from "hono";
 import { now } from "../log.ts";
 import { authenticateHuman } from "./authn.ts";
-import { findOperationByKey, hasTombstone } from "@mykey/db";
-import { replayAnswer, sameIntent, type Intent } from "@mykey/operations";
+import { captureMode, findOperationByKey, hasTombstone } from "@mykey/db";
+import { isCaptureRefusal, replayAnswer, sameIntent, type Intent } from "@mykey/operations";
 import type { UserPrincipal as Principal } from "./authn.ts";
 import { admitStates, authorize, deny } from "./authz.ts";
 import { checkOrigin, hasMixedCredentials, needsOriginCheck } from "./origin.ts";
@@ -141,6 +141,17 @@ export async function capacityStep(deps: AppDeps): Promise<void> {
   throw new ApiError("dependency_unavailable", `capacity_${reading.cause}`);
 }
 
+/**
+ * P-118: while a pair is captured (draining or capturing), a request that
+ * would write is refused before it is validated or reaches a store. The
+ * routes that only read, and those that reduce access, continue.
+ */
+export async function captureStep(deps: AppDeps, id: string, method: string): Promise<void> {
+  if (!closedByCapture(id, method)) return;
+  const { mode } = await captureMode(deps.pool);
+  if (mode !== "idle") throw new ApiError("busy", "capture");
+}
+
 /** What a route with no handler does after every check has passed. */
 const terminal: Handler = () => Promise.reject(new NoHandler());
 
@@ -158,12 +169,15 @@ export function failureResponse(
   deps: AppDeps,
 ): Response {
   if (error instanceof NoHandler) return errorResponse("not_found", requestId);
+  // P-118: a statement the capture barrier refused (a race with the change of mode).
   const code =
     error instanceof ApiError
       ? error.code
       : error instanceof AuditUnavailable
         ? "audit_unavailable"
-        : null;
+        : isCaptureRefusal(error)
+          ? "busy"
+          : null;
   if (code === null) {
     deps.log({
       event: "unhandled",
@@ -318,6 +332,8 @@ async function run(
       ? await machineStep(deps, c, params, route, requestId, source)
       : null;
     if (machine !== null) await rateStep(deps, requestId, "rl:credential", machine.credentialId);
+    // P-118: after the gate and the limits, before validation.
+    await captureStep(deps, route.id, route.method);
     if (early) {
       // P-114: a slot, or busy at once; only then the body.
       if (!large.enter()) throw new ApiError("busy");

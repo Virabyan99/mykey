@@ -88,3 +88,26 @@ export const REDUCING_ROUTES: ReadonlySet<string> = new Set([
   "POST /v1/auth/recovery/verify",
   "POST /v1/auth/totp/step-up",
 ]);
+
+/**
+ * P-118: the mutations that continue while a pair is captured (the mode is
+ * `draining` or `capturing`): those that only read and audit, and those that
+ * reduce access, which record an invalidation instead. Every other route and
+ * auth path that is not a GET answers 503 busy.
+ */
+export const CAPTURE_OPEN_ROUTES: ReadonlySet<string> = new Set([
+  "secrets.reveal",
+  "export.create",
+  "machine.resolve",
+  "projects.archive",
+  "environments.archive",
+  "credentials.revoke",
+  "POST /v1/auth/sign-out",
+  "POST /v1/auth/sessions/revoke",
+  "POST /v1/auth/revoke-sessions",
+]);
+
+/** True for a request the capture barrier refuses at admission. */
+export function closedByCapture(id: string, method: string): boolean {
+  return method !== "GET" && !CAPTURE_OPEN_ROUTES.has(id);
+}

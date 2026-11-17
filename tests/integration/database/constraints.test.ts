@@ -211,7 +211,8 @@ describe("database constraints", () => {
          FROM information_schema.columns
         WHERE table_schema IN ('app', 'audit') AND column_name = 'id' AND table_name <> 'service_control'`,
     );
-    expect(ids).toHaveLength(14);
+    // Run 6.5 (migration 0017): app.backup_invalidation is the fifteenth.
+    expect(ids).toHaveLength(15);
     expect(ids.filter((row) => row.data_type !== "uuid" || row.column_default !== null)).toEqual(
       [],
     );

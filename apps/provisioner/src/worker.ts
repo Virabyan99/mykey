@@ -4,11 +4,11 @@
 import { randomUUID } from "node:crypto";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
-import { LIMITS, type OrganizationId } from "@mykey/contracts";
-import { createPool } from "@mykey/db";
+import { LIMITS, type OperationId, type OrganizationId } from "@mykey/contracts";
+import { captureMode, createPool } from "@mykey/db";
 import { namespaceFor } from "@mykey/openbao";
 import { ProvisionerClient } from "@mykey/openbao/provisioner";
-import { createSender, createWorker, readGate } from "@mykey/operations";
+import { createSender, createWorker, isCaptureRefusal, readGate } from "@mykey/operations";
 import {
   provisionEnvironment,
   sweepAll,
@@ -57,16 +57,25 @@ export async function startProvisioner(
   };
   const gateOpen = () => readGate(config.gatePath, config.hostInstanceId).open;
   const sender = await createSender(pool);
+  // P-118: no job and no sweep while a pair is captured.
+  const captured = async (): Promise<boolean> => (await captureMode(pool)).mode !== "idle";
+  const later = async (operationId: OperationId, cause: string): Promise<void> => {
+    opts.log({ event: "job_deferred", operationId, cause });
+    await sender.send("environment.provision", operationId, {
+      startAfterSeconds: GATE_RETRY_SECONDS,
+    });
+  };
 
   const worker = await createWorker(pool, {
     "environment.provision": async (operationId, meta) => {
       if (!gateOpen()) {
-        opts.log({ event: "job_deferred", operationId, cause: "gate_closed" });
         // Nothing was done. The job comes back in 30 s without using a retry, so
         // a long closure (a deploy, a quarantine) never ends the job (gate review).
-        await sender.send("environment.provision", operationId, {
-          startAfterSeconds: GATE_RETRY_SECONDS,
-        });
+        await later(operationId, "gate_closed");
+        return;
+      }
+      if (await captured()) {
+        await later(operationId, "capture");
         return;
       }
       try {
@@ -82,6 +91,11 @@ export async function startProvisioner(
         );
         opts.log({ event: "job", operationId, outcome });
       } catch (error) {
+        // A capture began after the check: the barrier refused a write, so later.
+        if (isCaptureRefusal(error)) {
+          await later(operationId, "capture");
+          return;
+        }
         opts.log({
           event: "job_deferred",
           operationId,
@@ -95,6 +109,8 @@ export async function startProvisioner(
   const sweep = async (): Promise<void> => {
     if (!gateOpen()) {
       opts.log({ event: "sweep_skipped", cause: "gate_closed" });
+    } else if (await captured().catch(() => true)) {
+      opts.log({ event: "sweep_skipped", cause: "capture" });
     } else {
       try {
         const result = await sweepAll({ pool, clientFor });

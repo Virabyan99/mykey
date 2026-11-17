@@ -29,6 +29,7 @@ export {
   type GateRecord,
 } from "./gate.ts";
 export { CAPACITY_MAX_AGE_MS, readCapacity, type CapacityReading } from "./capacity.ts";
+export { CAPTURE_SQLSTATE, isCaptureRefusal } from "./capture/barrier.ts";
 export {
   beginOperation,
   intentFingerprint,
