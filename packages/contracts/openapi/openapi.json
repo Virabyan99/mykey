@@ -4636,7 +4636,7 @@
             }
           },
           "409": {
-            "description": "Conflict. Codes: state_conflict, environment_changed, key_under_review.",
+            "description": "Conflict. Codes: state_conflict, replay_expired, environment_changed, key_under_review.",
             "content": {
               "application/json": {
                 "schema": {

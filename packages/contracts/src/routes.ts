@@ -713,7 +713,8 @@ export const ROUTES: readonly RouteDef[] = Object.freeze([
       action: "secrets.write",
       body: "raw-dotenv",
       responses: { 200: operationResponseSchema, 202: operationResponseSchema },
-      errors: ["outcome_unknown", "audit_unavailable", ...IMPORT_WRITE],
+      // Run 6.9 (M-7): an import expired while it waited cannot be resumed.
+      errors: ["outcome_unknown", "audit_unavailable", "replay_expired", ...IMPORT_WRITE],
     },
   ),
   define("export.create", "POST", `${E}/export`, "human_fresh_totp", false, "4.9", {
