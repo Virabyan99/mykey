@@ -127,6 +127,16 @@ export function imageScanArgs(lock: DependenciesLock, key: string, repository?: 
 /** Images built from this repository (Run 2.10): built, saved and scanned from the archive. */
 export const OWN_SCANNED_IMAGES = ["api", "provisioner", "ops"];
 
+/** Run 6.9 (P-127): `images --archives <dir>` scans a release's archives instead of building. */
+export function parseScanArgs(argv: string[]): { mode: string; archives: string | null } {
+  const [mode = "", ...rest] = argv;
+  if (rest.length === 0) return { mode, archives: null };
+  if (mode !== "images" || rest[0] !== "--archives" || rest.length !== 2 || rest[1] === undefined) {
+    throw new Error("--archives <dir> belongs to images only, with one directory");
+  }
+  return { mode, archives: rest[1] };
+}
+
 /**
  * Trivy over our own image's archive (`<archiveDir>/<name>.tar`). Only the
  * language packages — our dependencies — under the repository's .trivyignore:
@@ -256,7 +266,14 @@ function selftest(lock: DependenciesLock, repository: string): boolean {
 if (import.meta.main) {
   const repository = resolve(import.meta.dirname, "..");
   const lock = loadLock(repository);
-  const mode = process.argv[2];
+  let parsed: { mode: string; archives: string | null };
+  try {
+    parsed = parseScanArgs(process.argv.slice(2));
+  } catch (error) {
+    console.error(error instanceof Error ? error.message : error);
+    process.exit(2);
+  }
+  const mode = parsed.mode;
   let ok: boolean;
   switch (mode) {
     case "secrets": {
@@ -287,16 +304,17 @@ if (import.meta.main) {
       const upstream = SCANNED_IMAGES.map((key) =>
         scan(`image ${key}`, imageScanArgs(lock, key, repository)),
       ).every(Boolean);
-      const archiveDir = mkdtempSync(join(tmpdir(), "mykey-own-images-"));
+      const given = parsed.archives === null ? null : resolve(parsed.archives);
+      const archiveDir = given ?? mkdtempSync(join(tmpdir(), "mykey-own-images-"));
       try {
         const own = OWN_SCANNED_IMAGES.map(
           (name) =>
-            buildOwnImage(repository, archiveDir, name) &&
+            (given !== null || buildOwnImage(repository, archiveDir, name)) &&
             scan(`own image ${name}`, ownImageScanArgs(lock, archiveDir, repository, name)),
         ).every(Boolean);
         ok = upstream && own;
       } finally {
-        rmSync(archiveDir, { recursive: true, force: true });
+        if (given === null) rmSync(archiveDir, { recursive: true, force: true });
       }
       break;
     }
@@ -304,7 +322,9 @@ if (import.meta.main) {
       ok = selftest(lock, repository);
       break;
     default:
-      console.error("usage: node scripts/ci-scan.ts <secrets|dependencies|images|selftest>");
+      console.error(
+        "usage: node scripts/ci-scan.ts <secrets|dependencies|images [--archives <dir>]|selftest>",
+      );
       ok = false;
   }
   process.exit(ok ? 0 : 1);

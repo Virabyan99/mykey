@@ -68,6 +68,8 @@ ENV MYKEY_BUILD=${MYKEY_BUILD}
 WORKDIR /app
 COPY --from=build /app /app
 COPY --from=reference /app/apps/api/assets /app/apps/api/assets
+# Run 6.9 (P-127): no package manager in a runtime image.
+RUN rm -rf /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/corepack /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/corepack
 # The `node` user of the image. The compose file repeats it.
 USER 1000:1000
 EXPOSE 8443

@@ -34,6 +34,8 @@ ENV NODE_ENV=production
 ENV MYKEY_BUILD=${MYKEY_BUILD}
 WORKDIR /app
 COPY --from=build /app /app
+# Run 6.9 (P-127): no package manager in a runtime image.
+RUN rm -rf /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/corepack /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/corepack
 USER 1000:1000
 # Unhealthy when the last sweep tick is older than three intervals (P-57).
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \

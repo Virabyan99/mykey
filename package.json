@@ -20,6 +20,7 @@
     "test:consumers": "node scripts/require-staging-env.ts && vitest run --project consumers",
     "cli:build": "node apps/cli/build.ts",
     "cli:release": "node infra/release/cli/build-release.ts",
+    "host:release": "node infra/release/build.ts",
     "pins:verify": "node scripts/pins-verify.ts",
     "stack:up": "node scripts/stack.ts up",
     "stack:down": "node scripts/stack.ts down",
