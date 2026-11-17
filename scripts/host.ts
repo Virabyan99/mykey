@@ -1910,7 +1910,9 @@ async function runBackupInit(host: HostEntry, address: Address, log: Logger): Pr
       rootToken,
     );
     if ((await admin.readAuthMount("", "approle")) === null) await admin.enableAppRole("");
-    const { roleId } = await admin.putAppRole("", "backup", BACKUP_TOKEN_SECONDS);
+    // The role of the Run 2.9 spike gave secret ids 60 s; this one lives until
+    // backup-init replaces it (it is installed on the host, never on a workstation).
+    const { roleId } = await admin.putAppRole("", "backup", BACKUP_TOKEN_SECONDS, [], 0);
     const { secretId } = await admin.newSecretId("", "backup");
     registerSecret(secretId);
     for (const [path, value] of [
@@ -1961,21 +1963,31 @@ export function jobTimers(): string[] {
   const units = Object.values(readOpsJobs().jobs).flatMap((job) =>
     job.unit === null ? [] : [job.unit],
   );
-  return ["mykey-bao-audit-rotate", ...units];
+  // Run 6.5 (P-119): the daily pair, run by backup.sh rather than ops-run.sh.
+  return ["mykey-bao-audit-rotate", ...units, "mykey-backup"];
 }
+
+/** Run 6.5 (P-120): services enabled at boot without a timer. */
+export const BOOT_SERVICES = ["mykey-capture-recover"] as const;
 
 export function timersCommand(units: readonly string[]): string {
   for (const unit of units) {
     if (!/^mykey-[a-z0-9-]+$/.test(unit)) throw new Error(`unusable unit name ${unit}`);
   }
-  const files = units.flatMap((unit) => [
-    `${REMOTE.hostsDir}/systemd/${unit}.service`,
-    `${REMOTE.hostsDir}/systemd/${unit}.timer`,
-  ]);
+  const files = [
+    ...units.flatMap((unit) => [
+      `${REMOTE.hostsDir}/systemd/${unit}.service`,
+      `${REMOTE.hostsDir}/systemd/${unit}.timer`,
+    ]),
+    ...BOOT_SERVICES.map((unit) => `${REMOTE.hostsDir}/systemd/${unit}.service`),
+  ];
   return [
     `install -m 0644 ${files.join(" ")} /etc/systemd/system/`,
     "systemctl daemon-reload",
     `systemctl enable --now ${units.map((unit) => `${unit}.timer`).join(" ")}`,
+    `systemctl enable ${BOOT_SERVICES.map((unit) => `${unit}.service`).join(" ")}`,
+    // The heartbeat expects a pair from now on (status.sh: backup_stale).
+    hostEnvSetCommand("MYKEY_BACKUP_EXPECTED", "yes"),
   ].join(" && ");
 }
 

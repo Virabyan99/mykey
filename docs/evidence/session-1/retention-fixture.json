@@ -19,7 +19,17 @@
     },
     {
       "name": "mykey-staging-pairs",
-      "lockRules": []
+      "lockRules": [
+        {
+          "id": "pairs-30d",
+          "enabled": true,
+          "prefix": "pairs/",
+          "condition": {
+            "type": "Age",
+            "maxAgeSeconds": 2592000
+          }
+        }
+      ]
     },
     {
       "name": "mykey-audit-archive",

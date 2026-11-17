@@ -4,7 +4,7 @@
 // boot unit call abort. begin prints one JSON line { pairId, captureStartedAt,
 // boundary } and exits 75 (EX_TEMPFAIL) when another capture runs or the
 // drain did not finish in 30 s.
-import { readFileSync, rmSync } from "node:fs";
+import { readdirSync, readFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { LIMITS } from "@mykey/contracts";
 import { createPool } from "@mykey/db";
@@ -15,6 +15,20 @@ import {
   type CaptureRecord,
 } from "@mykey/operations/operator";
 import { EXIT, type OpsCommand } from "../cli.ts";
+
+/**
+ * Removes a pair's scratch directory, or on a host, where it is a tmpfs mount
+ * point the ops user cannot remove, everything in it (backup.sh unmounts it).
+ */
+function emptyScratch(directory: string): void {
+  try {
+    rmSync(directory, { recursive: true, force: true });
+  } catch {
+    for (const name of readdirSync(directory)) {
+      rmSync(join(directory, name), { recursive: true, force: true });
+    }
+  }
+}
 
 /** EX_TEMPFAIL: a capture is not possible now; the timer tries again. */
 export const CAPTURE_BUSY = 75;
@@ -70,7 +84,7 @@ export const captureCommand: OpsCommand = {
       const released = await abortCapture(pool, owner, reason);
       // Session 2 M2: the artifacts of a capture that did not finish do not stay.
       if (released.released && released.pairId !== null && io.env.pairScratch !== undefined) {
-        rmSync(join(io.env.pairScratch, released.pairId), { recursive: true, force: true });
+        emptyScratch(join(io.env.pairScratch, released.pairId));
       }
       io.stdout.write(
         released.released

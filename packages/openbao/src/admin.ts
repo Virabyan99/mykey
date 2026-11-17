@@ -143,6 +143,8 @@ export class OpenBaoAdmin {
     name: AppRoleName | "backup",
     ttlSeconds: number,
     boundCidrs: readonly string[] = [],
+    /** Run 6.5: an explicit secret id lifetime (0: none); left unchanged when absent. */
+    secretIdTtlSeconds?: number,
   ): Promise<{ roleId: string }> {
     requireNamespace(namespace, true);
     requireName(name);
@@ -155,6 +157,7 @@ export class OpenBaoAdmin {
       secret_id_num_uses: 0,
       secret_id_bound_cidrs: [...boundCidrs],
       token_bound_cidrs: [...boundCidrs],
+      ...(secretIdTtlSeconds === undefined ? {} : { secret_id_ttl: secretIdTtlSeconds }),
     });
     return this.readRoleId(namespace, name);
   }

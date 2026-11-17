@@ -35,7 +35,8 @@ const ageRule = (id: string, prefix: string, maxAgeSeconds: number): LockRule =>
 /** The lock rules each bucket must have. An empty list means "no rule today". */
 export const LOCK_RULES: Record<BucketName, LockRule[]> = {
   "mykey-prod-pairs": [ageRule("pairs-30d", "pairs/", 2_592_000)],
-  "mykey-staging-pairs": [],
+  // Run 6.5 (P-119): set once the spike objects were removed (17 Nov 2026).
+  "mykey-staging-pairs": [ageRule("pairs-30d", "pairs/", 2_592_000)],
   // Run 6.2 (P-112, D-48): a year on production's segments, a month on staging's
   // (synthetic rows: a year would hold the bucket for nothing), ten minutes for
   // the cloud test's probe objects.

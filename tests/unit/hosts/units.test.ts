@@ -56,6 +56,11 @@ describe("the units of host jobs (P-112)", () => {
     );
     expect(command).toContain("/opt/mykey/hosts/systemd/mykey-audit-archive.service");
     expect(() => timersCommand(["mykey-x; rm -rf /"])).toThrow(/unusable/);
+    // Run 6.5: the daily pair's timer, the boot recovery and the heartbeat's expectation.
+    expect(jobTimers()).toContain("mykey-backup");
+    expect(command).toContain("systemctl enable mykey-capture-recover.service");
+    expect(command).toContain("/opt/mykey/hosts/systemd/mykey-capture-recover.service");
+    expect(command).toContain("MYKEY_BACKUP_EXPECTED=yes");
   });
 });
 

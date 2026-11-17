@@ -10,6 +10,8 @@ umask 077
 
 host_env=${MYKEY_HOST_ENV:-/etc/mykey/host.env}
 setting() { sed -n "s/^$1=//p" "$host_env" | tail -n 1; }
+# The jobs mount the pairs' directory: it exists before the first one runs.
+install -d -m 0711 -o root -g root /var/lib/mykey/pairs
 
 # backup.sh recover (mykey-capture-recover at boot; mykey-backup's ExecStopPost):
 # release a freeze a dead capture left, and remove every pair tmpfs left behind.
@@ -43,7 +45,6 @@ finish() {
 }
 trap finish EXIT INT TERM
 
-install -d -m 0711 /var/lib/mykey/pairs
 mkdir -m 0700 "$root"
 mount -t tmpfs -o size=1g,mode=0700,uid=1000,gid=1000,nosuid,nodev,noexec tmpfs "$root"
 install -d -m 0700 -o 1000 -g 1000 "$root/in" "$root/artifacts"
@@ -57,7 +58,7 @@ pw=$(sed 's/[\\:]/\\&/g' /etc/mykey/secrets/ops/backup_reader)
 printf 'postgres:5432:*:backup_reader:%s\n' "$pw" > "$root/in/pgpass"
 pw=
 chown 1000:1000 "$root/in/pgpass"
-: > "$root/artifacts/postgres.dump" && docker run --rm --network mykey_db --read-only --cap-drop ALL --security-opt no-new-privileges --tmpfs /tmp --user 1000:1000 -v "$root/in/pgpass:/run/mykey/pgpass:ro" -e PGPASSFILE=/run/mykey/pgpass -v /etc/mykey/pki/ca.crt:/run/mykey/ca.crt:ro -v "$root/artifacts/postgres.dump:/run/mykey/postgres.dump" --entrypoint pg_dump postgres@sha256:e3d24f6906d0760bf4da0dae872415391ededefad23fd471c47dc53b0ddf3c42 --format=custom --file=/run/mykey/postgres.dump --dbname='host=postgres port=5432 dbname=postgres user=backup_reader sslmode=verify-full sslrootcert=/run/mykey/ca.crt'
+: > "$root/artifacts/postgres.dump" && chown 1000:1000 "$root/artifacts/postgres.dump" && docker run --rm --network mykey_db --read-only --cap-drop ALL --security-opt no-new-privileges --tmpfs /tmp --user 1000:1000 -v "$root/in/pgpass:/run/mykey/pgpass:ro" -e PGPASSFILE=/run/mykey/pgpass -v /etc/mykey/pki/ca.crt:/run/mykey/ca.crt:ro -v "$root/artifacts/postgres.dump:/run/mykey/postgres.dump" --entrypoint pg_dump postgres@sha256:e3d24f6906d0760bf4da0dae872415391ededefad23fd471c47dc53b0ddf3c42 --format=custom --file=/run/mykey/postgres.dump --dbname='host=postgres port=5432 dbname=postgres user=backup_reader sslmode=verify-full sslrootcert=/run/mykey/ca.crt'
 rm -f "$root/in/pgpass"
 PGPASSWORD=$(cat /etc/mykey/secrets/postgres/superuser-password)
 export PGPASSWORD
@@ -71,11 +72,12 @@ rm -f "$root/in/bao-header"
 
 health=$(curl --fail --silent --max-time 30 --cacert /etc/mykey/pki/ca.crt --resolve openbao:8200:10.78.3.2 https://openbao:8200/v1/sys/health)
 seal=$(curl --fail --silent --max-time 30 --cacert /etc/mykey/pki/ca.crt --resolve openbao:8200:10.78.3.2 https://openbao:8200/v1/sys/seal-status)
-api_image=$(setting API_IMAGE)
+# The API image's own build (host.env records image ids, not tags).
+release_build=$(docker image inspect "$(setting API_IMAGE)" --format '{{range .Config.Env}}{{println .}}{{end}}' | sed -n 's/^MYKEY_BUILD=//p')
 {
   printf 'host_instance_id=%s\n' "$(cat /etc/machine-id)"
   printf 'backend_incarnation=%s\n' "$(printf '%s' "$health" | sed -n 's/.*"cluster_id":"\([^"]*\)".*/\1/p')"
-  printf 'release_build=%s\n' "${api_image##*:}"
+  printf 'release_build=%s\n' "$release_build"
   printf 'kms_key_id=%s\n' "$(setting MYKEY_KMS_SEAL_KEY_ID)"
   printf 'seal_name=%s\n' "$(printf '%s' "$seal" | sed -n 's/.*"type":"\([^"]*\)".*/\1/p')"
   printf 'tool_openbao=%s\n' "$(printf '%s' "$health" | sed -n 's/.*"version":"\([^"]*\)".*/\1/p')"
@@ -85,7 +87,7 @@ api_image=$(setting API_IMAGE)
 chown -R 1000:1000 "$root"
 
 /opt/mykey/hosts/ops-run.sh pair -- pair --step manifest --pair "$pair"
-/opt/mykey/hosts/ops-run.sh capture -- capture --step record --owner backup --pair "$pair" --manifest "$root/manifest.json"
+/opt/mykey/hosts/ops-run.sh capture -- capture --step record --owner backup --pair "$pair" --manifest "/run/mykey/pairs/$pair/manifest.json"
 released=true
 kill "$watchdog" 2>/dev/null || true
 

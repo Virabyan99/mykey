@@ -70,7 +70,7 @@ function stepsFor(q: Quote) {
     capture: {
       /** pg_dump as backup_reader over the database bridge, into the one file it writes. */
       dump: [
-        `: > ${q("artifacts/postgres.dump")} &&`,
+        `: > ${q("artifacts/postgres.dump")} && chown ${OPS_UID} ${q("artifacts/postgres.dump")} &&`,
         `docker run --rm --network mykey_db ${HARDENED} --user ${OPS_UID}`,
         `-v ${q("in/pgpass:/run/mykey/pgpass:ro")} -e PGPASSFILE=/run/mykey/pgpass`,
         `-v ${CA}:/run/mykey/ca.crt:ro -v ${q("artifacts/postgres.dump:/run/mykey/postgres.dump")}`,
@@ -153,6 +153,8 @@ umask 077
 
 host_env=\${MYKEY_HOST_ENV:-/etc/mykey/host.env}
 setting() { sed -n "s/^$1=//p" "$host_env" | tail -n 1; }
+# The jobs mount the pairs' directory: it exists before the first one runs.
+install -d -m 0711 -o root -g root ${PAIR_ROOT}
 
 # backup.sh recover (mykey-capture-recover at boot; mykey-backup's ExecStopPost):
 # release a freeze a dead capture left, and remove every pair tmpfs left behind.
@@ -186,7 +188,6 @@ finish() {
 }
 trap finish EXIT INT TERM
 
-install -d -m 0711 ${PAIR_ROOT}
 mkdir -m 0700 "$root"
 mount -t tmpfs -o size=${PAIR_TMPFS_SIZE},mode=0700,uid=1000,gid=1000,nosuid,nodev,noexec tmpfs "$root"
 install -d -m 0700 -o 1000 -g 1000 "$root/in" "$root/artifacts"
@@ -214,11 +215,12 @@ rm -f "$root/in/bao-header"
 
 health=$(curl --fail --silent --max-time 30 --cacert ${CA} --resolve openbao:${String(BAO.port)}:${BAO.address} https://openbao:${String(BAO.port)}/v1/sys/health)
 seal=$(curl --fail --silent --max-time 30 --cacert ${CA} --resolve openbao:${String(BAO.port)}:${BAO.address} https://openbao:${String(BAO.port)}/v1/sys/seal-status)
-api_image=$(setting API_IMAGE)
+# The API image's own build (host.env records image ids, not tags).
+release_build=$(docker image inspect "$(setting API_IMAGE)" --format '{{range .Config.Env}}{{println .}}{{end}}' | sed -n 's/^MYKEY_BUILD=//p')
 {
   printf 'host_instance_id=%s\\n' "$(cat /etc/machine-id)"
   printf 'backend_incarnation=%s\\n' "$(printf '%s' "$health" | sed -n 's/.*"cluster_id":"\\([^"]*\\)".*/\\1/p')"
-  printf 'release_build=%s\\n' "\${api_image##*:}"
+  printf 'release_build=%s\\n' "$release_build"
   printf 'kms_key_id=%s\\n' "$(setting MYKEY_KMS_SEAL_KEY_ID)"
   printf 'seal_name=%s\\n' "$(printf '%s' "$seal" | sed -n 's/.*"type":"\\([^"]*\\)".*/\\1/p')"
   printf 'tool_openbao=%s\\n' "$(printf '%s' "$health" | sed -n 's/.*"version":"\\([^"]*\\)".*/\\1/p')"
@@ -228,7 +230,7 @@ api_image=$(setting API_IMAGE)
 chown -R 1000:1000 "$root"
 
 ${ops} pair -- pair --step manifest --pair "$pair"
-${ops} capture -- capture --step record --owner backup --pair "$pair" --manifest "$root/manifest.json"
+${ops} capture -- capture --step record --owner backup --pair "$pair" --manifest "/run/mykey/pairs/$pair/manifest.json"
 released=true
 kill "$watchdog" 2>/dev/null || true
 
