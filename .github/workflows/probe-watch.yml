@@ -1,0 +1,40 @@
+name: probe-watch
+
+# Who watches the Worker (Run 6.4 Task D, P-117, D-50): every 15 minutes, read
+# the probe's state route and send one Telegram message when the probe has not
+# evaluated for 10 minutes or does not answer. GitHub may start a scheduled
+# run late, and pauses schedules after 60 days without repository activity:
+# both are stated limits (D-50). Node's built-ins only, so no install step.
+on:
+  schedule:
+    - cron: "7,22,37,52 * * * *"
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: probe-watch
+  cancel-in-progress: false
+
+# Every action is pinned by commit SHA (infra/dependencies.lock.json, pins:verify).
+jobs:
+  watch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          sparse-checkout: |
+            scripts/probe-watch.ts
+            .node-version
+          sparse-checkout-cone-mode: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .node-version
+      - name: Read the probe's state; alert when it is stale or silent
+        env:
+          PROBE_READ_TOKEN: ${{ secrets.PROBE_READ_TOKEN }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: node scripts/probe-watch.ts
