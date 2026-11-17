@@ -12,6 +12,7 @@ import type { DbTarget } from "@mykey/db";
 import type { AppRoleName, OpenBaoTarget } from "@mykey/openbao";
 import { auditArchiveCommand } from "./commands/audit-archive.ts";
 import { authCleanupCommand } from "./commands/auth-cleanup.ts";
+import { captureCommand } from "./commands/capture.ts";
 import { bootstrapOwnerCommand } from "./commands/bootstrap-owner.ts";
 import { operationsCommand } from "./commands/operations.ts";
 import { operationsExpireCommand } from "./commands/operations-expire.ts";
@@ -39,6 +40,8 @@ export interface OpsEnv {
   boundCidrs?: Record<AppRoleName, readonly string[]>;
   /** Run 6.2 (P-112): the audit archive's bucket, this host's name and the rotated OpenBao files. */
   archive?: { store: ObjectStore; host: string; rotatedDir: string | null };
+  /** Run 6.5 (P-120): where a capture keeps its artifacts (on a host /run/mykey-pair). */
+  pairScratch?: string;
 }
 
 export interface OpsIo {
@@ -68,6 +71,7 @@ export const COMMANDS: Readonly<Record<string, OpsCommand>> = {
   "reconcile-environment": reconcileEnvironmentCommand,
   "reconcile-credentials": reconcileCredentialsCommand,
   "audit-archive": auditArchiveCommand,
+  capture: captureCommand,
 };
 
 export const OPS_COMMANDS = Object.freeze(Object.keys(COMMANDS));

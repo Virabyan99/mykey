@@ -756,3 +756,46 @@ export async function pgRestoreFromFile(
     await compose(stack.project, ["exec", "-T", "-u", "0", "postgres", "rm", "-f", inside]);
   }
 }
+
+/**
+ * Run 6.5: the scratch OpenBao of a stack started with
+ * `scratch-bao.override.yml` (the same pki volume: the same static seal key
+ * and certificate). Initialised on first use. `restore` replaces its whole
+ * state with a Raft snapshot of the stack's own OpenBao and waits until it is
+ * active again; from then on the stack's root token is its root token.
+ */
+export interface ScratchBao {
+  /** The scratch as a Stack whose `bao` is the scratch (for baoFetch and friends). */
+  stack: Stack;
+  restore(snapshot: Uint8Array): Promise<void>;
+}
+
+export async function scratchBao(stack: Stack): Promise<ScratchBao> {
+  const state = {
+    ...stack,
+    bao: {
+      ...stack.bao,
+      url: `https://${HOST}:${await publishedPort(stack.project, "openbao-scratch", 8200)}`,
+      rootToken: "",
+    },
+  } as unknown as StackState;
+  await waitForOpenBaoListener(state);
+  await initialiseOpenBao(state);
+  await waitForOpenBaoActive(state);
+  return {
+    stack: state as unknown as Stack,
+    async restore(snapshot) {
+      const response = await baoRequest(state, "/v1/sys/storage/raft/snapshot-force", {
+        method: "POST",
+        body: snapshot,
+      });
+      if (response.status !== 204 && response.status !== 200) {
+        throw new Error(`snapshot-force returned HTTP ${String(response.status)}`);
+      }
+      state.bao.rootToken = stack.bao.rootToken;
+      // The node reloads the restored state (its audit device included: the
+      // override gives it a writable directory) and stays unsealed.
+      await waitForOpenBaoActive(state);
+    },
+  };
+}
