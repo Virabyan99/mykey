@@ -85,8 +85,45 @@ Projected for one pair a day at this size (**estimated**): 30 pairs ≈ 10 MB st
 
 Operations per pair in the product (P-119): 2 `PutObject` (`bundle.tar`, `eligible.json`) and 1 `GetObject` (the verification's read-back), so 60 Class A and 30 Class B a month for one pair a day: below every billing unit (**estimated**). The staging figure after Task D, from pairs the unit takes, replaces the empty stack's.
 
-## What is still missing for COST-B1
+## Measured: the used staging pair (Run 6.6, 17 Nov 2026)
 
-- The size of a PostgreSQL dump and an OpenBao snapshot of a used product (Run 6.5); the staging pair above is nearly empty.
-- Whether large bundles need multipart upload, which adds Class A operations per part.
-- The monthly figure on a Cloudflare invoice, to compare with this sheet.
+Three pairs taken by `mykey-backup.service` on staging, after the journeys of Sessions 4 and 5. Staging then held **6,784 secrets** (`app.secret_index`) and 18,731 audit events. Sizes are read from each pair's signed `eligible.json` and the bucket listing (`.superpowers/cost-figures.ts`, names and sizes only).
+
+| Pair (17 Nov 2026) | `bundle.tar`     | `postgres.dump` | `globals.sql` | `openbao.snap`   | `eligible.json` |
+| ------------------ | ---------------- | --------------- | ------------- | ---------------- | --------------- |
+| `1591f04a`, 16:38  | 44,226,560 bytes | 4,346,069 bytes | 1,204 bytes   | 43,941,679 bytes | 1,807 bytes     |
+| `c568b60e`, 16:49  | 44,236,800 bytes | 4,351,830 bytes | 1,204 bytes   | 43,944,239 bytes | 1,807 bytes     |
+| `fc7e95cd`, 16:51  | 44,267,520 bytes | 4,361,235 bytes | 1,204 bytes   | 43,957,551 bytes | 1,807 bytes     |
+
+The OpenBao snapshot is nine tenths of a pair. Restic's compression keeps the bundle about 8 % below the sum of the artifacts.
+
+**Upload.** `r2Store.put` sends one `PutObject`, which R2 accepts up to 5 GiB. A pair is a hundred times smaller than that, so it needs no multipart upload and no Class A operation per part. `backup.staging.test.ts` checks that no object under `pairs/` reaches 5 GiB.
+
+## Measured: the audit archive (Run 6.2 to 6.6)
+
+`mykey-audit-archive`, staging, as listed on 17 Nov 2026:
+
+| Stream  | Objects                    | Bytes      | Covers                                             | Per day (**estimated**)        |
+| ------- | -------------------------- | ---------- | -------------------------------------------------- | ------------------------------ |
+| app     | 10 (5 segments, manifests) | 1,000,899  | 12–16 Nov 2026, 18,649 events                      | about 200 KB                   |
+| openbao | 4 (2 rotated files)        | 87,964,798 | the OpenBao audit device of Sessions 2–6 (staging) | about 15 MB under test traffic |
+
+Staging's traffic is test traffic, much heavier than one person's use; the OpenBao figure is an upper bound.
+
+## Projection for one host (Run 6.6, **estimated** from the measured sizes)
+
+Retention (D-53) keeps a pair 30 days, plus up to two hours until its bucket lock ends, plus a day until the 05:00 run. With one pair a night, at most 32 pairs exist at once.
+
+| Item                                     | Per month                                                                                   | Cost at the rates of 11 Nov 2026                                 |
+| ---------------------------------------- | ------------------------------------------------------------------------------------------- | ---------------------------------------------------------------- |
+| Pairs stored (32 × 44.3 MB)              | 1.42 GB-month                                                                               | $0.00 inside the included 10 GB; $0.03 without it (rounded to 2) |
+| Pairs on a bad night (one more, crossed) | up to 2.8 GB-month                                                                          | $0.045 without the included amount                               |
+| Audit archive, app stream                | about 6 MB more each month (kept 365 days: about 73 MB a year)                              | $0.00                                                            |
+| Audit archive, OpenBao stream            | up to 450 MB more each month under test traffic                                             | $0.00 inside the included amount; $0.015 a GB-month beyond it    |
+| Class A                                  | 120: per night 2 `PutObject`; per retention run 1 `ListObjectsV2`, 1 `ListMultipartUploads` | below $0.001                                                     |
+| Class B                                  | 90: per night 1 `GetObject` (read-back); per deleted pair 2 `HeadObject`                    | below $0.001                                                     |
+| Deletes                                  | per deleted pair 2 `DeleteObjects`                                                          | free                                                             |
+
+A production host with a person's real use should be smaller than staging on every line except the snapshot's fixed part.
+
+**No invoice figure yet.** The first Cloudflare invoice that covers a whole month of daily pairs (December 2026) is to be compared with this sheet at Stage 1's exit (Run 9.x).

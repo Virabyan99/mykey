@@ -19,5 +19,12 @@
     "file": "tests/staging/backup-night.staging.test.ts",
     "command": "MYKEY_CHECKPOINT=backup-first-night pnpm run test:staging -- tests/staging/backup-night.staging.test.ts",
     "expects": "after the timer's own 03:00 UTC run, its pair is eligible and the heartbeat's newestEligibleCaptureAt is that capture (Run 6.5)"
+  },
+  {
+    "id": "pair-30-day",
+    "notBefore": "2026-12-17T19:00:00.000Z",
+    "file": "tests/staging/checkpoints/pair-30-day.staging.test.ts",
+    "command": "MYKEY_CHECKPOINT=pair-30-day pnpm run test:staging -- tests/staging/checkpoints/pair-30-day.staging.test.ts",
+    "expects": "the oldest staging pair (1591f04a, 17 Nov 16:38) restores on the workstation, then the retention unit deletes it (row expired, objects gone by HEAD) while a newer eligible pair stays; best run before the 05:00 UTC timer of 18 Dec, which otherwise deletes it first (the test then proves that and restores the next pair) (Run 6.6)"
   }
 ]

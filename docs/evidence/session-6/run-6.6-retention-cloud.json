@@ -22,5 +22,46 @@
       }
     ],
     "note": "no ret- prefix at least 11 min older; the next run after 2026-11-17T17:37:56.008Z cleans this one up"
+  },
+  {
+    "run": "probe/ret-1794937028773-e6da84bb-487a-4900-8eef-6e4c997de483/",
+    "startedAt": "2026-11-17T17:37:08.773Z",
+    "cleanedUp": [
+      {
+        "prefix": "probe/ret-1794935807725-a6f3d86f-11e5-4cc0-9e6a-f316b435c65d/",
+        "objects": 2,
+        "ageMinutes": 20
+      }
+    ],
+    "ownRefused": [
+      {
+        "key": "probe/ret-1794937028773-e6da84bb-487a-4900-8eef-6e4c997de483/eligible.json",
+        "code": "ObjectLockedByBucketPolicy"
+      }
+    ],
+    "note": "earlier prefixes deleted by applyRetention after their lock, proven gone by HEAD"
+  },
+  {
+    "run": "probe/ret-1794937695692-e768300a-77fd-4787-bb3e-2722fa90415f/",
+    "startedAt": "2026-11-17T17:48:15.692Z",
+    "cleanedUp": [
+      {
+        "prefix": "probe/ret-1794936416008-926e7e5e-09c6-47a7-b0fa-298b996899b7/",
+        "objects": 2,
+        "ageMinutes": 21
+      },
+      {
+        "prefix": "probe/ret-1794937028773-e6da84bb-487a-4900-8eef-6e4c997de483/",
+        "objects": 2,
+        "ageMinutes": 11
+      }
+    ],
+    "ownRefused": [
+      {
+        "key": "probe/ret-1794937695692-e768300a-77fd-4787-bb3e-2722fa90415f/eligible.json",
+        "code": "ObjectLockedByBucketPolicy"
+      }
+    ],
+    "note": "earlier prefixes deleted by applyRetention after their lock, proven gone by HEAD"
   }
 ]

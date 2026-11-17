@@ -1083,9 +1083,11 @@
       "ownerRun": "6.6",
       "contributingRuns": [],
       "oldSession": "D08-S41",
-      "status": "OPEN",
-      "evidence": [],
-      "note": ""
+      "status": "SPIKE_PASS",
+      "evidence": [
+        "docs/evidence/session-6/run-6.6.md"
+      ],
+      "note": "Retention keeps the newest eligible pair always, deletes expired and released pairs verified and in order (eligible.json, row, bundle); the unit runs on staging; key readability probed on the KMS."
     },
     {
       "id": "FR-1.79",
@@ -1882,9 +1884,11 @@
       "ownerRun": "6.6",
       "contributingRuns": [],
       "oldSession": "D08-S41",
-      "status": "OPEN",
-      "evidence": [],
-      "note": ""
+      "status": "SPIKE_PASS",
+      "evidence": [
+        "docs/evidence/session-6/run-6.6.md"
+      ],
+      "note": "Eligibility (30 days) and physical retention (lock: capture + 30 d + 2 h) follow D-53; a refused or still-present object stops that pair and fails the unit after three days; checkpoint pair-30-day on staging."
     },
     {
       "id": "AC-1.37",
@@ -2332,12 +2336,13 @@
         "1.9"
       ],
       "oldSession": "D08-S41",
-      "status": "OPEN",
+      "status": "SPIKE_PASS",
       "evidence": [
         "docs/evidence/session-1/run-1.9.md",
-        "docs/evidence/session-1/retention-fixture.json"
+        "docs/evidence/session-1/retention-fixture.json",
+        "docs/evidence/session-6/run-6.6.md"
       ],
-      "note": "Started, nothing passed: a synthetic fixture was uploaded on 11 Nov 2026 and is locked until 15 Nov 2026. Clean-up after expiry and restore of the oldest eligible pair belong to Run 6.6."
+      "note": "Daily pair, retention by its own unit, oldest-eligible restore: the fixture's oldest pair restored and the fixture cleaned up verified (Run 6.6, cleanup.ts); staging's pairs restore on the workstation (Run 6.5); the 30-day deletion on staging is checkpoint pair-30-day."
     },
     {
       "id": "PO-10",
@@ -2605,12 +2610,13 @@
         "1.9"
       ],
       "oldSession": "D08-S41",
-      "status": "OPEN",
+      "status": "SPIKE_PASS",
       "evidence": [
         "docs/evidence/session-1/run-1.9.md",
-        "docs/evidence/session-1/retention-fixture.json"
+        "docs/evidence/session-1/retention-fixture.json",
+        "docs/evidence/session-6/run-6.6.md"
       ],
-      "note": "Started, nothing passed: on the fixture bucket R2 refused overwrite, delete and bulk delete of locked objects and refused a lock-rule change by every object token; a ten-minute lock expired as configured. The 30-day production rule is read back but not aged."
+      "note": "Real lock aging: probe objects deleted after their 600 s lock by a later run and proven gone; locked ones refused (409, bulk 200 with per-object errors) and reported by applyRetention, not thrown; the fixture's 4-day pairs deleted after their lock and its oldest pair recovered (Run 6.6)."
     },
     {
       "id": "AGENT-B1",
@@ -2638,11 +2644,12 @@
         "1.9"
       ],
       "oldSession": "D08-S41",
-      "status": "OPEN",
+      "status": "SPIKE_PASS",
       "evidence": [
-        "docs/evidence/cost-sheet.md"
+        "docs/evidence/cost-sheet.md",
+        "docs/evidence/session-6/run-6.6.md"
       ],
-      "note": "Started, nothing passed: rates looked up on 11 Nov 2026 and operations counted on a synthetic fixture. The size of a real pair is not known."
+      "note": "A used staging pair measured (44.3 MB, 6,784 secrets), the audit archive per day, operations per night and per retention run; 32 pairs ≈ 1.42 GB-month. No invoice figure yet (Run 9.x)."
     }
   ]
 }

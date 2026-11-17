@@ -4,11 +4,12 @@ Run 6.5 (D-51, D-52). How a host backs itself up every night, how to read a fail
 
 ## What runs when
 
-| Unit                                  | When                                | What                                                                                                       |
-| ------------------------------------- | ----------------------------------- | ---------------------------------------------------------------------------------------------------------- |
-| `mykey-backup.timer` → `.service`     | 03:00 UTC (catches up after a boot) | `/opt/mykey/hosts/backup/backup.sh`: capture, pack, upload, verify, sign. At most 2 h (`TimeoutStartSec`). |
-| `mykey-backup.service` `ExecStopPost` | after every run                     | `backup.sh recover`                                                                                        |
-| `mykey-capture-recover.service`       | at boot                             | `backup.sh recover`: releases a freeze a crash left and removes any pair tmpfs                             |
+| Unit                                      | When                                | What                                                                                                       |
+| ----------------------------------------- | ----------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| `mykey-backup.timer` → `.service`         | 03:00 UTC (catches up after a boot) | `/opt/mykey/hosts/backup/backup.sh`: capture, pack, upload, verify, sign. At most 2 h (`TimeoutStartSec`). |
+| `mykey-backup.service` `ExecStopPost`     | after every run                     | `backup.sh recover`                                                                                        |
+| `mykey-capture-recover.service`           | at boot                             | `backup.sh recover`: releases a freeze a crash left and removes any pair tmpfs                             |
+| `mykey-pair-retention.timer` → `.service` | 05:00 UTC                           | `ops pair --step retention`: deletes expired pairs, never the newest eligible one (Run 6.6, D-53)          |
 
 One run:
 
@@ -61,6 +62,25 @@ node scripts/host.ts <host> timers            # installs mykey-backup.timer and 
 ```
 
 The bucket's lock rule `pairs-30d` is set by `infra/backup/retention-fixture/provision.ts --locks-only`. From then on every object under `pairs/` stays 30 days, test pairs included.
+
+## Retention (Run 6.6, D-53)
+
+Every morning at 05:00 UTC `mykey-pair-retention` deletes, through `mykey-<host>-pairs-cleanup`:
+
+- eligible pairs older than 30 days;
+- ineligible pairs once their lock has ended (capture + 30 days + 2 hours).
+
+It never deletes the newest eligible pair. Per pair it deletes `eligible.json` first and proves it gone, then closes the row (`expired`, `deleted_at`), then deletes `bundle.tar`.
+
+| Journal line                                           | Meaning, what to do                                                                                                           |
+| ------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------- |
+| `retention <host>: nothing to delete (N kept)`         | Normal until pairs are 30 days old.                                                                                           |
+| `expired <pairId>`                                     | Its `eligible.json` is gone and the row closed; the bundle follows in the same run or the next.                               |
+| `… refused (ObjectLockedByBucketPolicy)`               | The lock still holds; the next run tries again. With `, 3 days after its lock` the unit fails: check the bucket's rule.       |
+| `… still present after a delete that answered success` | The unit fails. Read the object with `HEAD`; do not delete the row by hand.                                                   |
+| `orphan pairs/<host>/<prefix>/ (not deleted)`          | Objects without a row. Find out where they came from; remove them with `ops pair --step retention --delete-orphans <prefix>`. |
+
+Install on a host: `node scripts/host.ts <host> r2-install pairs-cleanup`, then `timers`.
 
 ## Why a pair is ineligible
 

@@ -24,5 +24,36 @@
       }
     ],
     "note": "earlier runs' objects deleted after their lock and proven gone by HEAD"
+  },
+  {
+    "run": "probe/run-1794936996754-aeaffd15/",
+    "startedAt": "2026-11-17T17:36:36.754Z",
+    "lockMinutes": 10,
+    "deleted": [
+      {
+        "prefix": "probe/run-1794935776893-b54a6865/",
+        "objects": 1,
+        "ageMinutes": 20
+      }
+    ],
+    "note": "earlier runs' objects deleted after their lock and proven gone by HEAD"
+  },
+  {
+    "run": "probe/run-1794937664597-77c02432/",
+    "startedAt": "2026-11-17T17:47:44.597Z",
+    "lockMinutes": 10,
+    "deleted": [
+      {
+        "prefix": "probe/run-1794936384110-dd6427fa/",
+        "objects": 1,
+        "ageMinutes": 21
+      },
+      {
+        "prefix": "probe/run-1794936996754-aeaffd15/",
+        "objects": 1,
+        "ageMinutes": 11
+      }
+    ],
+    "note": "earlier runs' objects deleted after their lock and proven gone by HEAD"
   }
 ]
