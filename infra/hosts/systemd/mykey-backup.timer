@@ -1,0 +1,10 @@
+[Unit]
+Description=MyKey daily pair at 03:00 UTC (Run 6.5)
+
+[Timer]
+OnCalendar=*-*-* 03:00:00 UTC
+Persistent=true
+RandomizedDelaySec=0
+
+[Install]
+WantedBy=timers.target

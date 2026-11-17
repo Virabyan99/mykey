@@ -118,7 +118,9 @@ export const USAGE = `usage: node scripts/host.ts <staging|prod> <command> [--pu
   keys init                      the auth key rings: new files on the workstation, installed on the host
   ops <command> [--flag value]   an operator command (apps/ops) as maintenance, through a tunnel
   ops-secrets                    role passwords for ops jobs on the host; MYKEY_HOST_NAME in host.env
-  r2-install <audit-archive>     the S3 credentials of that job's R2 token, on stdin
+  r2-install <audit-archive|pairs>  the S3 credentials of that job's R2 token, on stdin
+  backup-init                    backup password and signing key made on the host; trust anchor; AppRole backup
+  backup-custody                 copy the backup password and signing key to ~/.mykey/custody/<host>/backup/
   timers                         install and start the job timers (ops-jobs.json, audit rotation)
   quiesce                        gate close, stop api and provisioner, restart OpenBao (staging only)
   resume                         start api and provisioner; the gate stays closed until gate open
@@ -136,6 +138,8 @@ export type HostCommand = { host: HostName; via: Address } & (
         | "quiesce"
         | "resume"
         | "ops-secrets"
+        | "backup-init"
+        | "backup-custody"
         | "timers";
     }
   | { command: "status"; json: boolean }
@@ -224,6 +228,8 @@ export function parseHostArgs(argv: string[]): HostCommand {
     case "quiesce":
     case "resume":
     case "ops-secrets":
+    case "backup-init":
+    case "backup-custody":
     case "timers":
       if (positional.length !== 0) throw new Error(USAGE);
       return { ...base, command };
@@ -1759,6 +1765,12 @@ async function main(argv: string[], log: Logger): Promise<number> {
     case "r2-install":
       await runR2Install(host, command.name, address, log);
       return 0;
+    case "backup-init":
+      await runBackupInit(host, address, log);
+      return 0;
+    case "backup-custody":
+      await runBackupCustody(host, address, log);
+      return 0;
     case "timers":
       await runTimers(host, address, log);
       return 0;
@@ -1768,8 +1780,13 @@ async function main(argv: string[], log: Logger): Promise<number> {
 /** Run 6.2 (P-112): which R2 token each host job uses, and where its three files go. */
 export const R2_INSTALLS = {
   "audit-archive": {
-    token: "mykey-audit-archive-upload",
+    token: () => "mykey-audit-archive-upload",
     directory: "/etc/mykey/secrets/r2-audit-archive",
+  },
+  /** Run 6.5 (P-119): the pair job; the token reads back what it wrote (Item Write). */
+  pairs: {
+    token: (host: HostName) => `mykey-${host}-pairs-upload`,
+    directory: "/etc/mykey/secrets/r2-pairs",
   },
 } as const;
 export type R2InstallName = keyof typeof R2_INSTALLS;
@@ -1793,7 +1810,7 @@ async function runR2Install(
   address: Address,
   log: Logger,
 ): Promise<void> {
-  const credentials = loadR2Credentials(R2_INSTALLS[name].token);
+  const credentials = loadR2Credentials(R2_INSTALLS[name].token(host.name));
   registerSecret(credentials.secretAccessKey);
   const files = r2InstallFiles(name);
   for (const field of ["accountId", "accessKeyId", "secretAccessKey"] as const) {
@@ -1807,6 +1824,135 @@ async function runR2Install(
       `installing ${files[field]}`,
     );
     log.info(`${host.name}: ${files[field]} installed`);
+  }
+}
+
+/** Run 6.5 (P-119): the backup secrets of a host, as files on it. */
+export const BACKUP_FILES = {
+  /** Restic's password; owner 1000 (the ops user), mode 0400. */
+  password: "/etc/mykey/secrets/backup/password",
+  /** The Ed25519 key that signs eligible.json; owner 1000, mode 0400. */
+  signingKey: "/etc/mykey/secrets/backup/signing-key",
+  /** The root AppRole backup, read by backup.sh as root. */
+  roleId: "/etc/mykey/secrets/backup-approle/role-id",
+  secretId: "/etc/mykey/secrets/backup-approle/secret-id",
+} as const;
+/** The signing key's id (ops-jobs.json: MYKEY_PAIR_SIGNER). */
+export const BACKUP_KEY_ID = "k1";
+/** The token of the AppRole backup lives 600 s (P-119). */
+const BACKUP_TOKEN_SECONDS = 600;
+
+/** Makes the backup password and the signing key on the host, once; never prints them. */
+export function backupKeysCommand(): string {
+  const make = (path: string, generate: string): string =>
+    `( test -s ${path} || ( ${generate} > ${path}.new && chown 1000:1000 ${path}.new && chmod 0400 ${path}.new && mv ${path}.new ${path} ) )`;
+  return [
+    "umask 077",
+    "install -d -m 0700 -o 1000 -g 1000 /etc/mykey/secrets/backup",
+    make(BACKUP_FILES.password, "openssl rand -hex 32"),
+    make(BACKUP_FILES.signingKey, "openssl genpkey -algorithm ed25519"),
+  ].join(" && ");
+}
+
+/** The committed public key of a host (the trust anchor a restore checks against). */
+export function trustFile(host: HostName): string {
+  return resolve(
+    import.meta.dirname,
+    "..",
+    "infra/hosts/backup/trust",
+    `${host}-${BACKUP_KEY_ID}.pub`,
+  );
+}
+
+/**
+ * P-119: the backup password and the signing key are made on the host; the
+ * public key is written to infra/hosts/backup/trust/ (commit it); the root
+ * AppRole backup (policy backup, 600 s tokens) gets a new secret id, installed
+ * for backup.sh. Safe to run again: the keys are never replaced.
+ */
+async function runBackupInit(host: HostEntry, address: Address, log: Logger): Promise<void> {
+  const remote = { sudo: true, address, secretOutput: true } as const;
+  expectSuccess(await sshExec(host, backupKeysCommand(), remote), "the backup password and key");
+  const answer = expectSuccess(
+    await sshExec(host, `openssl pkey -in ${BACKUP_FILES.signingKey} -pubout`, remote),
+    "the public signing key",
+  ).stdout;
+  const key = createPublicKey(answer);
+  if (key.asymmetricKeyType !== "ed25519") throw new Error("the signing key is not Ed25519");
+  const pem = key.export({ format: "pem", type: "spki" }).toString();
+  const file = trustFile(host.name);
+  if (existsSync(file) && readFileSync(file, "utf8") !== pem) {
+    throw new Error(`${file} differs from the host's key: a new key needs a new key id`);
+  }
+  mkdirSync(dirname(file), { recursive: true });
+  writeFileSync(file, pem);
+  log.info(`${host.name}: trust anchor ${file} (commit it)`);
+
+  const custody = custodyCopyPath(host.name);
+  const rootToken = (JSON.parse(readFileSync(custody, "utf8")) as { root_token?: unknown })
+    .root_token;
+  if (typeof rootToken !== "string" || rootToken === "") {
+    throw new Error(`${custody} holds no root token`);
+  }
+  registerSecret(rootToken);
+  const { OpenBaoAdmin } = await import("@mykey/openbao/admin");
+  const dir = mkdtempSync(join(tmpdir(), "mykey-backup-init-"));
+  const tunnel = await openTunnel(host, REMOTE.openbao);
+  try {
+    const caCertPath = join(dir, "ca.crt");
+    writeFileSync(
+      caCertPath,
+      expectSuccess(await sshExec(host, `cat ${REMOTE.caCert}`, { address }), "reading the host CA")
+        .stdout,
+    );
+    const admin = new OpenBaoAdmin(
+      { url: `https://127.0.0.1:${tunnel.localPort}`, caCertPath },
+      rootToken,
+    );
+    if ((await admin.readAuthMount("", "approle")) === null) await admin.enableAppRole("");
+    const { roleId } = await admin.putAppRole("", "backup", BACKUP_TOKEN_SECONDS);
+    const { secretId } = await admin.newSecretId("", "backup");
+    registerSecret(secretId);
+    for (const [path, value] of [
+      [BACKUP_FILES.roleId, roleId],
+      [BACKUP_FILES.secretId, secretId],
+    ] as const) {
+      expectSuccess(
+        await sshExec(host, secretInstallCommand(path, "0:0"), { ...remote, stdin: value }),
+        `installing ${path}`,
+      );
+      log.info(`${host.name}: ${path} installed`);
+    }
+  } finally {
+    await tunnel.close();
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+/** OWN-4: the backup password and signing key, copied unseen to workstation custody. */
+async function runBackupCustody(host: HostEntry, address: Address, log: Logger): Promise<void> {
+  const dir = join(homedir(), ".mykey", "custody", host.name, "backup");
+  mkdirSync(dir, { recursive: true, mode: 0o700 });
+  for (const [name, path] of [
+    ["password", BACKUP_FILES.password],
+    ["signing-key", BACKUP_FILES.signingKey],
+  ] as const) {
+    const value = expectSuccess(
+      await sshExec(host, `cat ${path}`, { sudo: true, address, secretOutput: true }),
+      `reading ${name}`,
+    ).stdout;
+    if (value.trim() === "") throw new Error(`${path} is empty: run backup-init first`);
+    registerSecret(value.trim());
+    const target = join(dir, name);
+    if (existsSync(target)) {
+      if (readFileSync(target, "utf8") !== value) {
+        throw new Error(`${target} differs from the host's ${name}; it is never overwritten`);
+      }
+      log.info(`${host.name}: ${target} already holds the host's ${name}`);
+    } else {
+      writeFileSync(target, value, { mode: 0o600, flag: "wx" });
+      log.info(`${host.name}: ${target} written`);
+    }
   }
 }
 

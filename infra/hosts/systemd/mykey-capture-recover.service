@@ -1,0 +1,11 @@
+[Unit]
+Description=MyKey: release a capture freeze a crash left, at boot (Run 6.5)
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/opt/mykey/hosts/backup/backup.sh recover
+
+[Install]
+WantedBy=multi-user.target

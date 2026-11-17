@@ -6,7 +6,14 @@
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { jobTimers, parseHostArgs, r2InstallFiles, timersCommand } from "../../../scripts/host.ts";
+import {
+  BACKUP_FILES,
+  backupKeysCommand,
+  jobTimers,
+  parseHostArgs,
+  r2InstallFiles,
+  timersCommand,
+} from "../../../scripts/host.ts";
 import { readOpsJobs } from "../../../scripts/ops-jobs.ts";
 
 const SYSTEMD = join(import.meta.dirname, "..", "..", "..", "infra", "hosts", "systemd");
@@ -58,14 +65,36 @@ describe("r2-install and timers (P-112)", () => {
       command: "r2-install",
       name: "audit-archive",
     });
-    expect(() => parseHostArgs(["staging", "r2-install", "pairs"])).toThrow(/audit-archive/);
+    expect(parseHostArgs(["staging", "r2-install", "pairs"])).toMatchObject({ name: "pairs" });
+    expect(() => parseHostArgs(["staging", "r2-install", "other"])).toThrow(/audit-archive, pairs/);
+    expect(parseHostArgs(["prod", "backup-init"])).toMatchObject({ command: "backup-init" });
+    expect(parseHostArgs(["staging", "backup-custody"])).toMatchObject({
+      command: "backup-custody",
+    });
     expect(parseHostArgs(["staging", "timers"])).toMatchObject({ command: "timers" });
   });
 
   it("installs the three files exactly where the job mounts them", () => {
-    const files = Object.values(r2InstallFiles("audit-archive")).sort();
-    const job = table.jobs["audit-archive"];
-    const mounted = Object.values(job?.secrets ?? {}).filter((source) => source.includes("/r2-"));
-    expect(files).toEqual(mounted.sort());
+    for (const name of ["audit-archive", "pairs"] as const) {
+      const files = Object.values(r2InstallFiles(name)).sort();
+      const job = table.jobs[name === "pairs" ? "pair" : name];
+      const mounted = Object.values(job?.secrets ?? {}).filter((source) => source.includes("/r2-"));
+      expect(files, name).toEqual(mounted.sort());
+    }
+  });
+
+  it("the pair job mounts the signing key where host-env reads it, and the pair scratch", () => {
+    const job = table.jobs.pair;
+    expect(job?.secrets["/run/mykey/secrets/backup/signing-key"]).toBe(BACKUP_FILES.signingKey);
+    expect(job?.writable).toEqual({ "/run/mykey/pairs": "/var/lib/mykey/pairs" });
+    expect(table.jobs.capture?.writable).toEqual(job?.writable);
+  });
+
+  it("backup-init makes the keys on the host once and never prints them", () => {
+    const command = backupKeysCommand();
+    expect(command).toContain(`test -s ${BACKUP_FILES.password} ||`);
+    expect(command).toContain("openssl genpkey -algorithm ed25519");
+    expect(command).not.toMatch(/\bcat\b|\becho\b|\btee\b|\bprintf\b/);
+    expect(command).toContain("chown 1000:1000");
   });
 });

@@ -32,12 +32,16 @@ export {
 } from "./reconcile/credentials.ts";
 // Run 6.5 (P-118, P-120): the capture coordinator (maintenance; `ops capture`).
 export {
+  CANDIDATE_DEADLINE_SECONDS,
   DRAIN_DEADLINE_MS,
   FROZEN_DEADLINE_MS,
   abortCapture,
   beginCapture,
   recordCapture,
+  settlePair,
   type BeginResult,
   type Boundary,
   type CaptureRecord,
+  type Publication,
+  type Settled,
 } from "./capture/coordinator.ts";

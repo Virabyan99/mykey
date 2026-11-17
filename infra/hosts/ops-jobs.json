@@ -30,6 +30,42 @@
       },
       "unit": "mykey-audit-archive",
       "schedule": "*-*-* 01:30:00 UTC"
+    },
+    "capture": {
+      "command": "capture",
+      "role": "maintenance",
+      "secrets": {
+        "/run/mykey/secrets/db-password": "/etc/mykey/secrets/ops/maintenance"
+      },
+      "writable": {
+        "/run/mykey/pairs": "/var/lib/mykey/pairs"
+      },
+      "env": {
+        "MYKEY_PAIR_SCRATCH": "/run/mykey/pairs"
+      },
+      "unit": null,
+      "schedule": null
+    },
+    "pair": {
+      "command": "pair",
+      "role": "maintenance",
+      "secrets": {
+        "/run/mykey/secrets/db-password": "/etc/mykey/secrets/ops/maintenance",
+        "/run/mykey/secrets/r2/account-id": "/etc/mykey/secrets/r2-pairs/account-id",
+        "/run/mykey/secrets/r2/access-key-id": "/etc/mykey/secrets/r2-pairs/access-key-id",
+        "/run/mykey/secrets/r2/secret-access-key": "/etc/mykey/secrets/r2-pairs/secret-access-key",
+        "/run/mykey/secrets/backup/signing-key": "/etc/mykey/secrets/backup/signing-key"
+      },
+      "writable": {
+        "/run/mykey/pairs": "/var/lib/mykey/pairs"
+      },
+      "env": {
+        "MYKEY_PAIR_SCRATCH": "/run/mykey/pairs",
+        "MYKEY_R2_DIR": "/run/mykey/secrets/r2",
+        "MYKEY_PAIR_SIGNER": "k1"
+      },
+      "unit": null,
+      "schedule": null
     }
   }
 }

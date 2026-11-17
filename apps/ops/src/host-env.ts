@@ -1,6 +1,7 @@
 // The ops image's settings on a host (Run 6.2, P-111): what ops-run.sh passes
 // for a job. Plain settings come from the environment, secrets from the files
 // it mounts; nothing secret is ever an environment value.
+import { createPrivateKey } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { credentialsFromDirectory, r2Store } from "@mykey/backup";
 import type { OpsEnv } from "./cli.ts";
@@ -18,6 +19,9 @@ function required(env: NodeJS.ProcessEnv, name: string): string {
   if (value === undefined || value === "") throw new MissingSetting(name);
   return value;
 }
+
+/** Where the pair job finds the host's signing key (ops-jobs.json mounts it). */
+export const SIGNING_KEY_FILE = "/run/mykey/secrets/backup/signing-key";
 
 /** The host a job runs on, as the archive names it. */
 export const OPS_HOSTS = ["staging", "prod"] as const;
@@ -62,9 +66,41 @@ export function opsEnvFromEnvironment(env: NodeJS.ProcessEnv): HostJobEnv {
       rotatedDir: env.MYKEY_BAO_ROTATED_DIR ?? null,
     };
   }
+  // Run 6.5 (P-119): the pair job — the host's pairs bucket and signing key.
+  let pairs: OpsEnv["pairs"];
+  const signer = env.MYKEY_PAIR_SIGNER;
+  if (signer !== undefined && signer !== "") {
+    if (!/^[A-Za-z0-9_]{1,64}$/.test(signer)) {
+      throw new MissingSetting("MYKEY_PAIR_SIGNER", "is not a key id");
+    }
+    let credentials;
+    try {
+      credentials = credentialsFromDirectory(required(env, "MYKEY_R2_DIR"));
+    } catch (error) {
+      if (error instanceof MissingSetting) throw error;
+      throw new MissingSetting("MYKEY_R2_DIR", "does not hold the three credential files");
+    }
+    let key;
+    try {
+      key = createPrivateKey(readFileSync(SIGNING_KEY_FILE));
+    } catch {
+      throw new MissingSetting(SIGNING_KEY_FILE, "cannot be read as a private key");
+    }
+    if (key.asymmetricKeyType !== "ed25519") {
+      throw new MissingSetting(SIGNING_KEY_FILE, "is not an Ed25519 key");
+    }
+    pairs = {
+      store: r2Store(credentials, `mykey-${host}-pairs`),
+      host,
+      signing: { key, keyId: signer },
+    };
+  }
+  const pairScratch = env.MYKEY_PAIR_SCRATCH;
   return {
     host: host as OpsHost,
     ...(archive === undefined ? {} : { archive }),
+    ...(pairs === undefined ? {} : { pairs }),
+    ...(pairScratch === undefined || pairScratch === "" ? {} : { pairScratch }),
     database: {
       host: required(env, "MYKEY_DB_HOST"),
       port,

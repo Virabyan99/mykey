@@ -73,6 +73,18 @@ Operations per pair: 2 `PutObject` (Class A) for the capture; 2 `GetObject` (Cla
 
 Projected for one pair a day at this size (**estimated**): 30 pairs ≈ 10 MB stored, 60 Class A and 60 Class B operations a month — below every billing unit; $0.015 a month if no included amount were left.
 
+## Measured: the product's bundle through the pair job's token (Run 6.5, 17 Nov 2026)
+
+`tests/restore/retention/cleanup.cloud.test.ts` packs a real pair of an empty local stack (its own Restic repository, `bundle.tar`) and puts it into `mykey-staging-pairs` under `probe/` with `mykey-staging-pairs-upload`, the token the pair job uses. It reads it back, compares it and deletes it (`docs/evidence/session-6/run-6.5-pair-cloud.json`).
+
+| Item                       | Measured      |
+| -------------------------- | ------------- |
+| `bundle.tar`               | 155,136 bytes |
+| Upload, one `PutObject`    | 803 ms        |
+| Read back, one `GetObject` | equal digest  |
+
+Operations per pair in the product (P-119): 2 `PutObject` (`bundle.tar`, `eligible.json`) and 1 `GetObject` (the verification's read-back), so 60 Class A and 30 Class B a month for one pair a day: below every billing unit (**estimated**). The staging figure after Task D, from pairs the unit takes, replaces the empty stack's.
+
 ## What is still missing for COST-B1
 
 - The size of a PostgreSQL dump and an OpenBao snapshot of a used product (Run 6.5); the staging pair above is nearly empty.

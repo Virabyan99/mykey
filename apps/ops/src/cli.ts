@@ -6,6 +6,7 @@
 // is refused for every command); a secret it needs is read from stdin; a
 // secret it produces goes to a file under ~/.mykey/out/ and only the path is
 // printed. Exit codes: 0 done, 1 failed, 2 refused, 3 needs review, 64 usage.
+import type { KeyObject } from "node:crypto";
 import type { Readable, Writable } from "node:stream";
 import type { ObjectStore } from "@mykey/backup";
 import type { DbTarget } from "@mykey/db";
@@ -15,6 +16,7 @@ import { authCleanupCommand } from "./commands/auth-cleanup.ts";
 import { captureCommand } from "./commands/capture.ts";
 import { bootstrapOwnerCommand } from "./commands/bootstrap-owner.ts";
 import { operationsCommand } from "./commands/operations.ts";
+import { pairCommand } from "./commands/pair.ts";
 import { operationsExpireCommand } from "./commands/operations-expire.ts";
 import { provisionOrganizationCommand } from "./commands/provision-organization.ts";
 import { reconcileCredentialsCommand } from "./commands/reconcile-credentials.ts";
@@ -42,6 +44,8 @@ export interface OpsEnv {
   archive?: { store: ObjectStore; host: string; rotatedDir: string | null };
   /** Run 6.5 (P-120): where a capture keeps its artifacts (on a host /run/mykey-pair). */
   pairScratch?: string;
+  /** Run 6.5 (P-119): the pairs' bucket, this host's name and its signing key (ops pair). */
+  pairs?: { store: ObjectStore; host: string; signing: { key: KeyObject; keyId: string } };
 }
 
 export interface OpsIo {
@@ -72,6 +76,7 @@ export const COMMANDS: Readonly<Record<string, OpsCommand>> = {
   "reconcile-credentials": reconcileCredentialsCommand,
   "audit-archive": auditArchiveCommand,
   capture: captureCommand,
+  pair: pairCommand,
 };
 
 export const OPS_COMMANDS = Object.freeze(Object.keys(COMMANDS));

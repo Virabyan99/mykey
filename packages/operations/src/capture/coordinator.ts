@@ -10,8 +10,10 @@ import { randomUUID } from "node:crypto";
 import { appendAudit } from "@mykey/audit";
 import {
   captureMode,
+  crossedByReduction,
   findPair,
   insertCandidate,
+  markEligible,
   markIneligible,
   setCaptureMode,
   withTransaction,
@@ -20,6 +22,8 @@ import type pg from "pg";
 
 export const DRAIN_DEADLINE_MS = 30_000;
 export const FROZEN_DEADLINE_MS = 120_000;
+/** A candidate not verified this long after its capture is ineligible (P-120). */
+export const CANDIDATE_DEADLINE_SECONDS = 7_200;
 
 /** What the manifest of a pair says that the database records (P-119). */
 export interface CaptureRecord {
@@ -58,7 +62,7 @@ async function boundaryOf(db: pg.Pool | pg.PoolClient): Promise<Boundary> {
 
 const audit = (
   tx: pg.PoolClient,
-  action: "system.backup_capture" | "system.backup_invalidated",
+  action: "system.backup_capture" | "system.backup_invalidated" | "system.backup_eligible",
   outcome: "intent" | "success" | "failure",
   details: {
     pairId: string;
@@ -203,5 +207,59 @@ export async function abortCapture(
       "UPDATE app.service_control SET capture_mode = 'idle', pair_id = NULL, owner = NULL, updated_at = now()",
     );
     return { released: true, pairId };
+  });
+}
+
+/** What a verified pair becomes, as the database records it. */
+export interface Publication {
+  objectKey: string;
+  manifestSha256: string;
+  artifactHashes: Record<string, string>;
+  eligibleUntil: Date;
+}
+
+export type Settled =
+  | { kind: "eligible" }
+  | { kind: "ineligible"; reason: "deadline" | "access_reduction" }
+  | { kind: "not_candidate"; status: string };
+
+/**
+ * The end of a verified pair, with its row locked: past the deadline it is
+ * ineligible (deadline); crossed by an access reduction it is ineligible
+ * (access_reduction); otherwise `publish` writes eligible.json and the pair
+ * becomes eligible in the same transaction (a failed publish leaves it a
+ * candidate). Each outcome writes its audit row.
+ */
+export async function settlePair(
+  pool: pg.Pool,
+  pairId: string,
+  publish: (pair: { captureStartedAt: Date }) => Promise<Publication>,
+): Promise<Settled> {
+  return withTransaction(pool, async (tx) => {
+    const locked = await tx.query<{ status: string; captured: Date; late: boolean }>(
+      `SELECT validation_status AS status, capture_started_at AS captured,
+              capture_started_at < now() - make_interval(secs => $2) AS late
+         FROM app.backup_pair WHERE id = $1 FOR UPDATE`,
+      [pairId, CANDIDATE_DEADLINE_SECONDS],
+    );
+    const row = locked.rows[0];
+    if (row === undefined) return { kind: "not_candidate", status: "absent" } as const;
+    if (row.status !== "candidate") return { kind: "not_candidate", status: row.status } as const;
+    const reason = row.late
+      ? ("deadline" as const)
+      : (await crossedByReduction(tx, pairId))
+        ? ("access_reduction" as const)
+        : null;
+    if (reason !== null) {
+      await markIneligible(tx, pairId, reason);
+      await audit(tx, "system.backup_invalidated", "success", { pairId, reason });
+      return { kind: "ineligible", reason } as const;
+    }
+    const publication = await publish({ captureStartedAt: row.captured });
+    if (!(await markEligible(tx, pairId, publication))) {
+      throw new Error(`pair ${pairId} could not be marked eligible`);
+    }
+    await audit(tx, "system.backup_eligible", "success", { pairId });
+    return { kind: "eligible" } as const;
   });
 }

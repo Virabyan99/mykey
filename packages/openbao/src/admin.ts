@@ -139,7 +139,8 @@ export class OpenBaoAdmin {
    */
   async putAppRole(
     namespace: string,
-    name: AppRoleName,
+    /** Run 6.5 (P-119): `backup`, in the root namespace only, for the pair's snapshot. */
+    name: AppRoleName | "backup",
     ttlSeconds: number,
     boundCidrs: readonly string[] = [],
   ): Promise<{ roleId: string }> {
@@ -159,7 +160,7 @@ export class OpenBaoAdmin {
   }
 
   /** The role id of an existing AppRole (not a secret by itself). */
-  async readRoleId(namespace: string, name: AppRoleName): Promise<{ roleId: string }> {
+  async readRoleId(namespace: string, name: AppRoleName | "backup"): Promise<{ roleId: string }> {
     requireNamespace(namespace, true);
     requireName(name);
     const answer = await this.#request(

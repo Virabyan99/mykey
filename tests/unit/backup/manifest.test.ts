@@ -1,92 +1,125 @@
-// Run 2.9: the manifest of a paired backup and the check of its artifacts.
-import { createHash, randomUUID } from "node:crypto";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+// Run 6.5 Task C (P-119, D-52): the manifest of a pair, format mykey-pair/1.
+// Exactly three artifacts; nothing in it is a secret: the backup password is
+// named by reference (`<host>/<n>`), never carried.
+import { randomUUID } from "node:crypto";
 import {
   ARTIFACT_NAMES,
-  buildManifest,
-  verifyArtifacts,
+  PAIR_FORMAT,
+  artifactsMatch,
+  eligibilitySchema,
+  pairManifestSchema,
   type PairManifest,
-} from "../../../infra/backup/pair-spike/manifest.ts";
+} from "@mykey/backup";
+import { describe, expect, it } from "vitest";
 
-const directories: string[] = [];
-afterEach(() => {
-  for (const directory of directories.splice(0))
-    rmSync(directory, { recursive: true, force: true });
-});
-
-function pairDirectory(): { directory: string; manifest: PairManifest } {
-  const directory = mkdtempSync(join(tmpdir(), "mykey-pair-"));
-  directories.push(directory);
-  const artifacts = {} as PairManifest["artifacts"];
-  for (const name of ARTIFACT_NAMES) {
-    const bytes = Buffer.from(`synthetic ${name} ${randomUUID()}`);
-    writeFileSync(join(directory, name), bytes);
-    artifacts[name] = {
-      sha256: createHash("sha256").update(bytes).digest("hex"),
-      bytes: bytes.length,
-    };
-  }
-  const manifest = buildManifest({
+function manifest(): PairManifest {
+  return {
+    format: PAIR_FORMAT,
     pairId: randomUUID(),
-    captureStartedAt: "2026-11-12T10:00:00.000Z",
-    captureFinishedAt: "2026-11-12T10:00:20.000Z",
-    captureEpoch: "3",
-    releaseCommit: "a".repeat(40),
-    schemaRevision: `0003_auth_base ${"b".repeat(64)}`,
-    versions: { postgres: "18.6", openbao: "2.7.2", restic: "0.19.1" },
-    seal: { type: "kmip", keyIds: ["synthetic-key-id"] },
-    namespaces: ["org-00000000-0000-4000-8000-000000000001"],
+    host: "staging",
+    hostInstanceId: randomUUID(),
+    backendIncarnation: randomUUID(),
+    captureStartedAt: "2026-11-17T03:00:01.000Z",
     boundary: { lastOperationId: null, executingOperations: 0, heldEffectSlots: 0 },
-    artifacts,
-    rolesChecksum: "c".repeat(64),
-  });
-  writeFileSync(join(directory, "manifest.json"), JSON.stringify(manifest));
-  return { directory, manifest };
+    schemaRevision: "0017_capture_barrier",
+    releaseBuild: "c5c037e41946",
+    artifacts: [
+      { name: "postgres.dump", bytes: 10, sha256: "a".repeat(64) },
+      { name: "globals.sql", bytes: 11, sha256: "b".repeat(64) },
+      { name: "openbao.snap", bytes: 12, sha256: "c".repeat(64) },
+    ],
+    keyRefs: {
+      kmsKeyId: "kms-key-1",
+      sealName: "staging-seal",
+      backupPassword: "staging/1",
+      signingKeyId: "k1",
+    },
+    tools: { postgres: "18", openbao: "2.7.2", restic: "0.19.1" },
+  };
 }
 
-describe("buildManifest", () => {
-  it("marks the pair synthetic and names its format", () => {
-    const { manifest } = pairDirectory();
-    expect(manifest.format).toBe("mykey-pair-spike/1");
-    expect(manifest.synthetic).toBe(true);
+/** Every key of a value, at every depth. */
+function keysOf(value: unknown): string[] {
+  if (Array.isArray(value)) return value.flatMap(keysOf);
+  if (value !== null && typeof value === "object") {
+    return Object.entries(value).flatMap(([key, inner]) => [key, ...keysOf(inner)]);
+  }
+  return [];
+}
+
+describe("the pair manifest", () => {
+  it("accepts a whole manifest", () => {
+    expect(pairManifestSchema.safeParse(manifest()).success).toBe(true);
+    expect(ARTIFACT_NAMES).toEqual(["postgres.dump", "globals.sql", "openbao.snap"]);
   });
 
-  it("refuses a boundary with executing operations or held slots, and malformed hashes", () => {
-    const { manifest } = pairDirectory();
-    const input = Object.fromEntries(
-      Object.entries(manifest).filter(([key]) => key !== "format" && key !== "synthetic"),
-    ) as Omit<PairManifest, "format" | "synthetic">;
-    expect(() =>
-      buildManifest({ ...input, boundary: { ...input.boundary, executingOperations: 1 as 0 } }),
-    ).toThrow(/boundary/);
-    expect(() =>
-      buildManifest({ ...input, boundary: { ...input.boundary, heldEffectSlots: 2 as 0 } }),
-    ).toThrow(/boundary/);
-    expect(() => buildManifest({ ...input, rolesChecksum: "xyz" })).toThrow(/rolesChecksum/);
-    expect(() => buildManifest({ ...input, pairId: "not-a-uuid" })).toThrow(/pairId/);
-  });
-});
-
-describe("verifyArtifacts", () => {
-  it("passes for the files the manifest describes (control)", async () => {
-    const { directory, manifest } = pairDirectory();
-    expect(await verifyArtifacts(manifest, directory)).toEqual({ ok: true, problems: [] });
+  it("refuses a fourth artifact, a missing one, a repeated one and a sha256 of the wrong length", () => {
+    const fourth = manifest();
+    fourth.artifacts.push({ name: "postgres.dump", bytes: 1, sha256: "d".repeat(64) });
+    expect(pairManifestSchema.safeParse(fourth).success).toBe(false);
+    const missing = manifest();
+    missing.artifacts.pop();
+    expect(pairManifestSchema.safeParse(missing).success).toBe(false);
+    const repeated = manifest();
+    repeated.artifacts[2] = { name: "globals.sql", bytes: 12, sha256: "c".repeat(64) };
+    expect(pairManifestSchema.safeParse(repeated).success).toBe(false);
+    const short = manifest();
+    short.artifacts[0]!.sha256 = "a".repeat(63);
+    expect(pairManifestSchema.safeParse(short).success).toBe(false);
   });
 
-  it("reports a changed byte, a missing file and an extra file", async () => {
-    const { directory, manifest } = pairDirectory();
-    writeFileSync(join(directory, "globals.sql"), "synthetic globals.sql changed");
-    rmSync(join(directory, "openbao.snap"));
-    writeFileSync(join(directory, "extra.bin"), "x");
-    const result = await verifyArtifacts(manifest, directory);
-    expect(result.ok).toBe(false);
-    expect(result.problems.sort()).toEqual([
-      "changed: globals.sql",
-      "extra: extra.bin",
-      "missing: openbao.snap",
-    ]);
+  it("refuses a boundary with an executing operation or a held slot, and an unknown field", () => {
+    const executing = manifest();
+    (executing.boundary as { executingOperations: number }).executingOperations = 1;
+    expect(pairManifestSchema.safeParse(executing).success).toBe(false);
+    const extra = { ...manifest(), password: "x" };
+    expect(pairManifestSchema.safeParse(extra).success).toBe(false);
+  });
+
+  it("no field name looks like a secret but backupPassword, whose value is a reference", () => {
+    const names = keysOf(manifest()).filter((key) => /password|secret|token|private/i.test(key));
+    expect(names).toEqual(["backupPassword"]);
+    const literal = manifest();
+    literal.keyRefs.backupPassword = "correct horse battery staple";
+    expect(pairManifestSchema.safeParse(literal).success).toBe(false);
+  });
+
+  it("artifactsMatch compares a listing with the manifest: missing, changed and extra files", () => {
+    const m = manifest();
+    const listing = Object.fromEntries(
+      m.artifacts.map((a) => [a.name, { bytes: a.bytes, sha256: a.sha256 }]),
+    );
+    expect(artifactsMatch(m, listing)).toEqual({ ok: true, problems: [] });
+    expect(
+      artifactsMatch(m, { ...listing, "globals.sql": { bytes: 11, sha256: "e".repeat(64) } }),
+    ).toEqual({ ok: false, problems: ["changed: globals.sql"] });
+    const rest = { ...listing };
+    delete rest["openbao.snap"];
+    expect(artifactsMatch(m, { ...rest, "x.bin": { bytes: 1, sha256: "f".repeat(64) } })).toEqual({
+      ok: false,
+      problems: ["missing: openbao.snap", "extra: x.bin"],
+    });
+  });
+
+  it("an eligibility record carries the manifest, the verification and a 30-day window", () => {
+    const record = {
+      manifest: manifest(),
+      verification: {
+        bundleSha256: "d".repeat(64),
+        downloadedSha256: "d".repeat(64),
+        resticCheck: "read-data",
+        verifiedAt: "2026-11-17T03:04:00.000Z",
+      },
+      eligibleUntil: "2026-12-17T03:00:01.000Z",
+      signature: { alg: "ed25519", keyId: "k1", value: "AAAA" },
+    };
+    expect(eligibilitySchema.safeParse(record).success).toBe(true);
+    expect(
+      eligibilitySchema.safeParse({
+        ...record,
+        verification: { ...record.verification, downloadedSha256: "e".repeat(64) },
+      }).success,
+      "a download that differs from the upload is no verification",
+    ).toBe(false);
   });
 });
