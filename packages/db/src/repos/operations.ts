@@ -299,9 +299,30 @@ export async function hasTombstone(db: Queryable, key: OperationKey): Promise<bo
  * The operator's expiry (P-65): every terminal row whose replay record has
  * expired gets a tombstone and loses what only replay needed (fingerprint, key
  * id, expected, result). The row itself stays for attribution and the audit
- * link. Unfinished rows never expire. Answers the number of rows expired.
+ * link. Unfinished rows never expire, with one exception (M-7, Run 6.9): an
+ * import parent waiting for its owner (`awaiting_input`) whose entries' window
+ * has ended ends with them — `rejected` with `replay_expired`, then expired
+ * like any terminal row — so a late resume answers replay_expired instead of
+ * colliding with its expired entries. Answers the number of rows expired.
  */
 export async function expireOperations(tx: pg.PoolClient): Promise<number> {
+  const stranded = `state = 'awaiting_input' AND parent_operation_id IS NULL
+    AND EXISTS (SELECT 1 FROM app.operation c
+                 WHERE c.parent_operation_id = app.operation.id AND c.replay_expires_at < now())`;
+  // Its unfinished entries first (none are executing while the parent waits), then the parent.
+  await tx.query(
+    `UPDATE app.operation
+        SET state = 'rejected', error_code = 'replay_expired', completed_at = now(),
+            replay_expires_at = now() - interval '1 second'
+      WHERE state IN ('accepted', 'awaiting_input')
+        AND parent_operation_id IN (SELECT id FROM app.operation WHERE ${stranded})`,
+  );
+  await tx.query(
+    `UPDATE app.operation
+        SET state = 'rejected', error_code = 'replay_expired', completed_at = now(),
+            replay_expires_at = now() - interval '1 second'
+      WHERE ${stranded}`,
+  );
   const expiring = `state IN ('succeeded', 'partial', 'rejected') AND replay_expires_at < now()
     AND (fingerprint IS NOT NULL OR fingerprint_key_id IS NOT NULL OR expected IS NOT NULL
          OR result IS NOT NULL)`;

@@ -62,6 +62,9 @@ const FIXTURES: { [K in LogEntry["event"]]: Extract<LogEntry, { event: K }>[] } 
     { event: "operation_sweep", time: TIME, uncertain: [ID], rejected: [ID] },
   ],
   archive_continue: [{ event: "archive_continue", time: TIME, archived: [ID] }],
+  archive_failed: [
+    { event: "archive_failed", time: TIME, failed: [{ operationId: ID, errorClass: "TypeError" }] },
+  ],
   machine_unauthenticated: [
     { event: "machine_unauthenticated", time: TIME, requestId: ID, cause: "token" },
   ],

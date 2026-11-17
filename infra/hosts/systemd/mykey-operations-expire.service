@@ -1,0 +1,9 @@
+[Unit]
+Description=MyKey operation expiry: replay records past their window, parked imports with them (Run 6.9)
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/opt/mykey/hosts/ops-run.sh operations-expire -- operations-expire
+TimeoutStartSec=30min

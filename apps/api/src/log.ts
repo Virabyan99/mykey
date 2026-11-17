@@ -54,6 +54,8 @@ export type LogEntry =
   | { event: "operation_sweep"; time: string; uncertain: string[]; rejected: string[] }
   /** Run 5.3: archives the tick finished, by operation id only. */
   | { event: "archive_continue"; time: string; archived: string[] }
+  /** Run 6.9 (P-129): an archive whose drive threw; the tick went on. */
+  | { event: "archive_failed"; time: string; failed: { operationId: string; errorClass: string }[] }
   /** Run 5.4 (P-93): a machine token nobody can attribute; counted here, never audited. */
   | {
       event: "machine_unauthenticated";
@@ -153,6 +155,7 @@ const FORMATS: Readonly<Record<string, (value: string) => boolean>> = {
   uncertain: (v) => UUID.test(v),
   rejected: (v) => UUID.test(v),
   archived: (v) => UUID.test(v),
+  operationId: (v) => UUID.test(v),
   missing: (v) => v === "configuration" || API_SETTINGS.includes(v),
   runtimeLogin: (v) => ENUM.test(v),
   issuerLogin: (v) => ENUM.test(v),

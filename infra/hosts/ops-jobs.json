@@ -83,6 +83,39 @@
       },
       "unit": "mykey-pair-retention",
       "schedule": "*-*-* 05:00:00 UTC"
+    },
+    "operations-expire": {
+      "command": "operations-expire",
+      "role": "maintenance",
+      "secrets": {
+        "/run/mykey/secrets/db-password": "/etc/mykey/secrets/ops/maintenance"
+      },
+      "writable": {},
+      "env": {},
+      "unit": "mykey-operations-expire",
+      "schedule": "*-*-* 02:00:00 UTC"
+    },
+    "auth-cleanup": {
+      "command": "auth-cleanup",
+      "role": "maintenance",
+      "secrets": {
+        "/run/mykey/secrets/db-password": "/etc/mykey/secrets/ops/maintenance"
+      },
+      "writable": {},
+      "env": {},
+      "unit": "mykey-auth-cleanup",
+      "schedule": "*-*-* *:15:00 UTC"
+    },
+    "sweep": {
+      "command": "sweep",
+      "role": "maintenance",
+      "secrets": {
+        "/run/mykey/secrets/db-password": "/etc/mykey/secrets/ops/maintenance"
+      },
+      "writable": {},
+      "env": {},
+      "unit": "mykey-sweep",
+      "schedule": "*-*-* *:0/5:00 UTC"
     }
   }
 }

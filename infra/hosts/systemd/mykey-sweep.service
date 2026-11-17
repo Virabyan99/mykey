@@ -1,0 +1,9 @@
+[Unit]
+Description=MyKey stale-operation sweep, PostgreSQL only, for when the API is down (Run 6.9)
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/opt/mykey/hosts/ops-run.sh sweep -- sweep
+TimeoutStartSec=4min

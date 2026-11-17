@@ -1,0 +1,10 @@
+[Unit]
+Description=MyKey operation expiry daily at 02:00 UTC (Run 6.9)
+
+[Timer]
+OnCalendar=*-*-* 02:00:00 UTC
+Persistent=true
+RandomizedDelaySec=0
+
+[Install]
+WantedBy=timers.target

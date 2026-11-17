@@ -59,6 +59,7 @@ export {
   ARCHIVE_FAULT_POINTS,
   beginArchive,
   continueArchives,
+  driveEach,
   driveArchive,
   type ArchiveDriveDeps,
   type ArchiveFaultPoint,

@@ -35,11 +35,23 @@ describe("the units of host jobs (P-112)", () => {
     }
   });
 
-  it("every job timer and the rotation catch up after a boot; the rotation runs before the archive", () => {
+  // Run 6.9 (P-129): the hourly and five-minute timers do not catch up; every daily one does.
+  const FREQUENT: Record<string, RegExp> = {
+    "mykey-auth-cleanup": /^\*-\*-\* \*:15:00 UTC$/,
+    "mykey-sweep": /^\*-\*-\* \*:0\/5:00 UTC$/,
+  };
+
+  it("every daily job timer and the rotation catch up after a boot; the rotation runs before the archive", () => {
     for (const unit of jobTimers()) {
       const timer = read(`${unit}.timer`);
-      expect(field(timer, "Persistent"), unit).toBe("true");
-      expect(field(timer, "OnCalendar"), unit).toMatch(/^\*-\*-\* \d\d:\d\d:00 UTC$/);
+      const frequent = FREQUENT[unit];
+      if (frequent === undefined) {
+        expect(field(timer, "Persistent"), unit).toBe("true");
+        expect(field(timer, "OnCalendar"), unit).toMatch(/^\*-\*-\* \d\d:\d\d:00 UTC$/);
+      } else {
+        expect(field(timer, "Persistent"), unit).toBe("false");
+        expect(field(timer, "OnCalendar"), unit).toMatch(frequent);
+      }
       expect(field(read(`${unit}.service`), "Type"), unit).toBe("oneshot");
     }
     const at = (unit: string) => field(read(`${unit}.timer`), "OnCalendar") ?? "";
@@ -73,6 +85,23 @@ describe("the units of host jobs (P-112)", () => {
     expect(command).toContain("systemctl enable mykey-capture-recover.service");
     expect(command).toContain("/opt/mykey/hosts/systemd/mykey-capture-recover.service");
     expect(command).toContain("MYKEY_BACKUP_EXPECTED=yes");
+  });
+
+  // Run 6.9 (P-129): expiry at 02:00, auth clean-up hourly, the PostgreSQL sweeps every 5 minutes.
+  it("operations-expire, auth-cleanup and sweep each have a timer that runs their command through ops-run.sh", () => {
+    const want = {
+      "operations-expire": ["mykey-operations-expire", "operations-expire", "*-*-* 02:00:00 UTC"],
+      "auth-cleanup": ["mykey-auth-cleanup", "auth-cleanup", "*-*-* *:15:00 UTC"],
+      sweep: ["mykey-sweep", "sweep", "*-*-* *:0/5:00 UTC"],
+    } as const;
+    for (const [job, [unit, command, schedule]] of Object.entries(want)) {
+      expect(table.jobs[job], job).toMatchObject({ command, role: "maintenance", unit, schedule });
+      expect(jobTimers()).toContain(unit);
+      expect(field(read(`${unit}.service`), "ExecStart")).toBe(
+        `/opt/mykey/hosts/ops-run.sh ${job} -- ${command}`,
+      );
+      expect(field(read(`${unit}.timer`), "OnCalendar")).toBe(schedule);
+    }
   });
 });
 

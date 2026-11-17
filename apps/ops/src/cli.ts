@@ -18,6 +18,7 @@ import { bootstrapOwnerCommand } from "./commands/bootstrap-owner.ts";
 import { operationsCommand } from "./commands/operations.ts";
 import { pairCommand } from "./commands/pair.ts";
 import { operationsExpireCommand } from "./commands/operations-expire.ts";
+import { sweepCommand } from "./commands/sweep.ts";
 import { provisionOrganizationCommand } from "./commands/provision-organization.ts";
 import { reconcileCredentialsCommand } from "./commands/reconcile-credentials.ts";
 import { reconcileEnvironmentCommand } from "./commands/reconcile-environment.ts";
@@ -71,6 +72,7 @@ export const COMMANDS: Readonly<Record<string, OpsCommand>> = {
   "provision-organization": provisionOrganizationCommand,
   "verify-organization": verifyOrganizationCommand,
   "operations-expire": operationsExpireCommand,
+  sweep: sweepCommand,
   operations: operationsCommand,
   "reconcile-operation": reconcileOperationCommand,
   "reconcile-environment": reconcileEnvironmentCommand,

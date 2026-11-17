@@ -233,6 +233,8 @@ export async function resumeImport(
   if (row.state === "accepted" || row.state === "executing")
     return { kind: "waiting", operation: row };
   if (row.state === "uncertain") return { kind: "unknown", operationId: row.id };
+  // M-7: an import expired while it waited (operations-expire) cannot be resumed.
+  if (row.expired) return refused("replay_expired", row.id);
   if (row.state !== "awaiting_input") return refused("state_conflict");
   const file = await fileOfParent(deps.pool, row.id);
   if (file === null || deps.ring.keys[file.hmacKeyId] === undefined) {

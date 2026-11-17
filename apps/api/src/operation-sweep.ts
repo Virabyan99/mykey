@@ -11,7 +11,9 @@ import { now, type LogEntry } from "./log.ts";
 export const OPERATION_SWEEP_INTERVAL_MS = 30_000;
 export const OPERATION_SWEEP_JITTER_MS = 5_000;
 
-export type SweepPass = { skipped: "capture" } | { result: SweepResult; archived: string[] };
+export type SweepPass =
+  | { skipped: "capture" }
+  | { result: SweepResult; archived: string[]; failed: { id: string; error: string }[] };
 
 /**
  * One pass: the secret and credential rules, then the archives. P-118: while
@@ -21,7 +23,11 @@ export async function operationSweepPass(
   pool: pg.Pool,
   opts: {
     sweep?: (pool: pg.Pool) => Promise<SweepResult>;
-    archives?: () => Promise<{ archived: string[]; waiting: string[] }>;
+    archives?: () => Promise<{
+      archived: string[];
+      waiting: string[];
+      failed?: { id: string; error: string }[];
+    }>;
     /** Test only: whether the mode is idle. */
     idle?: (pool: pg.Pool) => Promise<boolean>;
   } = {},
@@ -30,8 +36,8 @@ export async function operationSweepPass(
     opts.idle ?? (async (target: pg.Pool) => (await captureMode(target)).mode === "idle");
   if (!(await idle(pool))) return { skipped: "capture" };
   const result = await (opts.sweep ?? defaultSweep)(pool);
-  const driven = opts.archives === undefined ? { archived: [] } : await opts.archives();
-  return { result, archived: driven.archived };
+  const driven = opts.archives === undefined ? { archived: [], failed: [] } : await opts.archives();
+  return { result, archived: driven.archived, failed: driven.failed ?? [] };
 }
 
 async function defaultSweep(target: pg.Pool): Promise<SweepResult> {
@@ -47,7 +53,11 @@ export function startOperationSweep(
     /** Test only. */
     sweep?: (pool: pg.Pool) => Promise<SweepResult>;
     /** Run 5.3 (P-91): drives the archives left executing; its failure is logged like the sweep's. */
-    archives?: () => Promise<{ archived: string[]; waiting: string[] }>;
+    archives?: () => Promise<{
+      archived: string[];
+      waiting: string[];
+      failed?: { id: string; error: string }[];
+    }>;
     random?: () => number;
     /** Test only: whether the mode is idle. */
     idle?: (pool: pg.Pool) => Promise<boolean>;
@@ -72,8 +82,15 @@ export function startOperationSweep(
           schedule();
           return;
         }
-        const { result, archived } = pass;
+        const { result, archived, failed } = pass;
         if (archived.length > 0) log({ event: "archive_continue", time: now(), archived });
+        if (failed.length > 0) {
+          log({
+            event: "archive_failed",
+            time: now(),
+            failed: failed.map((f) => ({ operationId: f.id, errorClass: f.error })),
+          });
+        }
         if (result.uncertain.length > 0 || result.rejected.length > 0) {
           log({
             event: "operation_sweep",

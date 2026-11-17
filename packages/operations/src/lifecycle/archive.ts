@@ -431,10 +431,35 @@ export async function driveArchive(
 }
 
 /** The tick (P-91): every archive executing with a heartbeat older than the stale time, driven again. */
+/**
+ * Run 6.9 (P-129): each due archive is driven on its own; one that throws is
+ * reported (by its error's class, never its message) and the next is driven.
+ */
+export async function driveEach<Id extends string>(
+  ids: readonly Id[],
+  drive: (id: Id) => Promise<"archived" | "waiting">,
+): Promise<{ archived: Id[]; waiting: Id[]; failed: { id: Id; error: string }[] }> {
+  const archived: Id[] = [];
+  const waiting: Id[] = [];
+  const failed: { id: Id; error: string }[] = [];
+  for (const id of ids) {
+    try {
+      ((await drive(id)) === "archived" ? archived : waiting).push(id);
+    } catch (error) {
+      failed.push({ id, error: error instanceof Error ? error.constructor.name : "error" });
+    }
+  }
+  return { archived, waiting, failed };
+}
+
 export async function continueArchives(
   deps: ArchiveDriveDeps,
   opts: { staleSeconds?: number } = {},
-): Promise<{ archived: OperationId[]; waiting: OperationId[] }> {
+): Promise<{
+  archived: OperationId[];
+  waiting: OperationId[];
+  failed: { id: OperationId; error: string }[];
+}> {
   const staleSeconds = opts.staleSeconds ?? LIMITS.operation.stuckAlertSeconds;
   const due = await deps.pool.query<{ id: OperationId }>(
     `SELECT id FROM app.operation
@@ -443,10 +468,8 @@ export async function continueArchives(
       ORDER BY created_at`,
     [[...ARCHIVE_ACTIONS], staleSeconds],
   );
-  const archived: OperationId[] = [];
-  const waiting: OperationId[] = [];
-  for (const { id } of due.rows) {
-    ((await driveArchive(deps, id)) === "archived" ? archived : waiting).push(id);
-  }
-  return { archived, waiting };
+  return driveEach(
+    due.rows.map((row) => row.id),
+    async (id) => ((await driveArchive(deps, id)) === "archived" ? "archived" : "waiting"),
+  );
 }

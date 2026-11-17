@@ -1,0 +1,10 @@
+[Unit]
+Description=MyKey stale-operation sweep every 5 minutes (Run 6.9)
+
+[Timer]
+OnCalendar=*-*-* *:0/5:00 UTC
+Persistent=false
+RandomizedDelaySec=0
+
+[Install]
+WantedBy=timers.target
