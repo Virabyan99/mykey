@@ -26,3 +26,17 @@ export {
   type ArchiveDeps,
   type ArchiveResult,
 } from "./commands/audit-archive.ts";
+// Run 6.7 (P-124, D-55): the restore's invalidation by class.
+export {
+  restoreInvalidate,
+  type InvalidateCounts,
+  type RestoreDeps,
+  type RestorePoint,
+} from "./commands/restore-invalidate.ts";
+export {
+  restoreVerify,
+  type Check,
+  type CheckAnswer,
+  type JourneyResult,
+  type VerifyDeps,
+} from "./commands/restore-verify.ts";
