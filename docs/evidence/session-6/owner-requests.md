@@ -21,7 +21,7 @@ One certificate under **staging's** KMS domain (the restore needs staging's seal
 
 ## 3. OWN-4: an offline copy of the backup custody files
 
-**Needed:** after Run 6.5; the agent says when the two files exist.
+**Needed:** after Run 6.5. **The two files exist since 17 Nov 2026 16:45 UTC** (`host.ts staging backup-custody`). Waiting for the owner's "copied".
 
 Copy `~/.mykey/custody/staging/backup/` (two files: the backup password and the manifest signing key) to your offline medium, then answer "copied".
 

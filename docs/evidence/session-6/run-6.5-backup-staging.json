@@ -1,0 +1,42 @@
+{
+  "project": {
+    "name": "s65-backup-5db438",
+    "id": "f939eec9-1aa9-4904-9fdf-453d3b2c9101"
+  },
+  "firstCapture": {
+    "pairId": "c568b60e-ee12-4f5a-bd67-f3fe3f611e9e",
+    "frozenMs": 8959,
+    "writes": 17,
+    "writesBusy": 10,
+    "busySpanMs": 7402,
+    "reveals": 4,
+    "bundleBytes": 48297273
+  },
+  "crossedCapture": {
+    "pairId": "8594348a-454b-4869-b576-21b6dd4245f6",
+    "revoked": 5
+  },
+  "restoredOnWorkstation": {
+    "pairId": "c568b60e-ee12-4f5a-bd67-f3fe3f611e9e",
+    "digests": {
+      "postgres.dump": "c9c3da8d3cd75bc3",
+      "globals.sql": "a73607c314f100b3",
+      "openbao.snap": "6a7dc85fca086917"
+    }
+  },
+  "largestObjectBytes": 44247040,
+  "secretsSearch": {
+    "units": {
+      "found": 0,
+      "controls": 2
+    },
+    "journal": {
+      "found": 0,
+      "controls": 1
+    },
+    "processes": {
+      "found": 0,
+      "controls": 1
+    }
+  }
+}

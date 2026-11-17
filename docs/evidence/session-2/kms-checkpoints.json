@@ -12,5 +12,12 @@
       "keyB": "64d8c056-de88-4404-bc78-7a70bbb3b4d6"
     },
     "secretSha256": "5b9ad0a4e122fa059b0d3cb3bdb5b1a72a0fb03af8c5a3a82eb76b595136f38b"
+  },
+  {
+    "id": "backup-first-night",
+    "notBefore": "2026-11-18T03:30:00.000Z",
+    "file": "tests/staging/backup-night.staging.test.ts",
+    "command": "MYKEY_CHECKPOINT=backup-first-night pnpm run test:staging -- tests/staging/backup-night.staging.test.ts",
+    "expects": "after the timer's own 03:00 UTC run, its pair is eligible and the heartbeat's newestEligibleCaptureAt is that capture (Run 6.5)"
   }
 ]

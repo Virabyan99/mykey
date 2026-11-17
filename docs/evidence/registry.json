@@ -927,9 +927,11 @@
       "ownerRun": "6.5",
       "contributingRuns": [],
       "oldSession": "D08-S41",
-      "status": "OPEN",
-      "evidence": [],
-      "note": ""
+      "status": "SPIKE_PASS",
+      "evidence": [
+        "docs/evidence/session-6/run-6.5.md"
+      ],
+      "note": "The daily pair on staging: writing closed by a trigger, captured, uploaded, read back, checked, signed and eligible by its own unit; 40 local captures under load restored whole."
     },
     {
       "id": "FR-1.67",
@@ -1762,9 +1764,11 @@
       "ownerRun": "6.5",
       "contributingRuns": [],
       "oldSession": "D08-S41",
-      "status": "OPEN",
-      "evidence": [],
-      "note": ""
+      "status": "SPIKE_PASS",
+      "evidence": [
+        "docs/evidence/session-6/run-6.5.md"
+      ],
+      "note": "Pairs crossed by an access reduction are ineligible; an eligible pair restores whole (compete 20/20, staging restore on the workstation)."
     },
     {
       "id": "AC-1.28",
@@ -2388,9 +2392,10 @@
       "oldSession": "D08-S41",
       "status": "SPIKE_PASS",
       "evidence": [
-        "docs/evidence/session-2/run-2.9.md"
+        "docs/evidence/session-2/run-2.9.md",
+        "docs/evidence/session-6/run-6.5.md"
       ],
-      "note": "One paired backup of staging captured at a boundary and restored into new stores (spike; owner runs in Session 6)."
+      "note": "One paired backup of staging restored into new stores (Run 2.9 spike); the product's daily pair on staging made by its unit, restored on the workstation with the custody password (Run 6.5)."
     },
     {
       "id": "PO-14",
@@ -2512,9 +2517,10 @@
       "oldSession": "D08-S41",
       "status": "SPIKE_PASS",
       "evidence": [
-        "docs/evidence/session-2/run-2.9.md"
+        "docs/evidence/session-2/run-2.9.md",
+        "docs/evidence/session-6/run-6.5.md"
       ],
-      "note": "The bucket holds ciphertext only; a swapped manifest is refused (spike)."
+      "note": "The bucket holds ciphertext only (spike); the product's pairs are Restic ciphertext and an eligible.json signed with the host's key, verified against the committed trust anchor (Run 6.5)."
     },
     {
       "id": "PO-22",
