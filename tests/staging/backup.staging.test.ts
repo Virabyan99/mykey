@@ -11,6 +11,8 @@
 // 3. The bundle, downloaded to the workstation, restores with the custody
 //    password and its three digests equal the manifest's (digests only).
 // 4. No object under pairs/ is larger than 5 GiB.
+// 6. Run 6.6 (P-121): keyReadable answers false for the destroyed loss-test
+//    key of Run 2.7 and true for staging's seal key.
 // 5. The backup password, the signing key and the R2 secret are in no unit
 //    file, no journal line of the unit and no process list taken during a
 //    capture (countOnHost, with controls).
@@ -25,6 +27,7 @@ import { Readable } from "node:stream";
 import { setTimeout as sleep } from "node:timers/promises";
 import {
   artifactsMatch,
+  keyReadable,
   bytesOf,
   digestOf,
   eligibilitySchema,
@@ -45,6 +48,7 @@ import {
   sshExec,
 } from "../harness/staging.ts";
 import { publicRequest, stagingOwnerSession, type PublicAnswer } from "../harness/staging-owner.ts";
+import { kmsKeyState, kmsKeyStateCommand } from "../../scripts/host.ts";
 
 const host = loadHosts().staging;
 const ORGANIZATION = "e2350312-420b-4fde-84c5-d582a008080b";
@@ -129,31 +133,31 @@ async function eligibility(objectKey: string): Promise<Eligibility> {
   );
 }
 
-beforeAll(async () => {
-  ({ cookie } = await stagingOwnerSession());
-  const name = `s65-backup-${randomBytes(3).toString("hex")}`;
-  const created = await send("POST", `/v1/organizations/${ORGANIZATION}/projects`, { name });
-  expect(created.status, created.body.slice(0, 200)).toBe(201);
-  const result = json(created).result as { projectId: string; developmentEnvironmentId: string };
-  const projectPath = `/v1/organizations/${ORGANIZATION}/projects/${result.projectId}`;
-  environmentPath = `${projectPath}/environments/${result.developmentEnvironmentId}`;
-  for (const deadline = Date.now() + 180_000; ;) {
-    const listed = await publicRequest("GET", `${projectPath}/environments`, { cookie });
-    const all = (json(listed).environments ?? []) as { id: string; state: string }[];
-    if (all.find((e) => e.id === result.developmentEnvironmentId)?.state === "active") break;
-    if (Date.now() > deadline) throw new Error("environment not active");
-    await sleep(5000);
-  }
-  const seeded = await send("POST", `${environmentPath}/secrets`, {
-    name: SEEDED,
-    value: `synthetic-${randomBytes(8).toString("hex")}`,
-  });
-  expect(seeded.status, seeded.body.slice(0, 200)).toBe(201);
-  record("project", { name, id: result.projectId });
-}, 420_000);
-
 describe("the daily pair on staging", () => {
   let first: PairRow;
+
+  beforeAll(async () => {
+    ({ cookie } = await stagingOwnerSession());
+    const name = `s65-backup-${randomBytes(3).toString("hex")}`;
+    const created = await send("POST", `/v1/organizations/${ORGANIZATION}/projects`, { name });
+    expect(created.status, created.body.slice(0, 200)).toBe(201);
+    const result = json(created).result as { projectId: string; developmentEnvironmentId: string };
+    const projectPath = `/v1/organizations/${ORGANIZATION}/projects/${result.projectId}`;
+    environmentPath = `${projectPath}/environments/${result.developmentEnvironmentId}`;
+    for (const deadline = Date.now() + 180_000; ;) {
+      const listed = await publicRequest("GET", `${projectPath}/environments`, { cookie });
+      const all = (json(listed).environments ?? []) as { id: string; state: string }[];
+      if (all.find((e) => e.id === result.developmentEnvironmentId)?.state === "active") break;
+      if (Date.now() > deadline) throw new Error("environment not active");
+      await sleep(5000);
+    }
+    const seeded = await send("POST", `${environmentPath}/secrets`, {
+      name: SEEDED,
+      value: `synthetic-${randomBytes(8).toString("hex")}`,
+    });
+    expect(seeded.status, seeded.body.slice(0, 200)).toBe(201);
+    record("project", { name, id: result.projectId });
+  }, 420_000);
 
   it("a capture started by the unit ends eligible; writes are busy only while closed; reveals succeed; the freeze is under 60 s", async () => {
     const before = await newestPair();
@@ -365,4 +369,29 @@ describe("the daily pair on staging", () => {
       );
     }
   }, 1_900_000);
+});
+
+// Run 6.6 Task B (P-121): the restore's refusal of a pair whose KMS key is gone.
+describe("keyReadable on staging's KMS", () => {
+  const LOSSTEST_DESTROYED = "436f2b46-8a77-45bb-816b-6fba1a36ba62"; // L-A, Run 2.7 (key-loss-staging.txt)
+  const STAGING_SEAL = "5ec11f05-091a-460b-a7e6-f1064a6ece0e"; // mykey-staging-seal-1 (custody-map.md)
+  const probeWith =
+    (cert: string) =>
+    async (keyId: string): Promise<boolean> => {
+      const answer = expectSuccess(
+        await sshExec(host, kmsKeyStateCommand(cert, keyId), { sudo: true, timeoutMs: 120_000 }),
+        "okms attributes",
+      ).stdout;
+      return kmsKeyState(answer) === "Active";
+    };
+
+  it("answers false for the destroyed loss-test key of Run 2.7 and true for staging's seal key", async () => {
+    expect(await keyReadable(LOSSTEST_DESTROYED, probeWith("losstest-ops"))).toBe(false);
+    expect(await keyReadable(STAGING_SEAL, probeWith("staging-seal-2"))).toBe(true);
+    writeFileSync(
+      "docs/evidence/session-6/run-6.6-key-readable.json",
+      `${JSON.stringify({ observedAt: new Date().toISOString(), keyReadable: { [LOSSTEST_DESTROYED]: false, [STAGING_SEAL]: true } }, null, 2)}
+`,
+    );
+  }, 300_000);
 });

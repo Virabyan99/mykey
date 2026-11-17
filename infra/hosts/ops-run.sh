@@ -44,6 +44,11 @@ case "$job" in
     files="/etc/mykey/secrets/ops/maintenance /etc/mykey/secrets/r2-pairs/account-id /etc/mykey/secrets/r2-pairs/access-key-id /etc/mykey/secrets/r2-pairs/secret-access-key /etc/mykey/secrets/backup/signing-key"
     fixed="--env=MYKEY_DB_USER=maintenance --env=MYKEY_PAIR_SCRATCH=/run/mykey/pairs --env=MYKEY_R2_DIR=/run/mykey/secrets/r2 --env=MYKEY_PAIR_SIGNER=k1 --mount=type=bind,source=/etc/mykey/secrets/ops/maintenance,target=/run/mykey/secrets/db-password,readonly --mount=type=bind,source=/etc/mykey/secrets/r2-pairs/account-id,target=/run/mykey/secrets/r2/account-id,readonly --mount=type=bind,source=/etc/mykey/secrets/r2-pairs/access-key-id,target=/run/mykey/secrets/r2/access-key-id,readonly --mount=type=bind,source=/etc/mykey/secrets/r2-pairs/secret-access-key,target=/run/mykey/secrets/r2/secret-access-key,readonly --mount=type=bind,source=/etc/mykey/secrets/backup/signing-key,target=/run/mykey/secrets/backup/signing-key,readonly --mount=type=bind,source=/var/lib/mykey/pairs,target=/run/mykey/pairs"
     ;;
+  pair-retention)
+    command=pair
+    files="/etc/mykey/secrets/ops/maintenance /etc/mykey/secrets/r2-pairs-cleanup/account-id /etc/mykey/secrets/r2-pairs-cleanup/access-key-id /etc/mykey/secrets/r2-pairs-cleanup/secret-access-key"
+    fixed="--env=MYKEY_DB_USER=maintenance --env=MYKEY_R2_DIR=/run/mykey/secrets/r2 --env=MYKEY_PAIR_RETENTION=yes --mount=type=bind,source=/etc/mykey/secrets/ops/maintenance,target=/run/mykey/secrets/db-password,readonly --mount=type=bind,source=/etc/mykey/secrets/r2-pairs-cleanup/account-id,target=/run/mykey/secrets/r2/account-id,readonly --mount=type=bind,source=/etc/mykey/secrets/r2-pairs-cleanup/access-key-id,target=/run/mykey/secrets/r2/access-key-id,readonly --mount=type=bind,source=/etc/mykey/secrets/r2-pairs-cleanup/secret-access-key,target=/run/mykey/secrets/r2/secret-access-key,readonly"
+    ;;
   *)
     echo "ops-run.sh: unknown job $job" >&2
     exit 64

@@ -45,7 +45,8 @@ export interface OpsEnv {
   /** Run 6.5 (P-120): where a capture keeps its artifacts (on a host /run/mykey-pair). */
   pairScratch?: string;
   /** Run 6.5 (P-119): the pairs' bucket, this host's name and its signing key (ops pair). */
-  pairs?: { store: ObjectStore; host: string; signing: { key: KeyObject; keyId: string } };
+  /** `signing` is absent for the retention job (Run 6.6), which signs nothing. */
+  pairs?: { store: ObjectStore; host: string; signing?: { key: KeyObject; keyId: string } };
 }
 
 export interface OpsIo {

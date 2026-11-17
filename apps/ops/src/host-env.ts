@@ -94,6 +94,16 @@ export function opsEnvFromEnvironment(env: NodeJS.ProcessEnv): HostJobEnv {
       host,
       signing: { key, keyId: signer },
     };
+  } else if (env.MYKEY_PAIR_RETENTION === "yes") {
+    // Run 6.6 (P-121): the retention job — the bucket through the cleanup token, no signer.
+    let credentials;
+    try {
+      credentials = credentialsFromDirectory(required(env, "MYKEY_R2_DIR"));
+    } catch (error) {
+      if (error instanceof MissingSetting) throw error;
+      throw new MissingSetting("MYKEY_R2_DIR", "does not hold the three credential files");
+    }
+    pairs = { store: r2Store(credentials, `mykey-${host}-pairs`), host };
   }
   const pairScratch = env.MYKEY_PAIR_SCRATCH;
   return {

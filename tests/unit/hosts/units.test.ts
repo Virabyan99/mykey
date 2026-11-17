@@ -58,6 +58,18 @@ describe("the units of host jobs (P-112)", () => {
     expect(() => timersCommand(["mykey-x; rm -rf /"])).toThrow(/unusable/);
     // Run 6.5: the daily pair's timer, the boot recovery and the heartbeat's expectation.
     expect(jobTimers()).toContain("mykey-backup");
+    // Run 6.6: retention runs after the night's pair, with the cleanup token, without the signer.
+    expect(jobTimers()).toContain("mykey-pair-retention");
+    const at = (unit: string) => field(read(`${unit}.timer`), "OnCalendar") ?? "";
+    expect(at("mykey-backup") < at("mykey-pair-retention")).toBe(true);
+    const retention = table.jobs["pair-retention"];
+    expect(retention?.env).toEqual({
+      MYKEY_R2_DIR: "/run/mykey/secrets/r2",
+      MYKEY_PAIR_RETENTION: "yes",
+    });
+    expect(Object.keys(retention?.secrets ?? {})).not.toContain(
+      "/run/mykey/secrets/backup/signing-key",
+    );
     expect(command).toContain("systemctl enable mykey-capture-recover.service");
     expect(command).toContain("/opt/mykey/hosts/systemd/mykey-capture-recover.service");
     expect(command).toContain("MYKEY_BACKUP_EXPECTED=yes");
@@ -71,7 +83,12 @@ describe("r2-install and timers (P-112)", () => {
       name: "audit-archive",
     });
     expect(parseHostArgs(["staging", "r2-install", "pairs"])).toMatchObject({ name: "pairs" });
-    expect(() => parseHostArgs(["staging", "r2-install", "other"])).toThrow(/audit-archive, pairs/);
+    expect(parseHostArgs(["staging", "r2-install", "pairs-cleanup"])).toMatchObject({
+      name: "pairs-cleanup",
+    });
+    expect(() => parseHostArgs(["staging", "r2-install", "other"])).toThrow(
+      /audit-archive, pairs, pairs-cleanup/,
+    );
     expect(parseHostArgs(["prod", "backup-init"])).toMatchObject({ command: "backup-init" });
     expect(parseHostArgs(["staging", "backup-custody"])).toMatchObject({
       command: "backup-custody",
@@ -80,9 +97,14 @@ describe("r2-install and timers (P-112)", () => {
   });
 
   it("installs the three files exactly where the job mounts them", () => {
-    for (const name of ["audit-archive", "pairs"] as const) {
+    const jobOf = {
+      "audit-archive": "audit-archive",
+      pairs: "pair",
+      "pairs-cleanup": "pair-retention",
+    };
+    for (const name of ["audit-archive", "pairs", "pairs-cleanup"] as const) {
       const files = Object.values(r2InstallFiles(name)).sort();
-      const job = table.jobs[name === "pairs" ? "pair" : name];
+      const job = table.jobs[jobOf[name]];
       const mounted = Object.values(job?.secrets ?? {}).filter((source) => source.includes("/r2-"));
       expect(files, name).toEqual(mounted.sort());
     }

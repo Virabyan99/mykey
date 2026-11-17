@@ -118,7 +118,7 @@ export const USAGE = `usage: node scripts/host.ts <staging|prod> <command> [--pu
   keys init                      the auth key rings: new files on the workstation, installed on the host
   ops <command> [--flag value]   an operator command (apps/ops) as maintenance, through a tunnel
   ops-secrets                    role passwords for ops jobs on the host; MYKEY_HOST_NAME in host.env
-  r2-install <audit-archive|pairs>  the S3 credentials of that job's R2 token, on stdin
+  r2-install <audit-archive|pairs|pairs-cleanup>  the S3 credentials of that job's R2 token, on stdin
   backup-init                    backup password and signing key made on the host; trust anchor; AppRole backup
   backup-custody                 copy the backup password and signing key to ~/.mykey/custody/<host>/backup/
   timers                         install and start the job timers (ops-jobs.json, audit rotation)
@@ -907,6 +907,39 @@ export function okmsCommand(name: string, argv: string[]): string {
     if (!/^[A-Za-z0-9_.,:=@/-]+$/.test(arg)) throw new Error(`kms: unexpected argument ${arg}`);
   }
   return [`${REMOTE.hostsDir}/kms/okms.sh`, name, ...argv].join(" ");
+}
+
+/** Run 6.6 (P-121): a KMS key's attributes, as JSON (no key material). */
+export function kmsKeyStateCommand(cert: string, keyId: string): string {
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(keyId)) {
+    throw new Error("kms: not a key id");
+  }
+  return okmsCommand(cert, ["kmip", "attributes", "get", keyId, "--output", "json"]);
+}
+
+/**
+ * The State attribute (Active, Deactivated, Destroyed, …) in okms's answer,
+ * which may follow a line of its own; null when the answer holds none.
+ */
+export function kmsKeyState(output: string): string | null {
+  const start = output.search(/[[{]/);
+  if (start < 0) return null;
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(output.slice(start));
+  } catch {
+    return null;
+  }
+  const list = Array.isArray(parsed)
+    ? parsed
+    : ((parsed as { Attribute?: unknown } | null)?.Attribute ?? []);
+  if (!Array.isArray(list)) return null;
+  for (const entry of list as { AttributeName?: unknown; AttributeValue?: unknown }[]) {
+    if (entry.AttributeName === "State" && typeof entry.AttributeValue === "string") {
+      return entry.AttributeValue;
+    }
+  }
+  return null;
 }
 
 export function acmeCommands(directory: AcmeDirectory): string[] {
@@ -1787,6 +1820,11 @@ export const R2_INSTALLS = {
   pairs: {
     token: (host: HostName) => `mykey-${host}-pairs-upload`,
     directory: "/etc/mykey/secrets/r2-pairs",
+  },
+  /** Run 6.6 (P-121): the retention job deletes through its own token. */
+  "pairs-cleanup": {
+    token: (host: HostName) => `mykey-${host}-pairs-cleanup`,
+    directory: "/etc/mykey/secrets/r2-pairs-cleanup",
   },
 } as const;
 export type R2InstallName = keyof typeof R2_INSTALLS;

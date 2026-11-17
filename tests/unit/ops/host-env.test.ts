@@ -56,4 +56,19 @@ describe("opsEnvFromEnvironment", () => {
       expect((caught as Error).message).not.toContain(password);
     }
   });
+
+  it("the retention job (Run 6.6) gets the host's pairs bucket without a signer; without its R2 files it is refused by name", () => {
+    const r2 = mkdtempSync(join(tmpdir(), "mykey-ops-r2-"));
+    for (const name of ["account-id", "access-key-id", "secret-access-key"]) {
+      writeFileSync(join(r2, name), `synthetic-${name}\n`);
+    }
+    const env = opsEnvFromEnvironment({ ...base, MYKEY_PAIR_RETENTION: "yes", MYKEY_R2_DIR: r2 });
+    expect(env.pairs?.host).toBe("staging");
+    expect(env.pairs?.signing).toBeUndefined();
+    expect(env.pairs?.store).toBeDefined();
+    expect(opsEnvFromEnvironment(base).pairs).toBeUndefined();
+    expect(() =>
+      opsEnvFromEnvironment({ ...base, MYKEY_PAIR_RETENTION: "yes", MYKEY_R2_DIR: join(dir, "x") }),
+    ).toThrow(/MYKEY_R2_DIR/);
+  });
 });

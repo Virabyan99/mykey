@@ -11,6 +11,11 @@
 //             must all agree with the manifest; then, with the pair's row
 //             locked, eligible.json is signed and written and the pair is
 //             eligible — or it is ineligible (deadline, access_reduction).
+//
+// `ops pair --step retention [--delete-orphans <prefix>]` (Run 6.6, P-121,
+// D-53): run daily by mykey-pair-retention. Plans and applies retention for
+// the host. Exit 1 when a delete claimed a key that is still there, or when an
+// object stays refused three days after its lock should have ended.
 import { createHash } from "node:crypto";
 import {
   createReadStream,
@@ -29,17 +34,23 @@ import {
   PAIR_FORMAT,
   artifactsMatch,
   canonicalJson,
+  lockEndsAt,
+  pairIdOf,
+  planRetention,
   pairManifestSchema,
   pairPrefix,
   signEligibility,
   type PairManifest,
 } from "@mykey/backup";
 import { LIMITS } from "@mykey/contracts";
-import { createPool } from "@mykey/db";
-import { settlePair } from "@mykey/operations/operator";
+import { createPool, listPairs } from "@mykey/db";
+import { applyRetention, settlePair } from "@mykey/operations/operator";
 import { EXIT, type OpsCommand, type OpsIo } from "../cli.ts";
 
-const STEPS = ["manifest", "upload", "verify"] as const;
+const STEPS = ["manifest", "upload", "verify", "retention"] as const;
+/** A refusal this long after the lock should have ended is an alert, not patience. */
+const REFUSAL_GRACE_MS = 3 * 86_400_000;
+const ORPHAN_PREFIX = /^pairs\/[a-z0-9-]+\/[^/]+\/$/;
 type Step = (typeof STEPS)[number];
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const FACT_KEYS = [
@@ -129,7 +140,11 @@ async function manifestStep(io: OpsIo, dir: string, pairId: string): Promise<voi
       kmsKeyId: facts.kms_key_id,
       sealName: facts.seal_name,
       backupPassword: `${pairs.host}/1`,
-      signingKeyId: pairs.signing.keyId,
+      signingKeyId:
+        pairs.signing?.keyId ??
+        ((): never => {
+          throw new Refused("manifest: no signing key (MYKEY_PAIR_SIGNER)");
+        })(),
     },
     tools: {
       postgres: facts.tool_postgres,
@@ -185,6 +200,8 @@ async function uploadStep(io: OpsIo, dir: string, pairId: string): Promise<void>
 async function verifyStep(io: OpsIo, dir: string, pairId: string): Promise<boolean> {
   const pairs = io.env.pairs;
   if (pairs === undefined || io.env.database === undefined) throw new Refused("not configured");
+  const signing = pairs.signing;
+  if (signing === undefined) throw new Refused("verify: no signing key (MYKEY_PAIR_SIGNER)");
   const manifest = readManifest(dir);
   if (manifest.pairId !== pairId) throw new Refused("manifest.json names another pair");
   const uploaded = JSON.parse(readFileSync(join(dir, "upload.json"), "utf8")) as {
@@ -231,8 +248,8 @@ async function verifyStep(io: OpsIo, dir: string, pairId: string): Promise<boole
           },
           eligibleUntil: eligibleUntil.toISOString(),
         },
-        pairs.signing.key,
-        pairs.signing.keyId,
+        signing.key,
+        signing.keyId,
       );
       const body = Buffer.from(`${JSON.stringify(record, null, 2)}\n`, "utf8");
       await pairs.store.put(`${prefix}eligible.json`, body, {
@@ -263,14 +280,86 @@ async function verifyStep(io: OpsIo, dir: string, pairId: string): Promise<boole
   }
 }
 
+async function retentionStep(io: OpsIo, deleteOrphans: string | undefined): Promise<boolean> {
+  const pairs = io.env.pairs;
+  if (pairs === undefined || io.env.database === undefined) throw new Refused("not configured");
+  const { store, host } = pairs;
+  const pool = createPool(io.env.database, { max: LIMITS.db.opsPool });
+  try {
+    const now = new Date();
+    const rows = await listPairs(pool, host);
+    const objects = await store.list(`pairs/${host}/`);
+    if (deleteOrphans !== undefined) {
+      const plan = planRetention(rows, objects, host, now);
+      if (!ORPHAN_PREFIX.test(deleteOrphans) || !plan.orphans.includes(deleteOrphans)) {
+        throw new Refused(`retention: ${deleteOrphans} is not an orphan of ${host}`);
+      }
+      const keys = objects.filter((o) => o.key.startsWith(deleteOrphans)).map((o) => o.key);
+      const outcomes = await store.deleteChecked(keys);
+      let ok = true;
+      for (const o of outcomes) {
+        if (!o.deleted || (await store.head(o.key)) !== null) {
+          io.stderr.write(`retention: ${o.key} not deleted (${o.errorCode ?? "still present"})\n`);
+          ok = false;
+        }
+      }
+      io.stdout.write(`orphan ${deleteOrphans}: ${String(keys.length)} object(s)\n`);
+      return ok;
+    }
+    const plan = planRetention(rows, objects, host, now);
+    const result = await applyRetention({ pool, store, host, now: () => now }, plan);
+    for (const id of result.expired) io.stdout.write(`ineligible ${id} (deadline)\n`);
+    for (const id of result.closed) io.stdout.write(`expired ${id}\n`);
+    for (const orphan of plan.orphans) io.stdout.write(`orphan ${orphan} (not deleted)\n`);
+    io.stdout.write(
+      result.deleted.length === 0 && result.closed.length === 0
+        ? `retention ${host}: nothing to delete (${String(plan.keep.length)} kept)\n`
+        : `retention ${host}: ${String(result.deleted.length)} object(s) deleted, ${String(plan.keep.length)} pair(s) kept\n`,
+    );
+    let ok = true;
+    for (const key of result.stillPresent) {
+      io.stderr.write(`retention: ${key} still present after a delete that answered success\n`);
+      ok = false;
+    }
+    for (const { key, code } of result.refused) {
+      const row = rows.find((r) => r.id === pairIdOf(key));
+      const overdue =
+        row !== undefined && now.getTime() > lockEndsAt(row).getTime() + REFUSAL_GRACE_MS;
+      io.stderr.write(
+        `retention: ${key} refused (${code})${overdue ? ", 3 days after its lock" : ""}\n`,
+      );
+      if (overdue) ok = false;
+    }
+    if (result.uploadsAborted > 0) {
+      io.stdout.write(`aborted ${String(result.uploadsAborted)} stale upload(s)\n`);
+    }
+    return ok;
+  } finally {
+    await pool.end();
+  }
+}
+
 export const pairCommand: OpsCommand = {
-  flags: ["step", "pair"],
-  summary: "a pair after its capture: --step manifest|upload|verify --pair <id>",
+  flags: ["step", "pair", "delete-orphans"],
+  summary:
+    "a pair after its capture: --step manifest|upload|verify --pair <id>; retention: --step retention [--delete-orphans <prefix>]",
   async run(flags, io) {
     const step = flags.step as Step | undefined;
     const pairId = flags.pair;
+    if (step === "retention") {
+      try {
+        return (await retentionStep(io, flags["delete-orphans"])) ? EXIT.ok : EXIT.failed;
+      } catch (error) {
+        io.stderr.write(
+          error instanceof Refused
+            ? `${error.message}\n`
+            : `pair retention failed: ${error instanceof Error ? error.constructor.name : "error"}\n`,
+        );
+        return EXIT.failed;
+      }
+    }
     if (step === undefined || !STEPS.includes(step) || pairId === undefined || !UUID.test(pairId)) {
-      io.stderr.write("pair: --step manifest|upload|verify --pair <uuid>\n");
+      io.stderr.write("pair: --step manifest|upload|verify --pair <uuid>, or --step retention\n");
       return EXIT.usage;
     }
     if (io.env.pairScratch === undefined || io.env.pairs === undefined) {

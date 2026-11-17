@@ -157,3 +157,25 @@ export async function expireCandidates(db: Queryable, olderThanSeconds: number):
   );
   return result.rows.map((row) => row.id);
 }
+
+/** Every pair of a host, oldest capture first (Run 6.6, retention). */
+export async function listPairs(db: Queryable, host: string): Promise<PairRow[]> {
+  const result = await db.query<Stored>(
+    `SELECT ${COLUMNS} FROM app.backup_pair WHERE host = $1 ORDER BY capture_started_at`,
+    [host],
+  );
+  return result.rows.map(toRow);
+}
+
+/**
+ * Run 6.6 (P-121): the pair's eligible.json is gone, so the pair no longer
+ * exists for a restore: expired, with deleted_at. False when already closed.
+ */
+export async function closePair(db: Queryable, id: string): Promise<boolean> {
+  const result = await db.query(
+    `UPDATE app.backup_pair SET validation_status = 'expired', deleted_at = now()
+      WHERE id = $1 AND deleted_at IS NULL`,
+    [id],
+  );
+  return result.rowCount === 1;
+}

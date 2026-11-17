@@ -23,6 +23,8 @@ import {
   kmsImportKeyCommand,
   kmsRemoveCommand,
   kmsUseCommand,
+  kmsKeyState,
+  kmsKeyStateCommand,
   okmsCommand,
   okmsInstallCommand,
   imageParts,
@@ -337,6 +339,27 @@ describe("kms", () => {
     );
     expect(okmsCommand("staging-seal-1", ["kmip", "locate"])).not.toContain("secrets");
     expect(() => okmsCommand("staging-seal-1", ["kmip", "$(id)"])).toThrow(/argument/);
+  });
+
+  // Run 6.6 (P-121): the probe keyReadable uses — a key is readable when its State is Active.
+  it("reads a KMS key's state from okms attributes, and refuses what is not a key id", () => {
+    expect(kmsKeyStateCommand("staging-seal-2", "5ec11f05-091a-460b-a7e6-f1064a6ece0e")).toBe(
+      "/opt/mykey/hosts/kms/okms.sh staging-seal-2 kmip attributes get 5ec11f05-091a-460b-a7e6-f1064a6ece0e --output json",
+    );
+    expect(() => kmsKeyStateCommand("staging-seal-2", "x y")).toThrow(/key id/);
+    const answer = (state: string): string =>
+      JSON.stringify([
+        { AttributeName: "Name", AttributeIndex: 0, AttributeValue: "k" },
+        { AttributeName: "State", AttributeIndex: 0, AttributeValue: state },
+      ]);
+    expect(kmsKeyState(answer("Active"))).toBe("Active");
+    expect(kmsKeyState(answer("Destroyed"))).toBe("Destroyed");
+    expect(
+      kmsKeyState(
+        JSON.stringify({ Attribute: [{ AttributeName: "State", AttributeValue: "Active" }] }),
+      ),
+    ).toBe("Active");
+    expect(kmsKeyState("Error: object not found")).toBeNull();
   });
 });
 

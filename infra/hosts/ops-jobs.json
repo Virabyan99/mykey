@@ -66,6 +66,23 @@
       },
       "unit": null,
       "schedule": null
+    },
+    "pair-retention": {
+      "command": "pair",
+      "role": "maintenance",
+      "secrets": {
+        "/run/mykey/secrets/db-password": "/etc/mykey/secrets/ops/maintenance",
+        "/run/mykey/secrets/r2/account-id": "/etc/mykey/secrets/r2-pairs-cleanup/account-id",
+        "/run/mykey/secrets/r2/access-key-id": "/etc/mykey/secrets/r2-pairs-cleanup/access-key-id",
+        "/run/mykey/secrets/r2/secret-access-key": "/etc/mykey/secrets/r2-pairs-cleanup/secret-access-key"
+      },
+      "writable": {},
+      "env": {
+        "MYKEY_R2_DIR": "/run/mykey/secrets/r2",
+        "MYKEY_PAIR_RETENTION": "yes"
+      },
+      "unit": "mykey-pair-retention",
+      "schedule": "*-*-* 05:00:00 UTC"
     }
   }
 }

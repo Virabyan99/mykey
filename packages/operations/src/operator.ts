@@ -45,3 +45,5 @@ export {
   type Publication,
   type Settled,
 } from "./capture/coordinator.ts";
+// Run 6.6 (P-121): retention applies planRetention's plan (`ops pair --step retention`).
+export { applyRetention, type CleanupResult } from "./capture/retention.ts";

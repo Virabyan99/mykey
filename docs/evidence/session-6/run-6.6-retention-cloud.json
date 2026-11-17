@@ -1,0 +1,26 @@
+[
+  {
+    "run": "probe/ret-1794935807725-a6f3d86f-11e5-4cc0-9e6a-f316b435c65d/",
+    "startedAt": "2026-11-17T17:16:47.725Z",
+    "cleanedUp": [],
+    "ownRefused": [
+      {
+        "key": "probe/ret-1794935807725-a6f3d86f-11e5-4cc0-9e6a-f316b435c65d/eligible.json",
+        "code": "ObjectLockedByBucketPolicy"
+      }
+    ],
+    "note": "no ret- prefix at least 11 min older; the next run after 2026-11-17T17:27:47.725Z cleans this one up"
+  },
+  {
+    "run": "probe/ret-1794936416008-926e7e5e-09c6-47a7-b0fa-298b996899b7/",
+    "startedAt": "2026-11-17T17:26:56.008Z",
+    "cleanedUp": [],
+    "ownRefused": [
+      {
+        "key": "probe/ret-1794936416008-926e7e5e-09c6-47a7-b0fa-298b996899b7/eligible.json",
+        "code": "ObjectLockedByBucketPolicy"
+      }
+    ],
+    "note": "no ret- prefix at least 11 min older; the next run after 2026-11-17T17:37:56.008Z cleans this one up"
+  }
+]

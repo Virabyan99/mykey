@@ -168,10 +168,12 @@ export {
   type InvalidationReason,
 } from "./repos/capture.ts";
 export {
+  closePair,
   crossedByReduction,
   expireCandidates,
   findPair,
   insertCandidate,
+  listPairs,
   markEligible,
   markIneligible,
   newestEligible,
