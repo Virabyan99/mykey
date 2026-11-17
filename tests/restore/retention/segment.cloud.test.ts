@@ -16,7 +16,7 @@ const manifest = Buffer.from(
   `${JSON.stringify({ format: "mykey-audit-segment/1", sha256: sha(body) })}\n`,
 );
 
-describe("the audit archive's bucket (P-112)", () => {
+describe("the audit archive's bucket (P-112)", { timeout: 60_000 }, () => {
   it("put, read back, compare: segment and manifest", async () => {
     await store.put(`${base}/segment-0000000001.ndjson.gz`, body, {
       bytes: body.length,

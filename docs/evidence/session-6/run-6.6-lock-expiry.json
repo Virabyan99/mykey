@@ -1,0 +1,28 @@
+[
+  {
+    "run": "probe/run-1794935776893-b54a6865/",
+    "startedAt": "2026-11-17T17:16:16.893Z",
+    "lockMinutes": 10,
+    "deleted": [
+      {
+        "prefix": "probe/run-1794935050821-754b1c3c/",
+        "objects": 1,
+        "ageMinutes": 12
+      }
+    ],
+    "note": "earlier runs' objects deleted after their lock and proven gone by HEAD"
+  },
+  {
+    "run": "probe/run-1794936384110-dd6427fa/",
+    "startedAt": "2026-11-17T17:26:24.110Z",
+    "lockMinutes": 10,
+    "deleted": [
+      {
+        "prefix": "probe/run-1794935373361-71ee1320/",
+        "objects": 1,
+        "ageMinutes": 17
+      }
+    ],
+    "note": "earlier runs' objects deleted after their lock and proven gone by HEAD"
+  }
+]
