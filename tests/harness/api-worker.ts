@@ -15,6 +15,8 @@ const ENTRY = resolve(import.meta.dirname, "api-process.ts");
 export interface ApiProcess {
   baseUrl: string;
   port: number;
+  /** Run 6.7: the verification listener's port, when started with `verifyListener`. */
+  verifyPort?: number;
   pid: number;
   kill(signal?: NodeJS.Signals): Promise<void>;
   /** The exit code (null after a signal), once the process has exited. */
@@ -71,6 +73,8 @@ export function startApiProcess(
     archiveTick?: { intervalMs: number; staleSeconds: number };
     /** Run 6.3: the product's rate limits (default: limits that never refuse). */
     rateLimits?: "product" | "wide";
+    /** Run 6.7 (P-123): also the verification listener. */
+    verifyListener?: boolean;
   },
 ): Promise<ApiProcess> {
   return new Promise((resolveStart, reject) => {
@@ -97,9 +101,10 @@ export function startApiProcess(
       output += chunk.toString("utf8");
       const line = output.split("\n")[0];
       if (line === undefined || !output.includes("\n")) return;
-      const { port } = JSON.parse(line) as { port: number };
+      const { port, verifyPort } = JSON.parse(line) as { port: number; verifyPort?: number };
       resolveStart({
         port,
+        ...(verifyPort === undefined ? {} : { verifyPort }),
         baseUrl: `https://127.0.0.1:${String(port)}`,
         pid: child.pid ?? -1,
         exited,
@@ -123,6 +128,7 @@ export function startApiProcess(
       ...(opts.faults === undefined ? {} : { fault: opts.faults }),
       ...(opts.archiveTick === undefined ? {} : { archiveTick: opts.archiveTick }),
       ...(opts.rateLimits === undefined ? {} : { rateLimits: opts.rateLimits }),
+      ...(opts.verifyListener === true ? { verifyListener: true } : {}),
     };
     child.stdin.write(`${JSON.stringify(settings)}\n`);
   });

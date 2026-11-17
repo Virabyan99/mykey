@@ -53,7 +53,9 @@ export interface LostWorld {
 }
 
 export async function createLostWorld(): Promise<LostWorld> {
-  const f = await createCredentialsFixture({ stackOverrides: ["scratch-bao.override.yml"] });
+  const f = await createCredentialsFixture({
+    stackOverrides: ["scratch-bao.override.yml", "scratch-pg.override.yml"],
+  });
   try {
     // Credentials: two per environment, then left in every state the table knows.
     const states = ["active", "revoked", "needs_review", "revoking", "issuing", "expired"];

@@ -12,6 +12,7 @@ import { join, resolve } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 import { OpenBaoAdmin } from "@mykey/openbao/admin";
 import pg from "pg";
+import type { DbTarget } from "@mykey/db";
 
 export interface Stack {
   /** Compose project name, unique per stack. */
@@ -729,10 +730,12 @@ export async function pgRestoreFromFile(
   stack: Stack,
   localPath: string,
   database: string,
+  /** Run 6.7: "postgres-scratch" (scratch-pg.override.yml) restores into the second cluster. */
+  service: "postgres" | "postgres-scratch" = "postgres",
 ): Promise<void> {
   if (!/^[a-z0-9_]+$/.test(database)) throw new Error("invalid database name");
   const inside = `/tmp/restore-${database}.dump`;
-  await compose(stack.project, ["cp", localPath, `postgres:${inside}`]);
+  await compose(stack.project, ["cp", localPath, `${service}:${inside}`]);
   try {
     await compose(
       stack.project,
@@ -741,7 +744,7 @@ export async function pgRestoreFromFile(
         "-T",
         "-e",
         "PGPASSWORD",
-        "postgres",
+        service,
         "pg_restore",
         "-U",
         stack.pg.superuser.user,
@@ -753,8 +756,44 @@ export async function pgRestoreFromFile(
       { PGPASSWORD: stack.pg.superuser.password },
     );
   } finally {
-    await compose(stack.project, ["exec", "-T", "-u", "0", "postgres", "rm", "-f", inside]);
+    await compose(stack.project, ["exec", "-T", "-u", "0", service, "rm", "-f", inside]);
   }
+}
+
+/**
+ * Run 6.7 Task C: the second cluster of a stack started with
+ * scratch-pg.override.yml, as its superuser (the stack's superuser password:
+ * the same secret file). Waits until it accepts a connection.
+ */
+export async function scratchPg(stack: Stack): Promise<DbTarget> {
+  const target: DbTarget = {
+    host: HOST,
+    port: await publishedPort(stack.project, "postgres-scratch", 5432),
+    database: "postgres",
+    user: stack.pg.superuser.user,
+    password: stack.pg.superuser.password,
+    caCertPath: stack.pg.caCertPath,
+  };
+  await waitFor("the scratch PostgreSQL", async () => {
+    const client = new pg.Client({
+      host: target.host,
+      port: target.port,
+      database: target.database,
+      user: target.user,
+      password: target.password,
+      ssl: { ca: readFileSync(target.caCertPath, "utf8"), rejectUnauthorized: true },
+    });
+    try {
+      await client.connect();
+      await client.query("SELECT 1");
+      return true;
+    } catch {
+      return false;
+    } finally {
+      await client.end().catch(() => undefined);
+    }
+  });
+  return target;
 }
 
 /**
@@ -798,4 +837,16 @@ export async function scratchBao(stack: Stack): Promise<ScratchBao> {
       await waitForOpenBaoActive(state);
     },
   };
+}
+
+/**
+ * Run 6.7 Task C (P-124 step 4): a new scratch OpenBao — its container and
+ * volume removed, started again and initialised anew on the same static seal.
+ * A restore's snapshot then goes into an instance no earlier restore touched.
+ */
+export async function freshScratchBao(stack: Stack): Promise<ScratchBao> {
+  await compose(stack.project, ["rm", "--stop", "--force", "openbao-scratch"]);
+  await run("docker", ["volume", "rm", "--force", `${stack.project}_baoscratch`]);
+  await compose(stack.project, ["up", "--detach", "openbao-scratch"]);
+  return scratchBao(stack);
 }

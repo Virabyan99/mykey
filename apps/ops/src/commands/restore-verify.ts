@@ -97,20 +97,40 @@ function storeChecks(deps: VerifyDeps): Record<string, () => Promise<CheckAnswer
     },
     sessions_none: async () =>
       zero(await count(pool, "SELECT count(*) AS n FROM auth.session"), "sessions"),
+    // An account is usable again only through a reset the operator issued
+    // after the restore began (the journey's owner); every other one waits.
     accounts_recovery_pending: async () =>
       zero(
-        await count(
-          pool,
-          "SELECT count(*) AS n FROM auth.account_state WHERE state NOT IN ('recovery_pending', 'disabled')",
+        Number(
+          (
+            await pool.query<{ n: string }>(
+              `SELECT count(*) AS n FROM auth.account_state s
+                WHERE s.state NOT IN ('recovery_pending', 'disabled')
+                  AND NOT EXISTS (SELECT 1 FROM auth.reset_token t
+                                   WHERE t.user_id = s.user_id AND t.consumed_at IS NOT NULL
+                                     AND t.created_at >= $1)`,
+              [deps.restoreStartedAt],
+            )
+          ).rows[0]?.n ?? "0",
         ),
-        "accounts not recovery_pending",
+        "accounts usable without a reset after the restore",
       ),
-    reset_tokens_none: async () =>
-      zero(
-        (await count(pool, "SELECT count(*) AS n FROM auth.reset_token")) +
-          (await count(pool, "SELECT count(*) AS n FROM auth.verification")),
-        "reset tokens or verifications",
-      ),
+    // Nothing of the old world: no reset token or verification older than the restore.
+    reset_tokens_none: async () => {
+      const older = async (table: string): Promise<number> =>
+        Number(
+          (
+            await pool.query<{ n: string }>(
+              `SELECT count(*) AS n FROM auth.${table} WHERE created_at < $1`,
+              [deps.restoreStartedAt],
+            )
+          ).rows[0]?.n ?? "0",
+        );
+      return zero(
+        (await older("reset_token")) + (await older("verification")),
+        "reset tokens or verifications of the old world",
+      );
+    },
     machine_accessors_none: async () => {
       const self = (await admin.lookupSelf()).accessor;
       let left = 0;
@@ -274,4 +294,26 @@ export async function restoreVerify(
     }),
   );
   return report;
+}
+
+/** P-124: the checks `gate open` performs again itself, right before opening. */
+export const RECHECKED = [
+  "sessions_none",
+  "machine_accessors_none",
+  "control_row_idle",
+  "incarnation_three_places",
+] as const;
+
+export async function recheckForOpen(deps: VerifyDeps): Promise<Check[]> {
+  const all = storeChecks(deps);
+  const checks: Check[] = [];
+  for (const id of RECHECKED) {
+    const run = all[id];
+    const answer: CheckAnswer =
+      run === undefined
+        ? { state: "unknown", observed: "no such check" }
+        : await run().catch(() => ({ state: "unknown" as const, observed: "error" }));
+    checks.push({ id, ...answer });
+  }
+  return checks;
 }

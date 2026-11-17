@@ -1,0 +1,31 @@
+# Run 6.7 Task C (P-124): a second PostgreSQL cluster on the same pki volume
+# (the same certificate and CA), so a restore can make roles with new
+# passwords and pg_restore a pair into a cluster of its own while the stack's
+# cluster keeps serving the source world. Used with scratch-bao.override.yml
+# by tests/integration/restore/full.test.ts and tests/fault/restore/*.
+services:
+  postgres-scratch:
+    image: postgres@sha256:e3d24f6906d0760bf4da0dae872415391ededefad23fd471c47dc53b0ddf3c42
+    depends_on:
+      pki-init:
+        condition: service_completed_successfully
+    command: ["postgres", "-c", "config_file=/etc/mykey/postgresql.conf"]
+    environment:
+      POSTGRES_PASSWORD_FILE: /run/secrets/pg_superuser_password
+    secrets:
+      - pg_superuser_password
+    volumes:
+      - pgscratch:/var/lib/postgresql
+      - pki:/pki:ro
+      - ./dev/postgresql.conf:/etc/mykey/postgresql.conf:ro
+      - ./dev/pg_hba.conf:/etc/mykey/pg_hba.conf:ro
+    ports:
+      - "127.0.0.1:0:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -q -h /var/run/postgresql -U postgres -d postgres"]
+      interval: 2s
+      timeout: 3s
+      retries: 60
+
+volumes:
+  pgscratch:

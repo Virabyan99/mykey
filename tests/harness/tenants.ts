@@ -32,7 +32,13 @@ export interface Tenants {
   cookie(user: FixtureUser): Promise<string>;
   userId(user: FixtureUser): string;
   /** E-mail, password and TOTP seed, for a new sign-in. */
-  credentials(user: FixtureUser): { email: string; password: string; seed: Uint8Array };
+  credentials(user: FixtureUser): {
+    email: string;
+    password: string;
+    seed: Uint8Array;
+    /** Run 6.7: the recovery codes activation answered (all unused at enrolment). */
+    recoveryCodes: readonly string[];
+  };
 }
 
 const MEMBERSHIP: Record<FixtureUser, { org: "a" | "b"; role: "owner" | "admin" | "member" }> = {
@@ -91,7 +97,14 @@ export async function createTenants(api: TestApi): Promise<Tenants> {
   const hasher = (await api.auth.$context).password;
   const users = new Map<
     FixtureUser,
-    { id: string; email: string; password: string; seed: Uint8Array; cookie: string }
+    {
+      id: string;
+      email: string;
+      password: string;
+      seed: Uint8Array;
+      recoveryCodes: readonly string[];
+      cookie: string;
+    }
   >();
   const tag = randomBytes(3).toString("hex");
   for (const name of FIXTURE_USERS) {
@@ -123,7 +136,14 @@ export async function createTenants(api: TestApi): Promise<Tenants> {
       email,
       password,
     });
-    users.set(name, { id, email, password, seed: enrolled.seed, cookie: enrolled.cookie });
+    users.set(name, {
+      id,
+      email,
+      password,
+      seed: enrolled.seed,
+      recoveryCodes: enrolled.recoveryCodes,
+      cookie: enrolled.cookie,
+    });
     // Seven sign-ins from one address would trip the per-source limit (Run 3.3).
     await db.query("DELETE FROM app.rate_limit");
   }
@@ -160,8 +180,8 @@ export async function createTenants(api: TestApi): Promise<Tenants> {
     cookie: (name) => Promise.resolve(userOf(name).cookie),
     userId: (name) => userOf(name).id,
     credentials: (name) => {
-      const { email, password, seed } = userOf(name);
-      return { email, password, seed };
+      const { email, password, seed, recoveryCodes } = userOf(name);
+      return { email, password, seed, recoveryCodes };
     },
   };
 }

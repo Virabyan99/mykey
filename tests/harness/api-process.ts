@@ -15,11 +15,13 @@ import { createInterface } from "node:readline";
 import {
   createApp,
   createHealthCheck,
+  createServiceGate,
   issuerBaoFromDirectory,
   listen,
   capacityPathOf,
   runtimeBaoFromDirectory,
   type ApiConfig,
+  type AppDeps,
 } from "@mykey/api";
 import { createAuth, createThrottle, loadAuthKeys } from "@mykey/auth";
 import { createPool, type DbTarget } from "@mykey/db";
@@ -39,6 +41,8 @@ interface Settings {
   fault?: { point: string; action: FaultAction };
   archiveTick?: { intervalMs: number; staleSeconds: number };
   rateLimits?: RateLimitsMode;
+  /** Run 6.7 (P-123): a second listener, the verification one, on the same gate. */
+  verifyListener?: boolean;
 }
 
 const lines = createInterface({ input: process.stdin })[Symbol.asyncIterator]();
@@ -80,7 +84,10 @@ const issuer =
   settings.runtime === undefined
     ? undefined
     : issuerBaoFromDirectory(settings.runtime.openBao, settings.runtime.secretsDirectory);
-const app = createApp({
+// Run 6.7: one gate for both listeners, as in startServer.
+const gate = createServiceGate(settings.api, pool);
+const deps: AppDeps = {
+  gate,
   pool,
   ...(lockPool === undefined ? {} : { lockPool }),
   ...(settings.runtime === undefined || issuer === undefined
@@ -108,9 +115,20 @@ const app = createApp({
     },
     ...(fault === undefined ? {} : { faults: (point: string) => meet(point) }),
   },
-});
+};
+const app = createApp({ ...deps, listener: "public" });
 const server = await listen(app, { hostname: "127.0.0.1", port: 0, tls: settings.tls });
-process.stdout.write(`${JSON.stringify({ port: server.port })}\n`);
+const verifyServer =
+  settings.verifyListener === true
+    ? await listen(createApp({ ...deps, listener: "verify" }), {
+        hostname: "127.0.0.1",
+        port: 0,
+        tls: settings.tls,
+      })
+    : undefined;
+process.stdout.write(
+  `${JSON.stringify({ port: server.port, ...(verifyServer === undefined ? {} : { verifyPort: verifyServer.port }) })}\n`,
+);
 
 const tick = settings.archiveTick;
 let ticking = false;

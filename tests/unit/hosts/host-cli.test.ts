@@ -328,6 +328,78 @@ describe("gate (Run 3.1, P-43)", () => {
     expect(() => parseHostArgs(["staging", "gate", "open", "--wide"])).toThrow(/gate/);
   });
 
+  // Run 6.7 (P-124): steps 1–7 by `restore`, the report and step 9 by `restore-verify`.
+  it("parses restore --source <host> --pair <id> | --newest, and refuses anything else", () => {
+    const pair = "0b0e7a52-6b51-4d43-9a1e-61f4a0e3c0d2";
+    expect(parseHostArgs(["staging", "restore", "--source", "staging", "--newest"])).toEqual({
+      host: "staging",
+      via: "vpn",
+      command: "restore",
+      source: "staging",
+      pair: "newest",
+    });
+    expect(parseHostArgs(["prod", "restore", "--source", "staging", "--pair", pair])).toEqual({
+      host: "prod",
+      via: "vpn",
+      command: "restore",
+      source: "staging",
+      pair,
+    });
+    expect(() => parseHostArgs(["staging", "restore", "--newest"])).toThrow(/--source/);
+    expect(() => parseHostArgs(["staging", "restore", "--source", "staging"])).toThrow(/--pair/);
+    expect(() =>
+      parseHostArgs(["staging", "restore", "--source", "staging", "--newest", "--pair", pair]),
+    ).toThrow(/--pair/);
+    expect(() =>
+      parseHostArgs(["staging", "restore", "--source", "staging", "--pair", "latest"]),
+    ).toThrow(/pair id/);
+    expect(() =>
+      parseHostArgs(["staging", "restore", "--source", "elsewhere", "--newest"]),
+    ).toThrow(/--source/);
+  });
+
+  it("parses restore-verify --confirm-members <n> with --journey or --owner-confirmed, and --open", () => {
+    expect(
+      parseHostArgs(["staging", "restore-verify", "--confirm-members", "2", "--journey", "--open"]),
+    ).toEqual({
+      host: "staging",
+      via: "vpn",
+      command: "restore-verify",
+      confirmMembers: 2,
+      journey: "run",
+      open: true,
+    });
+    expect(
+      parseHostArgs(["prod", "restore-verify", "--confirm-members", "1", "--owner-confirmed"]),
+    ).toEqual({
+      host: "prod",
+      via: "vpn",
+      command: "restore-verify",
+      confirmMembers: 1,
+      journey: "owner-confirmed",
+      open: false,
+    });
+    expect(() => parseHostArgs(["staging", "restore-verify", "--journey"])).toThrow(
+      /--confirm-members/,
+    );
+    expect(() =>
+      parseHostArgs(["staging", "restore-verify", "--confirm-members", "two", "--journey"]),
+    ).toThrow(/--confirm-members/);
+    expect(() => parseHostArgs(["staging", "restore-verify", "--confirm-members", "2"])).toThrow(
+      /--journey or --owner-confirmed/,
+    );
+    expect(() =>
+      parseHostArgs([
+        "staging",
+        "restore-verify",
+        "--confirm-members",
+        "2",
+        "--journey",
+        "--owner-confirmed",
+      ]),
+    ).toThrow(/--journey or --owner-confirmed/);
+  });
+
   it("a close keeps the origin of a v2 record, and names a fresh install otherwise", () => {
     const origin = { kind: "restore", pairId: "0b0e7a52-6b51-4d43-9a1e-61f4a0e3c0d2" };
     expect(gateOriginOf(JSON.stringify({ version: 2, origin }), hostId)).toEqual(origin);

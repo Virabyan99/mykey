@@ -142,6 +142,8 @@ export interface SecretsFixture {
   ): Promise<{ currentVersion: number; versions: BackendVersion[] } | null>;
   /** Where the API's credential files are (runtime and issuer). */
   secretsDirectory: string;
+  /** The auth key rings' directory (Run 6.7: a restored product uses the lost host's keys). */
+  keysDirectory: string;
   /** The operator client of A's namespace (root token): for writing past the product. */
   operatorBao(): OpenBaoClient;
   /** Requests the audit device recorded that change KV and carry this operation id. */
@@ -328,6 +330,7 @@ export async function createSecretsFixture(
     },
     env: ids,
     secretsDirectory,
+    keysDirectory,
     setBeforeHandler(hook) {
       beforeHandler = hook;
     },

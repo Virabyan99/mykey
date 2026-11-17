@@ -109,6 +109,9 @@ const ops: Record<string, Coverage> = {
   // Run 6.7 (P-124).
   "restore-invalidate": { actions: ["operator.restore_begin", "operator.restore_invalidate"] },
   "restore-verify": { actions: ["operator.restore_verify"] },
+  // The step functions around them: their audit is restore-invalidate's and restore-verify's.
+  restore: { none: "drives restore-invalidate; audits through it" },
+  "verify-journey": { none: "HTTP requests to the listener; each is audited by its route" },
   // Run 6.7 / 6.9 (P-122, P-127): host tooling.
   "host gate": { actions: ["operator.gate_open", "operator.gate_close"] },
   "host deploy": { actions: ["operator.deploy"] },

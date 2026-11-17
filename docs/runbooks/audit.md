@@ -111,6 +111,8 @@ Requests refused before a principal is known (401, malformed requests, origin, q
 - `pair`: `system.backup_eligible`, `system.backup_invalidated`, `system.backup_cleanup`
 - `restore-invalidate`: `operator.restore_begin`, `operator.restore_invalidate`
 - `restore-verify`: `operator.restore_verify`
+- `restore`: nothing — drives restore-invalidate; audits through it
+- `verify-journey`: nothing — HTTP requests to the listener; each is audited by its route
 - `host gate`: `operator.gate_open`, `operator.gate_close`
 - `host deploy`: `operator.deploy`
 
