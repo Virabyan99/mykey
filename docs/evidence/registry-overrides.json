@@ -865,6 +865,36 @@
       "status": "SPIKE_PASS",
       "evidence": ["docs/evidence/session-6/run-6.6.md"],
       "note": "Eligibility (30 days) and physical retention (lock: capture + 30 d + 2 h) follow D-53; a refused or still-present object stops that pair and fails the unit after three days; checkpoint pair-30-day on staging."
+    },
+    {
+      "id": "FR-1.67",
+      "status": "SPIKE_PASS",
+      "evidence": ["docs/evidence/session-6/run-6.7.md"],
+      "note": "A restore ends closed + verifying: gate v2 binds host, incarnation and build; the public listener is quarantined at every step a restore can stop at; gate open needs a fresh, complete report and re-checks it (local proof; the drill in Run 6.8)."
+    },
+    {
+      "id": "FR-1.68",
+      "status": "SPIKE_PASS",
+      "evidence": ["docs/evidence/session-6/run-6.7.md"],
+      "note": "Access is revalidated by class: sessions, reset tokens, verifications deleted, accounts recovery_pending, credentials revoked, every accessor in every namespace revoked, AppRole secret ids rotated; nine old credentials each refused after a local restore."
+    },
+    {
+      "id": "FR-1.69",
+      "status": "SPIKE_PASS",
+      "evidence": ["docs/evidence/session-6/run-6.7.md"],
+      "note": "restoreMeasurements records capture time, age at restore, restore and revalidation time and result; host.ts writes them beside the report. Measured values, never an SLA."
+    },
+    {
+      "id": "FR-1.86",
+      "status": "SPIKE_PASS",
+      "evidence": ["docs/evidence/session-6/run-6.7.md"],
+      "note": "Human recovery: the operator's mfa reset, then enrolment, sign-in, reveal digest and a refused change through the verification listener; the owner can do what an owner can after opening, and no more."
+    },
+    {
+      "id": "FR-1.87",
+      "status": "SPIKE_PASS",
+      "evidence": ["docs/evidence/session-6/run-6.7.md"],
+      "note": "Restore readiness: host.ts restore and restore-verify with runbook restore.md; refusals before anything is written (data present, KMS key unusable, unknown role in globals.sql); a stopped restore completes from step 1."
     }
   ]
 }

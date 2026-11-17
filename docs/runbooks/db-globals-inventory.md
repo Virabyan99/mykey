@@ -42,7 +42,7 @@ Written in Run 1.7 (2026-11-10) against PostgreSQL 18.6.
 
 ## Reconstruction order
 
-Runs 2.9 and 6.8 follow this order and record the result of each step.
+Runs 2.9 and 6.8 follow this order and record the result of each step. Since Run 6.7, `restoreToVerifying` (`restore.md`, D-55) does steps 2–5 itself: it compares `globals.sql` with the roles of this inventory and never runs it, applies the roles with new passwords and the database access, then restores the dump; a restored database that skipped step 4 is caught by `tests/integration/restore/full.test.ts`.
 
 1. Start PostgreSQL 18 with the configuration files and certificates from the table above.
 2. As the superuser, create an empty database.

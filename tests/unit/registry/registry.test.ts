@@ -175,7 +175,7 @@ describe("evidence:verify", () => {
       tamper((copy) => (copy.items[0]!.evidence = ["docs/evidence/does-not-exist.md"])).join("\n"),
     ).toMatch(/does-not-exist/);
     expect(tamper((copy) => (copy.items[200 - 60]!.gate = "F")).join("\n")).toMatch(/gate/);
-  });
+  }, 30_000); // six whole registry scans: about 5 s on a loaded workstation
 
   it("refuses a claim its evidence file does not state", () => {
     const claim = (id: string, status: Registry["items"][number]["status"], evidence: string[]) => {
