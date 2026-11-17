@@ -400,6 +400,34 @@ describe("gate (Run 3.1, P-43)", () => {
     ).toThrow(/--journey or --owner-confirmed/);
   });
 
+  // Run 6.9 (P-128): a release through the closed gate.
+  it("parses deploy --release <dir> with --resume, --install-only, --stay-closed and --image", () => {
+    const image = `sha256:${"a".repeat(64)}`;
+    expect(parseHostArgs(["staging", "deploy", "--release", "r/0.6.0"])).toEqual({
+      host: "staging",
+      via: "vpn",
+      command: "deploy",
+      release: "r/0.6.0",
+      images: [],
+      resume: false,
+      installOnly: false,
+      stayClosed: false,
+    });
+    expect(
+      parseHostArgs(["prod", "deploy", "--release", "r", "--stay-closed", "--image", image]),
+    ).toMatchObject({ stayClosed: true, images: [image] });
+    expect(parseHostArgs(["staging", "deploy", "--release", "r", "--resume"])).toMatchObject({
+      resume: true,
+    });
+    expect(() => parseHostArgs(["staging", "deploy"])).toThrow(/--release/);
+    expect(() =>
+      parseHostArgs(["staging", "deploy", "--release", "r", "--install-only", "--stay-closed"]),
+    ).toThrow(/exclude/);
+    expect(() =>
+      parseHostArgs(["staging", "deploy", "--release", "r", "--image", "api:1"]),
+    ).toThrow(/unexpected/);
+  });
+
   it("a close keeps the origin of a v2 record, and names a fresh install otherwise", () => {
     const origin = { kind: "restore", pairId: "0b0e7a52-6b51-4d43-9a1e-61f4a0e3c0d2" };
     expect(gateOriginOf(JSON.stringify({ version: 2, origin }), hostId)).toEqual(origin);

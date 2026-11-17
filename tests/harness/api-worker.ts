@@ -75,10 +75,15 @@ export function startApiProcess(
     rateLimits?: "product" | "wide";
     /** Run 6.7 (P-123): also the verification listener. */
     verifyListener?: boolean;
+    /** Run 6.9 (P-131): another checkout's api-process.ts, started in that checkout. */
+    entry?: { path: string; cwd: string };
   },
 ): Promise<ApiProcess> {
   return new Promise((resolveStart, reject) => {
-    const child = spawn(process.execPath, [ENTRY], { stdio: ["pipe", "pipe", "pipe"] });
+    const child = spawn(process.execPath, [opts.entry?.path ?? ENTRY], {
+      stdio: ["pipe", "pipe", "pipe"],
+      ...(opts.entry === undefined ? {} : { cwd: opts.entry.cwd }),
+    });
     let output = "";
     let errors = "";
     const exited = new Promise<number | null>((resolveExit) =>

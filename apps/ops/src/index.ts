@@ -52,4 +52,15 @@ export {
   type RestoreStep,
   type RestoreTarget,
 } from "./commands/restore.ts";
-export { verifyJourney, type JourneyDeps, type JourneyRequest } from "./commands/verify-journey.ts";
+export {
+  deployJourney,
+  verifyJourney,
+  type DeployJourneyDeps,
+  type JourneyDeps,
+  type JourneyRequest,
+} from "./commands/verify-journey.ts";
+export {
+  deployVerify,
+  previousGateClosed,
+  type DeployVerifyDeps,
+} from "./commands/deploy-verify.ts";

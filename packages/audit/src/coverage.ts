@@ -111,6 +111,7 @@ const ops: Record<string, Coverage> = {
   "restore-verify": { actions: ["operator.restore_verify"] },
   // Run 6.9 (P-129): the API's PostgreSQL sweeps, run once by the host timer.
   sweep: { actions: ["system.operation_stuck"] },
+  "deploy-verify": { actions: ["operator.deploy"] },
   // The step functions around them: their audit is restore-invalidate's and restore-verify's.
   restore: { none: "drives restore-invalidate; audits through it" },
   "verify-journey": { none: "HTTP requests to the listener; each is audited by its route" },

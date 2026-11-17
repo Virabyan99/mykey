@@ -75,7 +75,7 @@ async function count(pool: pg.Pool, sql: string): Promise<number> {
 }
 
 /** Every check that reads the restored stores. An exception makes it unknown. */
-function storeChecks(deps: VerifyDeps): Record<string, () => Promise<CheckAnswer>> {
+export function storeChecks(deps: VerifyDeps): Record<string, () => Promise<CheckAnswer>> {
   const { pool, admin } = deps;
   const namespaces = async (): Promise<string[]> => ["", ...(await admin.listNamespaces())];
   return {

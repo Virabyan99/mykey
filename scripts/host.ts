@@ -24,6 +24,7 @@ import {
   rmSync,
   writeFileSync,
 } from "node:fs";
+import { spawnSync } from "node:child_process";
 import { homedir, tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import {
@@ -125,6 +126,7 @@ export const USAGE = `usage: node scripts/host.ts <staging|prod> <command> [--pu
   gate open --report <file>      opens with a verification report (v2; Run 6.7)
   gate close [--verifying]       closes; --verifying lets the verification listener serve
   tunnel verify                  a local port to the API's verification listener (Ctrl-C ends it)
+  deploy --release <dir> [--resume] [--install-only|--stay-closed]   P-128: a release through the closed gate
   restore --source <host> (--pair <id> | --newest)   P-124 steps 1–7: restore a pair, start closed + verifying
   restore-verify --confirm-members <n> (--journey | --owner-confirmed) [--open]   the report; --open opens
   quiesce                        gate close, stop api and provisioner, restart OpenBao (staging only)
@@ -164,6 +166,14 @@ export type HostCommand = { host: HostName; via: Address } & (
   | { command: "tunnel"; target: "verify" }
   | { command: "restore"; source: HostName; pair: string }
   | {
+      command: "deploy";
+      release: string;
+      resume: boolean;
+      installOnly: boolean;
+      stayClosed: boolean;
+      images: string[];
+    }
+  | {
       command: "restore-verify";
       confirmMembers: number;
       journey: "run" | "owner-confirmed";
@@ -182,6 +192,37 @@ export type GateAction = "open" | "close" | "status";
  * in host.env yet, until Run 6.9's first deploy) opens without one.
  */
 const PAIR_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+
+/** `deploy --release <dir> [--resume] [--install-only | --stay-closed] [--image <id>]…` (P-128). */
+function parseDeployArgs(host: "staging" | "prod", rest: string[]): HostCommand {
+  let release: string | null = null;
+  const images: string[] = [];
+  const flags = { resume: false, installOnly: false, stayClosed: false };
+  for (let i = 0; i < rest.length; i += 1) {
+    const word = rest[i];
+    const value = rest[i + 1];
+    if (word === "--release" && value !== undefined && !value.startsWith("--")) {
+      release = value;
+      i += 1;
+    } else if (word === "--image" && value !== undefined && /^sha256:[0-9a-f]{64}$/.test(value)) {
+      images.push(value);
+      i += 1;
+    } else if (word === "--resume") {
+      flags.resume = true;
+    } else if (word === "--install-only") {
+      flags.installOnly = true;
+    } else if (word === "--stay-closed") {
+      flags.stayClosed = true;
+    } else {
+      throw new Error(`deploy: unexpected ${String(word)} (deploy --release <dir> …)`);
+    }
+  }
+  if (release === null) throw new Error("deploy needs --release <dir>");
+  if (flags.installOnly && flags.stayClosed) {
+    throw new Error("deploy: --install-only and --stay-closed exclude each other");
+  }
+  return { host, via: "vpn", command: "deploy", release, images, ...flags };
+}
 
 /** `restore --source <host> (--pair <id> | --newest)`: P-124 steps 1–7. */
 function parseRestoreArgs(host: "staging" | "prod", rest: string[]): HostCommand {
@@ -305,6 +346,7 @@ export function parseHostArgs(argv: string[]): HostCommand {
   }
   if (command === "gate") return parseGateArgs(host, rest);
   if (command === "restore") return parseRestoreArgs(host, rest);
+  if (command === "deploy") return parseDeployArgs(host, rest);
   if (command === "restore-verify") return parseRestoreVerifyArgs(host, rest);
   if (command === "tunnel") {
     if (rest.length !== 1 || rest[0] !== "verify") throw new Error("tunnel needs verify");
@@ -1975,6 +2017,8 @@ async function main(argv: string[], log: Logger): Promise<number> {
       return runRestore(host, command, address, log);
     case "restore-verify":
       return runRestoreVerify(host, command, address, log);
+    case "deploy":
+      return runDeployCommand(host, command, address, log);
     case "quiesce":
       return runQuiesce(host, address, log);
     case "resume":
@@ -2904,6 +2948,522 @@ async function runRestoreVerify(
     await pgTunnel.close();
     await baoTunnel.close();
     rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+// ------------------------------------------------------------------- deploy (Run 6.9)
+
+const DEPLOY_STATE_FILE = "/var/lib/mykey/deploy-state.json";
+
+/** What a deploy keeps on the workstation: the gate before it, its report, the journey's secret. */
+export function deployFiles(
+  host: HostName,
+  home: string = homedir(),
+): { previousGate: string; report: string; journey: string } {
+  const directory = join(home, ".mykey", "secrets", "hosts", host);
+  return {
+    previousGate: join(directory, "deploy-previous-gate.json"),
+    report: join(directory, "deploy-report.json"),
+    journey: join(directory, "deploy-journey.json"),
+  };
+}
+
+/** RFC 4648 base32 (the TOTP seed's form) to bytes. */
+export function base32Bytes(text: string): Uint8Array {
+  const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
+  let bits = 0;
+  let value = 0;
+  const out: number[] = [];
+  for (const char of text.replace(/=+$/, "").toUpperCase()) {
+    const index = alphabet.indexOf(char);
+    if (index < 0) throw new Error("base32: unexpected character");
+    value = (value << 5) | index;
+    bits += 5;
+    if (bits >= 8) {
+      out.push((value >>> (bits - 8)) & 0xff);
+      bits -= 8;
+    }
+  }
+  return Uint8Array.from(out);
+}
+
+/** One HTTPS request to the API through a local tunnel, with the host's CA and its origin. */
+async function apiThrough(
+  port: number,
+  ca: string,
+  origin: string,
+  method: string,
+  path: string,
+  init: { body?: unknown; cookie?: string; headers?: Record<string, string> } = {},
+): Promise<Response> {
+  const { request } = await import("node:https");
+  const body = init.body === undefined ? undefined : JSON.stringify(init.body);
+  return new Promise((done, fail) => {
+    const req = request(
+      {
+        host: "127.0.0.1",
+        port,
+        method,
+        path,
+        ca,
+        headers: {
+          origin,
+          ...(body === undefined ? {} : { "content-type": "application/json" }),
+          ...(init.cookie === undefined ? {} : { cookie: init.cookie }),
+          ...init.headers,
+        },
+      },
+      (res) => {
+        const chunks: Buffer[] = [];
+        res.on("data", (chunk: Buffer) => chunks.push(chunk));
+        res.on("end", () => {
+          const headers = new Headers();
+          for (const [k, v] of Object.entries(res.headers)) {
+            for (const one of Array.isArray(v) ? v : v === undefined ? [] : [v])
+              headers.append(k, one);
+          }
+          done(new Response(Buffer.concat(chunks), { status: res.statusCode ?? 0, headers }));
+        });
+      },
+    );
+    req.on("error", fail);
+    req.end(body);
+  });
+}
+
+function sessionPairOf(response: Response): string | null {
+  for (const cookie of response.headers.getSetCookie()) {
+    const pair = cookie.split(";")[0] ?? "";
+    if (pair.startsWith("__Secure-better-auth.session_token=") && pair.length > 40) return pair;
+  }
+  return null;
+}
+
+/**
+ * P-128: `deploy --release <dir>` promotes a release built by
+ * `pnpm run host:release` through the closed gate: verify, load, close, migrate,
+ * start, the owner's journey through the verification listener, the report,
+ * open. `--resume` continues a stopped deploy; a rollback is a deploy of the
+ * previous release.
+ */
+async function runDeployCommand(
+  host: HostEntry,
+  command: {
+    release: string;
+    resume: boolean;
+    installOnly: boolean;
+    stayClosed: boolean;
+    images: string[];
+  },
+  address: Address,
+  log: Logger,
+): Promise<number> {
+  const { releaseSchema } = await import("../infra/release/release-schema.ts");
+  const { deployPlan, runDeploy } = await import("./host-deploy.ts");
+  const { createPool } = await import("@mykey/db");
+  const { openGate } = await import("@mykey/operations/operator");
+  const { OpenBaoAdmin } = await import("@mykey/openbao/admin");
+  const { codeAt, stepAt } = await import("@mykey/auth");
+  const { deployJourney, deployVerify } = await import("@mykey/ops");
+  const dir = resolve(command.release);
+  const release = releaseSchema.parse(JSON.parse(readFileSync(join(dir, "release.json"), "utf8")));
+  const build = release.commit.slice(0, 12);
+  const files = deployFiles(host.name);
+  const remote = { sudo: true, address } as const;
+  const hostEnv = async () =>
+    parseHostEnv(
+      expectSuccess(await sshExec(host, `cat ${REMOTE.hostEnv}`, { address }), "reading host.env")
+        .stdout,
+    );
+  const runningBuild = async () => (await sshExec(host, apiBuildCommand(), remote)).stdout.trim();
+  const tmp = mkdtempSync(join(tmpdir(), "mykey-deploy-"));
+  const caCertPath = join(tmp, "ca.crt");
+  writeFileSync(
+    caCertPath,
+    expectSuccess(await sshExec(host, `cat ${REMOTE.caCert}`, { address }), "reading the CA")
+      .stdout,
+  );
+  const withMaintenance = async <T>(work: (pool: ReturnType<typeof createPool>) => Promise<T>) => {
+    const tunnel = await openTunnel(host, REMOTE.postgres);
+    const pool = createPool(
+      {
+        host: "127.0.0.1",
+        port: tunnel.localPort,
+        database: "postgres",
+        user: "maintenance",
+        password: localSecret(workstationRoleSecretFile(host.name, "maintenance")),
+        caCertPath,
+      },
+      { max: 2 },
+    );
+    try {
+      return await work(pool);
+    } finally {
+      await pool.end();
+      await tunnel.close();
+    }
+  };
+  const withAdmin = async <T>(work: (admin: InstanceType<typeof OpenBaoAdmin>) => Promise<T>) => {
+    const custody = custodyCopyPath(host.name);
+    const token = (JSON.parse(readFileSync(custody, "utf8")) as { root_token?: unknown })
+      .root_token;
+    if (typeof token !== "string" || token === "")
+      throw new Error(`${custody} holds no root token`);
+    registerSecret(token);
+    const tunnel = await openTunnel(host, REMOTE.openbao);
+    try {
+      return await work(
+        new OpenBaoAdmin(
+          { url: `https://127.0.0.1:${String(tunnel.localPort)}`, caCertPath },
+          token,
+        ),
+      );
+    } finally {
+      await tunnel.close();
+    }
+  };
+  const binding = async () => {
+    const env = await hostEnv();
+    const hostInstanceId = env.MYKEY_HOST_INSTANCE_ID;
+    const backendIncarnation = env.MYKEY_BACKEND_INCARNATION;
+    if (hostInstanceId === undefined || backendIncarnation === undefined) {
+      throw new Error("host.env holds no host instance id or incarnation");
+    }
+    return { hostInstanceId, backendIncarnation, releaseBuild: build };
+  };
+  const gateCommand = (action: "open" | "close", verifying: boolean) =>
+    ({
+      host: host.name,
+      via: "vpn" as const,
+      command: "gate" as const,
+      action,
+      ...(verifying ? { verifying: true as const } : {}),
+    }) as HostCommand & { command: "gate" };
+
+  try {
+    const current = {
+      build: await runningBuild(),
+      lastMigration: await withMaintenance(async (pool) =>
+        (
+          (
+            await pool.query<{ name: string }>(
+              "SELECT name FROM meta.schema_migration ORDER BY name DESC LIMIT 1",
+            )
+          ).rows[0]?.name ?? ""
+        ).replace(/\.sql$/, ""),
+      ),
+    };
+    const related =
+      current.build === "" ||
+      [
+        ["merge-base", "--is-ancestor", current.build, release.commit],
+        ["merge-base", "--is-ancestor", release.commit, current.build],
+      ].some((args) => spawnSync("git", args, { stdio: "ignore" }).status === 0);
+    const plan = deployPlan(
+      current,
+      release,
+      { related, imageIds: command.images },
+      { installOnly: command.installOnly, stayClosed: command.stayClosed },
+    );
+    if ("refused" in plan) {
+      log.error(`${host.name}: deploy refused: ${plan.refused}`);
+      return 1;
+    }
+    log.info(
+      `${host.name}: deploy ${release.version} (${build}) over ${current.build || "nothing"}: ${plan.steps.join(", ")}`,
+    );
+
+    await runDeploy(
+      {
+        state: {
+          read: async () => {
+            const text = (
+              await sshExec(
+                host,
+                `if test -s ${DEPLOY_STATE_FILE}; then cat ${DEPLOY_STATE_FILE}; fi`,
+                remote,
+              )
+            ).stdout.trim();
+            return text === ""
+              ? null
+              : (JSON.parse(text) as import("./host-deploy.ts").DeployState);
+          },
+          write: async (state) => {
+            expectSuccess(
+              await sshExec(
+                host,
+                state === null
+                  ? `rm -f ${DEPLOY_STATE_FILE}`
+                  : `install -d -m 0755 /var/lib/mykey && cat > ${DEPLOY_STATE_FILE}.tmp && mv -f ${DEPLOY_STATE_FILE}.tmp ${DEPLOY_STATE_FILE}`,
+                { ...remote, ...(state === null ? {} : { stdin: JSON.stringify(state) }) },
+              ),
+              "the deploy state",
+            );
+          },
+        },
+        step: async (step) => {
+          const started = Date.now();
+          switch (step) {
+            case "verify_release": {
+              const sums = readFileSync(join(dir, "SHA256SUMS"), "utf8").trim().split("\n");
+              for (const line of sums) {
+                const [sum, file] = line.split("  ");
+                if (sum === undefined || file === undefined)
+                  throw new Error("SHA256SUMS: bad line");
+                const actual = createHash("sha256")
+                  .update(readFileSync(join(dir, file)))
+                  .digest("hex");
+                if (actual !== sum) throw new Error(`release: ${file} does not match SHA256SUMS`);
+              }
+              for (const image of release.images) {
+                if (!sums.includes(`${image.archiveSha256}  ${image.archive}`)) {
+                  throw new Error(
+                    `release: ${image.archive} is not the archive release.json lists`,
+                  );
+                }
+              }
+              break;
+            }
+            case "load_images": {
+              for (const image of release.images) {
+                const inspect = `docker image inspect --format '{{.Id}}' ${image.imageId}`;
+                if ((await sshExec(host, inspect, remote)).code !== 0) {
+                  await runImage(host, image.name, join(dir, image.archive), { address, log });
+                }
+                const loaded = expectSuccess(
+                  await sshExec(host, inspect, remote),
+                  `inspect ${image.name}`,
+                ).stdout.trim();
+                if (loaded !== image.imageId) throw new Error(`${image.name}: loaded ${loaded}`);
+                expectSuccess(
+                  await sshExec(
+                    host,
+                    hostEnvSetCommand(imageEnvKey(image.name), image.imageId),
+                    remote,
+                  ),
+                  `host.env ${imageEnvKey(image.name)}`,
+                );
+              }
+              break;
+            }
+            case "gate_close": {
+              const before = await sshExec(host, `cat ${GATE_FILE}`, remote);
+              mkdirSync(dirname(files.previousGate), { recursive: true, mode: 0o700 });
+              writeFileSync(
+                files.previousGate,
+                JSON.stringify({ text: before.code === 0 ? before.stdout : null }),
+              );
+              const v2 = (await hostEnv()).MYKEY_BACKEND_INCARNATION !== undefined;
+              const code = await runGate(host, gateCommand("close", v2), address, log);
+              if (code !== 0) throw new Error("gate close failed");
+              break;
+            }
+            case "migrate": {
+              await runDbInit(host, address, log);
+              const { backendIncarnation } = await binding();
+              if (openBaoValuesFrom(host.name, await hostEnv()) !== null) {
+                // The copies where none is: never over a different one (that is a restore's to settle).
+                await withAdmin(async (admin) => {
+                  for (const namespace of ["", ...(await admin.listNamespaces())]) {
+                    if ((await admin.readIncarnation(namespace)) === null) {
+                      await admin.writeIncarnation(namespace, backendIncarnation);
+                    }
+                  }
+                });
+              }
+              // A host converted from a v1 record: closed + verifying in v2 now.
+              const record = await sshExec(host, `cat ${GATE_FILE}`, remote);
+              if (record.code !== 0 || !record.stdout.includes('"version":2')) {
+                const code = await runGate(host, gateCommand("close", true), address, log);
+                if (code !== 0) throw new Error("gate close (v2) failed");
+              }
+              break;
+            }
+            case "start": {
+              await runUp(host, address, log);
+              const deadline = Date.now() + 240_000;
+              while ((await runningBuild()) !== build) {
+                if (Date.now() > deadline) throw new Error(`the API does not run ${build}`);
+                await new Promise((r) => setTimeout(r, 5_000));
+              }
+              break;
+            }
+            case "journey": {
+              const env = await hostEnv();
+              const origin = env.MYKEY_BASE_URL;
+              if (origin === undefined) throw new Error("host.env holds no MYKEY_BASE_URL");
+              const ownerDir = join(homedir(), ".mykey", "secrets", "hosts", host.name);
+              const password = readFileSync(join(ownerDir, "owner-password"), "utf8").trim();
+              const seed = readFileSync(join(ownerDir, "owner-totp-seed"), "utf8").trim();
+              registerSecret(password);
+              registerSecret(seed);
+              const ca = readFileSync(caCertPath, "utf8");
+              const tunnel = await openTunnel(host, REMOTE_API_VERIFY);
+              try {
+                const request = (
+                  method: string,
+                  path: string,
+                  init: Parameters<typeof apiThrough>[5] = {},
+                ) => apiThrough(tunnel.localPort, ca, origin, method, path, init);
+                const saved = existsSync(files.journey)
+                  ? (JSON.parse(readFileSync(files.journey, "utf8")) as {
+                      path: string;
+                      sha256: string;
+                      organizationId: string;
+                    })
+                  : null;
+                const owner = { email: `owner@mykey-${host.name}.invalid`, password };
+                const totp = async () => {
+                  const lastFile = join(ownerDir, "owner-totp-last-step");
+                  const last = existsSync(lastFile)
+                    ? Number(readFileSync(lastFile, "utf8").trim())
+                    : 0;
+                  while (stepAt(new Date()) <= last) await new Promise((r) => setTimeout(r, 1_000));
+                  const step = stepAt(new Date());
+                  writeFileSync(lastFile, `${String(step)}\n`, { mode: 0o600 });
+                  return { code: codeAt(base32Bytes(seed), step) };
+                };
+                // The first deploy picks the first secret it can list and records its path.
+                const target: { path: string; organizationId: string } =
+                  saved ?? (await firstSecret(request, owner, totp));
+                const journey = await deployJourney({
+                  request,
+                  cookieOf: sessionPairOf,
+                  owner,
+                  totp,
+                  reveal: { path: target.path, sha256: saved?.sha256 ?? null },
+                  mutation: {
+                    method: "POST",
+                    path: `/v1/organizations/${target.organizationId}/projects`,
+                    body: { name: "deploy-journey" },
+                  },
+                });
+                if (journey.revealedSha256 !== null) {
+                  writeFileSync(
+                    files.journey,
+                    JSON.stringify({ ...target, sha256: journey.revealedSha256 }, null, 2),
+                    { mode: 0o600 },
+                  );
+                }
+                writeFileSync(join(tmp, "journey.json"), JSON.stringify(journey.checks));
+              } finally {
+                await tunnel.close();
+              }
+              break;
+            }
+            case "report": {
+              const journeyFile = join(tmp, "journey.json");
+              const checks = existsSync(journeyFile)
+                ? (JSON.parse(readFileSync(journeyFile, "utf8")) as Record<
+                    string,
+                    { state: "ok" | "failed" | "unknown"; observed: string }
+                  >)
+                : {};
+              const previous = (
+                JSON.parse(readFileSync(files.previousGate, "utf8")) as { text: string | null }
+              ).text;
+              const expect = await binding();
+              const report = await withMaintenance((pool) =>
+                withAdmin((admin) =>
+                  deployVerify(
+                    {
+                      pool,
+                      admin,
+                      host: host.name,
+                      expect,
+                      origin: gateOriginOf(previous, expect.hostInstanceId),
+                      schemaRevision: release.migrations.last,
+                      previousGate: previous,
+                    },
+                    { checks },
+                  ),
+                ),
+              );
+              writeFileSync(files.report, JSON.stringify(report, null, 2));
+              const failed = report.checks.filter((c) => c.state !== "ok");
+              for (const c of failed)
+                log.error(`${host.name}:   ${c.id}: ${c.state} (${c.observed})`);
+              if (failed.length > 0)
+                throw new Error(
+                  `the report has ${String(failed.length)} checks not ok (${files.report})`,
+                );
+              break;
+            }
+            case "gate_open": {
+              const report = JSON.parse(readFileSync(files.report, "utf8")) as unknown;
+              const expect = await binding();
+              const opened = await withMaintenance((pool) =>
+                openGate({
+                  writer: hostGateWriter(host, address),
+                  pool,
+                  expect,
+                  report,
+                  kind: "deploy",
+                  now: () => new Date(),
+                }),
+              );
+              if (!opened.ok) throw new Error(`gate open refused: ${opened.cause}`);
+              log.info(`${host.name}: ${JSON.stringify(opened.record)}`);
+              break;
+            }
+          }
+          log.info(
+            `${host.name}: ${step} done (${String(Math.round((Date.now() - started) / 1000))} s)`,
+          );
+        },
+      },
+      release,
+      plan,
+      { resume: command.resume },
+    );
+    return 0;
+  } finally {
+    rmSync(tmp, { recursive: true, force: true });
+  }
+}
+
+/** The first secret the owner can list: the journey's reveal from now on. */
+async function firstSecret(
+  request: (
+    method: string,
+    path: string,
+    init?: { body?: unknown; cookie?: string; headers?: Record<string, string> },
+  ) => Promise<Response>,
+  owner: { email: string; password: string },
+  totp: () => Promise<{ code: string }>,
+): Promise<{ path: string; organizationId: string }> {
+  const signedIn = await request("POST", "/v1/auth/sign-in/email", { body: owner });
+  const first = sessionPairOf(signedIn);
+  if (first === null) throw new Error("journey: sign-in failed");
+  const verified = await request("POST", "/v1/auth/totp/verify", {
+    body: { code: (await totp()).code },
+    cookie: first,
+  });
+  const cookie = sessionPairOf(verified);
+  if (cookie === null) throw new Error("journey: TOTP failed");
+  try {
+    const list = async <T>(path: string, key: string): Promise<T[]> => {
+      const answer = await request("GET", path, { cookie });
+      if (answer.status !== 200)
+        throw new Error(`journey: ${path} answered ${String(answer.status)}`);
+      return ((await answer.json()) as Record<string, T[] | undefined>)[key] ?? [];
+    };
+    for (const org of await list<{ id: string }>("/v1/organizations", "organizations")) {
+      const o = `/v1/organizations/${org.id}`;
+      for (const project of await list<{ id: string }>(`${o}/projects`, "projects")) {
+        const p = `${o}/projects/${project.id}`;
+        for (const env of await list<{ id: string }>(`${p}/environments`, "environments")) {
+          const e = `${p}/environments/${env.id}`;
+          const [secret] = await list<{ name: string }>(`${e}/secrets`, "secrets");
+          if (secret !== undefined) {
+            return { path: `${e}/secrets/${secret.name}/reveal`, organizationId: org.id };
+          }
+        }
+      }
+    }
+    throw new Error("journey: the owner can list no secret to reveal");
+  } finally {
+    await request("POST", "/v1/auth/sign-out", { body: {}, cookie });
   }
 }
 
