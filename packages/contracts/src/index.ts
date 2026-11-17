@@ -8,3 +8,4 @@ export * from "./names.ts";
 export * from "./openapi.ts";
 export * from "./operation.ts";
 export * from "./routes.ts";
+export * from "./gate-record.ts";

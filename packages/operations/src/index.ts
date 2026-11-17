@@ -22,8 +22,12 @@ export {
 } from "./provisioning/plan.ts";
 export {
   GATE_MAX_BYTES,
+  mayOpen,
   readGate,
+  reportSha256,
+  type GateAdmits,
   type GateCause,
+  type GateExpect,
   type GateIo,
   type GateReading,
   type GateRecord,

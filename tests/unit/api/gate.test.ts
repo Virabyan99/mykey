@@ -1,6 +1,8 @@
-// Run 3.1 Task D (P-43): the gate record. Open only for the exact valid record
-// naming this host; every other case is closed, with its cause. Real files in
-// a temporary directory outside the repository.
+// Run 3.1 Task D (P-43), version 2 since Run 6.7 (P-122, D-54): the gate
+// record. `all` only for the exact valid open, serving record of this host,
+// incarnation and build; `verification` for closed + verifying with the same
+// three; everything else `none`, with its cause. Real files in a temporary
+// directory outside the repository.
 import { randomUUID } from "node:crypto";
 import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -9,7 +11,11 @@ import { afterAll, describe, expect, it } from "vitest";
 import { readGate } from "@mykey/api";
 
 const directory = mkdtempSync(join(tmpdir(), "mykey-gate-unit-"));
-const host = randomUUID();
+const expect3 = {
+  hostInstanceId: randomUUID(),
+  backendIncarnation: randomUUID(),
+  releaseBuild: "abcdef123456",
+};
 let counter = 0;
 
 afterAll(() => {
@@ -18,11 +24,16 @@ afterAll(() => {
 
 function record(overrides: Record<string, unknown> = {}): Record<string, unknown> {
   return {
-    version: 1,
+    version: 2,
     state: "open",
     gateEpoch: 7,
-    hostInstanceId: host,
-    writtenAt: "2026-11-12T10:00:00.000Z",
+    hostInstanceId: expect3.hostInstanceId,
+    backendIncarnation: expect3.backendIncarnation,
+    origin: { kind: "fresh_install", id: randomUUID() },
+    releaseBuild: expect3.releaseBuild,
+    reportSha256: "a".repeat(64),
+    phase: "serving",
+    writtenAt: "2026-11-17T10:00:00.000Z",
     ...overrides,
   };
 }
@@ -34,72 +45,106 @@ function file(content: string | Buffer): string {
   return path;
 }
 
-describe("readGate", () => {
-  it("is open for the exact valid record of this host", () => {
-    expect(readGate(file(JSON.stringify(record())), host)).toEqual({ open: true, gateEpoch: 7 });
+const reading = (path: string) => {
+  const { admits, cause } = readGate(path, expect3);
+  return { admits, cause };
+};
+
+describe("readGate (v2)", () => {
+  it("admits all for the exact open, serving record of this host, incarnation and build", () => {
+    const result = readGate(file(JSON.stringify(record())), expect3);
+    expect(result.admits).toBe("all");
+    expect(result.cause).toBeNull();
+    expect(result.record?.gateEpoch).toBe(7);
+  });
+
+  it("admits verification for closed + verifying with the same three", () => {
+    expect(
+      reading(
+        file(JSON.stringify(record({ state: "closed", phase: "verifying", reportSha256: null }))),
+      ),
+    ).toEqual({ admits: "verification", cause: "closed" });
   });
 
   it.each([
-    ["state closed", JSON.stringify(record({ state: "closed" })), "closed"],
-    ["another host", JSON.stringify(record({ hostInstanceId: randomUUID() })), "host"],
-    ["version 2", JSON.stringify(record({ version: 2 })), "version"],
-    ["an extra field", JSON.stringify(record({ release: "x" })), "invalid"],
+    ["state closed, serving", record({ state: "closed" }), "closed"],
+    ["open but verifying", record({ phase: "verifying" }), "closed"],
+    ["another host", record({ hostInstanceId: randomUUID() }), "host"],
+    ["another incarnation", record({ backendIncarnation: randomUUID() }), "incarnation"],
+    ["another build", record({ releaseBuild: "0123456789ab" }), "build"],
+    [
+      "another incarnation, closed + verifying",
+      record({ state: "closed", phase: "verifying", backendIncarnation: randomUUID() }),
+      "incarnation",
+    ],
+    [
+      "a v1 record",
+      {
+        version: 1,
+        state: "open",
+        gateEpoch: 7,
+        hostInstanceId: expect3.hostInstanceId,
+        writtenAt: "2026-11-12T10:00:00.000Z",
+      },
+      "version",
+    ],
+    ["version 3", record({ version: 3 }), "version"],
+    ["an extra field", record({ release: "x" }), "invalid"],
     [
       "a missing field",
-      JSON.stringify({ version: 1, state: "open", hostInstanceId: host }),
+      { version: 2, state: "open", hostInstanceId: expect3.hostInstanceId },
       "invalid",
     ],
-    ["another state", JSON.stringify(record({ state: "half-open" })), "invalid"],
-    ["an empty file", "", "invalid"],
-    ["invalid JSON", "{", "invalid"],
-    ["a JSON array", "[]", "invalid"],
+    ["another state", record({ state: "half-open" }), "invalid"],
+    ["another origin", record({ origin: { kind: "copy" } }), "invalid"],
+    ["a bad report hash", record({ reportSha256: "x" }), "invalid"],
+  ])("admits none for %s, cause %s", (_name, value, cause) => {
+    expect(reading(file(JSON.stringify(value)))).toEqual({ admits: "none", cause });
+  });
+
+  it.each([
+    ["an empty file", ""],
+    ["invalid JSON", "{"],
+    ["a JSON array", "[]"],
     [
       "4,097 bytes",
       `${JSON.stringify(record())}${" ".repeat(4097 - JSON.stringify(record()).length)}`,
-      "invalid",
     ],
-  ])("is closed for %s, cause %s", (_name, content, cause) => {
-    expect(readGate(file(content), host)).toEqual({ open: false, cause });
+  ])("admits none for %s, cause invalid", (_name, content) => {
+    expect(reading(file(content))).toEqual({ admits: "none", cause: "invalid" });
   });
 
   it("accepts exactly 4,096 bytes (control of the size limit)", () => {
     const text = JSON.stringify(record());
-    expect(readGate(file(`${text}${" ".repeat(4096 - text.length)}`), host)).toEqual({
-      open: true,
-      gateEpoch: 7,
-    });
+    expect(reading(file(`${text}${" ".repeat(4096 - text.length)}`)).admits).toBe("all");
   });
 
-  it("is closed when there is no file", () => {
-    expect(readGate(join(directory, "absent.json"), host)).toEqual({
-      open: false,
-      cause: "missing",
-    });
+  it("admits none when there is no file", () => {
+    expect(reading(join(directory, "absent.json"))).toEqual({ admits: "none", cause: "missing" });
   });
 
-  it("is closed for a directory", () => {
+  it("admits none for a directory", () => {
     const path = join(directory, "a-directory");
     mkdirSync(path);
-    expect(readGate(path, host)).toEqual({ open: false, cause: "invalid" });
+    expect(reading(path)).toEqual({ admits: "none", cause: "invalid" });
   });
 
-  it("is closed for a symbolic link to a valid record", () => {
+  it("admits none for a symbolic link to a valid record", () => {
     const target = file(JSON.stringify(record()));
     const link = join(directory, "link.json");
     symlinkSync(target, link);
-    expect(readGate(target, host).open).toBe(true);
-    expect(readGate(link, host)).toEqual({ open: false, cause: "invalid" });
+    expect(reading(target).admits).toBe("all");
+    expect(reading(link)).toEqual({ admits: "none", cause: "invalid" });
   });
 
-  it("is closed when the file cannot be read", () => {
+  it("admits none when the file cannot be read", () => {
     const path = file(JSON.stringify(record()));
     const denied = Object.assign(new Error("denied"), { code: "EACCES" });
-    expect(
-      readGate(path, host, {
-        openSync: () => {
-          throw denied;
-        },
-      }),
-    ).toEqual({ open: false, cause: "unreadable" });
+    const result = readGate(path, expect3, {
+      openSync: () => {
+        throw denied;
+      },
+    });
+    expect([result.admits, result.cause]).toEqual(["none", "unreadable"]);
   });
 });

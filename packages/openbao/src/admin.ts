@@ -35,6 +35,9 @@ function requireName(name: string): void {
   if (!OBJECT_NAME.test(name)) throw new Error("invalid object name");
 }
 
+/** Run 6.7 (P-122): the KV v2 mount that holds the backend incarnation. */
+export const META_MOUNT = "mykey-meta";
+
 export class OpenBaoAdmin {
   readonly #target: ResolvedTarget;
   readonly #token: string;
@@ -320,6 +323,52 @@ export class OpenBaoAdmin {
       token_type: data.token_type,
       token_period: data.token_period,
     } as ReadableTokenRole;
+  }
+
+  /**
+   * Run 6.7 (P-122, D-54): the backend incarnation, in the KV v2 mount
+   * `mykey-meta` of a namespace ("" is the root; each organization namespace
+   * holds a copy its provisioner can read). The mount is made on first write.
+   */
+  async writeIncarnation(namespace: string, incarnation: string): Promise<void> {
+    requireNamespace(namespace, true);
+    const mounted = await this.#request("POST", namespace, `sys/mounts/${META_MOUNT}`, [204, 400], {
+      type: "kv",
+      options: { version: "2" },
+    });
+    if (mounted.status === 400 && !JSON.stringify(mounted.body).includes("already in use")) {
+      throw new Error("OpenBao sys/mounts/mykey-meta: HTTP 400");
+    }
+    const deadline = Date.now() + KV_UPGRADE_TIMEOUT_MS;
+    for (;;) {
+      const written = await this.#request(
+        "POST",
+        namespace,
+        `${META_MOUNT}/data/incarnation`,
+        [200, 400],
+        {
+          data: { incarnation },
+        },
+      );
+      if (written.status === 200) return;
+      // A new KV v2 mount answers 400 "Upgrading…" for a moment.
+      if (Date.now() > deadline) throw new Error("OpenBao mykey-meta: mount upgrade timed out");
+      await sleep(200);
+    }
+  }
+
+  /** The incarnation of a namespace, or null when none was written. */
+  async readIncarnation(namespace: string): Promise<string | null> {
+    requireNamespace(namespace, true);
+    const answer = await this.#request(
+      "GET",
+      namespace,
+      `${META_MOUNT}/data/incarnation`,
+      [200, 404],
+    );
+    if (answer.status === 404) return null;
+    const value = record(record(record(answer.body).data).data).incarnation;
+    return typeof value === "string" ? value : null;
   }
 
   /** `LIST auth/token/accessors` (needs sudo). "" is the root namespace. */

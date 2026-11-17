@@ -12,6 +12,7 @@ import { createPool, type DbTarget } from "@mykey/db";
 import { drizzle } from "drizzle-orm/node-postgres";
 import type { Hono } from "hono";
 import { createApp } from "./app.ts";
+import { createServiceGate } from "./pipeline/gate.ts";
 import { auditedBaoCall, createHealthCheck, type OpenBaoHealthTarget } from "./health.ts";
 import { issuerBaoFromDirectory, runtimeBaoFromDirectory } from "./runtime-bao.ts";
 import { issuerSelfCheck, runtimeSelfCheck } from "./selfcheck.ts";
@@ -20,7 +21,7 @@ import { continueArchives, readCapacity } from "@mykey/operations";
 import { startOperationSweep } from "./operation-sweep.ts";
 import { startOutboxDispatcher } from "./outbox-dispatcher.ts";
 import { startSessionCleanup, startThrottleSweep } from "./throttle-sweep.ts";
-import type { ApiConfig, ApiEnv } from "./pipeline/context.ts";
+import type { ApiConfig, ApiEnv, AppDeps } from "./pipeline/context.ts";
 import { createRateLimiter } from "./pipeline/rate.ts";
 
 export interface ListenOptions {
@@ -32,6 +33,8 @@ export interface ListenOptions {
 
 export interface ApiServer {
   port: number;
+  /** Run 6.7 (P-123): the verification listener's port, when it listens. */
+  verifyPort?: number;
   close(): Promise<void>;
 }
 
@@ -93,6 +96,12 @@ export interface ServerConfig extends ListenOptions {
   /** On a host with OpenBao (Run 2.7): /health also requires it unsealed. */
   openbao?: OpenBaoHealthTarget;
   api: ApiConfig;
+  /**
+   * Run 6.7 (P-123): a second listener (MYKEY_VERIFY_LISTEN, an address of the
+   * mk-api bridge the proxy does not route). It serves while the gate record
+   * says closed + verifying; `host.ts <host> tunnel verify` reaches it.
+   */
+  verifyListen?: { hostname: string; port: number };
   /** The key files of the auth module (read-only mount on a host). */
   keysDirectory: string;
   /** The credential files (organization-id, runtime-role-id, runtime-secret-id, issuer-role-id, issuer-secret-id). */
@@ -138,7 +147,9 @@ export async function startServer(config: ServerConfig): Promise<ApiServer> {
       ? undefined
       : issuerBaoFromDirectory(config.openbao, config.secretsDirectory ?? "/run/mykey/secrets");
   const bootId = randomUUID();
-  const app = createApp({
+  // Run 6.7 (P-122): one gate for both listeners, with the database's incarnation.
+  const gate = createServiceGate(config.api, pool);
+  const appDeps: AppDeps = {
     pool,
     lockPool,
     ...(runtimeBao === undefined || issuer === undefined ? {} : { bao: runtimeBao, issuer }),
@@ -150,8 +161,16 @@ export async function startServer(config: ServerConfig): Promise<ApiServer> {
     // P-115: the host writes capacity.json beside the gate record (status.sh, every minute).
     capacity: { read: (nowMs) => readCapacity(capacityPathOf(config.api.gatePath), nowMs) },
     auth: { auth, keys, throttle: createThrottle({ pool, ring: keys.rateLimit }) },
-  });
-  const server = await listen(app, config);
+    gate,
+  };
+  const server = await listen(createApp({ ...appDeps, listener: "public" }), config);
+  const verifyServer =
+    config.verifyListen === undefined
+      ? undefined
+      : await listen(createApp({ ...appDeps, listener: "verify" }), {
+          ...config.verifyListen,
+          tls: config.tls,
+        });
   const dispatcher = startOutboxDispatcher(pool, config.log);
   const sweep = startThrottleSweep(pool, config.log);
   const sessionCleanup = startSessionCleanup(pool, config.log);
@@ -163,12 +182,14 @@ export async function startServer(config: ServerConfig): Promise<ApiServer> {
   });
   return {
     port: server.port,
+    ...(verifyServer === undefined ? {} : { verifyPort: verifyServer.port }),
     async close() {
       operationSweep.stop();
       sweep.stop();
       sessionCleanup.stop();
       await dispatcher.stop();
       await server.close();
+      await verifyServer?.close();
       await health.close();
       await pool.end();
       await lockPool.end();
@@ -209,6 +230,16 @@ export function configFromEnvironment(env: NodeJS.ProcessEnv): Omit<ServerConfig
   const build = required(env, "MYKEY_BUILD");
   if (!/^[0-9a-f]{7,40}$/.test(build)) throw new MissingSetting("MYKEY_BUILD", "is not a commit");
   const baseUrl = required(env, "MYKEY_BASE_URL");
+  // Run 6.7 (P-123): "<address>:<port>" of the verification listener, when set.
+  const verifyListen = env.MYKEY_VERIFY_LISTEN ?? "";
+  const verifyMatch = /^([0-9.]+):(\d{1,5})$/.exec(verifyListen);
+  if (verifyListen !== "" && (verifyMatch === null || Number(verifyMatch[2]) > 65_535)) {
+    throw new MissingSetting("MYKEY_VERIFY_LISTEN", "is not an address and port");
+  }
+  const incarnation = required(env, "MYKEY_BACKEND_INCARNATION");
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(incarnation)) {
+    throw new MissingSetting("MYKEY_BACKEND_INCARNATION", "is not a uuid");
+  }
   if (new URL(baseUrl).origin !== baseUrl) {
     throw new MissingSetting("MYKEY_BASE_URL", "is not an origin");
   }
@@ -231,6 +262,9 @@ export function configFromEnvironment(env: NodeJS.ProcessEnv): Omit<ServerConfig
     ...(env.MYKEY_BAO_URL === undefined || env.MYKEY_BAO_URL === ""
       ? {}
       : { openbao: { url: env.MYKEY_BAO_URL, caCertPath: required(env, "MYKEY_BAO_CA_FILE") } }),
+    ...(verifyMatch === null
+      ? {}
+      : { verifyListen: { hostname: verifyMatch[1] ?? "", port: Number(verifyMatch[2]) } }),
     keysDirectory: env.MYKEY_AUTH_RINGS_DIR ?? "/run/mykey/keys",
     secretsDirectory: env.MYKEY_API_SECRETS_DIR ?? "/run/mykey/secrets",
     api: {
@@ -238,6 +272,7 @@ export function configFromEnvironment(env: NodeJS.ProcessEnv): Omit<ServerConfig
       build,
       gatePath: required(env, "MYKEY_GATE_PATH"),
       hostInstanceId: required(env, "MYKEY_HOST_INSTANCE_ID"),
+      backendIncarnation: incarnation,
       trustedProxy:
         env.MYKEY_TRUSTED_PROXY === undefined || env.MYKEY_TRUSTED_PROXY === ""
           ? null

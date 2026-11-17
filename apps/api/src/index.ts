@@ -42,11 +42,18 @@ export { checkOrigin, hasMixedCredentials, needsOriginCheck } from "./pipeline/o
 export { checkStates } from "./pipeline/states.ts";
 export {
   GATE_MAX_BYTES,
+  INCARNATION_REUSE_MS,
+  createServiceGate,
   readGate,
+  verificationServes,
+  type GateAdmits,
   type GateCause,
+  type GateExpect,
   type GateIo,
   type GateReading,
   type GateRecord,
+  type Listener,
+  type ServiceGate,
 } from "./pipeline/gate.ts";
 export {
   ApiError,

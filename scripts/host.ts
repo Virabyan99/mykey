@@ -122,6 +122,9 @@ export const USAGE = `usage: node scripts/host.ts <staging|prod> <command> [--pu
   backup-init                    backup password and signing key made on the host; trust anchor; AppRole backup
   backup-custody                 copy the backup password and signing key to ~/.mykey/custody/<host>/backup/
   timers                         install and start the job timers (ops-jobs.json, audit rotation)
+  gate open --report <file>      opens with a verification report (v2; Run 6.7)
+  gate close [--verifying]       closes; --verifying lets the verification listener serve
+  tunnel verify                  a local port to the API's verification listener (Ctrl-C ends it)
   quiesce                        gate close, stop api and provisioner, restart OpenBao (staging only)
   resume                         start api and provisioner; the gate stays closed until gate open
 --public uses the public address instead of the VPN (bootstrap always does).`;
@@ -155,13 +158,39 @@ export type HostCommand = { host: HostName; via: Address } & (
   | { command: "kms"; name: string; argv: string[] }
   | { command: "env"; key: OpenBaoEnvKey; value: string }
   | { command: "maint"; minutes: number; argv: string[] }
-  | { command: "gate"; action: GateAction }
+  | { command: "gate"; action: GateAction; report?: string; verifying?: true }
+  | { command: "tunnel"; target: "verify" }
   | { command: "keys"; action: "init" }
   | { command: "ops"; argv: string[] }
   | { command: "r2-install"; name: R2InstallName }
 );
 
 export type GateAction = "open" | "close" | "status";
+
+/**
+ * Run 6.7 (P-122): `gate open [--report <file>]`, `gate close [--verifying]`,
+ * `gate status`. A v2 host needs the report to open; a v1 host (no incarnation
+ * in host.env yet, until Run 6.9's first deploy) opens without one.
+ */
+function parseGateArgs(host: "staging" | "prod", rest: string[]): HostCommand {
+  const [action, ...more] = rest;
+  const base = { host, via: "vpn", command: "gate" } as const;
+  if (action === "open") {
+    if (more.length === 0) return { ...base, action };
+    if (more[0] === "--report") {
+      if (more.length !== 2 || more[1] === undefined || more[1].startsWith("--")) {
+        throw new Error("gate open --report needs one file");
+      }
+      return { ...base, action, report: more[1] };
+    }
+  } else if (action === "close") {
+    if (more.length === 0) return { ...base, action };
+    if (more.length === 1 && more[0] === "--verifying") return { ...base, action, verifying: true };
+  } else if (action === "status" && more.length === 0) {
+    return { ...base, action };
+  }
+  throw new Error("gate needs open [--report <file>], close [--verifying] or status");
+}
 
 /** The host.env settings `env` may write: OpenBao and its KMS (Run 2.7). */
 export const OPENBAO_ENV_KEYS = [
@@ -200,6 +229,11 @@ export function parseHostArgs(argv: string[]): HostCommand {
     // Everything after `ops` belongs to the operator tool, flags included.
     if (rest.length === 0) throw new Error("ops needs a command (see apps/ops)");
     return { host, via: "vpn", command, argv: rest };
+  }
+  if (command === "gate") return parseGateArgs(host, rest);
+  if (command === "tunnel") {
+    if (rest.length !== 1 || rest[0] !== "verify") throw new Error("tunnel needs verify");
+    return { host, via: "vpn", command, target: "verify" };
   }
   let words = rest;
   let tail: string[] = [];
@@ -340,16 +374,6 @@ export function parseHostArgs(argv: string[]): HostCommand {
         throw new Error("keys needs init");
       }
       return { ...base, command, action: "init" };
-    }
-    case "gate": {
-      const [action] = positional;
-      if (
-        positional.length !== 1 ||
-        (action !== "open" && action !== "close" && action !== "status")
-      ) {
-        throw new Error("gate needs open, close or status");
-      }
-      return { ...base, command, action };
     }
     case "r2-install": {
       const [name] = positional;
@@ -700,6 +724,65 @@ export function gateRecordText(
     }
   }
   return JSON.stringify({ version: 1, state, gateEpoch: epoch + 1, hostInstanceId, writtenAt });
+}
+
+/** Run 6.7 (P-123): the API's verification listener, inside the host (never published). */
+export const REMOTE_API_VERIFY = { address: "10.78.2.3", port: 8444 } as const;
+
+/** Run 6.7 (P-122): the running API's MYKEY_BUILD, and nothing else of its environment. */
+export function apiBuildCommand(): string {
+  return "docker inspect --format '{{range .Config.Env}}{{println .}}{{end}}' mykey-api-1 | sed -n 's/^MYKEY_BUILD=//p'";
+}
+
+/** The origin a close keeps: the previous v2 record's, else a fresh install of this host. */
+export function gateOriginOf(
+  previous: string | null,
+  hostInstanceId: string,
+): { kind: "fresh_install"; id: string } | { kind: "restore"; pairId: string } {
+  const fresh = { kind: "fresh_install", id: hostInstanceId } as const;
+  if (previous === null) return fresh;
+  try {
+    const record = JSON.parse(previous) as { version?: unknown; origin?: unknown };
+    if (record.version !== 2) return fresh;
+    const origin = record.origin as { kind?: unknown; id?: unknown; pairId?: unknown } | undefined;
+    if (
+      origin?.kind === "restore" &&
+      typeof origin.pairId === "string" &&
+      UUID.test(origin.pairId)
+    ) {
+      return { kind: "restore", pairId: origin.pairId };
+    }
+    if (origin?.kind === "fresh_install" && typeof origin.id === "string" && UUID.test(origin.id)) {
+      return { kind: "fresh_install", id: origin.id };
+    }
+  } catch {
+    // An unreadable record: the host's own fresh install.
+  }
+  return fresh;
+}
+
+/**
+ * Run 6.7 (P-122): db-init's incarnation. New when neither the database nor
+ * host.env holds one; copied to the side that lacks it; two different ones are
+ * an unfinished restore, and db-init stops.
+ */
+export function planIncarnation(
+  database: string | null,
+  hostEnv: string | undefined,
+  fresh: () => string,
+): { incarnation: string; writeDatabase: boolean; writeHostEnv: boolean } {
+  for (const value of [database, hostEnv]) {
+    if (value !== null && value !== undefined && !UUID.test(value)) {
+      throw new Error("db-init: the incarnation is not a uuid");
+    }
+  }
+  if (database !== null && hostEnv !== undefined && database !== hostEnv) {
+    throw new Error(
+      "db-init: the database and host.env name different incarnations (an unfinished restore?)",
+    );
+  }
+  const incarnation = database ?? hostEnv ?? fresh();
+  return { incarnation, writeDatabase: database === null, writeHostEnv: hostEnv === undefined };
 }
 
 /**
@@ -1518,6 +1601,36 @@ async function runDbInit(host: HostEntry, address: Address, log: Logger): Promis
     } finally {
       await ownerPool.end();
     }
+    // Run 6.7 (P-122): the incarnation in the database and in host.env.
+    const { readIncarnation, writeIncarnation } = await import("@mykey/db");
+    const superPool = createPool(
+      { ...base, user: "postgres", password: superuserPassword },
+      { max: 1 },
+    );
+    try {
+      const hostEnv = parseHostEnv(
+        expectSuccess(await sshExec(host, `cat ${REMOTE.hostEnv}`, { address }), "reading host.env")
+          .stdout,
+      );
+      const plan = planIncarnation(
+        await readIncarnation(superPool),
+        hostEnv.MYKEY_BACKEND_INCARNATION,
+        () => randomUUID(),
+      );
+      if (plan.writeDatabase) await writeIncarnation(superPool, plan.incarnation, null);
+      if (plan.writeHostEnv) {
+        expectSuccess(
+          await sshExec(host, hostEnvSetCommand("MYKEY_BACKEND_INCARNATION", plan.incarnation), {
+            sudo: true,
+            address,
+          }),
+          "writing the incarnation into host.env",
+        );
+      }
+      log.info(`${host.name}: incarnation ${plan.incarnation}`);
+    } finally {
+      await superPool.end();
+    }
     log.info(`${host.name}: roles ${ROLE_NAMES.join(", ")}`);
     log.info(
       `${host.name}: applied ${result.applied.length === 0 ? "nothing" : result.applied.join(", ")}`,
@@ -1780,7 +1893,9 @@ async function main(argv: string[], log: Logger): Promise<number> {
       return 0;
     }
     case "gate":
-      return runGate(host, command.action, address, log);
+      return runGate(host, command, address, log);
+    case "tunnel":
+      return runVerifyTunnel(host, log);
     case "quiesce":
       return runQuiesce(host, address, log);
     case "resume":
@@ -2194,10 +2309,11 @@ async function runOpsOnHost(host: HostEntry, argv: string[], address: Address): 
 
 async function runGate(
   host: HostEntry,
-  action: GateAction,
+  command: { action: GateAction; report?: string; verifying?: true },
   address: Address,
   log: Logger,
 ): Promise<number> {
+  const { action } = command;
   const current = await sshExec(host, `cat ${GATE_FILE}`, { sudo: true, address });
   const previous = current.code === 0 ? current.stdout : null;
   if (action === "status") {
@@ -2211,6 +2327,22 @@ async function runGate(
   const hostInstanceId = env.MYKEY_HOST_INSTANCE_ID;
   if (hostInstanceId === undefined)
     throw new Error("host.env has no MYKEY_HOST_INSTANCE_ID: run up first");
+  const backendIncarnation = env.MYKEY_BACKEND_INCARNATION;
+  if (backendIncarnation !== undefined) {
+    return runGateV2(
+      host,
+      { ...command, action },
+      { hostInstanceId, backendIncarnation },
+      address,
+      log,
+    );
+  }
+  // Ruling (Run 6.7): a host without an incarnation still runs a v1 release
+  // (until Run 6.9's first deploy); it keeps v1 records, which that release reads.
+  if (command.report !== undefined || command.verifying === true) {
+    throw new Error("gate: this host has no MYKEY_BACKEND_INCARNATION yet (a v1 release)");
+  }
+  log.info(`${host.name}: v1 record (host.env has no MYKEY_BACKEND_INCARNATION)`);
   const record = gateRecordText(
     action === "open" ? "open" : "closed",
     previous,
@@ -2225,8 +2357,125 @@ async function runGate(
   return 0;
 }
 
+/**
+ * Run 6.7 (P-122, D-54): the v2 record. Open needs a report `mayOpen` accepts
+ * and `operator.gate_open` committed first (as maintenance, through a tunnel);
+ * close is written first and audited when PostgreSQL answers.
+ */
+async function runGateV2(
+  host: HostEntry,
+  command: { action: "open" | "close"; report?: string; verifying?: true },
+  binding: { hostInstanceId: string; backendIncarnation: string },
+  address: Address,
+  log: Logger,
+): Promise<number> {
+  const { closeGate, openGate } = await import("@mykey/operations/operator");
+  const releaseBuild = expectSuccess(
+    await sshExec(host, apiBuildCommand(), { sudo: true, address }),
+    "reading the API's build",
+  ).stdout.trim();
+  if (command.action === "open" && !/^[0-9a-f]{7,40}$/.test(releaseBuild)) {
+    throw new Error("gate open: the API container is not running or names no build");
+  }
+  const expect = { ...binding, releaseBuild };
+  const writer = {
+    read: async (): Promise<string | null> => {
+      const answer = await sshExec(host, `cat ${GATE_FILE}`, { sudo: true, address });
+      return answer.code === 0 ? answer.stdout : null;
+    },
+    write: async (text: string): Promise<void> => {
+      expectSuccess(
+        await sshExec(host, gateWriteCommand(), { sudo: true, address, stdin: text }),
+        `gate ${command.action}`,
+      );
+    },
+  };
+  let report: unknown = null;
+  if (command.action === "open") {
+    if (command.report === undefined) {
+      throw new Error("gate open: this host needs --report <file> (a verification report)");
+    }
+    report = JSON.parse(readFileSync(command.report, "utf8"));
+  }
+  const { createPool } = await import("@mykey/db");
+  const password = localSecret(workstationRoleSecretFile(host.name, "maintenance"));
+  const dir = mkdtempSync(join(tmpdir(), "mykey-gate-"));
+  const tunnel = await openTunnel(host, REMOTE.postgres).catch(() => null);
+  let pool: ReturnType<typeof createPool> | null = null;
+  try {
+    if (tunnel !== null) {
+      const caCertPath = join(dir, "ca.crt");
+      const ca = await sshExec(host, `cat ${REMOTE.caCert}`, { address });
+      if (ca.code === 0) {
+        writeFileSync(caCertPath, ca.stdout);
+        pool = createPool(
+          {
+            host: "127.0.0.1",
+            port: tunnel.localPort,
+            database: "postgres",
+            user: "maintenance",
+            password,
+            caCertPath,
+          },
+          { max: 1 },
+        );
+      }
+    }
+    if (command.action === "close") {
+      const closed = await closeGate({
+        writer,
+        pool,
+        expect,
+        origin: gateOriginOf(await writer.read(), binding.hostInstanceId),
+        phase: command.verifying === true ? "verifying" : "serving",
+        now: () => new Date(),
+      });
+      log.info(`${host.name}: ${JSON.stringify(closed.record)}`);
+      if (!closed.audited) log.error(`${host.name}: closed; operator.gate_close not audited`);
+      return 0;
+    }
+    if (pool === null) throw new Error("gate open: PostgreSQL is not reachable for the audit");
+    const opened = await openGate({
+      writer,
+      pool,
+      expect,
+      report,
+      kind:
+        (report as { origin?: { kind?: unknown } }).origin?.kind === "restore"
+          ? "restore"
+          : "deploy",
+      now: () => new Date(),
+    });
+    if (!opened.ok) {
+      log.error(`${host.name}: gate open refused: ${opened.cause}`);
+      return 1;
+    }
+    log.info(`${host.name}: ${JSON.stringify(opened.record)}`);
+    return 0;
+  } finally {
+    await pool?.end();
+    await tunnel?.close();
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+/** Run 6.7 (P-123): a local port to the verification listener until Ctrl-C. */
+async function runVerifyTunnel(host: HostEntry, log: Logger): Promise<number> {
+  const tunnel = await openTunnel(host, REMOTE_API_VERIFY);
+  log.info(
+    `${host.name}: the verification listener is at https://127.0.0.1:${String(tunnel.localPort)} (Ctrl-C ends it)`,
+  );
+  await new Promise<void>((resolveStop) => {
+    process.once("SIGINT", () => {
+      resolveStop();
+    });
+  });
+  await tunnel.close();
+  return 0;
+}
+
 async function runQuiesce(host: HostEntry, address: Address, log: Logger): Promise<number> {
-  await runGate(host, "close", address, log);
+  await runGate(host, { action: "close" }, address, log);
   const steps = quiesceCommands();
   expectSuccess(await sshExec(host, steps.stop, { sudo: true, address }), "stopping the executors");
   expectSuccess(

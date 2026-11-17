@@ -11,7 +11,7 @@ import { headerBytes, readAuthBody } from "./pipeline/body.ts";
 import { HELD_BY_PIPELINE, createLargeGate, type LargeGate } from "./large.ts";
 import { createInflightGate } from "./pipeline/inflight.ts";
 import type { ApiEnv, AppDeps, Handler } from "./pipeline/context.ts";
-import { readGate } from "./pipeline/gate.ts";
+import { createServiceGate, verificationServes } from "./pipeline/gate.ts";
 import { checkOrigin } from "./pipeline/origin.ts";
 import { errorResponse } from "./pipeline/respond.ts";
 import { requestSource } from "./pipeline/source.ts";
@@ -165,7 +165,11 @@ export function handledRouteIds(): ReadonlySet<string> {
   return new Set(ROUTES.filter((route) => known[route.id] !== undefined).map((route) => route.id));
 }
 
-export function createApp(deps: AppDeps): Hono<ApiEnv> {
+export function createApp(given: AppDeps): Hono<ApiEnv> {
+  // Run 6.7 (P-122): one gate per process, shared by its listeners when given.
+  const gate = given.gate ?? createServiceGate(given.config, given.pool);
+  const listener = given.listener ?? "public";
+  const deps: AppDeps = { ...given, gate, listener };
   const app = new Hono<ApiEnv>();
   const inflight = createInflightGate(LIMITS.concurrency.httpPerProcess);
 
@@ -174,9 +178,16 @@ export function createApp(deps: AppDeps): Hono<ApiEnv> {
     // The gate is the first check of every request, matched or not (P-43).
     // GET /health is the one exception: it reports the gate instead of refusing.
     const isHealth = c.req.method === "GET" && c.req.path === "/health";
-    const gate = isHealth ? null : readGate(deps.config.gatePath, deps.config.hostInstanceId);
-    if (gate !== null && !gate.open) {
-      deps.log({ event: "gate_closed", time: now(), requestId, cause: gate.cause });
+    await gate.refresh();
+    const reading = isHealth ? null : gate.read();
+    // P-123: on the verification listener, while the record says closed +
+    // verifying, reads, the auth module and a reveal are served.
+    const verifying =
+      listener === "verify" &&
+      reading?.admits === "verification" &&
+      verificationServes(c.req.method, c.req.path);
+    if (reading !== null && reading.admits !== "all" && !verifying) {
+      deps.log({ event: "gate_closed", time: now(), requestId, cause: reading.cause ?? "closed" });
       c.res = errorResponse("quarantined", requestId);
       return;
     }

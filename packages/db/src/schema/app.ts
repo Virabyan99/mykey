@@ -505,6 +505,11 @@ export const serviceControl = appSchema.table(
     owner: text("owner"),
     pairId: uuid("pair_id"),
     updatedAt: timestamptz("updated_at").notNull().defaultNow(),
+    // Run 6.7 (P-122, migration 0018): the backend incarnation this database
+    // belongs to (also in the gate record and OpenBao's mykey-meta), and the
+    // pair it was restored from. Changed by maintenance only (0017's guard).
+    backendIncarnation: text("backend_incarnation"),
+    restoredFromPair: uuid("restored_from_pair"),
   },
   (t) => [
     check("service_control_single_row_check", sql`${t.id}`),

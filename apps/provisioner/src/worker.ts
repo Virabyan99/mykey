@@ -55,7 +55,37 @@ export async function startProvisioner(
       }),
     );
   };
-  const gateOpen = () => readGate(config.gatePath, config.hostInstanceId).open;
+  // Run 6.7 (P-122): the record must admit all, and OpenBao (the organization
+  // namespace's copy) must name this incarnation; read again after 5 s.
+  let baoIncarnation: { value: string | null; at: number } = { value: null, at: -Infinity };
+  const readBaoIncarnation = async (): Promise<string | null> => {
+    if (Date.now() - baoIncarnation.at < 5_000) return baoIncarnation.value;
+    let value: string | null = null;
+    const organizationId = readCredential(config.secretsDirectory)?.organizationId;
+    const client =
+      organizationId === undefined ? null : await clientFor(organizationId as OrganizationId);
+    if (client !== null) {
+      try {
+        const answer = await client.readIncarnation();
+        value = answer.ok ? answer.value : null;
+      } finally {
+        await client.close();
+      }
+    }
+    baoIncarnation = { value, at: Date.now() };
+    return value;
+  };
+  const expect = {
+    hostInstanceId: config.hostInstanceId,
+    backendIncarnation: config.backendIncarnation,
+    releaseBuild: config.releaseBuild,
+  };
+  const gateCause = async (): Promise<string | null> => {
+    const reading = readGate(config.gatePath, expect);
+    if (reading.admits !== "all") return "gate_closed";
+    const found = await readBaoIncarnation().catch(() => null);
+    return found === config.backendIncarnation ? null : "incarnation";
+  };
   const sender = await createSender(pool);
   // P-118: no job and no sweep while a pair is captured.
   const captured = async (): Promise<boolean> => (await captureMode(pool)).mode !== "idle";
@@ -68,10 +98,11 @@ export async function startProvisioner(
 
   const worker = await createWorker(pool, {
     "environment.provision": async (operationId, meta) => {
-      if (!gateOpen()) {
+      const closed = await gateCause();
+      if (closed !== null) {
         // Nothing was done. The job comes back in 30 s without using a retry, so
         // a long closure (a deploy, a quarantine) never ends the job (gate review).
-        await later(operationId, "gate_closed");
+        await later(operationId, closed);
         return;
       }
       if (await captured()) {
@@ -107,8 +138,9 @@ export async function startProvisioner(
   });
 
   const sweep = async (): Promise<void> => {
-    if (!gateOpen()) {
-      opts.log({ event: "sweep_skipped", cause: "gate_closed" });
+    const closed = await gateCause();
+    if (closed !== null) {
+      opts.log({ event: "sweep_skipped", cause: closed });
     } else if (await captured().catch(() => true)) {
       opts.log({ event: "sweep_skipped", cause: "capture" });
     } else {

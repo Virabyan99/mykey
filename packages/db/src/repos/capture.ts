@@ -84,3 +84,27 @@ export async function invalidationsBetween(db: Queryable, from: Date, to: Date):
   );
   return Number(result.rows[0]?.count ?? 0);
 }
+
+/**
+ * Run 6.7 (P-122): the backend incarnation this database belongs to, or null
+ * on a database no host has bound yet. Written by maintenance only (the guard
+ * of migration 0017): a fresh install at db-init, a restore at its reset step.
+ */
+export async function readIncarnation(db: Queryable): Promise<string | null> {
+  const result = await db.query<{ incarnation: string | null }>(
+    "SELECT backend_incarnation AS incarnation FROM app.service_control",
+  );
+  return result.rows[0]?.incarnation ?? null;
+}
+
+export async function writeIncarnation(
+  db: Queryable,
+  incarnation: string,
+  restoredFromPair: string | null,
+): Promise<void> {
+  await db.query(
+    `UPDATE app.service_control
+        SET backend_incarnation = $1, restored_from_pair = $2, updated_at = now()`,
+    [incarnation, restoredFromPair],
+  );
+}

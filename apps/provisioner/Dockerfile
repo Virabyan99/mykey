@@ -28,7 +28,10 @@ COPY infra/openbao/policies infra/openbao/policies
 COPY apps/provisioner/src apps/provisioner/src
 
 FROM node@sha256:a34ab6d7f6f4813f4d0c5469d74685604b962fbdbf5793a7bc7b4998ecb867c8
+ARG MYKEY_BUILD
 ENV NODE_ENV=production
+# Run 6.7 (P-122): the build the gate record must name; without it the provisioner refuses to start.
+ENV MYKEY_BUILD=${MYKEY_BUILD}
 WORKDIR /app
 COPY --from=build /app /app
 USER 1000:1000

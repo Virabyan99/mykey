@@ -14,7 +14,6 @@ import {
 import { listIndex, lockParents, resolveAccess, type EnvironmentScope } from "@mykey/db";
 import {
   operationResponse,
-  readGate,
   readHistory,
   revealSecret,
   replayAnswer,
@@ -51,7 +50,7 @@ export function effectDeps(deps: AppDeps): EffectDeps {
     bao: deps.bao,
     bootId: deps.bootId,
     ring,
-    gateOpen: () => readGate(deps.config.gatePath, deps.config.hostInstanceId).open,
+    gateOpen: () => deps.gate?.open() === true,
     ...(faults === undefined ? {} : { faults }),
   };
 }

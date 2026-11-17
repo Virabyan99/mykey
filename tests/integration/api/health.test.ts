@@ -17,7 +17,9 @@ import { startServer, type ApiConfig, type ApiServer, type LogEntry } from "@myk
 import { generateKeyFiles } from "@mykey/auth";
 import { ROUTES, errorEnvelopeSchema } from "@mykey/contracts";
 import { ROLE_NAMES, applyRoles, migrate, type DbTarget, type RoleName } from "@mykey/db";
+import pg from "pg";
 import type { z } from "zod";
+import { TEST_BUILD, gateText, setIncarnation } from "../../harness/gate.ts";
 import {
   baoFetch,
   restartService,
@@ -91,22 +93,18 @@ describe("API health stub", () => {
   generateKeyFiles(keysDirectory);
   // An open gate (Run 3.1): this suite is about health, not the gate.
   const hostInstanceId = randomUUID();
+  const backendIncarnation = randomUUID();
   const apiConfig: ApiConfig = {
     baseUrl: "https://mykey.test",
-    build: "0000000",
+    build: TEST_BUILD,
     gatePath: join(directory, "gate.json"),
     hostInstanceId,
+    backendIncarnation,
     trustedProxy: null,
   };
   writeFileSync(
     apiConfig.gatePath,
-    JSON.stringify({
-      version: 1,
-      state: "open",
-      gateEpoch: 1,
-      hostInstanceId,
-      writtenAt: new Date().toISOString(),
-    }),
+    gateText({ hostInstanceId, backendIncarnation, releaseBuild: TEST_BUILD }, "open", 1),
   );
   const cleanup: (() => Promise<void>)[] = [];
 
@@ -137,6 +135,19 @@ describe("API health stub", () => {
       password: passwords.migration_owner,
       caCertPath: stack.pg.caCertPath,
     });
+
+    // Run 6.7 (P-122): the database names the incarnation the gate record names.
+    const superuser = new pg.Pool({
+      host: stack.pg.host,
+      port: stack.pg.port,
+      database: stack.pg.database,
+      user: stack.pg.superuser.user,
+      password: stack.pg.superuser.password,
+      ssl: { ca: readFileSync(stack.pg.caCertPath, "utf8") },
+      max: 1,
+    });
+    await setIncarnation(superuser, backendIncarnation);
+    await superuser.end();
 
     relay = net.createServer((client) => {
       const upstream = net.connect({ host: stack.pg.host, port: stack.pg.port });
@@ -238,6 +249,28 @@ describe("API health stub", () => {
     expect(answer.headers["x-request-id"]).toBe(lines[0]?.requestId);
     // Nothing of the database target may reach a log line.
     expect(JSON.stringify(log)).not.toContain(database.password);
+  });
+
+  // Run 6.7 (P-123): the verification listener exists only when configured.
+  it("without MYKEY_VERIFY_LISTEN there is one listener; with it a second one answers", async () => {
+    expect(api.verifyPort).toBeUndefined();
+    const two = await startServer({
+      hostname: "127.0.0.1",
+      port: 0,
+      tls: { certPath: stack.api.certPath, keyPath: stack.api.keyPath },
+      database,
+      api: apiConfig,
+      keysDirectory,
+      verifyListen: { hostname: "127.0.0.1", port: 0 },
+      log: () => undefined,
+    });
+    try {
+      expect(two.verifyPort).toEqual(expect.any(Number));
+      expect(two.verifyPort).not.toBe(two.port);
+      expect((await request(stack, two.verifyPort ?? 0, "/v1/version")).status).toBe(200);
+    } finally {
+      await two.close();
+    }
   });
 
   it("answers 503 down with a certificate cause when the CA did not sign the database certificate", async () => {

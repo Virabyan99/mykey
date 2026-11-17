@@ -46,9 +46,10 @@ beforeAll(async () => {
     keysDirectory,
     api: {
       baseUrl: TEST_ORIGIN,
-      build: "0000000",
+      build: api.gate.releaseBuild,
       gatePath: api.gate.gatePath,
       hostInstanceId: api.gate.hostInstanceId,
+      backendIncarnation: api.gate.backendIncarnation,
       trustedProxy: null,
     },
     tls: { certPath: api.database.stack.api.certPath, keyPath: api.database.stack.api.keyPath },

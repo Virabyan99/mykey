@@ -111,7 +111,7 @@ async function manifestStep(io: OpsIo, dir: string, pairId: string): Promise<voi
   if (begun.pairId !== pairId) throw new Refused("begin.json names another pair");
   const facts = readFacts(join(dir, "facts"));
   const found = await listing(join(dir, "artifacts"));
-  const pool = createPool(io.env.database, { max: 1 });
+  const pool = createPool(io.env.database, { max: LIMITS.db.opsPool });
   let schemaRevision: string;
   try {
     const latest = await pool.query<{ name: string }>(

@@ -163,7 +163,9 @@ export {
   invalidateCapture,
   invalidationsBetween,
   isCaptureRefusal,
+  readIncarnation,
   setCaptureMode,
+  writeIncarnation,
   type CaptureMode,
   type InvalidationReason,
 } from "./repos/capture.ts";

@@ -109,6 +109,7 @@ export const API_SETTINGS: readonly string[] = Object.freeze([
   "MYKEY_API_PORT",
   "MYKEY_API_TLS_CERT_FILE",
   "MYKEY_API_TLS_KEY_FILE",
+  "MYKEY_BACKEND_INCARNATION",
   "MYKEY_BAO_CA_FILE",
   "MYKEY_BASE_URL",
   "MYKEY_BUILD",
@@ -118,6 +119,7 @@ export const API_SETTINGS: readonly string[] = Object.freeze([
   "MYKEY_DB_PORT",
   "MYKEY_GATE_PATH",
   "MYKEY_HOST_INSTANCE_ID",
+  "MYKEY_VERIFY_LISTEN",
 ]);
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;

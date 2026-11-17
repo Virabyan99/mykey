@@ -156,6 +156,9 @@ export function startProvisionerProcess(
     secretsDirectory: string;
     gatePath: string;
     hostInstanceId: string;
+    /** Run 6.7 (P-122): what the gate record and OpenBao must name. */
+    backendIncarnation: string;
+    releaseBuild: string;
     stateFile: string;
     sweepSeconds?: number;
     crashAt?: string;
@@ -229,6 +232,8 @@ export function startProvisionerProcess(
           secretsDirectory: opts.secretsDirectory,
           gatePath: opts.gatePath,
           hostInstanceId: opts.hostInstanceId,
+          backendIncarnation: opts.backendIncarnation,
+          releaseBuild: opts.releaseBuild,
           sweepSeconds: opts.sweepSeconds ?? 3600,
           stateFile: opts.stateFile,
         },

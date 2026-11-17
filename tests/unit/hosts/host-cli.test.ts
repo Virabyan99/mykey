@@ -4,9 +4,12 @@
 import { afterEach, describe, expect, it } from "vitest";
 import {
   CONFIRM_PROBE,
+  REMOTE_API_VERIFY,
+  apiBuildCommand,
   applyCommand,
   bootstrapCommands,
   confirmPlan,
+  gateOriginOf,
   gateRecordText,
   gateWriteCommand,
   hostEnvSetCommand,
@@ -17,6 +20,7 @@ import {
   maintCommands,
   parseConfirmProbe,
   parseHostArgs,
+  planIncarnation,
   quiesceCommands,
   resumeCommand,
   runConfirm,
@@ -300,6 +304,73 @@ describe("gate (Run 3.1, P-43)", () => {
     });
     expect(() => parseHostArgs(["staging", "gate"])).toThrow(/gate/);
     expect(() => parseHostArgs(["staging", "gate", "ajar"])).toThrow(/gate/);
+  });
+
+  // Run 6.7 (P-122): v2 needs a verification report to open; close may say verifying.
+  it("parses gate open --report <file>, gate close --verifying, and refuses other words", () => {
+    expect(parseHostArgs(["staging", "gate", "open", "--report", "r.json"])).toEqual({
+      host: "staging",
+      via: "vpn",
+      command: "gate",
+      action: "open",
+      report: "r.json",
+    });
+    expect(parseHostArgs(["staging", "gate", "close", "--verifying"])).toEqual({
+      host: "staging",
+      via: "vpn",
+      command: "gate",
+      action: "close",
+      verifying: true,
+    });
+    expect(() => parseHostArgs(["staging", "gate", "open", "--report"])).toThrow(/report/);
+    expect(() => parseHostArgs(["staging", "gate", "close", "--report", "r.json"])).toThrow(/gate/);
+    expect(() => parseHostArgs(["staging", "gate", "status", "--verifying"])).toThrow(/gate/);
+    expect(() => parseHostArgs(["staging", "gate", "open", "--wide"])).toThrow(/gate/);
+  });
+
+  it("a close keeps the origin of a v2 record, and names a fresh install otherwise", () => {
+    const origin = { kind: "restore", pairId: "0b0e7a52-6b51-4d43-9a1e-61f4a0e3c0d2" };
+    expect(gateOriginOf(JSON.stringify({ version: 2, origin }), hostId)).toEqual(origin);
+    expect(gateOriginOf(JSON.stringify({ version: 1, state: "open" }), hostId)).toEqual({
+      kind: "fresh_install",
+      id: hostId,
+    });
+    expect(gateOriginOf(null, hostId)).toEqual({ kind: "fresh_install", id: hostId });
+    expect(gateOriginOf("garbage", hostId)).toEqual({ kind: "fresh_install", id: hostId });
+  });
+
+  it("db-init's incarnation: new when nowhere, copied to where it is missing, refused when they differ", () => {
+    const a = "1d3c6f4e-9a1b-4c2d-8e3f-5a6b7c8d9e0f";
+    const b = "2e4d7a5f-0b2c-4d3e-9f4a-6b7c8d9e0f1a";
+    expect(planIncarnation(null, undefined, () => a)).toEqual({
+      incarnation: a,
+      writeDatabase: true,
+      writeHostEnv: true,
+    });
+    expect(planIncarnation(null, b, () => a)).toEqual({
+      incarnation: b,
+      writeDatabase: true,
+      writeHostEnv: false,
+    });
+    expect(planIncarnation(b, undefined, () => a)).toEqual({
+      incarnation: b,
+      writeDatabase: false,
+      writeHostEnv: true,
+    });
+    expect(planIncarnation(b, b, () => a)).toEqual({
+      incarnation: b,
+      writeDatabase: false,
+      writeHostEnv: false,
+    });
+    expect(() => planIncarnation(a, b, () => a)).toThrow(/different incarnations/);
+    expect(() => planIncarnation(null, "not-a-uuid", () => a)).toThrow(/uuid/);
+  });
+
+  it("reads the running API's build from its container, printing nothing else", () => {
+    expect(apiBuildCommand()).toBe(
+      "docker inspect --format '{{range .Config.Env}}{{println .}}{{end}}' mykey-api-1 | sed -n 's/^MYKEY_BUILD=//p'",
+    );
+    expect(REMOTE_API_VERIFY).toEqual({ address: "10.78.2.3", port: 8444 });
   });
 
   it("writes a v1 record whose epoch follows the previous one", () => {

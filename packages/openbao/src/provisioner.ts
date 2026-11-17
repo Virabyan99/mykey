@@ -178,6 +178,17 @@ export class ProvisionerClient {
     return this.#write("POST", `auth/token/roles/${name}`, role);
   }
 
+  /**
+   * Run 6.7 (P-122): the incarnation copy in this organization's namespace
+   * (`mykey-meta/data/incarnation`); null when none was written.
+   */
+  async readIncarnation(): Promise<Answer<string | null>> {
+    const answer = await this.#read("mykey-meta/data/incarnation");
+    if (!answer.ok || answer.value === null) return answer as Answer<null>;
+    const value = record(answer.value.data).incarnation;
+    return { ok: true, value: typeof value === "string" ? value : null };
+  }
+
   /** Revokes the client's own token, if it logged in. */
   async close(): Promise<void> {
     if (this.#token === null) return;

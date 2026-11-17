@@ -319,6 +319,10 @@ async function runEntriesOf(
     if (applied > 0 && performance.now() - started > run.budgetMs) {
       return park(deps, parentId, fromRow);
     }
+    // Run 6.7 (M-1, P-122): the gate closed mid-way. The entry is not attempted
+    // (a child refused at dispatch would bind its key to a rejection): the
+    // import waits and a resume after the gate opens completes it.
+    if (!deps.gateOpen()) return park(deps, parentId, fromRow);
     const step = await applyEntry(deps, run, parentId, entry, values);
     if (step.kind === "wait") return park(deps, parentId, fromRow);
     if (step.kind === "uncertain") {

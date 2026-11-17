@@ -11,7 +11,6 @@ import { lockParents } from "@mykey/db";
 import {
   readEnvironment,
   readEnvironmentNames,
-  readGate,
   type EnvironmentReadRequest,
 } from "@mykey/operations";
 import type pg from "pg";
@@ -41,7 +40,7 @@ function machineRecheck(deps: AppDeps, machine: MachinePrincipal) {
     );
     const row = credential.rows[0];
     if (row?.state !== "active" || !row.live) return "unauthenticated";
-    if (!readGate(deps.config.gatePath, deps.config.hostInstanceId).open) return "quarantined";
+    if (deps.gate?.open() !== true) return "quarantined";
     return null;
   };
 }

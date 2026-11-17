@@ -17,6 +17,7 @@ import { startProvisionerProcess, type ProvisionerProcess } from "../../harness/
 import { provisionTestOrganization } from "../../harness/org-fixture.ts";
 import { getSharedStack, startStack, type Stack } from "../../harness/stack.ts";
 import { createTenants, type Tenants } from "../../harness/tenants.ts";
+import { gateText } from "../../harness/gate.ts";
 
 export interface ProvisioningFixture {
   api: TestApi;
@@ -113,18 +114,14 @@ export async function createProvisioningFixture(
   writeFileSync(join(secrets, "provisioner-secret-id"), credentials.provisioner.secretId);
   const gatePath = join(directory, "gate.json");
   const hostInstanceId = randomUUID();
+  // Run 6.7 (P-122): the test API's incarnation, which provisioning copied into OpenBao.
+  const { backendIncarnation, releaseBuild } = api.gate;
   let epoch = 0;
   const setGate = (state: "open" | "closed") => {
     epoch += 1;
     writeFileSync(
       gatePath,
-      JSON.stringify({
-        version: 1,
-        state,
-        gateEpoch: epoch,
-        hostInstanceId,
-        writtenAt: new Date().toISOString(),
-      }),
+      gateText({ hostInstanceId, backendIncarnation, releaseBuild }, state, epoch),
     );
   };
   setGate("open");
@@ -168,6 +165,8 @@ export async function createProvisioningFixture(
         secretsDirectory: secrets,
         gatePath,
         hostInstanceId,
+        backendIncarnation,
+        releaseBuild,
         stateFile: join(directory, `state-${randomUUID()}`),
         ...(opts.sweepSeconds === undefined ? {} : { sweepSeconds: opts.sweepSeconds }),
         ...(opts.crashAt === undefined ? {} : { crashAt: opts.crashAt }),
