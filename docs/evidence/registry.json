@@ -801,9 +801,11 @@
       "ownerRun": "6.1",
       "contributingRuns": [],
       "oldSession": "D08-S38",
-      "status": "OPEN",
-      "evidence": [],
-      "note": ""
+      "status": "SPIKE_PASS",
+      "evidence": [
+        "docs/evidence/session-6/run-6.4.md"
+      ],
+      "note": "OpenBao's audit device is part of readiness: an audited call per 15 s; audit_failing opened, delivered and resolved on staging (alerts.md)."
     },
     {
       "id": "FR-1.58",
@@ -855,9 +857,11 @@
       "ownerRun": "6.3",
       "contributingRuns": [],
       "oldSession": "D08-S40",
-      "status": "OPEN",
-      "evidence": [],
-      "note": ""
+      "status": "SPIKE_PASS",
+      "evidence": [
+        "docs/evidence/session-6/run-6.3.md"
+      ],
+      "note": "Disk pressure: 507 {limit: disk} on expanding mutations, reduction and sign-in continue, no record 503, real exhaustion 503 without value; locally and on staging (limits.staging.test.ts)."
     },
     {
       "id": "FR-1.62",
@@ -867,9 +871,11 @@
       "ownerRun": "6.4",
       "contributingRuns": [],
       "oldSession": "D08-S40",
-      "status": "OPEN",
-      "evidence": [],
-      "note": ""
+      "status": "SPIKE_PASS",
+      "evidence": [
+        "docs/evidence/session-6/run-6.4.md"
+      ],
+      "note": "Health, readiness and heartbeat v2 with twelve checks; unknown is not healthy; every condition drilled on staging (alerts.md)."
     },
     {
       "id": "FR-1.63",
@@ -879,9 +885,11 @@
       "ownerRun": "6.4",
       "contributingRuns": [],
       "oldSession": "D08-S40",
-      "status": "OPEN",
-      "evidence": [],
-      "note": ""
+      "status": "SPIKE_PASS",
+      "evidence": [
+        "docs/evidence/session-6/run-6.4.md"
+      ],
+      "note": "Fifteen alert conditions, each opened, delivered on the real Telegram channel and resolved on staging; a test alert on demand; detection from outside the host."
     },
     {
       "id": "FR-1.64",
@@ -1293,9 +1301,11 @@
       "ownerRun": "6.4",
       "contributingRuns": [],
       "oldSession": "D08-S40",
-      "status": "OPEN",
-      "evidence": [],
-      "note": ""
+      "status": "SPIKE_PASS",
+      "evidence": [
+        "docs/evidence/session-6/run-6.4.md"
+      ],
+      "note": "The private operator status view (host.ts status), every line with its observation time; no diagnostic route on the API (status.staging.test.ts)."
     },
     {
       "id": "FR-1.96",
@@ -1626,9 +1636,11 @@
       "ownerRun": "6.4",
       "contributingRuns": [],
       "oldSession": "D08-S40",
-      "status": "OPEN",
-      "evidence": [],
-      "note": ""
+      "status": "SPIKE_PASS",
+      "evidence": [
+        "docs/evidence/session-6/run-6.4.md"
+      ],
+      "note": "Alerts arrive and stop: every condition opened and resolved on staging with its timings (alerts.md)."
     },
     {
       "id": "AC-1.19",
@@ -1694,9 +1706,11 @@
       "ownerRun": "6.1",
       "contributingRuns": [],
       "oldSession": "D08-S38",
-      "status": "OPEN",
-      "evidence": [],
-      "note": ""
+      "status": "SPIKE_PASS",
+      "evidence": [
+        "docs/evidence/session-6/run-6.4.md"
+      ],
+      "note": "Readiness fails on an unwritable audit table or an audited OpenBao call that cannot be audited (readiness.test.ts); the body names no cause."
     },
     {
       "id": "AC-1.24",
@@ -1706,9 +1720,11 @@
       "ownerRun": "6.3",
       "contributingRuns": [],
       "oldSession": "D08-S40",
-      "status": "OPEN",
-      "evidence": [],
-      "note": ""
+      "status": "SPIKE_PASS",
+      "evidence": [
+        "docs/evidence/session-6/run-6.3.md"
+      ],
+      "note": "Rate, concurrency, large-request and disk limits reject before exhaustion; locally and on staging."
     },
     {
       "id": "AC-1.25",
@@ -1718,9 +1734,11 @@
       "ownerRun": "6.4",
       "contributingRuns": [],
       "oldSession": "D08-S40",
-      "status": "OPEN",
-      "evidence": [],
-      "note": ""
+      "status": "SPIKE_PASS",
+      "evidence": [
+        "docs/evidence/session-6/run-6.4.md"
+      ],
+      "note": "A name that does not resolve, a name not in the certificate, and staging with its API stopped each open health_failing from outside the host (sink-test Worker)."
     },
     {
       "id": "AC-1.26",
@@ -2037,9 +2055,11 @@
       "ownerRun": "6.4",
       "contributingRuns": [],
       "oldSession": "D08-S40",
-      "status": "OPEN",
-      "evidence": [],
-      "note": ""
+      "status": "SPIKE_PASS",
+      "evidence": [
+        "docs/evidence/session-6/run-6.4.md"
+      ],
+      "note": "The operator status view shows each check with its time and marks a stale or missing one unknown; no secret path, token or address in it."
     },
     {
       "id": "AC-1.50",
@@ -2384,9 +2404,10 @@
       "oldSession": "D08-S40",
       "status": "SPIKE_PASS",
       "evidence": [
-        "docs/evidence/session-2/run-2.6.md"
+        "docs/evidence/session-2/run-2.6.md",
+        "docs/evidence/session-6/run-6.4.md"
       ],
-      "note": "Off-host alert path on staging with the real Telegram channel; the Worker's own disappearance is Run 6.4."
+      "note": "Off-host alert path on staging with the real Telegram channel (Run 2.6); every Run 6.4 condition delivered and resolved, and a watcher for the Worker itself."
     },
     {
       "id": "PO-15",
@@ -2515,9 +2536,11 @@
       "ownerRun": "6.4",
       "contributingRuns": [],
       "oldSession": "D08-S40",
-      "status": "OPEN",
-      "evidence": [],
-      "note": ""
+      "status": "SPIKE_PASS",
+      "evidence": [
+        "docs/evidence/session-6/run-6.4.md"
+      ],
+      "note": "Who watches the Worker: probe-watch.yml every 15 minutes; proven locally with the probe's cron removed. The scheduled Actions run starts after the merge to main."
     },
     {
       "id": "PO-24",

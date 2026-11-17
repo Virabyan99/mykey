@@ -1,6 +1,6 @@
 # Run 6.3 — Limits and overload
 
-**Result: DONE locally on 16 Nov 2026.** `tests/staging/limits.staging.test.ts` is committed and **not yet run**: it needs the API of this run on staging, which Run 6.4's deploy brings (plan, Task C step 4). Decision: D-49 (limits, concurrency and disk pressure).
+**Result: DONE locally on 16 Nov 2026.** `tests/staging/limits.staging.test.ts` ran after Run 6.4's staging deploy (2/2). Decision: D-49 (limits, concurrency and disk pressure).
 
 ## What was done
 
@@ -82,7 +82,9 @@
 
 FR-1.60 SPIKE_PASS — rate limits are pipeline steps for source, session, credential, the reveal, import, export and issuance classes, and attributable machine misses. A refusal is 429 with retry-after; a counter that cannot be written is 503 and never a bypass. The limits hold across two processes, and the source limit is checked before the body (`tests/integration/limits/{rate,machine}.test.ts`).
 
-FR-1.61 and AC-1.24 stay `OPEN` until `limits.staging.test.ts` has run after Run 6.4's deploy. They are proven locally (`limits/{capacity,large}.test.ts`, `tests/fault/audit/exhaustion.test.ts`).
+FR-1.61 SPIKE_PASS — disk pressure: the host's capacity record refuses every expanding mutation with 507 `{ limit: "disk" }` and lets revocation, archive and sign-in continue; no record is 503; real exhaustion is 503 with no value. Locally (`limits/capacity.test.ts`, `tests/fault/audit/exhaustion.test.ts`) and on staging after Run 6.4's deploy (`tests/staging/limits.staging.test.ts`, 2/2, build `c5c037e41946`).
+
+AC-1.24 SPIKE_PASS — rate, concurrency, large-request and disk limits reject before exhaustion (`tests/integration/limits/*.test.ts`; `limits.staging.test.ts` on staging, 2/2).
 
 ## Deviations and decisions
 
@@ -107,7 +109,7 @@ FR-1.61 and AC-1.24 stay `OPEN` until `limits.staging.test.ts` has run after Run
 
 ## Open issues
 
-- **`limits.staging.test.ts`** runs after Run 6.4's deploy. Deploy order on a host: `push` first, so that `status.sh` writes the record before an API of this run starts. Without the record, every expanding mutation is 503.
+- **Deploy order on a host:** `push` first, so that `status.sh` writes the record before an API of this run starts. Without the record, every expanding mutation is 503. (`limits.staging.test.ts` ran after Run 6.4's staging deploy: 2/2.)
 - **The starvation margin is thin.** The worst write used all three attempts. A slower host (staging reads 7 MB in up to 23.5 s) cannot meet the pass line with any cool-down: a single read outlasts a writer's three attempts. The runbook says writes answer `busy` and are safe to repeat.
 - **Production** reads no capacity record until its API is updated (Run 6.9).
 - **Dated items:** the KMS certificates expire on 12 Dec 2026; `.trivyignore.images` expires on 14 Dec 2026; `test:cloud`'s fixture guard is red until Run 6.6.

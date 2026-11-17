@@ -33,6 +33,10 @@ node scripts/host.ts staging kms staging-seal-2 -- kmip attributes get <key id>
 
 ## Replace a certificate (the certificate is lost, leaked or about to expire)
 
+**Alert (Run 6.4, D-50):** `certificate_expiring` opens 10 days before a 30-day certificate expires (a third of its life; 30 days for a certificate that lives longer than 60 days). `node scripts/host.ts staging status` → `checks.certificates` lists every certificate with its expiry.
+
+**Longer certificates:** none. `okms x509 sign --validity` signs a CSR with a domain key acting as our own CA; it does not issue the KMS's access certificates. Those come from the OKMS service, whose console offers 30 days only (checked in Run 6.4 with okms 0.6.0).
+
 Certificates from the console are valid for **30 days** (the only choice offered on 12 Nov 2026). **`staging-seal-2`, the current one, expires on 12 Dec 2026, 10:50 UTC** (`staging-seal-1` was replaced and deleted on 12 Nov 2026); OpenBao keeps running after that but cannot unseal again. Replace it at least a week before.
 
 1. `node scripts/host.ts staging kms-csr staging-seal-<n>` — a new key on the host; prints the CSR only.
@@ -58,6 +62,5 @@ A new key id in the same domain: create and activate it (`kms … kmip create sy
 
 ## Owed later
 
-- Run 6.4: an alert 30 days and 7 days before a seal certificate expires.
 - Production: the same layout with its own KMS domain, user, policy and certificate at its first OpenBao start.
 - Checkpoint `kms-cert-expiry` (`docs/evidence/session-2/kms-checkpoints.json`): from 12 Dec 2026, 09:57 UTC, prove that an expired certificate cannot unseal.
