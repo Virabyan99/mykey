@@ -28,7 +28,14 @@ import {
   type Refusal,
 } from "@mykey/backup";
 import { LIMITS } from "@mykey/contracts";
-import { ROLE_NAMES, applyRoles, createPool, type DbTarget, type RoleName } from "@mykey/db";
+import {
+  ROLE_NAMES,
+  applyDatabaseAccess,
+  applyRoles,
+  createPool,
+  type DbTarget,
+  type RoleName,
+} from "@mykey/db";
 import type { OpenBaoTarget } from "@mykey/openbao";
 import { OpenBaoAdmin } from "@mykey/openbao/admin";
 import type pg from "pg";
@@ -82,6 +89,44 @@ export interface RestoreTarget {
 
 export class RestoreRefused extends Error {}
 
+/** FR-1.69: what a restore measured. A measured duration is never an SLA. */
+export interface RestoreMeasurements {
+  captureStartedAt: string;
+  restoreStartedAt: string;
+  /** The pair's age when the restore began. */
+  ageAtRestoreSeconds: number;
+  /** Steps 1–7. */
+  restoreSeconds: number;
+  verifiedAt: string | null;
+  /** From the end of step 7 to the report (the owner's journey included). */
+  revalidationSeconds: number | null;
+  result: "verifying" | "verified" | "failed_checks";
+}
+
+export function restoreMeasurements(input: {
+  captureStartedAt: string;
+  startedAt: Date;
+  restoredAt: Date;
+  report?: { createdAt: string; failed: number };
+}): RestoreMeasurements {
+  const seconds = (from: number, to: number) => Math.round((to - from) / 1000);
+  const verified = input.report === undefined ? null : Date.parse(input.report.createdAt);
+  return {
+    captureStartedAt: input.captureStartedAt,
+    restoreStartedAt: input.startedAt.toISOString(),
+    ageAtRestoreSeconds: seconds(Date.parse(input.captureStartedAt), input.startedAt.getTime()),
+    restoreSeconds: seconds(input.startedAt.getTime(), input.restoredAt.getTime()),
+    verifiedAt: input.report?.createdAt ?? null,
+    revalidationSeconds: verified === null ? null : seconds(input.restoredAt.getTime(), verified),
+    result:
+      input.report === undefined
+        ? "verifying"
+        : input.report.failed === 0
+          ? "verified"
+          : "failed_checks",
+  };
+}
+
 export interface Restored {
   manifest: PairManifest;
   backendIncarnation: string;
@@ -92,6 +137,10 @@ export interface Restored {
   admin: OpenBaoAdmin;
   /** That token itself: host.ts keeps it (0600) between `restore` and `restore-verify`. */
   rootToken: string;
+  /** When this run began and when step 7 ended (FR-1.69). */
+  startedAt: Date;
+  restoredAt: Date;
+  measurements: RestoreMeasurements;
   given: {
     pair_signature: { state: "ok"; observed: string };
     pair_digests: { state: "ok"; observed: string };
@@ -103,6 +152,7 @@ export async function restoreToVerifying(
   opts: { crashAt?: (step: RestoreStep) => void } = {},
 ): Promise<Restored> {
   const crash = opts.crashAt ?? (() => undefined);
+  const startedAt = new Date();
   const done = async (pairId: string, step: RestoreStep): Promise<void> => {
     await target.state.write({ pairId, step });
     crash(step);
@@ -137,6 +187,13 @@ export async function restoreToVerifying(
     ROLE_NAMES.map((role) => [role, randomBytes(24).toString("base64url")]),
   ) as Record<RoleName, string>;
   await applyRoles(target.postgres.superuser, passwords);
+  // The dump does not carry database-level access (db-globals-inventory.md, step 4).
+  const access = createPool(target.postgres.superuser, { max: LIMITS.db.opsPool });
+  try {
+    await applyDatabaseAccess(access, target.postgres.superuser.database);
+  } finally {
+    await access.end();
+  }
   await target.postgres.keepPasswords(passwords);
   await target.postgres.restoreDump(files["postgres.dump"]);
   await done(manifest.pairId, "postgres");
@@ -166,6 +223,7 @@ export async function restoreToVerifying(
     const hostInstanceId = randomUUID();
     await target.startVerifying({ backendIncarnation, hostInstanceId });
     await done(manifest.pairId, "start");
+    const restoredAt = new Date();
     return {
       manifest,
       backendIncarnation,
@@ -173,6 +231,13 @@ export async function restoreToVerifying(
       pool,
       admin,
       rootToken: minted.token,
+      startedAt,
+      restoredAt,
+      measurements: restoreMeasurements({
+        captureStartedAt: manifest.captureStartedAt,
+        startedAt,
+        restoredAt,
+      }),
       given: {
         pair_signature: { state: "ok", observed: `signed by ${manifest.keyRefs.signingKeyId}` },
         pair_digests: { state: "ok", observed: "bundle and artifacts equal the manifest" },

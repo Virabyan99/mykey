@@ -2544,12 +2544,13 @@ async function runGateV2(
 export function restoreHandoffFiles(
   host: HostName,
   home: string = homedir(),
-): { state: string; token: string; report: string } {
+): { state: string; token: string; report: string; measurements: string } {
   const directory = join(home, ".mykey", "secrets", "hosts", host);
   return {
     state: join(directory, "restore.json"),
     token: join(directory, "restore-root-token"),
     report: join(directory, "restore-report.json"),
+    measurements: join(directory, "restore-measurements.json"),
   };
 }
 
@@ -2560,6 +2561,10 @@ interface RestoreHandoff {
   hostInstanceId: string;
   schemaRevision: string;
   given: Record<string, { state: "ok" | "failed" | "unknown"; observed: string }>;
+  /** FR-1.69. */
+  captureStartedAt: string;
+  startedAt: string;
+  restoredAt: string;
 }
 
 function hostGateWriter(host: HostEntry, address: Address) {
@@ -2735,6 +2740,9 @@ async function runRestore(
         backendIncarnation: restored.backendIncarnation,
         hostInstanceId: restored.hostInstanceId,
         schemaRevision: restored.manifest.schemaRevision,
+        captureStartedAt: restored.manifest.captureStartedAt,
+        startedAt: restored.startedAt.toISOString(),
+        restoredAt: restored.restoredAt.toISOString(),
         given: {
           ...restored.given,
           old_credentials_refused:
@@ -2756,6 +2764,7 @@ async function runRestore(
       log.info(
         `${host.name}: pair ${handoff.pairId} restored; closed + verifying; incarnation ${handoff.backendIncarnation}`,
       );
+      log.info(`${host.name}: measured (FR-1.69): ${JSON.stringify(restored.measurements)}`);
       log.info(
         `${host.name}: next: ops reset-account for the owner, the journey through tunnel verify, then restore-verify`,
       );
@@ -2849,6 +2858,18 @@ async function runRestoreVerify(
       });
       writeFileSync(files.report, JSON.stringify(report, null, 2));
       const failed = report.checks.filter((c) => c.state !== "ok");
+      const { restoreMeasurements } = await import("@mykey/ops");
+      const measured = restoreMeasurements({
+        captureStartedAt: handoff.captureStartedAt,
+        startedAt: new Date(handoff.startedAt),
+        restoredAt: new Date(handoff.restoredAt),
+        report: { createdAt: report.createdAt, failed: failed.length },
+      });
+      writeFileSync(
+        files.measurements,
+        JSON.stringify({ host: host.name, pairId: handoff.pairId, ...measured }, null, 2),
+      );
+      log.info(`${host.name}: measured (FR-1.69): ${JSON.stringify(measured)}`);
       log.info(
         `${host.name}: report ${files.report}: ${String(report.checks.length - failed.length)}/${String(report.checks.length)} ok, members ${String(report.members)}`,
       );

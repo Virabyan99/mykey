@@ -100,6 +100,25 @@ describe("the whole restore, locally (P-124)", () => {
     expect((await target.request("verify", "GET", "/v1/version")).status).toBe(200);
   });
 
+  it("the restore measured itself (FR-1.69): capture time, age at restore, elapsed time", () => {
+    const m = restored.measurements;
+    expect(m.captureStartedAt).toBe(world.pair.captureStartedAt.toISOString());
+    expect(m.ageAtRestoreSeconds).toBeGreaterThan(0);
+    expect(m.restoreSeconds).toBeGreaterThan(0);
+    expect(m.restoreSeconds).toBeLessThan(1_800);
+    expect(m.result).toBe("verifying");
+  });
+
+  it("the database-level access is the inventory's (step 4): no CREATE or TEMP for a runtime role", async () => {
+    const rows = await restored.pool.query<{ role: string; create: boolean; temp: boolean }>(
+      `SELECT r AS role,
+              has_database_privilege(r, current_database(), 'CREATE') AS create,
+              has_database_privilege(r, current_database(), 'TEMP') AS temp
+         FROM unnest(ARRAY['api_runtime', 'provisioner_runtime', 'backup_reader', 'maintenance']) AS r`,
+    );
+    expect(rows.rows.filter((r) => r.create || r.temp).map((r) => r.role)).toEqual([]);
+  });
+
   it("the role passwords of the restored cluster are new: the old api_runtime password is refused", async () => {
     const oldPassword = world.f.api.database.targets.api_runtime.password;
     const client = new pg.Client({

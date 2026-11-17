@@ -44,8 +44,10 @@ export { RECHECKED, recheckForOpen } from "./commands/restore-verify.ts";
 export {
   RESTORE_STEPS,
   RestoreRefused,
+  restoreMeasurements,
   restoreToVerifying,
   type Restored,
+  type RestoreMeasurements,
   type RestoreState,
   type RestoreStep,
   type RestoreTarget,
