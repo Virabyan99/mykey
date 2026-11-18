@@ -9,6 +9,24 @@
       "id": "AC-1.58",
       "ownerRun": "9.8",
       "reason": "D08-S47 became Runs 9.1, 9.2 and 9.5 to 9.9. Run 9.2 covers only the 'start of AC-1.58'. The exit dossier of Run 9.8 is where the first real consumer connection is verified and reported."
+    },
+    {
+      "id": "FR-1.73",
+      "status": "SPIKE_PASS",
+      "evidence": ["docs/evidence/session-6/run-6.9.md"],
+      "note": "A host release is built once on a clean clone: three images with the commit's build id, no npm/npx/corepack, scanned as the archives that ship (history, dependencies, images); release.json and SHA256SUMS only after every scan passes; published as host-vX.Y.Z (D-57)."
+    },
+    {
+      "id": "FR-1.74",
+      "status": "SPIKE_PASS",
+      "evidence": ["docs/evidence/session-6/run-6.9.md"],
+      "note": "host.ts deploy promotes a release through the closed gate with the owner's journey and a deploy report, resumes a stopped deploy, and rolls back by deploying the previous release; staging converted to gate v2 and went forward, back and forward again (deploy.staging.test.ts); runbook deploy.md."
+    },
+    {
+      "id": "AC-1.32",
+      "status": "SPIKE_PASS",
+      "evidence": ["docs/evidence/session-6/run-6.9.md"],
+      "note": "The release build refuses a failing scan and writes no release.json (host-build.test.ts); the scanners' self-test detects the seeded secret and the seeded vulnerable dependency (Session 1 fixtures); images are scanned as the archives that ship, with no seeded image."
     }
   ],
   "statuses": [
