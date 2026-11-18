@@ -11,9 +11,10 @@
     { "binding": "DB", "database_name": "mykey-probe", "migrations_dir": "migrations" },
   ],
   "vars": {
-    "HOSTS": "[{\"name\":\"staging\",\"hostname\":\"mykey-staging.nomikey.com\"},{\"name\":\"prod\",\"hostname\":\"mykey.nomikey.com\",\"inService\":false}]",
-    // prod is not in service yet (gate closed on purpose, no OpenBao): no health_failing for it.
-    // Set inService to true (or remove it) when production is brought into service.
+    "HOSTS": "[{\"name\":\"staging\",\"hostname\":\"mykey-staging.nomikey.com\"}]",
+    // Run 6.8 (D-56): production's server is lent to the drill and reinstalled; its entry
+    // comes back at the gate as {"name":"prod","hostname":"mykey.nomikey.com","inService":false}
+    // (not in service yet: gate closed on purpose, no OpenBao, so no health_failing for it).
     "SINK": "telegram",
     // LIMITS.monitoring (a unit test keeps them equal). D-22: the three graces are one number on purpose.
     "HEARTBEAT_GRACE_SECONDS": "180",
