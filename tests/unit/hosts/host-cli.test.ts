@@ -20,6 +20,7 @@ import {
   maintCommands,
   parseConfirmProbe,
   parseHostArgs,
+  usableHost,
   planIncarnation,
   quiesceCommands,
   resumeCommand,
@@ -266,6 +267,30 @@ describe("confirm", () => {
       /mykey-revert-ssh/,
     );
     expect(calls).toHaveLength(1);
+  });
+});
+
+// Run 6.8 (P-125, D-56): the drill host, and production lent to it.
+describe("the drill host and a lent host", () => {
+  it("accepts drill as a host, KMS and OpenBao commands included; production's rule stays production's", () => {
+    expect(parseHostArgs(["drill", "status"])).toMatchObject({ host: "drill", command: "status" });
+    expect(parseHostArgs(["drill", "quiesce"])).toMatchObject({ host: "drill" });
+    expect(parseHostArgs(["drill", "kms-use", "drill-1"])).toMatchObject({ host: "drill" });
+    expect(() => parseHostArgs(["prod", "quiesce"])).toThrow(/production/);
+    expect(() => parseHostArgs(["other", "status"])).toThrow(/unknown host/);
+  });
+
+  it("a host marked lent in hosts.json refuses every command", () => {
+    const entry = {
+      name: "prod",
+      publicIp: "192.0.2.48",
+      vpnIp: "10.77.1.1",
+      hostname: "prod.example.test",
+      sshUser: "ubuntu",
+    } as const;
+    expect(() => usableHost({ ...entry, lent: true })).toThrow(/lent/);
+    expect(usableHost(entry)).toEqual(entry);
+    expect(() => usableHost(undefined, "drill")).toThrow(/no drill entry/);
   });
 });
 

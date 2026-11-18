@@ -430,6 +430,39 @@ async function drillDns(action: string | undefined): Promise<void> {
   } else throw new Error("drill-dns needs up | down");
 }
 
+/** Run 6.8 (P-125, D-56): the drill host's public name, pointing at its address in hosts.json. */
+export const DRILL_HOSTNAME = "mykey-drill.nomikey.com";
+
+async function drillHostDns(action: string | undefined): Promise<void> {
+  const { zoneId } = await zoneAndAccount();
+  const found = await cf<{ id: string; content: string }[]>(
+    "GET",
+    `/zones/${zoneId}/dns_records?name=${DRILL_HOSTNAME}`,
+  );
+  if (action === "up") {
+    const drill = loadHosts().drill;
+    if (drill === undefined) throw new Error("hosts.json has no drill entry");
+    if (drill.hostname !== DRILL_HOSTNAME) throw new Error(`hosts.json names ${drill.hostname}`);
+    if (found.some((record) => record.content === drill.publicIp)) {
+      say(`dns: ${DRILL_HOSTNAME} exists`);
+      return;
+    }
+    if (found.length > 0)
+      throw new Error(`dns: ${DRILL_HOSTNAME} points elsewhere; remove it first`);
+    await cf("POST", `/zones/${zoneId}/dns_records`, {
+      type: "A",
+      name: DRILL_HOSTNAME,
+      content: drill.publicIp,
+      ttl: 60,
+      proxied: false,
+    });
+    say(`dns: ${DRILL_HOSTNAME} created`);
+  } else if (action === "down") {
+    for (const record of found) await cf("DELETE", `/zones/${zoneId}/dns_records/${record.id}`);
+    say(`dns: ${DRILL_HOSTNAME} removed (${String(found.length)})`);
+  } else throw new Error("drill-host-dns needs up | down");
+}
+
 /** Run 6.4 (P-117): the on-demand test message through the Worker's sink. */
 async function alertTest(host: string): Promise<void> {
   const config = workerConfig();
@@ -453,9 +486,10 @@ if (import.meta.main) {
     else if (command === "sinktest")
       await sinkTest(argument, process.argv.slice(4).includes("--outside"));
     else if (command === "drill-dns") await drillDns(argument);
+    else if (command === "drill-host-dns") await drillHostDns(argument);
     else {
       warn(
-        "usage: node scripts/probe.ts deploy [--no-cron] | secrets | state <host> | alert-test <host> | sinktest up|rows|down [--outside] | drill-dns up|down",
+        "usage: node scripts/probe.ts deploy [--no-cron] | secrets | state <host> | alert-test <host> | sinktest up|rows|down [--outside] | drill-dns up|down | drill-host-dns up|down",
       );
       process.exitCode = 2;
     }

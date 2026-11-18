@@ -54,6 +54,24 @@ describe("loadHosts", () => {
     expect(loadHosts(hostsFile(home({ hosts: VALID })))).toEqual(VALID);
   });
 
+  // Run 6.8 (P-125, D-56): the drill host is a third entry; production is lent to it.
+  it("reads a drill entry and a lent mark; a drill entry is optional", () => {
+    const drill = { ...VALID.prod, name: "drill", hostname: "drill.example.test" };
+    const hosts = loadHosts(
+      hostsFile(home({ hosts: { ...VALID, prod: { ...VALID.prod, lent: true }, drill } })),
+    );
+    expect(hosts.drill).toEqual(drill);
+    expect(hosts.prod.lent).toBe(true);
+    expect(hosts.staging.lent).toBeUndefined();
+    expect(loadHosts(hostsFile(home({ hosts: VALID }))).drill).toBeUndefined();
+    expect(() =>
+      loadHosts(hostsFile(home({ hosts: { ...VALID, prod: { ...VALID.prod, lent: "yes" } } }))),
+    ).toThrow(/prod\.lent/);
+    expect(() =>
+      loadHosts(hostsFile(home({ hosts: { ...VALID, drill: { ...drill, name: "prod" } } }))),
+    ).toThrow(/drill\.name/);
+  });
+
   it("throws naming the file when it is missing", () => {
     expect(() => loadHosts(hostsFile(home({})))).toThrow(/hosts\.json is missing/);
   });

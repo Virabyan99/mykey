@@ -44,7 +44,9 @@ import {
   shQuote,
   sshExec,
   type HostEntry,
+  type HostName,
   type Hosts,
+  usableHost,
 } from "@mykey/ops/remote";
 import { KEY_RINGS } from "@mykey/auth";
 import { loadR2Credentials } from "@mykey/backup";
@@ -67,7 +69,7 @@ const COMPOSE = `docker compose --env-file ${REMOTE.hostEnv} -f ${REMOTE.compose
 const BASE64_KEY = /^[A-Za-z0-9+/]{43}=$/;
 
 type Address = "vpn" | "public";
-type HostName = "staging" | "prod";
+export { usableHost };
 
 // -------------------------------------------------------------------- logger
 
@@ -194,7 +196,7 @@ export type GateAction = "open" | "close" | "status";
 const PAIR_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
 /** `deploy --release <dir> [--resume] [--install-only | --stay-closed] [--image <id>]…` (P-128). */
-function parseDeployArgs(host: "staging" | "prod", rest: string[]): HostCommand {
+function parseDeployArgs(host: HostName, rest: string[]): HostCommand {
   let release: string | null = null;
   const images: string[] = [];
   const flags = { resume: false, installOnly: false, stayClosed: false };
@@ -225,7 +227,7 @@ function parseDeployArgs(host: "staging" | "prod", rest: string[]): HostCommand 
 }
 
 /** `restore --source <host> (--pair <id> | --newest)`: P-124 steps 1–7. */
-function parseRestoreArgs(host: "staging" | "prod", rest: string[]): HostCommand {
+function parseRestoreArgs(host: HostName, rest: string[]): HostCommand {
   let source: HostName | null = null;
   const pairs: string[] = [];
   for (let i = 0; i < rest.length; i += 1) {
@@ -257,7 +259,7 @@ function parseRestoreArgs(host: "staging" | "prod", rest: string[]): HostCommand
 }
 
 /** `restore-verify --confirm-members <n> (--journey | --owner-confirmed) [--open]`: steps 8–9. */
-function parseRestoreVerifyArgs(host: "staging" | "prod", rest: string[]): HostCommand {
+function parseRestoreVerifyArgs(host: HostName, rest: string[]): HostCommand {
   let confirmMembers: number | null = null;
   const journeys: ("run" | "owner-confirmed")[] = [];
   let open = false;
@@ -286,7 +288,7 @@ function parseRestoreVerifyArgs(host: "staging" | "prod", rest: string[]): HostC
   return { host, via: "vpn", command: "restore-verify", confirmMembers, journey, open };
 }
 
-function parseGateArgs(host: "staging" | "prod", rest: string[]): HostCommand {
+function parseGateArgs(host: HostName, rest: string[]): HostCommand {
   const [action, ...more] = rest;
   const base = { host, via: "vpn", command: "gate" } as const;
   if (action === "open") {
@@ -333,8 +335,8 @@ const CERT_NAME = /^[a-z][a-z0-9-]{0,39}$/;
 export function parseHostArgs(argv: string[]): HostCommand {
   const [host, command, ...rest] = argv;
   if (host === undefined || command === undefined) throw new Error(USAGE);
-  if (host !== "staging" && host !== "prod") {
-    throw new Error(`unknown host "${host}": use staging or prod`);
+  if (host !== "staging" && host !== "prod" && host !== "drill") {
+    throw new Error(`unknown host "${host}": use staging, prod or drill`);
   }
   if (host === "prod" && STAGING_ONLY.has(command)) {
     throw new Error(`${command}: production holds no OpenBao or KMS material in Session 2`);
@@ -1547,12 +1549,24 @@ type PeerKeys = Partial<Record<HostName, string>>;
 
 const operatorAddress = (vpnIp: string): string => vpnIp.replace(/\.\d+$/, ".10");
 
+interface TunnelHosts {
+  prod: HostEntry;
+  staging: HostEntry;
+  drill?: HostEntry;
+}
+
+/** The tunnel's peers: production, or the drill host in its place while production is lent (Run 6.8). */
+function tunnelHosts(hosts: TunnelHosts): [HostEntry, HostEntry] {
+  const first = hosts.prod.lent === true && hosts.drill !== undefined ? hosts.drill : hosts.prod;
+  return [first, hosts.staging];
+}
+
 export function renderWireguardConfig(config: {
   privateKey: string;
-  hosts: { prod: HostEntry; staging: HostEntry };
+  hosts: TunnelHosts;
   peerKeys: PeerKeys;
 }): string {
-  const order = [config.hosts.prod, config.hosts.staging];
+  const order = tunnelHosts(config.hosts);
   const lines = [
     "# MyKey operator tunnel, written by scripts/host.ts. Holds a private key: keep it 0600.",
     "[Interface]",
@@ -1577,7 +1591,7 @@ export function renderWireguardConfig(config: {
 
 function parseWireguardConfig(
   text: string,
-  hosts: { prod: HostEntry; staging: HostEntry },
+  hosts: TunnelHosts,
 ): { privateKey: string | undefined; peerKeys: PeerKeys } {
   const peerKeys: PeerKeys = {};
   let privateKey: string | undefined;
@@ -1587,7 +1601,7 @@ function parseWireguardConfig(
     if (!block.startsWith("[Peer]")) continue;
     const allowed = value("AllowedIPs");
     const publicKey = value("PublicKey");
-    for (const host of [hosts.prod, hosts.staging]) {
+    for (const host of tunnelHosts(hosts)) {
       if (allowed === `${host.vpnIp}/32` && publicKey !== undefined)
         peerKeys[host.name] = publicKey;
     }
@@ -1606,7 +1620,7 @@ export function defaultWireguardFile(home: string = homedir()): string {
  */
 export function writeWireguardConfig(
   file: string,
-  hosts: { prod: HostEntry; staging: HostEntry },
+  hosts: TunnelHosts,
   peerKeys: PeerKeys,
 ): { file: string; publicKey: string } {
   for (const key of Object.values(peerKeys)) {
@@ -1639,7 +1653,7 @@ export function bootstrapCommands(
   hosts: Hosts,
   operatorPublicKey: string,
 ): string[] {
-  const host = hosts[name];
+  const host = usableHost(hosts[name], name);
   const wireguardEnv = [
     `WG_ADDRESS=${host.vpnIp}/24`,
     `WG_PEER_ADDRESS=${operatorAddress(host.vpnIp)}/32`,
@@ -1659,7 +1673,7 @@ export function bootstrapCommands(
 }
 
 async function runBootstrap(name: HostName, hosts: Hosts, log: Logger): Promise<void> {
-  const host = hosts[name];
+  const host = usableHost(hosts[name], name);
   const wireguardFile = defaultWireguardFile();
   const { publicKey } = writeWireguardConfig(wireguardFile, hosts, {});
   await pushFiles(host, collectPushFiles(), { address: "public" });
@@ -1842,7 +1856,13 @@ async function main(argv: string[], log: Logger): Promise<number> {
     return 2;
   }
   const hosts = loadHosts();
-  const host = hosts[command.host];
+  let host: HostEntry;
+  try {
+    host = usableHost(hosts[command.host], command.host);
+  } catch (error) {
+    log.error((error as Error).message);
+    return 2;
+  }
   const address = command.via;
   switch (command.command) {
     case "bootstrap":

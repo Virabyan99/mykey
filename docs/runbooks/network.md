@@ -20,6 +20,13 @@ SSH host keys (ED25519), pinned in `~/.mykey/ssh/known_hosts`; every connection 
 
 A changed host key is never accepted by hand. It means the server was reinstalled or something is in the path: stop and find out which.
 
+**After a reinstall the owner has just confirmed** (Run 6.8), the new key is taken once and at no other moment:
+
+1. Remove the old entry: `ssh-keygen -R <public IP> -f ~/.mykey/ssh/known_hosts`.
+2. Fetch the new key with `ssh-keyscan -t ed25519 <public IP>`, append it, and record its fingerprint in the run note.
+3. OVHcloud leaves the `ubuntu` password expired, and a key login is refused ("Password change required but no TTY available"). The owner changes it once in their own terminal:
+   `ssh -t -i ~/.mykey/ssh/mykey_ops_ed25519 -o UserKnownHostsFile=~/.mykey/ssh/known_hosts -o StrictHostKeyChecking=yes ubuntu@<public IP>`, giving the temporary password from OVHcloud's e-mail and a new one. The agent never sees either.
+
 ## How the operator gets in
 
 SSH listens on the VPN address only. Port 22 on the public address does not answer.

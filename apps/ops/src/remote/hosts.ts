@@ -5,18 +5,25 @@ import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 
+/** Run 6.8 (P-125, D-56): `drill` is the clean host of the restore drill (production's server, lent). */
+export type HostName = "staging" | "prod" | "drill";
+
 export interface HostEntry {
-  name: "staging" | "prod";
+  name: HostName;
   publicIp: string;
   vpnIp: string;
   hostname: string;
   sshUser: "ubuntu";
+  /** Run 6.8: the server is lent to another entry; every command for this one is refused. */
+  lent?: true;
 }
 
 export interface Hosts {
   region: string;
   staging: HostEntry;
   prod: HostEntry;
+  /** Only while the drill runs (Run 6.8 until the gate). */
+  drill?: HostEntry;
 }
 
 /**
@@ -56,7 +63,7 @@ export function isHostname(value: string): boolean {
   return HOSTNAME.test(value);
 }
 
-function hostEntry(raw: unknown, name: "staging" | "prod"): HostEntry {
+function hostEntry(raw: unknown, name: HostName): HostEntry {
   if (typeof raw !== "object" || raw === null)
     throw new Error(`hosts.json: field ${name} is missing`);
   const entry = raw as Record<string, unknown>;
@@ -70,13 +77,28 @@ function hostEntry(raw: unknown, name: "staging" | "prod"): HostEntry {
   };
   field("name", (value) => value === name);
   field("sshUser", (value) => value === "ubuntu");
+  if (entry.lent !== undefined && entry.lent !== true) {
+    throw new Error(`hosts.json: field ${name}.lent is malformed (true or absent)`);
+  }
   return {
     name,
     publicIp: field("publicIp", (value) => IPV4.test(value)),
     vpnIp: field("vpnIp", (value) => IPV4.test(value)),
     hostname: field("hostname", (value) => HOSTNAME.test(value)),
     sshUser: "ubuntu",
+    ...(entry.lent === true ? { lent: true as const } : {}),
   };
+}
+
+/** The entry a command may use: present, and not lent to another host (Run 6.8). */
+export function usableHost(entry: HostEntry | undefined, name: HostName = "drill"): HostEntry {
+  if (entry === undefined) throw new Error(`hosts.json: no ${name} entry`);
+  if (entry.lent === true) {
+    throw new Error(
+      `${entry.name}: its server is lent to the drill (hosts.json); every command is refused until the gate gives it back`,
+    );
+  }
+  return entry;
 }
 
 /** Reads and validates ~/.mykey/hosts.json; throws naming the missing or malformed field. */
@@ -99,6 +121,7 @@ export function loadHosts(file: string = hostsFile()): Hosts {
     region,
     staging: hostEntry(record.staging, "staging"),
     prod: hostEntry(record.prod, "prod"),
+    ...(record.drill === undefined ? {} : { drill: hostEntry(record.drill, "drill") }),
   };
 }
 
