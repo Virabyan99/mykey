@@ -1145,6 +1145,21 @@ export function restoreOrganization(onHost: string | null, named: string | null)
 }
 
 /**
+ * Run 6.8: where a restore keeps a role's new password. A host service's
+ * role on the host; a workstation role in custody, and for maintenance and
+ * backup_reader also the copy the host jobs read (ops-secrets), which would
+ * otherwise keep the old password and fail every job after a restore.
+ */
+export function restorePasswordPlaces(role: RoleName): { workstation: boolean; host: string[] } {
+  const onHost = ROLE_HOST_SECRET[role];
+  if (ROLE_PASSWORD_PLACE[role] === "host" && onHost !== undefined) {
+    return { workstation: false, host: [onHost.path] };
+  }
+  const ops = (OPS_ROLE_SECRETS as Partial<Record<RoleName, string>>)[role];
+  return { workstation: true, host: ops === undefined ? [] : [ops] };
+}
+
+/**
  * The OpenBao token `ops` uses on a host (Run 6.8). While a restore waits for
  * its report, the restore's own root token: the snapshot replaced the token
  * store the custody copy's token lived in. Otherwise the custody copy.
@@ -2822,10 +2837,10 @@ async function runRestore(
       },
       keepPassword: async (role, password) => {
         registerSecret(password);
-        const onHost = ROLE_HOST_SECRET[role];
-        if (ROLE_PASSWORD_PLACE[role] === "host" && onHost !== undefined) {
+        const places = restorePasswordPlaces(role);
+        for (const path of places.host) {
           expectSuccess(
-            await sshExec(host, secretInstallCommand(onHost.path, onHost.owner), {
+            await sshExec(host, secretInstallCommand(path, "1000:1000"), {
               sudo: true,
               address,
               stdin: password,
@@ -2833,7 +2848,8 @@ async function runRestore(
             }),
             `storing the ${role} password`,
           );
-        } else {
+        }
+        if (places.workstation) {
           const file = workstationRoleSecretFile(host.name, role);
           mkdirSync(dirname(file), { recursive: true, mode: 0o700 });
           writeFileSync(file, password, { mode: 0o600 });

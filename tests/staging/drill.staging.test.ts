@@ -780,7 +780,24 @@ describe("the clean-host restore drill (P-125)", () => {
       const health = await fetch(`${DRILL}/health`);
       expect(health.status).toBe(200);
       const status = await hostTsOk(["drill", "status"], { timeoutMs: 600_000 });
-      expect(status.split("\n").filter((line) => line.startsWith("bad"))).toEqual([]);
+      // Known on the drill host: the spike leftovers marked for review (C3), this
+      // test's one-hour tokens, the heartbeat with no probe token, and the jobs of
+      // the ops image, which knows staging and prod only (known-limits.md).
+      const marked = data(state, "markedForReview") as {
+        organizations: number;
+        environments: number;
+      };
+      const review = String(marked.organizations + marked.environments);
+      const known = [
+        new RegExp(`^bad\\s+(checks\\.)?reviewOpen\\s+${review}\\s`),
+        /^bad\s+checks\.credentialExpiring\s+\d+\s/,
+        /^bad\s+checks\.unitsFailed\s+(mykey-(heartbeat|sweep|auth-cleanup)\.service(, )?)+\s/,
+      ];
+      const unexpected = status
+        .split("\n")
+        .filter((line) => line.startsWith("bad"))
+        .filter((line) => !known.some((pattern) => pattern.test(line)));
+      expect(unexpected).toEqual([]);
     },
     HOUR,
   );
@@ -804,11 +821,19 @@ describe("the clean-host restore drill (P-125)", () => {
         "operator.gate_open",
       ]);
       const cookie = await drillOwnerSession();
-      const audit = await call(DRILL, "GET", `${O}/audit?limit=100`, { cookie });
+      const pAtIso = data(state, "pairCapturedAt") as string;
+      const audit = await call(
+        DRILL,
+        "GET",
+        `${O}/audit?limit=10&to=${encodeURIComponent(pAtIso)}`,
+        { cookie },
+      );
       expect(audit.status, audit.body.slice(0, 200)).toBe(200);
       const items = (JSON.parse(audit.body) as { items: { occurredAt: string }[] }).items;
-      const pAt = Date.parse(data(state, "pairCapturedAt") as string);
-      expect(items.some((item) => Date.parse(item.occurredAt) < pAt)).toBe(true);
+      expect(items.length).toBeGreaterThan(0);
+      for (const item of items) {
+        expect(Date.parse(item.occurredAt)).toBeLessThanOrEqual(Date.parse(pAtIso));
+      }
     },
     HOUR,
   );

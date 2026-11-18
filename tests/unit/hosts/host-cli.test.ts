@@ -31,6 +31,7 @@ import {
   runMaint,
   opsRootToken,
   restoreOrganization,
+  restorePasswordPlaces,
   restoreStartCommand,
 } from "../../../scripts/host.ts";
 import {
@@ -219,6 +220,26 @@ describe("the restore's start of the executors", () => {
     expect(command).toContain("--env-file /etc/mykey/host.env");
     expect(command).toMatch(/ up -d --force-recreate --no-deps api provisioner$/);
     expect(command).not.toContain(" start ");
+  });
+});
+
+// Run 6.8: a restore gives every role a new password; the host jobs read
+// maintenance and backup_reader from /etc/mykey/secrets/ops, which kept the old ones.
+describe("where a restore keeps each role's new password", () => {
+  it("a host service's on the host; the workstation's in custody, and the ops copy on the host too", () => {
+    expect(restorePasswordPlaces("api_runtime")).toEqual({
+      workstation: false,
+      host: ["/etc/mykey/secrets/api/db-password"],
+    });
+    expect(restorePasswordPlaces("maintenance")).toEqual({
+      workstation: true,
+      host: ["/etc/mykey/secrets/ops/maintenance"],
+    });
+    expect(restorePasswordPlaces("backup_reader")).toEqual({
+      workstation: true,
+      host: ["/etc/mykey/secrets/ops/backup_reader"],
+    });
+    expect(restorePasswordPlaces("migration_owner")).toEqual({ workstation: true, host: [] });
   });
 });
 
