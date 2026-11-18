@@ -235,7 +235,21 @@ function mapFromDoc10(doc10: string): Doc10Map {
 }
 
 export function loadOverrides(file: string = OVERRIDES_FILE): Overrides {
-  return JSON.parse(readFileSync(file, "utf8")) as Overrides;
+  const overrides = JSON.parse(readFileSync(file, "utf8")) as Overrides;
+  // Run 6.10: an entry in the wrong list is ignored by the build; refuse it.
+  for (const entry of overrides.owners as Record<string, unknown>[]) {
+    if (!("ownerRun" in entry) || "status" in entry) {
+      throw new Error(`${String(entry.id)}: an entry in owners must name ownerRun and no status`);
+    }
+  }
+  for (const entry of overrides.statuses as unknown as Record<string, unknown>[]) {
+    if (!("status" in entry) || "ownerRun" in entry) {
+      throw new Error(
+        `${String(entry.id)}: an entry in statuses must name a status and no ownerRun`,
+      );
+    }
+  }
+  return overrides;
 }
 
 function expectedIds(): { id: string; kind: Kind }[] {
