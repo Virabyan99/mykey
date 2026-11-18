@@ -2432,7 +2432,7 @@ async function runOpsOnHost(host: HostEntry, argv: string[], address: Address): 
 
 async function runGate(
   host: HostEntry,
-  command: { action: GateAction; report?: string; verifying?: true },
+  command: { action: GateAction; report?: string; verifying?: true; releaseBuild?: string },
   address: Address,
   log: Logger,
 ): Promise<number> {
@@ -2487,16 +2487,19 @@ async function runGate(
  */
 async function runGateV2(
   host: HostEntry,
-  command: { action: "open" | "close"; report?: string; verifying?: true },
+  command: { action: "open" | "close"; report?: string; verifying?: true; releaseBuild?: string },
   binding: { hostInstanceId: string; backendIncarnation: string },
   address: Address,
   log: Logger,
 ): Promise<number> {
   const { closeGate, openGate } = await import("@mykey/operations/operator");
-  const releaseBuild = expectSuccess(
-    await sshExec(host, apiBuildCommand(), { sudo: true, address }),
-    "reading the API's build",
-  ).stdout.trim();
+  // A deploy binds the release it brings, not the build still running (Run 6.9).
+  const releaseBuild =
+    command.releaseBuild ??
+    expectSuccess(
+      await sshExec(host, apiBuildCommand(), { sudo: true, address }),
+      "reading the API's build",
+    ).stdout.trim();
   if (command.action === "open" && !/^[0-9a-f]{7,40}$/.test(releaseBuild)) {
     throw new Error("gate open: the API container is not running or names no build");
   }
@@ -2959,12 +2962,13 @@ const DEPLOY_STATE_FILE = "/var/lib/mykey/deploy-state.json";
 export function deployFiles(
   host: HostName,
   home: string = homedir(),
-): { previousGate: string; report: string; journey: string } {
+): { report: string; journey: string; journeyChecks: string } {
   const directory = join(home, ".mykey", "secrets", "hosts", host);
   return {
-    previousGate: join(directory, "deploy-previous-gate.json"),
     report: join(directory, "deploy-report.json"),
     journey: join(directory, "deploy-journey.json"),
+    // Kept until gate_open, so a deploy resumed at report still has them.
+    journeyChecks: join(directory, "deploy-journey-checks.json"),
   };
 }
 
@@ -3131,14 +3135,12 @@ async function runDeployCommand(
     }
     return { hostInstanceId, backendIncarnation, releaseBuild: build };
   };
-  const gateCommand = (action: "open" | "close", verifying: boolean) =>
-    ({
-      host: host.name,
-      via: "vpn" as const,
-      command: "gate" as const,
-      action,
-      ...(verifying ? { verifying: true as const } : {}),
-    }) as HostCommand & { command: "gate" };
+  // Every gate write of a deploy binds the release's build, not the one still running.
+  const gateCommand = (action: "open" | "close", verifying: boolean) => ({
+    action,
+    releaseBuild: build,
+    ...(verifying ? { verifying: true as const } : {}),
+  });
 
   try {
     const current = {
@@ -3247,12 +3249,6 @@ async function runDeployCommand(
               break;
             }
             case "gate_close": {
-              const before = await sshExec(host, `cat ${GATE_FILE}`, remote);
-              mkdirSync(dirname(files.previousGate), { recursive: true, mode: 0o700 });
-              writeFileSync(
-                files.previousGate,
-                JSON.stringify({ text: before.code === 0 ? before.stdout : null }),
-              );
               const v2 = (await hostEnv()).MYKEY_BACKEND_INCARNATION !== undefined;
               const code = await runGate(host, gateCommand("close", v2), address, log);
               if (code !== 0) throw new Error("gate close failed");
@@ -3289,6 +3285,12 @@ async function runDeployCommand(
               break;
             }
             case "journey": {
+              // The listener serves only a record bound to the build that runs: written
+              // here, so a deploy resumed after an older record still verifies.
+              if ((await runningBuild()) !== build)
+                throw new Error(`the API does not run ${build}`);
+              const code = await runGate(host, gateCommand("close", true), address, log);
+              if (code !== 0) throw new Error("gate close (verifying) failed");
               const env = await hostEnv();
               const origin = env.MYKEY_BASE_URL;
               if (origin === undefined) throw new Error("host.env holds no MYKEY_BASE_URL");
@@ -3345,23 +3347,23 @@ async function runDeployCommand(
                     { mode: 0o600 },
                   );
                 }
-                writeFileSync(join(tmp, "journey.json"), JSON.stringify(journey.checks));
+                writeFileSync(files.journeyChecks, JSON.stringify(journey.checks), { mode: 0o600 });
               } finally {
                 await tunnel.close();
               }
               break;
             }
             case "report": {
-              const journeyFile = join(tmp, "journey.json");
+              const journeyFile = files.journeyChecks;
               const checks = existsSync(journeyFile)
                 ? (JSON.parse(readFileSync(journeyFile, "utf8")) as Record<
                     string,
                     { state: "ok" | "failed" | "unknown"; observed: string }
                   >)
                 : {};
-              const previous = (
-                JSON.parse(readFileSync(files.previousGate, "utf8")) as { text: string | null }
-              ).text;
+              // The record this opening replaces: the deploy's own closed one.
+              const current = await sshExec(host, `cat ${GATE_FILE}`, remote);
+              const previous = current.code === 0 ? current.stdout : null;
               const expect = await binding();
               const report = await withMaintenance((pool) =>
                 withAdmin((admin) =>
@@ -3404,6 +3406,7 @@ async function runDeployCommand(
               );
               if (!opened.ok) throw new Error(`gate open refused: ${opened.cause}`);
               log.info(`${host.name}: ${JSON.stringify(opened.record)}`);
+              rmSync(files.journeyChecks, { force: true });
               break;
             }
           }

@@ -39,7 +39,7 @@ const DEPLOY_STORE_CHECKS = [
   "control_row_idle",
 ] as const;
 
-/** Closed, or no record: the deploy's own gate_close is the first write. */
+/** The record the opening replaces, read when the report is made: closed (the deploy's own gate_close), or none. */
 export function previousGateClosed(text: string | null): CheckAnswer {
   if (text === null) return { state: "ok", observed: "no record before the deploy" };
   try {

@@ -87,7 +87,10 @@ export async function runDeploy(
         `deploy --resume: the stopped deploy is of release ${state.version}; give that release, or deploy this one without --resume`,
       );
     }
-    steps = steps.slice(steps.indexOf(state.done) + 1);
+    // By position in the whole order: a plan made after the stop may lack the step
+    // that was done (the host runs the release by then, so its plan has no migrate).
+    const after = DEPLOY_STEPS.indexOf(state.done);
+    steps = steps.filter((step) => DEPLOY_STEPS.indexOf(step) > after);
   }
   for (const step of steps) {
     await io.step(step);

@@ -71,6 +71,8 @@ The first deploy of a v2 release converts a host whose `host.env` has no incarna
 
 On a host with OpenBao, re-run `host.ts <host> ops provision-organization --organization <id>` after the deploy, so the organization's policies and its namespace's incarnation copy are current.
 
+**A release that changes a planned OpenBao object** (a policy, a role) leaves each organization's live object as it was: `provision-organization` then answers `review: <step> differs from the plan; nothing was overwritten`, and the sweep does the same. Reconcile as `provisioning.md` says: `ops verify-organization` names the object; compare the live one with the plan; write the planned one with the root token; run `provision-organization` again (→ `active`, `verify-organization` → `equal`). The run rotates every secret id. Releases from `host-v0.6.1` on read the new ones on their next call. With `host-v0.6.0` or older, the API keeps the destroyed runtime id, `/health` fails with `openbao_audit`, and after a few minutes OpenBao locks the runtime role id out for about 15 minutes. Staging met this in Run 6.9: Run 6.9's first deploy changed the provisioner policy (Run 6.7's read of `mykey-meta/data/incarnation`).
+
 ## Production
 
 Production has no OpenBao and no owner yet: `deploy --release <dir> --stay-closed` loads, migrates and starts, and leaves the gate closed. Every production deploy needs the owner's yes, asked before the command runs.

@@ -149,6 +149,25 @@ describe("runDeploy (P-128)", () => {
     expect(fake.state()).toBeNull();
   });
 
+  it("--resume after migrate continues from start though the host now runs the release (its plan has no migrate)", async () => {
+    const fake = fakeIo("journey");
+    await expect(runDeploy(fake.io, release("0.6.0", NEW), plan)).rejects.toThrow("journey failed");
+    expect(fake.state()).toMatchObject({ done: "start" });
+    // Replanned on the host as it is now: it runs the release's build already.
+    const replanned = deployPlan(
+      { build: NEW.slice(0, 12), lastMigration: "0018_incarnation" },
+      release("0.6.0", NEW),
+      { related: true },
+    );
+    if (!("steps" in replanned)) throw new Error("plan refused");
+    expect(replanned.steps).not.toContain("migrate");
+    await fake.io.state.write({ version: "0.6.0", commit: NEW, done: "migrate" });
+    fake.fail(null);
+    fake.ran.length = 0;
+    await runDeploy(fake.io, release("0.6.0", NEW), replanned, { resume: true });
+    expect(fake.ran).toEqual(["start", "journey", "report", "gate_open"]);
+  });
+
   it("--resume refuses a state of another release; a new deploy starts from step 1", async () => {
     const fake = fakeIo("start");
     await expect(runDeploy(fake.io, release("0.6.0", NEW), plan)).rejects.toThrow("start failed");

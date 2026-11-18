@@ -110,7 +110,6 @@ function localIo(target: Release, migrationsDir: string, reports: VerificationRe
   };
   const maintenance = createPool(db.targets.maintenance, { max: 2 });
   const admin = new OpenBaoAdmin(stack.bao, stack.bao.rootToken);
-  let previousGate: string | null = null;
   const io: DeployIo = {
     state: {
       read: () => Promise.resolve(state),
@@ -122,7 +121,6 @@ function localIo(target: Release, migrationsDir: string, reports: VerificationRe
     step: async (step) => {
       switch (step) {
         case "gate_close":
-          previousGate = await writer.read();
           await closeGate({
             writer,
             pool: maintenance,
@@ -138,7 +136,9 @@ function localIo(target: Release, migrationsDir: string, reports: VerificationRe
             await admin.writeIncarnation("", binding.backendIncarnation);
           }
           break;
-        case "report":
+        case "report": {
+          // The record this opening replaces: the deploy's own closed one.
+          const previousGate = await writer.read();
           reports.push(
             await deployVerify(
               {
@@ -161,6 +161,7 @@ function localIo(target: Release, migrationsDir: string, reports: VerificationRe
             ),
           );
           break;
+        }
         case "gate_open": {
           const opened = await openGate({
             writer,
@@ -239,7 +240,20 @@ describe("a deploy whose migration fails (P-128)", () => {
     expect(reports[1]!.checks.filter((c) => c.state !== "ok")).toEqual([]);
     await back.close();
 
-    // Three closes, two deploy reports, two opens: each in the audit table, global.
+    // A redeploy over the open gate: the record its opening replaces is its own closed one.
+    const again = localIo(PREVIOUS, MIGRATIONS, reports);
+    const againPlan = deployPlan(
+      { build: PREVIOUS.commit.slice(0, 12), lastMigration: "0018_incarnation" },
+      PREVIOUS,
+      { related: true },
+    );
+    if (!("steps" in againPlan)) throw new Error(againPlan.refused);
+    await runDeploy(again.io, PREVIOUS, againPlan);
+    expect(again.gate().admits).toBe("all");
+    expect(reports[2]!.checks.filter((c) => c.state !== "ok")).toEqual([]);
+    await again.close();
+
+    // Four closes, three deploy reports, three opens: each in the audit table, global.
     const audited = await db
       .pool("superuser")
       .query<{ action: string; n: string; orgs: string; details: Record<string, unknown> }>(
@@ -250,9 +264,9 @@ describe("a deploy whose migration fails (P-128)", () => {
           GROUP BY action ORDER BY action`,
       );
     expect(audited.rows.map((r) => [r.action, Number(r.n), Number(r.orgs)])).toEqual([
-      ["operator.deploy", 2, 0],
-      ["operator.gate_close", 3, 0],
-      ["operator.gate_open", 2, 0],
+      ["operator.deploy", 3, 0],
+      ["operator.gate_close", 4, 0],
+      ["operator.gate_open", 3, 0],
     ]);
     expect(audited.rows[0]?.details).toEqual({ build: PREVIOUS.commit.slice(0, 12) });
   }, 600_000);

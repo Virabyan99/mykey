@@ -81,11 +81,11 @@ if [ -n "${MYKEY_KMS_HOST:-}" ] && [ -e /etc/mykey/secrets/kms/seal.crt ] &&
 	fi
 fi
 
-# The service gate (Run 3.1, P-43): what the record says, not whether it is valid
+# The service gate (Run 3.1, P-43; v2 since Run 6.9): what the record says, not whether it is valid
 # for this host (the API decides that per request).
 gate=absent
 if [ -e /etc/mykey/gate/gate.json ]; then
-	gate=$(jq -r 'if (.state == "open" or .state == "closed") and .version == 1 then .state else "invalid" end' \
+	gate=$(jq -r 'if (.state == "open" or .state == "closed") and (.version == 1 or .version == 2) then .state else "invalid" end' \
 		/etc/mykey/gate/gate.json 2>/dev/null || echo invalid)
 fi
 

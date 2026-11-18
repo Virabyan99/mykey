@@ -24,6 +24,13 @@ describe("status.sh's checks (P-116)", () => {
     );
   });
 
+  // Run 6.9: staging reported "invalid" for its v2 record after the first deploy.
+  it("reads a gate record of version 1 or 2 as its state", () => {
+    expect(status).toContain(
+      `jq -r 'if (.state == "open" or .state == "closed") and (.version == 1 or .version == 2) then .state else "invalid" end'`,
+    );
+  });
+
   it("reads the firewall from nft, and the drill flag only reports it unloaded", () => {
     expect(status).toContain("nft list table inet mykey");
     expect(status).toContain('[ -e "$HOOKS/firewall-unloaded" ] && firewall_check=false');

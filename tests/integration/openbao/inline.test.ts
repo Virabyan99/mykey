@@ -5,11 +5,11 @@
 // a write whose cas equals a soft-deleted current version succeeds, and cas 0
 // fails for a path whose only version is deleted.
 import { randomUUID } from "node:crypto";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { runtimeBaoFromDirectory } from "@mykey/api";
+import { issuerBaoFromDirectory, runtimeBaoFromDirectory } from "@mykey/api";
 import type { OrganizationId } from "@mykey/contracts";
 import { OpenBaoClient, secretPath, type Correlation, type SecretEnvelope } from "@mykey/openbao";
 import { OpenBaoAdmin } from "@mykey/openbao/admin";
@@ -151,6 +151,65 @@ describe("runtimeBaoFromDirectory", () => {
       const path = freshPath();
       expect((await client!.kvWrite(path, envelope(randomUUID()), 0, correlation())).ok).toBe(true);
       expect(runtime.clientFor(randomUUID() as OrganizationId)).toBeNull();
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
+});
+
+// Run 6.9 (staging): provision-organization rotates every secret id — the new
+// one delivered first, then the others destroyed — so that a running process
+// always holds a working one. The API kept the first one it read, failed with
+// it after the rotation, and its failed logins locked the runtime role out.
+describe("a rotated secret id (Run 6.9)", () => {
+  /** As the host delivers: a new file renamed over the old one. */
+  function deliver(directory: string, name: string, value: string): void {
+    writeFileSync(join(directory, `.${name}.tmp`), value);
+    renameSync(join(directory, `.${name}.tmp`), join(directory, name));
+  }
+
+  /** As the reconcile does: a new secret id delivered, then every other destroyed. */
+  async function rotate(directory: string, identity: "runtime" | "issuer"): Promise<void> {
+    const fresh = await admin.newSecretId(org.namespace, identity);
+    deliver(directory, `${identity}-secret-id`, fresh.secretId);
+    for (const accessor of await admin.listSecretIdAccessors(org.namespace, identity)) {
+      if (accessor !== fresh.accessor) {
+        await admin.destroySecretIdAccessor(org.namespace, identity, accessor);
+      }
+    }
+  }
+
+  it("the next runtime call and the next issuer session use the delivered one, without a restart", async () => {
+    const directory = mkdtempSync(join(tmpdir(), "mykey-rotate-"));
+    try {
+      deliver(directory, "organization-id", org.organizationId);
+      for (const identity of ["runtime", "issuer"] as const) {
+        const credential = await org.credential(identity);
+        deliver(directory, `${identity}-role-id`, credential.roleId);
+        deliver(directory, `${identity}-secret-id`, credential.secretId);
+      }
+      const runtime = runtimeBaoFromDirectory(stack.bao, directory);
+      const issuer = issuerBaoFromDirectory(stack.bao, directory);
+      const path = freshPath();
+      expect(
+        (
+          await runtime
+            .clientFor(org.organizationId)!
+            .kvWrite(path, envelope(randomUUID()), 0, correlation())
+        ).ok,
+      ).toBe(true);
+      const first = await issuer.open(org.organizationId);
+      expect(first?.ok).toBe(true);
+      if (first?.ok === true) await first.data.close();
+
+      await rotate(directory, "runtime");
+      await rotate(directory, "issuer");
+
+      const read = await runtime.clientFor(org.organizationId)!.kvRead(path);
+      expect(read.ok, read.ok ? "" : `runtime after rotation: ${read.kind}`).toBe(true);
+      const second = await issuer.open(org.organizationId);
+      expect(second?.ok, "issuer after rotation").toBe(true);
+      if (second?.ok === true) await second.data.close();
     } finally {
       rmSync(directory, { recursive: true, force: true });
     }

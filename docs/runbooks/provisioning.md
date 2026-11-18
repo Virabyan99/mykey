@@ -30,7 +30,7 @@ The `secret-ids` step destroys every secret id of each AppRole and issues one; `
 - `/etc/mykey/secrets/api/runtime-role-id`, `runtime-secret-id`, `issuer-role-id`, `issuer-secret-id`, `organization-id` — for the API;
 - `/etc/mykey/secrets/provisioner/provisioner-role-id`, `provisioner-secret-id`, `organization-id` — for the provisioner.
 
-Each AppRole works only from its container's bao address (`runtime`, `issuer`: 10.78.3.3; `provisioner`: 10.78.3.4). Running the command again rotates every secret id; restart the API (`host.ts <host> up`) so it reads the new runtime id at start (the provisioner reads its files on every job). A host serves one organization in Stage 1.
+Each AppRole works only from its container's bao address (`runtime`, `issuer`: 10.78.3.3; `provisioner`: 10.78.3.4). Running the command again rotates every secret id: the new one is delivered before the old one is destroyed, and the API and the provisioner read their files again on their next call when a file has changed (the API since Run 6.9; before, it kept the destroyed id until a restart, and its failed logins locked the role out: OpenBao answers `permission denied` to every login of a locked role id for about 15 minutes, even with the right secret id). A host serves one organization in Stage 1.
 
 ## Environments (the provisioner)
 
