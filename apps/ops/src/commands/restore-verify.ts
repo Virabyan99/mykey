@@ -246,6 +246,14 @@ export function storeChecks(deps: VerifyDeps): Record<string, () => Promise<Chec
   };
 }
 
+/** Run 6.8: a check's `observed` within the report's 2000 characters, saying what was cut. */
+export function clipObserved(text: string): string {
+  const limit = 2000;
+  if (text.length <= limit) return text;
+  const keep = limit - 40;
+  return `${text.slice(0, keep)} … (+${String(text.length - keep)} characters)`;
+}
+
 export async function restoreVerify(
   deps: VerifyDeps,
   journey: JourneyResult | null,
@@ -267,10 +275,10 @@ export async function restoreVerify(
   for (const [id, answer] of Object.entries(deps.given)) answers[id] = answer;
   for (const [id, answer] of Object.entries(journey?.checks ?? {})) answers[id] = answer;
 
-  const checks: Check[] = REQUIRED_CHECKS.restore.map((id) => ({
-    id,
-    ...(answers[id] ?? { state: "unknown" as const, observed: "not performed" }),
-  }));
+  const checks: Check[] = REQUIRED_CHECKS.restore.map((id) => {
+    const answer = answers[id] ?? { state: "unknown" as const, observed: "not performed" };
+    return { id, state: answer.state, observed: clipObserved(answer.observed) };
+  });
   const report = verificationReportSchema.parse({
     format: "mykey-verification/1",
     host: deps.host,

@@ -30,6 +30,8 @@ import {
   runConfirm,
   runMaint,
   opsRootToken,
+  restoreOrganization,
+  restoreStartCommand,
 } from "../../../scripts/host.ts";
 import {
   setSshRunner,
@@ -209,6 +211,17 @@ describe("remote command construction", () => {
 // Run 6.8: after a restore's snapshot, the host's custody root token is gone
 // with the token store it lived in; until restore-verify --open revokes it,
 // the restore's own root token is the operator's one valid token.
+// Run 6.8: `compose start` reuses containers made before the restore wrote
+// the new incarnation and host instance id into host.env; they refused to start.
+describe("the restore's start of the executors", () => {
+  it("recreates api and provisioner from host.env, never starts the old containers", () => {
+    const command = restoreStartCommand();
+    expect(command).toContain("--env-file /etc/mykey/host.env");
+    expect(command).toMatch(/ up -d --force-recreate --no-deps api provisioner$/);
+    expect(command).not.toContain(" start ");
+  });
+});
+
 describe("the operator's OpenBao token for ops on a host", () => {
   it("is the restore's root token while a restore waits for its report, else the custody copy", () => {
     const home = mkdtempSync(join(tmpdir(), "mykey-ops-token-"));
@@ -435,6 +448,34 @@ describe("gate (Run 3.1, P-43)", () => {
     expect(() =>
       parseHostArgs(["staging", "restore", "--source", "elsewhere", "--newest"]),
     ).toThrow(/--source/);
+  });
+
+  // Run 6.8: a clean host has no organization file; the API serves the source's.
+  it("parses restore --organization <id>, and refuses one that is not an id", () => {
+    const org = "e2350312-420b-4fde-84c5-d582a008080b";
+    expect(
+      parseHostArgs(["drill", "restore", "--source", "staging", "--newest", "--organization", org]),
+    ).toEqual({
+      host: "drill",
+      via: "vpn",
+      command: "restore",
+      source: "staging",
+      pair: "newest",
+      organization: org,
+    });
+    expect(() =>
+      parseHostArgs(["drill", "restore", "--source", "staging", "--newest", "--organization", "x"]),
+    ).toThrow(/--organization/);
+  });
+
+  it("the organization the restored API serves: the host's file, or --organization on a clean host; never two", () => {
+    const a = "e2350312-420b-4fde-84c5-d582a008080b";
+    const b = "d0a3e52c-7e04-4b5e-94b3-c5693f5bc4eb";
+    expect(restoreOrganization(a, null)).toBe(a);
+    expect(restoreOrganization(a, a)).toBe(a);
+    expect(restoreOrganization(null, b)).toBe(b);
+    expect(() => restoreOrganization(a, b)).toThrow(/serves/);
+    expect(() => restoreOrganization(null, null)).toThrow(/--organization/);
   });
 
   it("parses restore-verify --confirm-members <n> with --journey or --owner-confirmed, and --open", () => {

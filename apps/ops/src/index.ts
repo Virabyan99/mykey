@@ -40,7 +40,7 @@ export {
   type JourneyResult,
   type VerifyDeps,
 } from "./commands/restore-verify.ts";
-export { RECHECKED, recheckForOpen } from "./commands/restore-verify.ts";
+export { RECHECKED, clipObserved, recheckForOpen } from "./commands/restore-verify.ts";
 export {
   RESTORE_STEPS,
   RestoreRefused,

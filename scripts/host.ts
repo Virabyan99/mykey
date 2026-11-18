@@ -167,7 +167,7 @@ export type HostCommand = { host: HostName; via: Address } & (
   | { command: "maint"; minutes: number; argv: string[] }
   | { command: "gate"; action: GateAction; report?: string; verifying?: true }
   | { command: "tunnel"; target: "verify" }
-  | { command: "restore"; source: HostName; pair: string }
+  | { command: "restore"; source: HostName; pair: string; organization?: string }
   | {
       command: "deploy";
       release: string;
@@ -227,9 +227,10 @@ function parseDeployArgs(host: HostName, rest: string[]): HostCommand {
   return { host, via: "vpn", command: "deploy", release, images, ...flags };
 }
 
-/** `restore --source <host> (--pair <id> | --newest)`: P-124 steps 1–7. */
+/** `restore --source <host> (--pair <id> | --newest) [--organization <id>]`: P-124 steps 1–7. */
 function parseRestoreArgs(host: HostName, rest: string[]): HostCommand {
   let source: HostName | null = null;
+  let organization: string | null = null;
   const pairs: string[] = [];
   for (let i = 0; i < rest.length; i += 1) {
     const word = rest[i];
@@ -239,6 +240,12 @@ function parseRestoreArgs(host: HostName, rest: string[]): HostCommand {
         throw new Error("restore --source needs staging or prod");
       }
       source = value;
+      i += 1;
+    } else if (word === "--organization") {
+      if (value === undefined || !PAIR_ID.test(value)) {
+        throw new Error("restore --organization needs an organization id");
+      }
+      organization = value;
       i += 1;
     } else if (word === "--newest") {
       pairs.push("newest");
@@ -256,7 +263,14 @@ function parseRestoreArgs(host: HostName, rest: string[]): HostCommand {
   if (pairs.length !== 1 || pair === undefined) {
     throw new Error("restore needs exactly one of --pair <id> or --newest");
   }
-  return { host, via: "vpn", command: "restore", source, pair };
+  return {
+    host,
+    via: "vpn",
+    command: "restore",
+    source,
+    pair,
+    ...(organization === null ? {} : { organization }),
+  };
 }
 
 /** `restore-verify --confirm-members <n> (--journey | --owner-confirmed) [--open]`: steps 8–9. */
@@ -944,6 +958,15 @@ export function resumeCommand(): string {
 }
 
 /**
+ * Run 6.8: the restore's step 7 starts the executors from the host.env it has
+ * just written (new incarnation, new host instance id). `start` would reuse
+ * containers made with the old values, which refuse to start.
+ */
+export function restoreStartCommand(): string {
+  return `${COMPOSE} up -d --force-recreate --no-deps api provisioner`;
+}
+
+/**
  * Switches the ACME directory. The edge and its certificate store go with it:
  * a certificate of the other directory must not be served or renewed. `up`
  * afterwards starts the edge, which asks the new directory once.
@@ -1101,6 +1124,24 @@ export function baoInitCommand(): string {
 /** The workstation's copy of a host's init answer (P-35). */
 export function custodyCopyPath(host: HostName, home: string = homedir()): string {
   return join(home, ".mykey", "custody", host, "openbao-init.json");
+}
+
+/**
+ * Run 6.8: the organization a restored host's API serves (its credentials are
+ * the ones the restore delivers): the host's own file, or on a clean host the
+ * one named with --organization. Two different ones are refused.
+ */
+export function restoreOrganization(onHost: string | null, named: string | null): string {
+  if (onHost !== null && named !== null && onHost !== named) {
+    throw new Error(`restore refused: this host serves ${onHost}, not ${named}`);
+  }
+  const chosen = onHost ?? named;
+  if (chosen === null) {
+    throw new Error(
+      "restore: a clean host serves no organization yet; name it with --organization <id>",
+    );
+  }
+  return chosen;
 }
 
 /**
@@ -2688,7 +2729,7 @@ async function localCaCert(host: HostEntry, address: Address, dir: string): Prom
  */
 async function runRestore(
   host: HostEntry,
-  command: { source: HostName; pair: string },
+  command: { source: HostName; pair: string; organization?: string },
   address: Address,
   log: Logger,
 ): Promise<number> {
@@ -2725,8 +2766,10 @@ async function runRestore(
     `if test -s ${credentialFiles("runtime").organizationId}; then cat ${credentialFiles("runtime").organizationId}; fi`,
     { sudo: true, address, secretOutput: true },
   );
-  const organizationId =
-    organizationFile.stdout.trim() === "" ? null : organizationFile.stdout.trim();
+  const organizationId = restoreOrganization(
+    organizationFile.stdout.trim() === "" ? null : organizationFile.stdout.trim(),
+    command.organization ?? null,
+  );
   const dir = mkdtempSync(join(tmpdir(), "mykey-restore-"));
   const restoreStartedAt = new Date();
   const files = restoreHandoffFiles(host.name);
@@ -2754,17 +2797,14 @@ async function runRestore(
         registerSecret(password.trim());
         return password;
       })(),
+      // Run 6.8: the host's own root token; after a first restore's snapshot
+      // that is the restore's own (a second run of the same pair).
       targetRootToken: ((): string => {
-        // This host's own OpenBao (bao-init); a restore onto the source host itself
-        // (staging over staging) has the pair's token as its own.
-        const own = custodyCopyPath(host.name);
-        const token = existsSync(own)
-          ? (JSON.parse(readFileSync(own, "utf8")) as { root_token?: unknown }).root_token
-          : pairRootToken;
-        if (typeof token !== "string" || token === "")
-          throw new Error(`${own} holds no root token`);
-        registerSecret(token);
-        return token;
+        const chosen = opsRootToken(host.name);
+        if (chosen === null)
+          throw new Error(`${host.name}: no root token (bao-init's custody copy)`);
+        registerSecret(chosen.token);
+        return chosen.token;
       })(),
       kmsKeyUsable: async (keyId) => {
         try {
@@ -2804,7 +2844,10 @@ async function runRestore(
         );
       },
       startExecutors: async () => {
-        expectSuccess(await sshExec(host, resumeCommand(), { sudo: true, address }), "resume");
+        expectSuccess(
+          await sshExec(host, restoreStartCommand(), { sudo: true, address, timeoutMs: 300_000 }),
+          "starting api and provisioner from host.env",
+        );
         return expectSuccess(
           await sshExec(host, apiBuildCommand(), { sudo: true, address }),
           "reading the API's build",
@@ -3627,9 +3670,7 @@ async function hostRestoreJourney(
         body: { name: "restore-journey" },
       },
     });
-    log.info(
-      `${host.name}: journey ${JSON.stringify(Object.fromEntries(Object.entries(journey.checks).map(([k, v]) => [k, v.state])))}`,
-    );
+    log.info(`${host.name}: journey ${JSON.stringify(journey.checks)}`);
     return journey.checks;
   } finally {
     await tunnel.close();

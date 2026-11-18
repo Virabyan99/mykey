@@ -32,6 +32,7 @@ A restore **never opens anything by itself**. It ends closed + `verifying`: the 
 ```sh
 MSYS_NO_PATHCONV=1 node scripts/host.ts <host> restore --source <staging|prod> --newest
 MSYS_NO_PATHCONV=1 node scripts/host.ts <host> restore --source <staging|prod> --pair <pair id>
+MSYS_NO_PATHCONV=1 node scripts/host.ts <host> restore --source <staging|prod> --newest --organization <id>   # a clean host: the organization its API serves
 ```
 
 | Step | What happens                                                                                                                                                             | What it prints / where to look                                         |

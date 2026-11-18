@@ -102,9 +102,13 @@ export async function verifyJourney(
             );
     }
   } catch (error) {
+    // Run 6.8: the message too (a transport or parse error; never a value).
     checks.journey_owner_enrolled = {
       state: "unknown",
-      observed: error instanceof Error ? error.constructor.name : "error",
+      observed:
+        error instanceof Error
+          ? `${error.constructor.name}: ${error.message}`.slice(0, 300)
+          : "error",
     };
   }
   if (cookie === null) return { checks, cookie };

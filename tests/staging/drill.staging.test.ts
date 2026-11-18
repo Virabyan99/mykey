@@ -398,9 +398,12 @@ describe("the clean-host restore drill (P-125)", () => {
       await step(
         "C2-restore",
         async (state) => {
-          const output = await hostTsOk(["drill", "restore", "--source", "staging", "--newest"], {
-            timeoutMs: 2 * HOUR,
-          });
+          const output = await hostTsOk(
+            ["drill", "restore", "--source", "staging", "--newest", "--organization", ORG],
+            {
+              timeoutMs: 2 * HOUR,
+            },
+          );
           expect(output).toContain(
             `pair ${data(state, "pairId") as string} restored; closed + verifying`,
           );
@@ -423,6 +426,28 @@ describe("the clean-host restore drill (P-125)", () => {
         "C3-owner",
         async (state) => {
           await hostTsOk(["drill", "ops", "verify-organization", "--organization", ORG]);
+          // Pair P holds Session 2's spike organizations: no member, no namespace
+          // left in OpenBao. They are marked for review (the backend is missing),
+          // as the product's own reconcile would; the report checks active ones.
+          const marked = await hostSql(
+            drillHost(),
+            `WITH orgs AS (
+               UPDATE app.organization o SET state = 'needs_review', review_reason = 'namespace_missing'
+                WHERE o.state = 'active' AND o.id <> '${ORG}'
+                  AND NOT EXISTS (SELECT 1 FROM app.membership m WHERE m.organization_id = o.id)
+               RETURNING o.id),
+             envs AS (
+               UPDATE app.environment e SET state = 'needs_review', review_reason = 'namespace_missing'
+                WHERE e.state = 'active' AND e.organization_id IN (SELECT id FROM orgs)
+               RETURNING e.id)
+             SELECT (SELECT count(*) FROM orgs), (SELECT count(*) FROM envs)`,
+          );
+          const [orgs = "0", envsMarked = "0"] = (marked[0] ?? "").split("|");
+          state.data.markedForReview = {
+            organizations: Number(orgs),
+            environments: Number(envsMarked),
+          };
+          writeState(state);
           // restore.md: every environment (staging holds 110 active ones); every exit kept.
           const envs = await hostSql(
             drillHost(),
@@ -471,6 +496,16 @@ describe("the clean-host restore drill (P-125)", () => {
       await step(
         "C4-report",
         async (state) => {
+          // A journey uses its reset link up: each attempt gets its own.
+          await hostTsOk([
+            "drill",
+            "ops",
+            "reset-account",
+            "--email",
+            STAGING_OWNER_EMAIL,
+            "--kind",
+            "mfa",
+          ]);
           const [members = "0"] = await hostSql(drillHost(), "SELECT count(*) FROM app.membership");
           state.data.members = Number(members);
           await hostTsOk(["drill", "restore-verify", "--confirm-members", members, "--journey"]);
