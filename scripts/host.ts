@@ -22,6 +22,7 @@ import {
   readdirSync,
   readFileSync,
   rmSync,
+  statSync,
   writeFileSync,
 } from "node:fs";
 import { spawnSync } from "node:child_process";
@@ -1100,6 +1101,26 @@ export function baoInitCommand(): string {
 /** The workstation's copy of a host's init answer (P-35). */
 export function custodyCopyPath(host: HostName, home: string = homedir()): string {
   return join(home, ".mykey", "custody", host, "openbao-init.json");
+}
+
+/**
+ * The OpenBao token `ops` uses on a host (Run 6.8). While a restore waits for
+ * its report, the restore's own root token: the snapshot replaced the token
+ * store the custody copy's token lived in. Otherwise the custody copy.
+ */
+export function opsRootToken(
+  host: HostName,
+  home: string = homedir(),
+): { token: string; from: "restore" | "custody" } | null {
+  const restoreToken = join(home, ".mykey", "secrets", "hosts", host, "restore-root-token");
+  if (existsSync(restoreToken)) {
+    const token = readFileSync(restoreToken, "utf8").trim();
+    if (token !== "") return { token, from: "restore" };
+  }
+  const custody = custodyCopyPath(host, home);
+  if (!existsSync(custody)) return null;
+  const token = (JSON.parse(readFileSync(custody, "utf8")) as { root_token?: unknown }).root_token;
+  return typeof token === "string" && token !== "" ? { token, from: "custody" } : null;
 }
 
 /** okms with one certificate, through infra/hosts/kms/okms.sh (prints identifiers, not secrets). */
@@ -2388,18 +2409,14 @@ async function runOpsOnHost(host: HostEntry, argv: string[], address: Address): 
         .stdout,
     );
     let openBao: { target: { url: string; caCertPath: string }; rootToken: string } | undefined;
-    const custody = custodyCopyPath(host.name);
-    if (env.MYKEY_OPENBAO === "1" && existsSync(custody)) {
-      const token = (JSON.parse(readFileSync(custody, "utf8")) as { root_token?: unknown })
-        .root_token;
-      if (typeof token === "string" && token !== "") {
-        registerSecret(token);
-        baoTunnel = await openTunnel(host, REMOTE.openbao);
-        openBao = {
-          target: { url: `https://127.0.0.1:${String(baoTunnel.localPort)}`, caCertPath },
-          rootToken: token,
-        };
-      }
+    const chosen = env.MYKEY_OPENBAO === "1" ? opsRootToken(host.name) : null;
+    if (chosen !== null) {
+      registerSecret(chosen.token);
+      baoTunnel = await openTunnel(host, REMOTE.openbao);
+      openBao = {
+        target: { url: `https://127.0.0.1:${String(baoTunnel.localPort)}`, caCertPath },
+        rootToken: chosen.token,
+      };
     }
     const flagAt = argv.indexOf("--organization");
     const organizationId = flagAt === -1 ? undefined : argv[flagAt + 1];
@@ -2623,6 +2640,8 @@ export function restoreHandoffFiles(
 
 interface RestoreHandoff {
   pairId: string;
+  /** Run 6.8: the host the pair came from (its deploy-journey.json names a secret to reveal). */
+  source?: HostName;
   restoreStartedAt: string;
   backendIncarnation: string;
   hostInstanceId: string;
@@ -2727,6 +2746,18 @@ async function runRestore(
       caCertPath: await localCaCert(host, address, dir),
       superuserPassword,
       pairRootToken,
+      targetRootToken: ((): string => {
+        // This host's own OpenBao (bao-init); a restore onto the source host itself
+        // (staging over staging) has the pair's token as its own.
+        const own = custodyCopyPath(host.name);
+        const token = existsSync(own)
+          ? (JSON.parse(readFileSync(own, "utf8")) as { root_token?: unknown }).root_token
+          : pairRootToken;
+        if (typeof token !== "string" || token === "")
+          throw new Error(`${own} holds no root token`);
+        registerSecret(token);
+        return token;
+      })(),
       kmsKeyUsable: async (keyId) => {
         try {
           const answer = await sshExec(host, kmsKeyStateCommand("seal", keyId), {
@@ -2803,6 +2834,7 @@ async function runRestore(
       })();
       const handoff: RestoreHandoff = {
         pairId: restored.manifest.pairId,
+        source: command.source,
         restoreStartedAt: restoreStartedAt.toISOString(),
         backendIncarnation: restored.backendIncarnation,
         hostInstanceId: restored.hostInstanceId,
@@ -2857,12 +2889,6 @@ async function runRestoreVerify(
   address: Address,
   log: Logger,
 ): Promise<number> {
-  if (command.journey === "run") {
-    // Ruling (Run 6.7): the journey against a host's listener is built with the drill (Run 6.8).
-    throw new Error(
-      "restore-verify --journey on a host arrives with the drill (Run 6.8); use --owner-confirmed",
-    );
-  }
   const files = restoreHandoffFiles(host.name);
   if (!existsSync(files.state) || !existsSync(files.token)) {
     throw new Error(`restore-verify: no restore of ${host.name} to verify (${files.state})`);
@@ -2917,11 +2943,14 @@ async function runRestoreVerify(
       };
       const confirmed = { state: "ok" as const, observed: "owner confirmed (--owner-confirmed)" };
       const report = await restoreVerify(deps, {
-        checks: {
-          journey_owner_enrolled: confirmed,
-          journey_reveal_digest: confirmed,
-          journey_mutation_refused: confirmed,
-        },
+        checks:
+          command.journey === "run"
+            ? await hostRestoreJourney(host, handoff, pool, caCertPath, log)
+            : {
+                journey_owner_enrolled: confirmed,
+                journey_reveal_digest: confirmed,
+                journey_mutation_refused: confirmed,
+              },
       });
       writeFileSync(files.report, JSON.stringify(report, null, 2));
       const failed = report.checks.filter((c) => c.state !== "ok");
@@ -3102,11 +3131,17 @@ async function runDeployCommand(
   const runningBuild = async () => (await sshExec(host, apiBuildCommand(), remote)).stdout.trim();
   const tmp = mkdtempSync(join(tmpdir(), "mykey-deploy-"));
   const caCertPath = join(tmp, "ca.crt");
-  writeFileSync(
-    caCertPath,
-    expectSuccess(await sshExec(host, `cat ${REMOTE.caCert}`, { address }), "reading the CA")
-      .stdout,
-  );
+  // Read when a step first needs it: a fresh host has no CA until its first `up`.
+  const ensureCa = async (): Promise<string> => {
+    if (!existsSync(caCertPath)) {
+      writeFileSync(
+        caCertPath,
+        expectSuccess(await sshExec(host, `cat ${REMOTE.caCert}`, { address }), "reading the CA")
+          .stdout,
+      );
+    }
+    return caCertPath;
+  };
   const withMaintenance = async <T>(work: (pool: ReturnType<typeof createPool>) => Promise<T>) => {
     const tunnel = await openTunnel(host, REMOTE.postgres);
     const pool = createPool(
@@ -3116,7 +3151,7 @@ async function runDeployCommand(
         database: "postgres",
         user: "maintenance",
         password: localSecret(workstationRoleSecretFile(host.name, "maintenance")),
-        caCertPath,
+        caCertPath: await ensureCa(),
       },
       { max: 2 },
     );
@@ -3138,7 +3173,7 @@ async function runDeployCommand(
     try {
       return await work(
         new OpenBaoAdmin(
-          { url: `https://127.0.0.1:${String(tunnel.localPort)}`, caCertPath },
+          { url: `https://127.0.0.1:${String(tunnel.localPort)}`, caCertPath: await ensureCa() },
           token,
         ),
       );
@@ -3163,17 +3198,23 @@ async function runDeployCommand(
   });
 
   try {
+    const build0 = await runningBuild();
     const current = {
-      build: await runningBuild(),
-      lastMigration: await withMaintenance(async (pool) =>
-        (
-          (
-            await pool.query<{ name: string }>(
-              "SELECT name FROM meta.schema_migration ORDER BY name DESC LIMIT 1",
-            )
-          ).rows[0]?.name ?? ""
-        ).replace(/\.sql$/, ""),
-      ),
+      build: build0,
+      // A host with no API container is fresh (the drill host before its restore,
+      // Run 6.8): no database to read yet, and no migration applied.
+      lastMigration:
+        build0 === ""
+          ? ""
+          : await withMaintenance(async (pool) =>
+              (
+                (
+                  await pool.query<{ name: string }>(
+                    "SELECT name FROM meta.schema_migration ORDER BY name DESC LIMIT 1",
+                  )
+                ).rows[0]?.name ?? ""
+              ).replace(/\.sql$/, ""),
+            ),
     };
     const related =
       current.build === "" ||
@@ -3319,7 +3360,7 @@ async function runDeployCommand(
               const seed = readFileSync(join(ownerDir, "owner-totp-seed"), "utf8").trim();
               registerSecret(password);
               registerSecret(seed);
-              const ca = readFileSync(caCertPath, "utf8");
+              const ca = readFileSync(await ensureCa(), "utf8");
               const tunnel = await openTunnel(host, REMOTE_API_VERIFY);
               try {
                 const request = (
@@ -3487,6 +3528,103 @@ async function firstSecret(
     throw new Error("journey: the owner can list no secret to reveal");
   } finally {
     await request("POST", "/v1/auth/sign-out", { body: {}, cookie });
+  }
+}
+
+/**
+ * Run 6.8 (P-124): `restore-verify --journey` — the operator runs the owner's
+ * return through the verification listener, as restore.md's "Between 7 and 8":
+ * the newest reset link issued since the restore began (`ops reset-account
+ * --kind mfa`, ~/.mykey/out), a new password and authenticator, sign-in,
+ * the reveal of the secret the source's deploy journey recorded (its digest
+ * must be the same), a write that must answer quarantined, sign-out. The new
+ * password and TOTP seed go to this host's custody.
+ */
+async function hostRestoreJourney(
+  host: HostEntry,
+  handoff: RestoreHandoff,
+  pool: { query: (sql: string) => Promise<{ rows: unknown[] }> },
+  caCertPath: string,
+  log: Logger,
+): Promise<Record<string, { state: "ok" | "failed" | "unknown"; observed: string }>> {
+  const { verifyJourney } = await import("@mykey/ops");
+  const { codeAt, stepAt } = await import("@mykey/auth");
+  if (handoff.source === undefined)
+    throw new Error("restore-verify --journey: the hand-off names no source");
+  const sourceJourney = deployFiles(handoff.source).journey;
+  if (!existsSync(sourceJourney)) throw new Error(`restore-verify --journey: no ${sourceJourney}`);
+  const target = JSON.parse(readFileSync(sourceJourney, "utf8")) as {
+    path: string;
+    sha256: string;
+    organizationId: string;
+  };
+  const outDir = join(homedir(), ".mykey", "out");
+  const links = (existsSync(outDir) ? readdirSync(outDir) : [])
+    .filter((name) => name.endsWith("-reset-link"))
+    .map((name) => join(outDir, name))
+    .filter((file) => statSync(file).mtimeMs >= Date.parse(handoff.restoreStartedAt))
+    .sort();
+  const newest = links.at(-1);
+  if (newest === undefined) {
+    throw new Error(
+      "restore-verify --journey: no reset link since the restore began (ops reset-account --kind mfa)",
+    );
+  }
+  const resetToken = /#t=([^&\s]+)/.exec(readFileSync(newest, "utf8"))?.[1];
+  if (resetToken === undefined)
+    throw new Error(`restore-verify --journey: ${newest} holds no token`);
+  registerSecret(resetToken);
+  const ownerRow = (
+    await pool.query(
+      `SELECT u.email FROM app.membership m JOIN auth."user" u ON u.id = m.user_id
+        WHERE m.role = 'owner' AND m.state = 'active' AND m.organization_id = '${target.organizationId.replace(/[^0-9a-f-]/g, "")}'`,
+    )
+  ).rows[0] as { email?: string } | undefined;
+  if (ownerRow?.email === undefined)
+    throw new Error("restore-verify --journey: no active owner in the restored data");
+  const env = parseHostEnv(
+    expectSuccess(await sshExec(host, `cat ${REMOTE.hostEnv}`), "reading host.env").stdout,
+  );
+  const origin = env.MYKEY_BASE_URL;
+  if (origin === undefined) throw new Error("host.env holds no MYKEY_BASE_URL");
+  const { randomBytes } = await import("node:crypto");
+  const newPassword = `Restored-${randomBytes(18).toString("base64url")}`;
+  registerSecret(newPassword);
+  const ca = readFileSync(caCertPath, "utf8");
+  const custody = join(homedir(), ".mykey", "secrets", "hosts", host.name);
+  mkdirSync(custody, { recursive: true, mode: 0o700 });
+  const tunnel = await openTunnel(host, REMOTE_API_VERIFY);
+  try {
+    let lastStep = 0;
+    const journey = await verifyJourney({
+      request: (method, path, init) => apiThrough(tunnel.localPort, ca, origin, method, path, init),
+      cookieOf: sessionPairOf,
+      owner: { email: ownerRow.email, resetToken, newPassword },
+      totp: async (secret) => {
+        registerSecret(secret);
+        // Each step verifies once: wait for a step not used yet.
+        while (stepAt(new Date()) <= lastStep) await new Promise((r) => setTimeout(r, 1_000));
+        lastStep = stepAt(new Date());
+        writeFileSync(join(custody, "owner-password"), `${newPassword}\n`, { mode: 0o600 });
+        writeFileSync(join(custody, "owner-totp-seed"), `${secret}\n`, { mode: 0o600 });
+        writeFileSync(join(custody, "owner-totp-last-step"), `${String(lastStep)}\n`, {
+          mode: 0o600,
+        });
+        return { code: codeAt(base32Bytes(secret), lastStep) };
+      },
+      reveal: { path: target.path, sha256: target.sha256 },
+      mutation: {
+        method: "POST",
+        path: `/v1/organizations/${target.organizationId}/projects`,
+        body: { name: "restore-journey" },
+      },
+    });
+    log.info(
+      `${host.name}: journey ${JSON.stringify(Object.fromEntries(Object.entries(journey.checks).map(([k, v]) => [k, v.state])))}`,
+    );
+    return journey.checks;
+  } finally {
+    await tunnel.close();
   }
 }
 

@@ -35,8 +35,14 @@ export interface HostIo {
   /** A local copy of the host's CA certificate. */
   caCertPath: string;
   superuserPassword: string;
-  /** The lost host's root token (its custody copy). */
+  /** The lost host's root token (its custody copy): valid in OpenBao once the snapshot is in. */
   pairRootToken: string;
+  /**
+   * Run 6.8: this host's own OpenBao root token (its custody copy, from its
+   * bao-init). A clean host's OpenBao knows only that one, so it is the token
+   * `snapshot-force` is sent with; the drill found the pair's token refused.
+   */
+  targetRootToken: string;
   kmsKeyUsable(keyId: string): Promise<boolean>;
   /** Stores a role's new password where db-init and the services read it. */
   keepPassword(role: RoleName, password: string): Promise<void>;
@@ -211,7 +217,7 @@ export async function hostRestoreTarget(
         caCertPath: io.caCertPath,
       },
       async restoreSnapshot() {
-        await header(io.pairRootToken);
+        await header(io.targetRootToken);
         await ok(stepsOf().baoRestore, "the OpenBao snapshot", {
           secretOutput: true,
           timeoutMs: 900_000,

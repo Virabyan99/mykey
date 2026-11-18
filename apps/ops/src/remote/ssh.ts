@@ -94,6 +94,12 @@ export function sshArgs(
     forward?: string;
   },
 ): string[] {
+  // Run 6.8 (P-125): a host declared lost is fenced for the drill; every
+  // connection to it is refused, in this process and in every child it starts.
+  const fenced = (process.env.MYKEY_FENCED_HOSTS ?? "").split(",").map((name) => name.trim());
+  if (fenced.includes(host.name)) {
+    throw new SshError("refused", `refused: ${host.name} is fenced (MYKEY_FENCED_HOSTS)`);
+  }
   const paths = opts.paths ?? sshPaths();
   const args = [
     "-i",

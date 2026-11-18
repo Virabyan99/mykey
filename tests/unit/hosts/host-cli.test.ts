@@ -1,6 +1,9 @@
 // The pure parts of scripts/host.ts: argument parsing, remote command
 // construction and the rule that a pending revert is cancelled only from a
 // connection opened after the apply. No network: ssh is an injected runner.
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import {
   CONFIRM_PROBE,
@@ -26,6 +29,7 @@ import {
   resumeCommand,
   runConfirm,
   runMaint,
+  opsRootToken,
 } from "../../../scripts/host.ts";
 import {
   setSshRunner,
@@ -199,6 +203,56 @@ describe("remote command construction", () => {
     expect(joined).toContain("WG_ADDRESS=10.77.2.1/24");
     expect(joined).toContain("WG_PEER_ADDRESS=10.77.2.10/32");
     expect(joined).toContain("WG_PEER_PUBLIC_KEY='WORKSTATIONPUBLICKEY='");
+  });
+});
+
+// Run 6.8: after a restore's snapshot, the host's custody root token is gone
+// with the token store it lived in; until restore-verify --open revokes it,
+// the restore's own root token is the operator's one valid token.
+describe("the operator's OpenBao token for ops on a host", () => {
+  it("is the restore's root token while a restore waits for its report, else the custody copy", () => {
+    const home = mkdtempSync(join(tmpdir(), "mykey-ops-token-"));
+    try {
+      expect(opsRootToken("drill", home)).toBeNull();
+      mkdirSync(join(home, ".mykey", "custody", "drill"), { recursive: true });
+      writeFileSync(
+        join(home, ".mykey", "custody", "drill", "openbao-init.json"),
+        JSON.stringify({ root_token: "custody-token" }),
+      );
+      expect(opsRootToken("drill", home)).toEqual({ token: "custody-token", from: "custody" });
+      mkdirSync(join(home, ".mykey", "secrets", "hosts", "drill"), { recursive: true });
+      writeFileSync(
+        join(home, ".mykey", "secrets", "hosts", "drill", "restore-root-token"),
+        "restore-token\n",
+      );
+      expect(opsRootToken("drill", home)).toEqual({ token: "restore-token", from: "restore" });
+      expect(opsRootToken("staging", home)).toBeNull();
+    } finally {
+      rmSync(home, { recursive: true, force: true });
+    }
+  });
+});
+
+// Run 6.8 (P-125): from "declared lost" until the drill host opens, staging is
+// unreachable on purpose: MYKEY_FENCED_HOSTS reaches host.ts's child processes too.
+describe("a fenced host", () => {
+  it("refuses every connection, command or tunnel, to a host MYKEY_FENCED_HOSTS names", () => {
+    const before = process.env.MYKEY_FENCED_HOSTS;
+    process.env.MYKEY_FENCED_HOSTS = "staging";
+    try {
+      expect(() => sshArgs(hosts.staging, "true", { address: "vpn" })).toThrow(/fenced/);
+      expect(() =>
+        sshArgs(hosts.staging, undefined, {
+          address: "vpn",
+          forward: "127.0.0.1:1:10.78.2.2:5432",
+        }),
+      ).toThrow(/fenced/);
+      expect(sshArgs(hosts.prod, "true", { address: "vpn" })).toContain("ControlMaster=no");
+    } finally {
+      if (before === undefined) delete process.env.MYKEY_FENCED_HOSTS;
+      else process.env.MYKEY_FENCED_HOSTS = before;
+    }
+    expect(sshArgs(hosts.staging, "true", { address: "vpn" })).toContain("ControlMaster=no");
   });
 });
 

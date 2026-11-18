@@ -32,6 +32,7 @@ function fakeIo(gate: string | null): { io: HostIo; ran: { command: string; stdi
     caCertPath: "ca.crt",
     superuserPassword: "unused",
     pairRootToken: "unused",
+    targetRootToken: "unused",
     kmsKeyUsable: () => Promise.resolve(true),
     keepPassword: () => Promise.resolve(),
     setHostEnv: () => Promise.resolve(),
