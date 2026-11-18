@@ -127,7 +127,16 @@ export const TABLES: Record<string, Expected> = {
   "app.service_control": {
     api: [S],
     provisioner: [S],
-    apiNoColumns: ["capture_mode", "epoch", "owner", "pair_id"],
+    // Run 6.7 (migration 0018): the incarnation is written by maintenance only
+    // (db-init, a restore); a new column gets no column grant for the API.
+    apiNoColumns: [
+      "capture_mode",
+      "epoch",
+      "owner",
+      "pair_id",
+      "backend_incarnation",
+      "restored_from_pair",
+    ],
   },
   "app.backup_pair": {
     api: [S],

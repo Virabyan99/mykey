@@ -19,6 +19,17 @@ function resticImage(): string {
   return `${pin.image}@${pin.digest}`;
 }
 
+/**
+ * On Linux, the containers run as the calling user: a bind mount keeps real
+ * ownership there, and files Restic or tar wrote as root could not be changed
+ * or removed by the test afterwards (CI, Session 6 gate: EACCES). Docker
+ * Desktop on Windows maps ownership away, so nothing is added there.
+ */
+function asCaller(): string[] {
+  if (process.platform !== "linux") return [];
+  return ["--user", `${String(process.getuid?.() ?? 0)}:${String(process.getgid?.() ?? 0)}`];
+}
+
 /** Runs restic; resolves with its exit code and output (never throws on a non-zero exit). */
 export async function restic(
   paths: { repo: string; password: string; artifacts?: string; out?: string },
@@ -33,6 +44,7 @@ export async function restic(
     },
     args,
   );
+  argv.splice(1, 0, ...asCaller());
   try {
     const { stdout, stderr } = await run("docker", argv, { maxBuffer: 64 * 1024 * 1024 });
     return { code: 0, output: `${stdout}${stderr}` };
@@ -50,6 +62,7 @@ export async function tarIn(directory: string, args: readonly string[]): Promise
   await run("docker", [
     "run",
     "--rm",
+    ...asCaller(),
     "--network",
     "none",
     "-v",

@@ -196,6 +196,21 @@ describe("the whole restore, locally (P-124)", () => {
     expect(
       (await baoFetch(bao, "/v1/auth/token/lookup-self", { token: world.old.rootToken })).status,
     ).toBe(403);
+    // The refusals above spent four of this source's five password attempts a
+    // minute (the throttle's fixed 60 s windows, P-48), and the journey after
+    // them needs three more. Whether that passed depended on where the minute's
+    // boundary fell (it failed on CI at the Session 6 gate). The owner's real
+    // journey comes from another source; give this one its budget back.
+    const admin = new pg.Client({
+      ...target.postgres.superuser,
+      ssl: { ca: readFileSync(target.postgres.superuser.caCertPath, "utf8") },
+    });
+    await admin.connect();
+    try {
+      await admin.query("DELETE FROM app.rate_limit WHERE scope LIKE 'src:%'");
+    } finally {
+      await admin.end();
+    }
   });
 
   it("the operator's reset link works, the owner enrols through the listener; the report needs the members confirmed", async () => {
