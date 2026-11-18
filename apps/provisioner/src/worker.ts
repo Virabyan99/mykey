@@ -57,10 +57,22 @@ export async function startProvisioner(
   };
   // Run 6.7 (P-122): the record must admit all, and OpenBao (the organization
   // namespace's copy) must name this incarnation; read again after 5 s.
-  let baoIncarnation: { value: string | null; at: number } = { value: null, at: -Infinity };
-  const readBaoIncarnation = async (): Promise<string | null> => {
-    if (Date.now() - baoIncarnation.at < 5_000) return baoIncarnation.value;
+  // A refused login (Session 6 gate): the provisioner's own secret id is bad or
+  // destroyed. It can change nothing, so the job runs and fails into review
+  // (provisioning_failed) instead of waiting for ever on a read it cannot make.
+  interface BaoReading {
+    value: string | null;
+    loginRefused: boolean;
+  }
+  let baoIncarnation: BaoReading & { at: number } = {
+    value: null,
+    loginRefused: false,
+    at: -Infinity,
+  };
+  const readBaoIncarnation = async (): Promise<BaoReading> => {
+    if (Date.now() - baoIncarnation.at < 5_000) return baoIncarnation;
     let value: string | null = null;
+    let loginRefused = false;
     const organizationId = readCredential(config.secretsDirectory)?.organizationId;
     const client =
       organizationId === undefined ? null : await clientFor(organizationId as OrganizationId);
@@ -68,12 +80,13 @@ export async function startProvisioner(
       try {
         const answer = await client.readIncarnation();
         value = answer.ok ? answer.value : null;
+        if (!answer.ok && answer.cause === "denied") loginRefused = await client.loginRefused();
       } finally {
         await client.close();
       }
     }
-    baoIncarnation = { value, at: Date.now() };
-    return value;
+    baoIncarnation = { value, loginRefused, at: Date.now() };
+    return baoIncarnation;
   };
   const expect = {
     hostInstanceId: config.hostInstanceId,
@@ -84,7 +97,8 @@ export async function startProvisioner(
     const reading = readGate(config.gatePath, expect);
     if (reading.admits !== "all") return "gate_closed";
     const found = await readBaoIncarnation().catch(() => null);
-    return found === config.backendIncarnation ? null : "incarnation";
+    if (found?.value === config.backendIncarnation) return null;
+    return found?.loginRefused === true ? null : "incarnation";
   };
   const sender = await createSender(pool);
   // P-118: no job and no sweep while a pair is captured.

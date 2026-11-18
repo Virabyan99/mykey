@@ -189,6 +189,17 @@ export class ProvisionerClient {
     return { ok: true, value: typeof value === "string" ? value : null };
   }
 
+  /**
+   * True only when OpenBao refused this client's AppRole login (a bad or
+   * destroyed secret id). Such a client can change nothing, so a job may run
+   * and fail into review (Session 6 gate) instead of waiting on a gate check
+   * that can never read the incarnation.
+   */
+  async loginRefused(): Promise<boolean> {
+    const login = await this.#login();
+    return !login.ok && login.cause === "denied";
+  }
+
   /** Revokes the client's own token, if it logged in. */
   async close(): Promise<void> {
     if (this.#token === null) return;
