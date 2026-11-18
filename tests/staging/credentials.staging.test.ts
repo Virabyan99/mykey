@@ -251,10 +251,7 @@ describe("machine credentials on staging", () => {
         await nextMinute();
         ({ cookie } = await stagingOwnerSession());
         const answers: Record<string, number> = {};
-        const pausing = pauseOpenBao(true).then(() => {
-          paused = true;
-          return now();
-        });
+        const pausing = pauseOpenBao(true).then(() => now());
         const shots = [0, 1, 2, 3, 4].map(async (i) => {
           await sleep(i * 250);
           const environment = environments[i % environments.length]!;
@@ -268,6 +265,7 @@ describe("machine credentials on staging", () => {
           }
         });
         const pausedAt = await pausing;
+        paused = true;
         await sleep(8000);
         await pauseOpenBao(false);
         paused = false;
