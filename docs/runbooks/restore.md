@@ -22,7 +22,7 @@ A restore **never opens anything by itself**. It ends closed + `verifying`: the 
 
   A restore refuses a host whose gate is open or whose database holds organizations.
 
-- The workstation holds: the source host's R2 token `mykey-<source>-pairs-upload` (`~/.mykey/secrets/r2/`), the source's custody copy `~/.mykey/custody/<source>/openbao-init.json` (its root token is in the pair's snapshot), the source's backup password `~/.mykey/custody/<source>/backup/password` (Restic opens the pair with it; the restore installs it on a target that has none and refuses one that holds a different password), and the trust anchor `infra/hosts/backup/trust/<source>-<key>.pub` (Git).
+- The workstation holds: the source host's R2 token `mykey-<source>-pairs-upload` (`~/.mykey/secrets/r2/`), the source's custody copy `~/.mykey/custody/<source>/openbao-init.json` (its root token is in the pair's snapshot), the source's backup password `~/.mykey/custody/<source>/backup/password` (Restic opens the pair with it; the restore installs it on the target, and a clean host's own password, made at install, is kept beside it as `/etc/mykey/secrets/backup/password.before-restore`), and the trust anchor `infra/hosts/backup/trust/<source>-<key>.pub` (Git).
 - The target's KMS certificate can use the pair's seal key: a pair sealed under another key is refused at step 2, before anything is written.
 
 ## Steps 1–7: `restore`

@@ -25,27 +25,32 @@ const SECRETS = "/etc/mykey/secrets";
 /** What host.ts gives the target: its SSH, tunnels and the workstation's custody. */
 /**
  * Run 6.8: Restic opens a pair with its source host's backup password, read
- * from BACKUP_PASSWORD_FILE on the target. A clean host has none: it is
- * installed from the workstation's custody copy (on stdin, never in a
- * command). A target that holds a different one is refused: that is the
- * target's own, and its pairs need it.
+ * from BACKUP_PASSWORD_FILE on the target. It comes from the workstation's
+ * custody copy (on stdin into tmpfs, never in a command). A clean host made
+ * its own at install (no pair uses it yet): that one is kept beside, at
+ * `.before-restore`, once; a second different one is refused.
  */
 export async function ensureSourceBackupPassword(
   exec: HostIo["exec"],
   password: string,
-): Promise<"installed" | "present"> {
+): Promise<"installed" | "present" | `replaced (${string})`> {
   const f = BACKUP_PASSWORD_FILE;
+  const kept = `${f}.before-restore`;
+  const put = `install -d -m 0700 -o 1000 -g 1000 $(dirname ${f}) && install -m 0400 -o 1000 -g 1000 "$t" ${f}`;
   const command = [
-    `if [ ! -s ${f} ]; then`,
-    `install -d -m 0700 -o 1000 -g 1000 $(dirname ${f}) && install -m 0400 -o 1000 -g 1000 /dev/stdin ${f} && exit 10;`,
-    `elif cmp -s /dev/stdin ${f}; then exit 0; else exit 11; fi`,
+    `t=$(mktemp -p /dev/shm) && trap 'rm -f "$t"' EXIT && cat > "$t" &&`,
+    `if [ ! -s ${f} ]; then ${put} && exit 10;`,
+    `elif cmp -s "$t" ${f}; then exit 0;`,
+    `elif [ -e ${kept} ]; then exit 11;`,
+    `else mv ${f} ${kept} && ${put} && exit 12; fi`,
   ].join(" ");
   const { code } = await exec(command, { stdin: password, secretOutput: true });
   if (code === 10) return "installed";
   if (code === 0) return "present";
+  if (code === 12) return `replaced (the target's own kept at ${kept})`;
   if (code === 11) {
     throw new Error(
-      "restore refused: the target holds a different backup password (its own); restore onto a host without one",
+      `restore refused: the target holds a different backup password and ${kept} exists already`,
     );
   }
   throw new Error(`installing the source's backup password: exit ${String(code)}`);

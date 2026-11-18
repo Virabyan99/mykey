@@ -138,7 +138,7 @@ describe("the source's backup password on the target", () => {
     return { exec, ran };
   };
 
-  it("installs it where none is, accepts the same one, and refuses a different one", async () => {
+  it("installs it where none is, accepts the same one, keeps a different one aside once and replaces it", async () => {
     const absent = run(10);
     await expect(ensureSourceBackupPassword(absent.exec, "pw-staging-1")).resolves.toBe(
       "installed",
@@ -148,10 +148,12 @@ describe("the source's backup password on the target", () => {
     expect(absent.ran[0]?.secretOutput).toBe(true);
     expect(absent.ran[0]?.command).not.toContain("pw-staging-1");
     expect(absent.ran[0]?.command).toContain("/etc/mykey/secrets/backup/password");
+    expect(absent.ran[0]?.command).toContain("/dev/shm");
     await expect(ensureSourceBackupPassword(run(0).exec, "pw")).resolves.toBe("present");
-    await expect(ensureSourceBackupPassword(run(11).exec, "pw")).rejects.toThrow(
-      /different backup password/,
+    await expect(ensureSourceBackupPassword(run(12).exec, "pw")).resolves.toBe(
+      "replaced (the target's own kept at /etc/mykey/secrets/backup/password.before-restore)",
     );
+    await expect(ensureSourceBackupPassword(run(11).exec, "pw")).rejects.toThrow(/before-restore/);
     await expect(ensureSourceBackupPassword(run(1).exec, "pw")).rejects.toThrow(/exit 1/);
   });
 });
