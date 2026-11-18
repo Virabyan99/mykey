@@ -8,7 +8,7 @@ import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { KEY_RINGS } from "@mykey/auth";
 import { createPool } from "@mykey/db";
-import { GATE_FILE, gateRecordText, gateWriteCommand } from "../../scripts/host.ts";
+import { GATE_FILE, gateWriteCommand } from "../../scripts/host.ts";
 import { httpsGet, type HttpsAnswer } from "../harness/outside.ts";
 import {
   STAGING_OWNER_EMAIL,
@@ -32,17 +32,28 @@ import {
 const host: HostEntry = loadHosts().staging;
 const API_CONTAINER = "mykey-api-1";
 let hostInstanceId = "";
+/** The host's own v2 record before the test (open, with its report): written back to open. */
+let original = "";
 
 const run = async (command: string, opts: { stdin?: string } = {}): Promise<string> =>
   expectSuccess(await sshExec(host, command, { sudo: true, timeoutMs: 120_000, ...opts }), command)
     .stdout;
 
+// Session 6 gate: staging runs a v2 gate since Run 6.9, which opens only with a
+// verification report, and a v1 record reads as closed (cause `version`). The
+// test opens by writing the host's own open record back, byte for byte, and
+// closes with the same record marked closed, without a report.
 async function writeGate(state: "open" | "closed"): Promise<void> {
-  const current = await sshExec(host, `cat ${GATE_FILE}`, { sudo: true });
-  const previous = current.code === 0 ? current.stdout : null;
-  await run(gateWriteCommand(), {
-    stdin: gateRecordText(state, previous, hostInstanceId, new Date().toISOString()),
-  });
+  const record =
+    state === "open"
+      ? original
+      : `${JSON.stringify({
+          ...(JSON.parse(original) as Record<string, unknown>),
+          state: "closed",
+          reportSha256: null,
+          writtenAt: new Date().toISOString(),
+        })}\n`;
+  await run(gateWriteCommand(), { stdin: record });
 }
 
 const errorCode = (answer: HttpsAnswer): string | undefined => {
@@ -64,6 +75,8 @@ beforeAll(async () => {
   expect(env.MYKEY_HOST).toBe("staging");
   hostInstanceId = env.MYKEY_HOST_INSTANCE_ID ?? "";
   expect(hostInstanceId).toMatch(/^[0-9a-f-]{36}$/);
+  original = await run(`cat ${GATE_FILE}`);
+  expect(JSON.parse(original)).toMatchObject({ version: 2, state: "open" });
 });
 
 afterAll(async () => {
