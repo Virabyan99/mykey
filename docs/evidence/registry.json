@@ -2589,7 +2589,8 @@
       "oldSession": "D08-S42",
       "status": "SPIKE_PASS",
       "evidence": [
-        "docs/evidence/session-2/run-2.7.md"
+        "docs/evidence/session-2/run-2.7.md",
+        "docs/evidence/session-6/run-6.8.md"
       ],
       "note": "Seal key lost: unrecoverable, proven on disposable instances in the losstest domain."
     },
@@ -2606,7 +2607,8 @@
       "oldSession": "D08-S42",
       "status": "SPIKE_PASS",
       "evidence": [
-        "docs/evidence/session-2/run-2.9.md"
+        "docs/evidence/session-2/run-2.9.md",
+        "docs/evidence/session-6/run-6.8.md"
       ],
       "note": "Database globals re-created from roles.sql plus applyDatabaseAccess; matrix passes on the restored database (spike)."
     },

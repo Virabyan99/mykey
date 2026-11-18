@@ -27,6 +27,30 @@
       "status": "SPIKE_PASS",
       "evidence": ["docs/evidence/session-6/run-6.9.md"],
       "note": "The release build refuses a failing scan and writes no release.json (host-build.test.ts); the scanners' self-test detects the seeded secret and the seeded vulnerable dependency (Session 1 fixtures); images are scanned as the archives that ship, with no seeded image."
+    },
+    {
+      "id": "AC-1.28",
+      "status": "SPIKE_PASS",
+      "evidence": ["docs/evidence/session-6/run-6.8.md", "docs/evidence/session-6/drill.json"],
+      "note": "The clean-host drill: the restored host stayed closed + verifying until a report with every check ok opened it; open without a report, with a report older than 30 min and with another incarnation's report were refused (D-56)."
+    },
+    {
+      "id": "AC-1.43",
+      "status": "SPIKE_PASS",
+      "evidence": ["docs/evidence/session-6/run-6.8.md", "docs/evidence/session-6/drill.json"],
+      "note": "A stale pair: after P the owner reset (password, TOTP, codes, link used), a session signed out, a token revoked, the admin removed, a secret and a token added; on the restored host all nine old credentials answered 401 and the after-P secret is absent (D-56)."
+    },
+    {
+      "id": "AC-1.44",
+      "status": "SPIKE_PASS",
+      "evidence": ["docs/evidence/session-6/run-6.8.md", "docs/evidence/session-6/drill.json"],
+      "note": "Recovered on a reinstalled VPS from R2 and the custody set alone (pair by listing, trust anchor, backup password, custody root, KMS certificate under staging's domain) while staging was fenced; restore.md's Before is the full list (D-56)."
+    },
+    {
+      "id": "PO-22",
+      "status": "SPIKE_PASS",
+      "evidence": ["docs/evidence/session-6/run-6.8.md", "docs/evidence/session-6/drill.json"],
+      "note": "The paired capture P restored on a clean host: signature, digests, Restic check, seal-key check, pg_restore, the snapshot; 50 secrets revealed with their digests; timed (drill.json). A pair taken on the restored host is not proven (no pairs/drill/ bucket)."
     }
   ],
   "statuses": [
@@ -179,7 +203,7 @@
     {
       "id": "KMS-L1",
       "status": "SPIKE_PASS",
-      "evidence": ["docs/evidence/session-2/run-2.7.md"],
+      "evidence": ["docs/evidence/session-2/run-2.7.md", "docs/evidence/session-6/run-6.8.md"],
       "note": "Seal key lost: unrecoverable, proven on disposable instances in the losstest domain."
     },
     {
@@ -197,7 +221,7 @@
     {
       "id": "DB-G1",
       "status": "SPIKE_PASS",
-      "evidence": ["docs/evidence/session-2/run-2.9.md"],
+      "evidence": ["docs/evidence/session-2/run-2.9.md", "docs/evidence/session-6/run-6.8.md"],
       "note": "Database globals re-created from roles.sql plus applyDatabaseAccess; matrix passes on the restored database (spike)."
     },
     {

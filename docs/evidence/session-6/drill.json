@@ -1,0 +1,207 @@
+{
+  "pairId": "55f15ea7-9553-4bab-95e5-3d67e53e7819",
+  "pairCapturedAt": "2026-11-18T13:30:20.709Z",
+  "lostAt": "2026-11-18T13:34:29.110Z",
+  "steps": [
+    {
+      "name": "C1-install",
+      "startedAt": "2026-11-18T13:39:52.741Z",
+      "seconds": 225.4
+    },
+    {
+      "name": "C2-restore",
+      "startedAt": "2026-11-18T15:00:42.863Z",
+      "seconds": 224.2
+    },
+    {
+      "name": "C3-owner",
+      "startedAt": "2026-11-18T15:04:53.004Z",
+      "seconds": 1661.3
+    },
+    {
+      "name": "C4-report",
+      "startedAt": "2026-11-18T15:44:09.825Z",
+      "seconds": 200
+    },
+    {
+      "name": "C9-open",
+      "startedAt": "2026-11-18T15:48:54.903Z",
+      "seconds": 234.2
+    }
+  ],
+  "gateOpenedAt": "2026-11-18T15:52:49.118Z",
+  "recoverySeconds": 8300,
+  "stepSeconds": 2545,
+  "earlierRestores": [
+    {
+      "steps": [
+        {
+          "name": "C2-restore",
+          "startedAt": "2026-11-18T13:58:00.398Z",
+          "seconds": 205.3
+        },
+        {
+          "name": "C3-owner",
+          "startedAt": "2026-11-18T14:01:43.297Z",
+          "seconds": 2170.5
+        }
+      ],
+      "reconcile": {
+        "environments": 112,
+        "exits": {
+          "0": 112
+        },
+        "seconds": 2126
+      },
+      "note": "step 7 left the API down (compose start); redone"
+    },
+    {
+      "steps": [
+        {
+          "name": "C2-restore",
+          "startedAt": "2026-11-18T14:54:49.397Z",
+          "seconds": 216
+        }
+      ],
+      "note": "no organization-id file delivered; redone"
+    }
+  ],
+  "markedForReview": {
+    "organizations": 16,
+    "environments": 28
+  },
+  "report": {
+    "sha256": "dfb927f4303b1be1565e7ecd6d4566aad330283be974c04c24f6cec21aa1d563",
+    "checks": [
+      {
+        "id": "pair_signature",
+        "state": "ok"
+      },
+      {
+        "id": "pair_digests",
+        "state": "ok"
+      },
+      {
+        "id": "schema_revision",
+        "state": "ok"
+      },
+      {
+        "id": "openbao_readable",
+        "state": "ok"
+      },
+      {
+        "id": "sessions_none",
+        "state": "ok"
+      },
+      {
+        "id": "accounts_recovery_pending",
+        "state": "ok"
+      },
+      {
+        "id": "reset_tokens_none",
+        "state": "ok"
+      },
+      {
+        "id": "machine_accessors_none",
+        "state": "ok"
+      },
+      {
+        "id": "credentials_all_revoked",
+        "state": "ok"
+      },
+      {
+        "id": "approle_secret_ids_rotated",
+        "state": "ok"
+      },
+      {
+        "id": "root_tokens_revoked",
+        "state": "ok"
+      },
+      {
+        "id": "control_row_idle",
+        "state": "ok"
+      },
+      {
+        "id": "incarnation_three_places",
+        "state": "ok"
+      },
+      {
+        "id": "operations_none_executing",
+        "state": "ok"
+      },
+      {
+        "id": "catalog_matches_backend",
+        "state": "ok"
+      },
+      {
+        "id": "members_confirmed",
+        "state": "ok"
+      },
+      {
+        "id": "journey_owner_enrolled",
+        "state": "ok"
+      },
+      {
+        "id": "journey_reveal_digest",
+        "state": "ok"
+      },
+      {
+        "id": "journey_mutation_refused",
+        "state": "ok"
+      },
+      {
+        "id": "old_credentials_refused",
+        "state": "ok"
+      }
+    ]
+  },
+  "negative": [
+    {
+      "name": "gate open without a report",
+      "refused": true,
+      "cause": "host.ts: gate open: this host needs --report <file> (a verification report)"
+    },
+    {
+      "name": "a report older than 30 minutes",
+      "refused": true,
+      "cause": "drill: gate open refused: the report is older than 30 minutes"
+    },
+    {
+      "name": "the report of another incarnation",
+      "refused": true,
+      "cause": "drill: gate open refused: the report is of another incarnation"
+    },
+    {
+      "name": "--pair naming an ineligible pair",
+      "refused": true,
+      "cause": "host.ts: restore: no eligible pair 8594348a-454b-4869-b576-21b6dd4245f6 of staging"
+    }
+  ],
+  "reconcile": {
+    "environments": 84,
+    "exits": {
+      "0": 84
+    },
+    "seconds": 1616
+  },
+  "oldCredentials": {
+    "token_live_at_P": 401,
+    "token_revoked_after_P": 401,
+    "token_issued_after_P": 401,
+    "owner_session_at_P": 401,
+    "admin_session_at_P": 401,
+    "owner_session_after_P": 401,
+    "admin_password_at_P": 401,
+    "owner_password_at_P": 401,
+    "owner_password_after_P": 401
+  },
+  "secrets": {
+    "count": 50,
+    "revealedWithDigest": 50
+  },
+  "members": {
+    "confirmed": 2,
+    "adminRemovedAfterOpening": true
+  },
+  "freshPairId": null
+}

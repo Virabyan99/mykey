@@ -31,6 +31,14 @@ node scripts/host.ts staging kms staging-seal-2 -- kmip attributes get <key id>
 
 `okms` (OVHcloud's CLI, release 0.6.0, pinned by SHA-256 in `infra/dependencies.lock.json`) runs on the host through `infra/hosts/kms/okms.sh`, as uid 100, with one named certificate; it prints identifiers and states only.
 
+**A new host** (the drill, Run 6.8; a rebuilt staging or production):
+
+1. Install `okms` from the pinned archive: `host.ts <host> kms-install <okms-cli-linux-x86_64.tar.gz>`. The archive's SHA-256 is checked against the lock, and a restore's seal-key check needs it.
+2. Make a CSR on the host (`kms-csr`); the owner issues the certificate in the console.
+3. Install it (`kms-cert`, `kms-use`).
+
+A host that restores a pair needs a certificate under the **source's** KMS domain: the pair is sealed with the source's key. The drill host's certificate `drill-seal-1` was issued under staging's domain and expires on 18 Dec 2026; it goes with the gate's reinstall.
+
 ## Replace a certificate (the certificate is lost, leaked or about to expire)
 
 **Alert (Run 6.4, D-50):** `certificate_expiring` opens 10 days before a 30-day certificate expires (a third of its life; 30 days for a certificate that lives longer than 60 days). `node scripts/host.ts staging status` → `checks.certificates` lists every certificate with its expiry.

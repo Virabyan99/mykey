@@ -858,7 +858,12 @@ describe("the clean-host restore drill (P-125)", () => {
           lostAt,
           steps: state.steps,
           gateOpenedAt,
+          // Wall time from "declared lost" to "gate open", the fixes the drill
+          // found included (D-56 lists them); and the steps of the run that passed.
           recoverySeconds: Math.round((Date.parse(gateOpenedAt) - Date.parse(lostAt)) / 1000),
+          stepSeconds: Math.round(state.steps.reduce((sum, s) => sum + s.seconds, 0)),
+          earlierRestores: [state.data.firstRestore, state.data.secondRestore],
+          markedForReview: state.data.markedForReview,
           report: state.data.report,
           negative: state.data.negative,
           reconcile: state.data.reconcile,
@@ -869,6 +874,28 @@ describe("the clean-host restore drill (P-125)", () => {
         });
         await hostTsOk(["staging", "resume"], { timeoutMs: 600_000 });
         await hostTsOk(["staging", "deploy", "--release", RELEASE], { timeoutMs: 2 * HOUR });
+      });
+      // The drill's machine tokens on staging (24 h) are revoked: staging keeps none of them.
+      await step("E-cleanup", async (state) => {
+        const seeded = data(state, "seeded") as Seeded;
+        const { cookie } = await stagingOwnerSession();
+        const listed = await call(STAGING, "GET", `${envPath(seeded, "dev")}/credentials`, {
+          cookie,
+        });
+        expect(listed.status, listed.body.slice(0, 200)).toBe(200);
+        const live = (
+          JSON.parse(listed.body) as { credentials: { credentialId: string; state: string }[] }
+        ).credentials.filter((c) => c.state === "active");
+        for (const credential of live) {
+          const revoked = await call(
+            STAGING,
+            "POST",
+            `${envPath(seeded, "dev")}/credentials/${credential.credentialId}/revoke`,
+            { body: { confirmed: true }, cookie, headers: idem() },
+          );
+          expect(revoked.status, revoked.body.slice(0, 200)).toBe(200);
+        }
+        state.data.stagingTokensRevoked = live.length;
       });
       const status = await hostTsOk(["staging", "status"], { timeoutMs: 600_000 });
       expect(status.split("\n").filter((line) => line.startsWith("bad"))).toEqual([]);
