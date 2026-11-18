@@ -47,7 +47,8 @@ export function restoreSteps(manifest: Pick<PairManifest, "pairId" | "artifacts"
       `install -d -m 0700 -o 1000 -g 1000 ${q("in")} ${q("restore")}`,
     ].join(" && "),
     receive: `cat > ${q("downloaded.tar")}`,
-    unpack: pair.tmpfs.unpack,
+    // Run 6.8: unpacked as root; restic restores into restore/out as uid 1000.
+    unpack: `${pair.tmpfs.unpack} && chown -R 1000:1000 ${q("restore")}`,
     resticCheck: pair.restic.check,
     resticRestore: pair.restic.restore,
     digests: `cd ${q("restore/out/artifacts")} && printf '${lines}\\n' | sha256sum --check --strict --quiet`,

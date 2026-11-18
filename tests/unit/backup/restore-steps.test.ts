@@ -32,6 +32,11 @@ describe("restoreSteps (P-124)", () => {
     expect(steps.cleanup).toContain(`umount '${root}'`);
   });
 
+  // Run 6.8: the host restore runs the steps as root, restic as uid 1000.
+  it("hands what it unpacked to the ops user, so restic (uid 1000) can restore into restore/out", () => {
+    expect(steps.unpack).toMatch(new RegExp(`chown -R 1000:1000 '${root}/restore'$`));
+  });
+
   it("checks every artifact against the manifest's digest", () => {
     for (const artifact of manifest.artifacts) {
       expect(steps.digests).toContain(`${artifact.sha256}  ${artifact.name}`);
