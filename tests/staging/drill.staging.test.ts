@@ -383,6 +383,18 @@ describe("the clean-host restore drill (P-125)", () => {
           await hostTsOk(["drill", "bao-init"], { timeoutMs: 600_000 });
           await hostTsOk(["drill", "db-init"], { timeoutMs: 600_000 });
           await hostTsOk(["drill", "keys", "init"]);
+          // The job timers; the heartbeat units without a probe token (the drill
+          // host is not in the probe): status.sh still writes the capacity record.
+          await hostTsOk(["drill", "timers"]);
+          await sshExec(
+            drillHost(),
+            [
+              "install -m 0644 /opt/mykey/hosts/systemd/mykey-heartbeat.service /opt/mykey/hosts/systemd/mykey-heartbeat.timer /etc/systemd/system/",
+              "systemctl daemon-reload",
+              "systemctl enable --now mykey-heartbeat.timer",
+            ].join(" && "),
+            { sudo: true },
+          );
           await hostTsOk(["drill", "quiesce"], { timeoutMs: 600_000 });
         },
         { timed: true },

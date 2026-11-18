@@ -2340,6 +2340,9 @@ export function timersCommand(units: readonly string[]): string {
     ...BOOT_SERVICES.map((unit) => `${REMOTE.hostsDir}/systemd/${unit}.service`),
   ];
   return [
+    // Run 6.8: measured by status.sh for the capacity record from the first minute
+    // (the rotation creates it only at its first run, 01:15 UTC).
+    "install -d -m 0700 -o 1000 -g 1000 /var/lib/mykey/bao-audit/rotated",
     `install -m 0644 ${files.join(" ")} /etc/systemd/system/`,
     "systemctl daemon-reload",
     `systemctl enable --now ${units.map((unit) => `${unit}.timer`).join(" ")}`,

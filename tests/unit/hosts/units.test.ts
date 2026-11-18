@@ -68,6 +68,12 @@ describe("the units of host jobs (P-112)", () => {
     );
     expect(command).toContain("/opt/mykey/hosts/systemd/mykey-audit-archive.service");
     expect(() => timersCommand(["mykey-x; rm -rf /"])).toThrow(/unusable/);
+    // Run 6.8: status.sh measures this directory for the capacity record; until
+    // the first rotation (01:15 UTC) a new host had none and refused every
+    // expanding mutation with 503.
+    expect(command).toContain(
+      "install -d -m 0700 -o 1000 -g 1000 /var/lib/mykey/bao-audit/rotated",
+    );
     // Run 6.5: the daily pair's timer, the boot recovery and the heartbeat's expectation.
     expect(jobTimers()).toContain("mykey-backup");
     // Run 6.6: retention runs after the night's pair, with the cleanup token, without the signer.
