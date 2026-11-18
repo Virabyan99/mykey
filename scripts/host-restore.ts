@@ -277,6 +277,17 @@ export async function hostRestoreTarget(
         namespace === "" ? name === "backup" : namespace === `org-${io.organizationId ?? ""}`;
       if (!ours) return; // another organization's credential: its host is elsewhere
       const files = deliveryFiles(name);
+      if (name === "runtime" && io.organizationId !== null) {
+        // Run 6.8: the organization the credentials belong to; a clean host has none.
+        await ok(
+          install(`${SECRETS}/api/organization-id`, files.owner),
+          "installing the organization id",
+          {
+            stdin: io.organizationId,
+            secretOutput: true,
+          },
+        );
+      }
       await ok(install(files.roleId, files.owner), `installing ${name} role id`, {
         stdin: credential.roleId,
         secretOutput: true,

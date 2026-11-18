@@ -74,13 +74,17 @@ describe("the host restore target (P-124)", () => {
     await target.deliver("org-7a7a7a7a-0000-4000-8000-000000000000", "runtime", credential);
     await target.deliver("", "runtime", credential);
     const installs = ran.filter((r) => r.command.includes("/dev/stdin"));
+    expect(installs[0]?.stdin).toBe(ORG);
+    // Run 6.8: with the runtime credential, the organization it belongs to (a
+    // clean host has no such file; the API reads it first).
     expect(installs.map((r) => r.command.split(" ").at(-1))).toEqual([
+      "/etc/mykey/secrets/api/organization-id",
       "/etc/mykey/secrets/api/runtime-role-id",
       "/etc/mykey/secrets/api/runtime-secret-id",
       "/etc/mykey/secrets/backup-approle/role-id",
       "/etc/mykey/secrets/backup-approle/secret-id",
     ]);
-    expect(installs.map((r) => r.stdin)).toEqual(["role-x", "secret-y", "role-x", "secret-y"]);
+    expect(installs.map((r) => r.stdin)).toEqual([ORG, "role-x", "secret-y", "role-x", "secret-y"]);
     for (const r of installs) expect(r.command).not.toContain("secret-y");
     await target.close();
   });
