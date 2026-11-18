@@ -333,6 +333,13 @@ describe("the clean-host restore drill (P-125)", () => {
       await step(
         "C1-install",
         async () => {
+          // The pinned okms: the restore checks the pair's seal key with it.
+          await hostTsOk([
+            "drill",
+            "kms-install",
+            process.env.MYKEY_OKMS_TAR ??
+              join(homedir(), "mykey-tmp", "okms-cli-linux-x86_64.tar.gz"),
+          ]);
           await hostTsOk(["drill", "deploy", "--release", RELEASE, "--install-only"]);
           // Upstream images by digest, in a maintenance window (network.md): a
           // clean host's egress reaches the registry only inside one.

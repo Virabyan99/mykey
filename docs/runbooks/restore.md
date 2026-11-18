@@ -10,6 +10,8 @@ A restore **never opens anything by itself**. It ends closed + `verifying`: the 
 
   ```sh
   MSYS_NO_PATHCONV=1 node scripts/host.ts <host> bootstrap        # then apply firewall|ssh + confirm, the VPN peer
+  MSYS_NO_PATHCONV=1 node scripts/host.ts <host> kms-install <okms-cli-linux-x86_64.tar.gz>   # the pinned okms (the restore checks the pair's seal key with it)
+  MSYS_NO_PATHCONV=1 node scripts/host.ts <host> kms-csr | kms-cert | kms-use   # kms-and-unseal.md: a certificate under the source's KMS domain
   MSYS_NO_PATHCONV=1 node scripts/host.ts <host> deploy --release <dir> --install-only
   MSYS_NO_PATHCONV=1 node scripts/host.ts <host> maint 10 -- docker compose --env-file /etc/mykey/host.env -f /opt/mykey/compose/host.compose.yml -p mykey pull --quiet postgres openbao edge   # upstream images, by digest
   MSYS_NO_PATHCONV=1 node scripts/host.ts <host> maint 5 -- docker pull -q restic/restic@sha256:136600b6ff6843d61d355f7f71f460a166429f35de6fd11b568fece3c9a4d510   # backup.sh's restic
