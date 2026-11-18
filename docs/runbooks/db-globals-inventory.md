@@ -56,4 +56,4 @@ Runs 2.9 and 6.8 follow this order and record the result of each step. Since Run
 ## Closed in Run 2.9
 
 - The database-level access is now `applyDatabaseAccess()` next to `applyRoles()` (step 4); forgetting it is caught by the matrix.
-- Default privileges come back with the dump: the matrix passed on the database restored from staging's pair (`tests/staging/pair.staging.test.ts`, "PostgreSQL is whole"), and `pg_dumpall --globals-only` of the new cluster equals the captured `globals.sql` apart from comments.
+- Default privileges come back with the dump: the matrix passed on the database restored from staging's pair (Session 2's spike, "PostgreSQL is whole"; that test went with Run 6.5), and the clean-host drill restored staging's pair P with the roles of the inventory (Run 6.8, `docs/evidence/session-6/run-6.8.md`), and `pg_dumpall --globals-only` of the new cluster equals the captured `globals.sql` apart from comments.

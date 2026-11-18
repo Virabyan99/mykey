@@ -51,6 +51,18 @@
       "status": "SPIKE_PASS",
       "evidence": ["docs/evidence/session-6/run-6.8.md", "docs/evidence/session-6/drill.json"],
       "note": "The paired capture P restored on a clean host: signature, digests, Restic check, seal-key check, pg_restore, the snapshot; 50 secrets revealed with their digests; timed (drill.json). A pair taken on the restored host is not proven (no pairs/drill/ bucket)."
+    },
+    {
+      "id": "FR-1.75",
+      "status": "SPIKE_PASS",
+      "evidence": ["docs/evidence/session-6/run-6.10.md"],
+      "note": "docs/runbooks/known-limits.md: what the service does not do, each with where it was measured or decided; one runbook section per probe condition (alerts.md)."
+    },
+    {
+      "id": "AC-1.33",
+      "status": "SPIKE_PASS",
+      "evidence": ["docs/evidence/session-6/run-6.10.md", "docs/evidence/session-6/alerts.md"],
+      "note": "Every probe condition seen to fire and resolve on staging with a dated delivery line, and a runbook section (Means, Check, Fix, Confirm, a command) kept equal to CONDITIONS by tests/unit/runbooks/alerts.test.ts; links and commands of every runbook checked (P-130)."
     }
   ],
   "statuses": [

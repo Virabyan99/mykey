@@ -19,6 +19,8 @@ A restore **never opens anything by itself**. It ends closed + `verifying`: the 
   MSYS_NO_PATHCONV=1 node scripts/host.ts <host> bao-init         # the host's own root token: the restore's step 4 needs it
   MSYS_NO_PATHCONV=1 node scripts/host.ts <host> db-init
   MSYS_NO_PATHCONV=1 node scripts/host.ts <host> keys init
+  MSYS_NO_PATHCONV=1 node scripts/host.ts <host> acme production  # then up again: a new host starts on Let's Encrypt staging (network.md)
+  MSYS_NO_PATHCONV=1 node scripts/host.ts <host> ops-secrets      # MYKEY_HOST_NAME and the jobs' role passwords (the restore replaces the passwords)
   MSYS_NO_PATHCONV=1 node scripts/host.ts <host> timers           # the job timers
   node scripts/probe.ts secrets                                    # the heartbeat: status.sh writes the capacity record each minute; without it every expanding change answers 503
   MSYS_NO_PATHCONV=1 node scripts/host.ts <host> quiesce
