@@ -3,6 +3,15 @@ import { defineConfig } from "vitest/config";
 
 const cloudTests = "tests/**/*.cloud.test.ts";
 
+// Session 6 gate: pnpm 10 passes the `--` of `pnpm run test:staging -- <file>`
+// through, and vitest then drops the file filter and runs every file of the
+// project (on staging: the drills and the reboots). Refuse it.
+if (process.argv.slice(2).includes("--")) {
+  throw new Error(
+    "vitest: drop the `--` (pnpm run test:staging <file>): with it vitest runs every file of the project",
+  );
+}
+
 /**
  * Dated checkpoints (Run 2.7): a checkpoint's test file stays out of the
  * staging run until its `notBefore`, unless MYKEY_CHECKPOINT names it (then

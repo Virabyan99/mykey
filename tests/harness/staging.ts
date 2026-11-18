@@ -2,7 +2,7 @@
 // tunnels over the VPN. The host list, SSH, redaction, tunnels and the status
 // report moved to apps/ops/src/remote in Run 3.2 (M17); they are re-exported
 // here so the tests keep one import.
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
@@ -23,6 +23,48 @@ import {
 import type { Stack } from "./stack.ts";
 
 export * from "@mykey/ops/remote";
+
+// ------------------------------------------------------ the gate and the limits
+
+/**
+ * The release staging runs, to redeploy after a quiesce: a v2 gate opens only
+ * with a verification report, and `deploy --release` of the running release
+ * is what writes one (Session 6 gate; `reconciliation.md`). MYKEY_RELEASE, or
+ * the newest ~/mykey-release/host-v* that holds a release.json.
+ */
+export function stagingRelease(): string {
+  const named = process.env.MYKEY_RELEASE;
+  if (named !== undefined && named !== "") return named;
+  const root = join(homedir(), "mykey-release");
+  const version = (name: string): number[] =>
+    name
+      .slice("host-v".length)
+      .split(".")
+      .map((part) => Number(part));
+  const newest = readdirSync(root)
+    .filter((name) => /^host-v\d+\.\d+\.\d+$/.test(name))
+    .filter((name) => existsSync(join(root, name, "release.json")))
+    .sort((a, b) => {
+      const [x, y] = [version(a), version(b)];
+      for (let i = 0; i < 3; i += 1) {
+        const diff = (x[i] ?? 0) - (y[i] ?? 0);
+        if (diff !== 0) return diff;
+      }
+      return 0;
+    })
+    .at(-1);
+  if (newest === undefined) throw new Error("stagingRelease: no release under ~/mykey-release");
+  return join(root, newest);
+}
+
+/**
+ * Waits for the start of the next minute, plus a margin: the product's rate
+ * windows are 60 s on database time (Run 6.3), so a drill that needs its full
+ * budget starts in a fresh window.
+ */
+export async function nextMinute(marginMs = 1500): Promise<void> {
+  await sleep(60_000 - (Date.now() % 60_000) + marginMs);
+}
 
 // ------------------------------------------------------------- staging stack
 

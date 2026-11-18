@@ -2,7 +2,7 @@
 // FR-1.78, AC-1.36): the oldest staging pair, captured by the unit on 17 Nov
 // 2026 16:38 UTC, leaves its 30 days and its bucket lock (capture + 30 d + 2 h).
 //
-//   MYKEY_CHECKPOINT=pair-30-day pnpm run test:staging -- tests/staging/checkpoints/pair-30-day.staging.test.ts
+//   MYKEY_CHECKPOINT=pair-30-day pnpm run test:staging tests/staging/checkpoints/pair-30-day.staging.test.ts
 //
 // - Run before the 05:00 retention timer of 18 Dec: the pair is restored on
 //   the workstation (custody password, digests equal to its signed manifest);

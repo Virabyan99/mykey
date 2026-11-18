@@ -7,11 +7,13 @@
 //    the host the token's bytes are searched (on fd 3, counts only) in the
 //    API's log, a pg_dump and Traefik's access log: 0 each, with the controls
 //    found.
-// 2. The drill: issuances run in two environments, three at a time each, while
-//    the OpenBao container is paused for 8 s; one caught after its marker
-//    answers 503 outcome_unknown. Then: the probe raises operations_unresolved;
-//    quiesce; ops reconcile-credentials --executors-excluded yes; resume, gate
-//    open; a new issuance for that environment → 201, revoked; the alert clears.
+// 2. The drill: five issuances (Run 6.3: five a minute per person), fired
+//    250 ms apart across the moment the OpenBao container is paused for 8 s,
+//    each attempt in a fresh minute; one caught after its marker answers 503
+//    outcome_unknown. Then: the probe raises operations_unresolved; quiesce;
+//    ops reconcile-credentials --executors-excluded yes; resume; a redeploy of
+//    the running release opens the v2 gate with a report; a new issuance for
+//    that environment → 201, revoked; the alert clears.
 //
 // Every credential this file issues is revoked in `finally` (they live 60 to
 // 300 s in any case). The token never leaves this process except on stdin.
@@ -25,8 +27,10 @@ import {
   expectSuccess,
   hostStatus,
   loadHosts,
+  nextMinute,
   registerSecret,
   sshExec,
+  stagingRelease,
 } from "../harness/staging.ts";
 import { publicRequest, stagingOwnerSession, type PublicAnswer } from "../harness/staging-owner.ts";
 
@@ -98,10 +102,10 @@ async function revokeAll(): Promise<number> {
 }
 
 /** `scripts/host.ts staging …` as a child process. */
-function hostTs(args: string[]): { code: number | null; out: string } {
+function hostTs(args: string[], timeoutMs = 600_000): { code: number | null; out: string } {
   const result = spawnSync(process.execPath, ["scripts/host.ts", "staging", ...args], {
     encoding: "utf8",
-    timeout: 600_000,
+    timeout: timeoutMs,
     env: { ...process.env, MSYS_NO_PATHCONV: "1" },
   });
   return { code: result.status, out: `${result.stdout}${result.stderr}` };
@@ -236,39 +240,38 @@ describe("machine credentials on staging", () => {
     let quiesced = false;
     const caught = new Map<string, string>(); // environment id → operation id
     try {
-      // 1. Three issuances at a time in each environment while OpenBao is paused, until one is unknown.
+      // 1. Five issuances, 250 ms apart, across the moment OpenBao is paused,
+      //    until one is unknown. Run 6.3 allows five issuances a minute per
+      //    person, so each attempt starts in a fresh minute and spends five.
+      //    An issuance logs in before its marker: one sent into a paused
+      //    OpenBao fails before the marker, so the pause must land mid-flight.
       let attempts = 0;
-      for (let attempt = 1; attempt <= 3 && caught.size === 0; attempt += 1) {
+      for (let attempt = 1; attempt <= 5 && caught.size === 0; attempt += 1) {
         attempts = attempt;
+        await nextMinute();
         ({ cookie } = await stagingOwnerSession());
-        let stop = false;
         const answers: Record<string, number> = {};
-        const loops = environments.flatMap((environment) =>
-          [0, 1, 2].map(async () => {
-            while (!stop) {
-              const { answer } = await issue(environment.path, 60);
-              const code = errorOf(answer).code;
-              const label = answer.status === 201 ? "201" : `${answer.status} ${code ?? ""}`;
-              answers[label] = (answers[label] ?? 0) + 1;
-              if (answer.status === 201) continue;
-              const operationId = errorOf(answer).operationId;
-              if (code === "outcome_unknown" && operationId !== undefined) {
-                if (!caught.has(environment.id)) caught.set(environment.id, operationId);
-              }
-              if (code === "state_conflict" || code === "outcome_unknown") return;
-              await sleep(200);
-            }
-          }),
-        );
-        await sleep(3000);
-        await pauseOpenBao(true);
-        paused = true;
-        const pausedAt = now();
+        const pausing = pauseOpenBao(true).then(() => {
+          paused = true;
+          return now();
+        });
+        const shots = [0, 1, 2, 3, 4].map(async (i) => {
+          await sleep(i * 250);
+          const environment = environments[i % environments.length]!;
+          const { answer } = await issue(environment.path, 60);
+          const code = errorOf(answer).code;
+          const label = answer.status === 201 ? "201" : `${answer.status} ${code ?? ""}`;
+          answers[label] = (answers[label] ?? 0) + 1;
+          const operationId = errorOf(answer).operationId;
+          if (code === "outcome_unknown" && operationId !== undefined) {
+            if (!caught.has(environment.id)) caught.set(environment.id, operationId);
+          }
+        });
+        const pausedAt = await pausing;
         await sleep(8000);
         await pauseOpenBao(false);
         paused = false;
-        stop = true;
-        await Promise.all(loops);
+        await Promise.all(shots);
         record(`attempt${String(attempt)}`, { pausedAt, answers });
         await revokeAll();
       }
@@ -327,7 +330,9 @@ describe("machine credentials on staging", () => {
         record(`reconciled ${id}`, settled.out.trim().split("\n")[0]);
       }
       expect(hostTs(["resume"]).code).toBe(0);
-      expect(hostTs(["gate", "open"]).code).toBe(0);
+      // A v2 gate opens only with a report: redeploy the running release.
+      const reopened = hostTs(["deploy", "--release", stagingRelease()], 1_800_000);
+      expect(reopened.code, reopened.out.slice(-500)).toBe(0);
       quiesced = false;
       record("resumed", now());
 
@@ -376,7 +381,7 @@ describe("machine credentials on staging", () => {
       }
       if (quiesced) {
         hostTs(["resume"]);
-        hostTs(["gate", "open"]);
+        hostTs(["deploy", "--release", stagingRelease()], 1_800_000);
       }
       await waitUntil(
         "API answering",
@@ -387,5 +392,5 @@ describe("machine credentials on staging", () => {
       ({ cookie } = await stagingOwnerSession());
       await revokeAll();
     }
-  }, 2_400_000);
+  }, 4_200_000);
 });

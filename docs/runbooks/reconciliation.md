@@ -40,8 +40,10 @@ MSYS_NO_PATHCONV=1 node scripts/host.ts <host> ops reconcile-operation --operati
 MSYS_NO_PATHCONV=1 node scripts/host.ts <host> quiesce      # gate close, stop api + provisioner, restart OpenBao
 MSYS_NO_PATHCONV=1 node scripts/host.ts <host> ops reconcile-operation --operation <id> --executors-excluded yes
 MSYS_NO_PATHCONV=1 node scripts/host.ts <host> resume       # start api + provisioner; the gate stays closed
-MSYS_NO_PATHCONV=1 node scripts/host.ts <host> gate open
+MSYS_NO_PATHCONV=1 node scripts/host.ts <host> deploy --release <the running release's directory>
 ```
+
+A v2 gate (every host since Run 6.9) opens only with a verification report, and a deploy of the release the host already runs is what makes one: it migrates nothing, runs the owner's journey through the verification listener, and opens (`deploy.md`, `service-gate.md`). A bare `gate open` is refused there.
 
 `quiesce` prints `executors: stopped` once OpenBao answers again. Restarting OpenBao ends any request it still held (D-20). `--executors-excluded yes` is your statement that this happened. Never give it without `quiesce`.
 
@@ -90,7 +92,7 @@ When it exits 3 with `left <credentialId> needs_exclusion`, an issuance was sent
 MSYS_NO_PATHCONV=1 node scripts/host.ts <host> quiesce
 MSYS_NO_PATHCONV=1 node scripts/host.ts <host> ops reconcile-credentials --environment <environmentId> --executors-excluded yes
 MSYS_NO_PATHCONV=1 node scripts/host.ts <host> resume
-MSYS_NO_PATHCONV=1 node scripts/host.ts <host> gate open
+MSYS_NO_PATHCONV=1 node scripts/host.ts <host> deploy --release <the running release's directory>
 ```
 
 With exclusion, a `needs_review` credential becomes `revoked` and its issuance `rejected` (`dependency_unavailable`); a new issuance for the environment is then accepted. The outputs and the rest are in `machine-credentials.md`.

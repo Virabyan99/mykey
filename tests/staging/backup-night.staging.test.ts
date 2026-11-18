@@ -1,7 +1,7 @@
 // Run 6.5 Task D, checkpoint `backup-first-night` (due 18 Nov 2026 03:30 UTC):
 // after the timer's own 03:00 run, that run's pair is eligible and the
 // heartbeat's newestEligibleCaptureAt is its capture.
-//   MYKEY_CHECKPOINT=backup-first-night pnpm run test:staging -- tests/staging/backup-night.staging.test.ts
+//   MYKEY_CHECKPOINT=backup-first-night pnpm run test:staging tests/staging/backup-night.staging.test.ts
 import { describe, expect, it } from "vitest";
 import { expectSuccess, loadHosts, shQuote, sshExec } from "../harness/staging.ts";
 
