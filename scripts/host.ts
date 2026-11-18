@@ -2746,6 +2746,14 @@ async function runRestore(
       caCertPath: await localCaCert(host, address, dir),
       superuserPassword,
       pairRootToken,
+      sourceBackupPassword: ((): string => {
+        const file = join(homedir(), ".mykey", "custody", command.source, "backup", "password");
+        if (!existsSync(file))
+          throw new Error(`no ${file} (host.ts ${command.source} backup-custody)`);
+        const password = readFileSync(file, "utf8");
+        registerSecret(password.trim());
+        return password;
+      })(),
       targetRootToken: ((): string => {
         // This host's own OpenBao (bao-init); a restore onto the source host itself
         // (staging over staging) has the pair's token as its own.

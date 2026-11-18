@@ -334,6 +334,44 @@ describe("the clean-host restore drill (P-125)", () => {
         "C1-install",
         async () => {
           await hostTsOk(["drill", "deploy", "--release", RELEASE, "--install-only"]);
+          // Upstream images by digest, in a maintenance window (network.md): a
+          // clean host's egress reaches the registry only inside one.
+          await hostTsOk(
+            [
+              "drill",
+              "maint",
+              "10",
+              "--",
+              "docker",
+              "compose",
+              "--env-file",
+              "/etc/mykey/host.env",
+              "-f",
+              "/opt/mykey/compose/host.compose.yml",
+              "-p",
+              "mykey",
+              "pull",
+              "--quiet",
+              "postgres",
+              "openbao",
+              "edge",
+            ],
+            { timeoutMs: 900_000 },
+          );
+          // The restore's restic runs from the pinned image (backup.sh's digest).
+          await hostTsOk(
+            [
+              "drill",
+              "maint",
+              "5",
+              "--",
+              "docker",
+              "pull",
+              "-q",
+              "restic/restic@sha256:136600b6ff6843d61d355f7f71f460a166429f35de6fd11b568fece3c9a4d510",
+            ],
+            { timeoutMs: 600_000 },
+          );
           await hostTsOk(["drill", "up"], { timeoutMs: 1_200_000 });
           await hostTsOk(["drill", "bao-init"], { timeoutMs: 600_000 });
           await hostTsOk(["drill", "db-init"], { timeoutMs: 600_000 });

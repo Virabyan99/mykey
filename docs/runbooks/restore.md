@@ -6,8 +6,23 @@ A restore **never opens anything by itself**. It ends closed + `verifying`: the 
 
 ## Before
 
-- The target host is installed (`host.ts <host> bootstrap`, `apply`, `up`, `db-init`, `keys init`) and its release is loaded, with **the gate closed and the executors stopped** (`host.ts <host> quiesce` on staging). A restore refuses a host whose gate is open or whose database holds organizations.
-- The workstation holds: the source host's R2 token `mykey-<source>-pairs-upload` (`~/.mykey/secrets/r2/`), the source's custody copy `~/.mykey/custody/<source>/openbao-init.json` (its root token is in the pair's snapshot), and the trust anchor `infra/hosts/backup/trust/<source>-<key>.pub` (Git).
+- The target host is installed and its release is loaded, with **the gate closed and the executors stopped**. On a clean host (the drill, Run 6.8), in this order:
+
+  ```sh
+  MSYS_NO_PATHCONV=1 node scripts/host.ts <host> bootstrap        # then apply firewall|ssh + confirm, the VPN peer
+  MSYS_NO_PATHCONV=1 node scripts/host.ts <host> deploy --release <dir> --install-only
+  MSYS_NO_PATHCONV=1 node scripts/host.ts <host> maint 10 -- docker compose --env-file /etc/mykey/host.env -f /opt/mykey/compose/host.compose.yml -p mykey pull --quiet postgres openbao edge   # upstream images, by digest
+  MSYS_NO_PATHCONV=1 node scripts/host.ts <host> maint 5 -- docker pull -q restic/restic@sha256:136600b6ff6843d61d355f7f71f460a166429f35de6fd11b568fece3c9a4d510   # backup.sh's restic
+  MSYS_NO_PATHCONV=1 node scripts/host.ts <host> up
+  MSYS_NO_PATHCONV=1 node scripts/host.ts <host> bao-init         # the host's own root token: the restore's step 4 needs it
+  MSYS_NO_PATHCONV=1 node scripts/host.ts <host> db-init
+  MSYS_NO_PATHCONV=1 node scripts/host.ts <host> keys init
+  MSYS_NO_PATHCONV=1 node scripts/host.ts <host> quiesce
+  ```
+
+  A restore refuses a host whose gate is open or whose database holds organizations.
+
+- The workstation holds: the source host's R2 token `mykey-<source>-pairs-upload` (`~/.mykey/secrets/r2/`), the source's custody copy `~/.mykey/custody/<source>/openbao-init.json` (its root token is in the pair's snapshot), the source's backup password `~/.mykey/custody/<source>/backup/password` (Restic opens the pair with it; the restore installs it on a target that has none and refuses one that holds a different password), and the trust anchor `infra/hosts/backup/trust/<source>-<key>.pub` (Git).
 - The target's KMS certificate can use the pair's seal key: a pair sealed under another key is refused at step 2, before anything is written.
 
 ## Steps 1–7: `restore`
@@ -36,7 +51,7 @@ New role passwords go where they were: `api_runtime` and `provisioner_runtime` o
 
 Every account is `recovery_pending` and every machine token is revoked.
 
-1. `host.ts <host> ops verify-organization --organization <id>` and `host.ts <host> ops reconcile-credentials --environment <id>` for every environment.
+1. `host.ts <host> ops verify-organization --organization <id>` and `host.ts <host> ops reconcile-credentials --environment <id>` for every environment. Until step 9, `host.ts <host> ops` uses the restore's root token (`restore-root-token`): the snapshot replaced the token store the host's custody copy belonged to.
 2. `host.ts <host> ops reset-account --email <owner> --kind mfa` (`operator-accounts.md`). Give the link to the owner.
 3. `host.ts <host> tunnel verify` opens a local port to the verification listener. Through it the owner completes the reset, enrols a new authenticator, signs in, reveals one secret they know and checks its value, and tries one change (it must answer `quarantined`). Then the owner signs out: the report requires that no session exists.
 
@@ -49,7 +64,8 @@ MSYS_NO_PATHCONV=1 node scripts/host.ts <host> restore-verify --confirm-members 
 
 - The report goes to `~/.mykey/secrets/hosts/<host>/restore-report.json` and the measurements to `restore-measurements.json`. It lists every check; a check not `ok` is printed with what was observed.
 - `--confirm-members <count>`: the restored memberships are the pair's, which may hold someone removed since. Read the count the report prints, check the list in the database, then confirm it. A wrong count fails `members_confirmed`.
-- `--owner-confirmed`: the owner did the journey above in a browser. `--journey` (the operator runs it with the owner's credentials) arrives with the drill.
+- `--owner-confirmed`: the owner did the journey above in a browser.
+- `--journey` (staging and the drill; never production): the operator runs the journey itself through the verification listener, with the newest reset link `ops reset-account` wrote since the restore began. The new password and authenticator seed go to `~/.mykey/secrets/hosts/<host>/` (`owner-password`, `owner-totp-seed`). A second `--journey` (for `--open`, after a report went stale) needs a new reset link first.
 - `--open`: `gate open` with the report, after re-checking sessions, accessors, the control row and the incarnation. Then the restore's root token is revoked and its copy and the state files are removed. A report older than 30 minutes is refused: run `restore-verify` again.
 
 After opening: every person signs in after a reset, every machine needs a new token, and every `uncertain` operation needs review (`reconciliation.md`).

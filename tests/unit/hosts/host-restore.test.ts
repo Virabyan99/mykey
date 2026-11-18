@@ -5,6 +5,7 @@
 import { describe, expect, it } from "vitest";
 import {
   deliveryFiles,
+  ensureSourceBackupPassword,
   hostRestoreTarget,
   pairPrefixFor,
   restoreStateCommand,
@@ -33,6 +34,7 @@ function fakeIo(gate: string | null): { io: HostIo; ran: { command: string; stdi
     superuserPassword: "unused",
     pairRootToken: "unused",
     targetRootToken: "unused",
+    sourceBackupPassword: "unused",
     kmsKeyUsable: () => Promise.resolve(true),
     keepPassword: () => Promise.resolve(),
     setHostEnv: () => Promise.resolve(),
@@ -117,5 +119,39 @@ describe("the host restore target (P-124)", () => {
     expect(
       await pairPrefixFor(listing, "staging", "2b1e7a52-6b51-4d43-9a1e-61f4a0e3c0d2"),
     ).toBeNull();
+  });
+});
+
+// Run 6.8: restic opens the pair with the source host's backup password; a
+// clean host has none. It comes from the workstation custody, on stdin only.
+describe("the source's backup password on the target", () => {
+  const run = (code: number) => {
+    const ran: { command: string; stdin?: string; secretOutput?: boolean }[] = [];
+    const exec: HostIo["exec"] = (command, opts = {}) => {
+      ran.push({
+        command,
+        ...(typeof opts.stdin === "string" ? { stdin: opts.stdin } : {}),
+        ...(opts.secretOutput === undefined ? {} : { secretOutput: opts.secretOutput }),
+      });
+      return Promise.resolve({ code, stdout: "" });
+    };
+    return { exec, ran };
+  };
+
+  it("installs it where none is, accepts the same one, and refuses a different one", async () => {
+    const absent = run(10);
+    await expect(ensureSourceBackupPassword(absent.exec, "pw-staging-1")).resolves.toBe(
+      "installed",
+    );
+    expect(absent.ran).toHaveLength(1);
+    expect(absent.ran[0]?.stdin).toBe("pw-staging-1");
+    expect(absent.ran[0]?.secretOutput).toBe(true);
+    expect(absent.ran[0]?.command).not.toContain("pw-staging-1");
+    expect(absent.ran[0]?.command).toContain("/etc/mykey/secrets/backup/password");
+    await expect(ensureSourceBackupPassword(run(0).exec, "pw")).resolves.toBe("present");
+    await expect(ensureSourceBackupPassword(run(11).exec, "pw")).rejects.toThrow(
+      /different backup password/,
+    );
+    await expect(ensureSourceBackupPassword(run(1).exec, "pw")).rejects.toThrow(/exit 1/);
   });
 });

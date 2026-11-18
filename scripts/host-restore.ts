@@ -16,12 +16,41 @@ import { closeGate } from "@mykey/operations/operator";
 import type { RestoreState, RestoreTarget } from "@mykey/ops";
 import pg from "pg";
 import { restoreSteps } from "../infra/hosts/backup/restore-steps.ts";
+import { BACKUP_PASSWORD_FILE } from "../infra/hosts/backup/steps.ts";
 
 export const RESTORE_STATE_FILE = "/var/lib/mykey/restore-state.json";
 const GATE_FILE = "/etc/mykey/gate/gate.json";
 const SECRETS = "/etc/mykey/secrets";
 
 /** What host.ts gives the target: its SSH, tunnels and the workstation's custody. */
+/**
+ * Run 6.8: Restic opens a pair with its source host's backup password, read
+ * from BACKUP_PASSWORD_FILE on the target. A clean host has none: it is
+ * installed from the workstation's custody copy (on stdin, never in a
+ * command). A target that holds a different one is refused: that is the
+ * target's own, and its pairs need it.
+ */
+export async function ensureSourceBackupPassword(
+  exec: HostIo["exec"],
+  password: string,
+): Promise<"installed" | "present"> {
+  const f = BACKUP_PASSWORD_FILE;
+  const command = [
+    `if [ ! -s ${f} ]; then`,
+    `install -d -m 0700 -o 1000 -g 1000 $(dirname ${f}) && install -m 0400 -o 1000 -g 1000 /dev/stdin ${f} && exit 10;`,
+    `elif cmp -s /dev/stdin ${f}; then exit 0; else exit 11; fi`,
+  ].join(" ");
+  const { code } = await exec(command, { stdin: password, secretOutput: true });
+  if (code === 10) return "installed";
+  if (code === 0) return "present";
+  if (code === 11) {
+    throw new Error(
+      "restore refused: the target holds a different backup password (its own); restore onto a host without one",
+    );
+  }
+  throw new Error(`installing the source's backup password: exit ${String(code)}`);
+}
+
 export interface HostIo {
   /** One command as root on the host. */
   exec(
@@ -43,6 +72,8 @@ export interface HostIo {
    * `snapshot-force` is sent with; the drill found the pair's token refused.
    */
   targetRootToken: string;
+  /** Run 6.8: the source host's backup password (its custody copy), as the file holds it. */
+  sourceBackupPassword: string;
   kmsKeyUsable(keyId: string): Promise<boolean>;
   /** Stores a role's new password where db-init and the services read it. */
   keepPassword(role: RoleName, password: string): Promise<void>;
@@ -178,6 +209,9 @@ export async function hostRestoreTarget(
         timeoutMs: 600_000,
       });
       await ok(s.unpack, "unpacking the bundle");
+      io.log(
+        `the source's backup password: ${await ensureSourceBackupPassword((c, o) => io.exec(c, o), io.sourceBackupPassword)}`,
+      );
       await ok(s.resticCheck, "restic check --read-data", {
         secretOutput: true,
         timeoutMs: 900_000,
