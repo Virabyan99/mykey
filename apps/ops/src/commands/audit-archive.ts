@@ -43,6 +43,7 @@ import {
   markUploaded,
   markVerified,
   nextSegmentInterval,
+  readIncarnation,
   purgeArchived,
   recountIntervals,
   sourceSegment,
@@ -78,8 +79,22 @@ export class ArchiveBusy extends Error {}
 export const MANIFEST_FORMAT = "mykey-audit-segment/1";
 const ROTATED = /^audit-[0-9]{8}T[0-9]{6}Z\.log$/;
 
-function segmentKey(host: string, stream: SegmentStream, from: string, sequence: bigint): string {
-  const base = `${host}/${stream}/${from.slice(0, 4)}/${from.slice(5, 7)}/segment-${sequence
+/**
+ * The object key of a new segment. The database's backend incarnation is part
+ * of it (review finding B, Session 6 gate): a restore writes a new incarnation,
+ * and its chain, which ends at the pair, must not land on the lost host's
+ * later segments, which are locked. A database no host has bound yet (null)
+ * keeps the layout of Run 6.2. A segment already recorded keeps its stored key.
+ */
+function segmentKey(
+  host: string,
+  incarnation: string | null,
+  stream: SegmentStream,
+  from: string,
+  sequence: bigint,
+): string {
+  const prefix = incarnation === null ? host : `${host}/${incarnation}`;
+  const base = `${prefix}/${stream}/${from.slice(0, 4)}/${from.slice(5, 7)}/segment-${sequence
     .toString()
     .padStart(10, "0")}`;
   return `${base}.${stream === "app" ? "ndjson.gz" : "log.gz"}`;
@@ -207,6 +222,7 @@ async function runLocked(
 ): Promise<void> {
   const { pool, store, host } = deps;
   let chain = await listSegments(pool);
+  const incarnation = await readIncarnation(pool);
   const problems = chainProblems(chain);
   if (problems.length > 0) throw new ArchiveStopped(`the chain is broken: ${problems.join("; ")}`);
 
@@ -275,7 +291,7 @@ async function runLocked(
       rowCount: rows,
       sha256: sha,
       previousSha256: last?.sha256 ?? null,
-      objectKey: segmentKey(host, stream, from, sequence),
+      objectKey: segmentKey(host, incarnation, stream, from, sequence),
     };
     chain = [...chain, { ...segment, uploadedAt: null, verifiedAt: null, purgedAt: null }];
     return segment;

@@ -131,7 +131,7 @@ Requests refused before a principal is known (401, malformed requests, origin, q
 ## Archive and retention (Run 6.2, D-48)
 
 - **Every night on each host:** `mykey-bao-audit-rotate.timer` (01:15 UTC) rotates OpenBao's file, and `mykey-audit-archive.timer` (01:30 UTC) runs `ops-run.sh audit-archive -- audit-archive` in the ops image. Both catch up after a boot (`Persistent=true`). Status: `systemctl status mykey-audit-archive.service`; the journal holds counts only.
-- **What lands in R2** (bucket `mykey-audit-archive`, under `<host>/`):
+- **What lands in R2** (bucket `mykey-audit-archive`, under `<host>/<backend incarnation>/`; segments recorded before the Session 6 gate keep their stored keys under `<host>/`). A restore writes a new incarnation, so the restored chain, which ends at its pair, is archived beside the lost host's later segments (locked) instead of colliding with them. The stored `object_key` of each segment is the authority:
   - `app/<yyyy>/<mm>/segment-<sequence>.ndjson.gz` with its `.manifest.json`, one per closed UTC day, plus a supplementary segment for rows committed late;
   - `openbao/…/segment-<sequence>.log.gz`, one per rotated file.
 
