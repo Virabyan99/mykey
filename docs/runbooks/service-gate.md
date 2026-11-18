@@ -31,7 +31,7 @@ Record v2 (Run 6.7, D-54; strict, at most 4,096 bytes):
 
 `open` + `serving` with host, incarnation and build equal admits every route. `closed` + `verifying` with the three equal lets the **verification listener** (`10.78.2.3:8444`, reached with `host.ts <host> tunnel verify`) serve reads, sign-in and reveal while the public listener stays quarantined. A v1 record is `none` to a v2 API.
 
-Record v1 (until a host's first v2 deploy, Run 6.9):
+Record v1 (until a host's first v2 deploy; `deploy` converts it, `deploy.md`):
 
 ```json
 {
@@ -63,7 +63,7 @@ MSYS_NO_PATHCONV=1 node scripts/host.ts staging gate open                       
 - `GET /health` → `503 {"status":"down"}`; the API log has `{"event":"health_down","cause":"gate","code":"missing"}`. **The probe alerts** after its grace period: during a deploy window this alert is expected.
 - every other request, matched or not → `503` with error code `quarantined` and `Cache-Control: no-store`; the log has `{"event":"gate_closed","cause":"…"}`.
 
-After a deploy is verified (`host.ts <host> status`, migrations applied), open the gate. Production stays closed until a session opens it with the owner's word.
+Since Run 6.9 a deploy is `host.ts <host> deploy --release <dir>` (`deploy.md`, D-57): it closes the gate itself (v2: `verifying`), migrates, starts, runs the owner's journey through the verification listener, writes the deploy report and opens with it. A deploy that stops leaves the gate closed. Production stays closed (`--stay-closed`) until a session opens it with the owner's word.
 
 ## What closed looks like from outside, and why
 

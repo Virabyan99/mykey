@@ -2,10 +2,10 @@
 // stores. Task A: the four writers added in this run, each in the
 // transaction of the change it records. Task C: one journey through every
 // route and command that writes, after which every action of the closed list
-// has a row — but those whose writer arrives in a later run (PENDING_WRITERS,
+// has a row — but those another test file asserts (WRITTEN_ELSEWHERE; PENDING_WRITERS,
 // which Run 6.9 must leave empty).
 import { randomBytes, randomUUID } from "node:crypto";
-import { mkdtempSync } from "node:fs";
+import { mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { PassThrough } from "node:stream";
@@ -206,22 +206,41 @@ describe("the missing writers (Task A)", () => {
   });
 });
 
-/** Actions whose writer arrives in a later run of Session 6; Run 6.9 leaves this list empty. */
-const PENDING_WRITERS: readonly AuditAction[] = [
-  // Runs 6.5, 6.6 (P-119 – P-121).
-  "system.backup_capture",
-  "system.backup_eligible",
-  "system.backup_invalidated",
-  "system.backup_cleanup",
-  // Run 6.7 (P-122, P-124).
-  "operator.gate_open",
-  "operator.gate_close",
-  "operator.restore_begin",
-  "operator.restore_invalidate",
-  "operator.restore_verify",
-  // Run 6.9 (P-127).
-  "operator.deploy",
-];
+/** Actions whose writer arrives in a later run of Session 6; Run 6.9 left this list empty. */
+const PENDING_WRITERS: readonly AuditAction[] = [];
+
+/**
+ * Writers this journey does not run (a capture, a restore, a deploy need a
+ * stack of their own): the test file that asserts each one's row.
+ */
+const WRITTEN_ELSEWHERE: Partial<Record<AuditAction, string>> = {
+  "system.backup_capture": "tests/integration/capture/coordinator.test.ts",
+  "system.backup_eligible": "tests/integration/capture/pair.test.ts",
+  "system.backup_invalidated": "tests/integration/capture/coordinator.test.ts",
+  "system.backup_cleanup": "tests/integration/capture/retention.test.ts",
+  "operator.gate_open": "tests/integration/restore/gate.test.ts",
+  "operator.gate_close": "tests/integration/deploy/failed-migration.test.ts",
+  "operator.restore_begin": "tests/integration/restore/invalidate.test.ts",
+  "operator.restore_invalidate": "tests/integration/restore/invalidate.test.ts",
+  "operator.restore_verify": "tests/integration/restore/verify.test.ts",
+  "operator.deploy": "tests/integration/deploy/failed-migration.test.ts",
+};
+
+describe("writers of Session 6 (Run 6.9)", () => {
+  it("no action is pending a writer, and each written elsewhere is asserted by the file that names it", () => {
+    expect(PENDING_WRITERS).toEqual([]);
+    const root = join(import.meta.dirname, "..", "..", "..");
+    for (const [action, file] of Object.entries(WRITTEN_ELSEWHERE)) {
+      // Named in quotes: a string in the code or a literal in its SQL.
+      const quoted = ["'", '"', "`"].map((q) => `${q}${action}${q}`);
+      const text = readFileSync(join(root, file), "utf8");
+      expect(
+        quoted.some((q) => text.includes(q)),
+        `${action} in ${file}`,
+      ).toBe(true);
+    }
+  });
+});
 
 describe("one journey through every writer (Task C)", () => {
   it("every action of AUDIT_ACTIONS outside PENDING_WRITERS has at least one row; a request's row carries the request id its response carried", async () => {
@@ -511,7 +530,8 @@ describe("one journey through every writer (Task C)", () => {
     );
     const have = new Set([...present.rows.map((row) => row.action), ...bootstrapped]);
     const missing = AUDIT_ACTIONS.filter(
-      (action) => !have.has(action) && !PENDING_WRITERS.includes(action),
+      (action) =>
+        !have.has(action) && !PENDING_WRITERS.includes(action) && !(action in WRITTEN_ELSEWHERE),
     );
     expect(missing).toEqual([]);
 

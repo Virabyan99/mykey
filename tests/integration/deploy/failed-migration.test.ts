@@ -238,5 +238,22 @@ describe("a deploy whose migration fails (P-128)", () => {
     );
     expect(reports[1]!.checks.filter((c) => c.state !== "ok")).toEqual([]);
     await back.close();
+
+    // Three closes, two deploy reports, two opens: each in the audit table, global.
+    const audited = await db
+      .pool("superuser")
+      .query<{ action: string; n: string; orgs: string; details: Record<string, unknown> }>(
+        `SELECT action, count(*) AS n, count(organization_id) AS orgs,
+                (array_agg(details ORDER BY occurred_at DESC))[1] AS details
+           FROM audit.event
+          WHERE action IN ('operator.gate_close', 'operator.gate_open', 'operator.deploy')
+          GROUP BY action ORDER BY action`,
+      );
+    expect(audited.rows.map((r) => [r.action, Number(r.n), Number(r.orgs)])).toEqual([
+      ["operator.deploy", 2, 0],
+      ["operator.gate_close", 3, 0],
+      ["operator.gate_open", 2, 0],
+    ]);
+    expect(audited.rows[0]?.details).toEqual({ build: PREVIOUS.commit.slice(0, 12) });
   }, 600_000);
 });

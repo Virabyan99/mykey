@@ -100,6 +100,8 @@ To cut one purpose off for a drill, on the server: `sudo /opt/mykey/hosts/firewa
 
 ## Deploying the services
 
+Since Run 6.9 a host gets a release built once and promoted with `host.ts <host> deploy --release <dir>` (`deploy.md`, D-57). The commands below are the parts it uses, kept for a first bootstrap and for repairs:
+
 ```sh
 docker build --platform linux/amd64 -f apps/api/Dockerfile --build-arg MYKEY_BUILD=$(git rev-parse --short=12 HEAD) -t mykey-api .   # without MYKEY_BUILD the API refuses to start
 docker save mykey-api:latest -o C:/Users/<you>/mykey-tmp/mykey-api.tar   # one tag; outside OneDrive
