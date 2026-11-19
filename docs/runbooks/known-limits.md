@@ -28,12 +28,19 @@ FR-1.75 (P-130). This is an honest list: each line names what the service does n
 - **On a narrow screen a wide table moves inside its own frame.** Rows are not stacked (Run 7.9).
 - **Contrast was not measured, and no accessibility standard is claimed.** Keyboard use, labels, focus and a 360-pixel screen were tested in Chromium only (Run 7.9).
 - **The CLI's error line has no next step and no operation id.** The page's text for the same code is the fuller one (Run 7.9).
+- **The script is downloaded again at every page load.** The page and its files are sent with `no-store` (Session 7 gate).
+- **A `HEAD` request for the page answers 404.** Only `GET` is served; a checker that uses `HEAD` sees the page as missing (Session 7 gate).
+- **The browser's own history may keep a pasted reset link.** The page removes the token from the address at once, but what the browser recorded at the paste is the browser's. The token works once, for 15 minutes (Session 7 gate).
+- **Some things the page holds are not on the 30-second rule.** The bytes of a previewed import file stay until the import ends or the page is left; a value typed into an open form stays while the form is open; an export that arrives while the tab is hidden is held for its 30 seconds (review of the Session 7 gate, for Session 8).
+- **After "the outcome is not known" the form's button is still there.** The page says not to enter the change a second time; the server answers a repeated request and does not do it twice (Session 7 gate, for Session 8).
 
 ## Alerts and the probe
 
 - **A certificate that lives 60 days or less alerts at a third of its life.** A 30-day KMS certificate alerts 10 days before it ends, not 30 (D-50).
 - **The watcher of the probe can be late, and it can stop.** `probe-watch.yml` is a scheduled GitHub workflow: GitHub may delay it, and it disables scheduled workflows after 60 days without repository activity (Run 6.4).
 - **A host that is not in the probe is not watched.** The drill host was never in it (Run 6.8).
+- **An edge outage of more than three minutes raises two alerts.** The host reads its public certificate as the edge serves it; with the edge down that check is unknown, so `checks_unknown` opens beside `health_failing` (Session 7 gate).
+- **A host without OpenBao has `checks_unknown` open.** Production reports it until its OpenBao exists: the seal, the KMS and the capacity record cannot be read there (Session 7 gate).
 
 ## Backups
 

@@ -28,7 +28,7 @@ pnpm run test:browser   # once per workstation before it: pnpm exec playwright i
 
 - **Sign-in** is a password and then a code from an authenticator app, or a recovery code. There is no sign-up: the first account and every reset come from the operator (runbook `operator-accounts.md`).
 - **Enrolment shows the setup key as text**, in groups of four, and as an `otpauth://` address. There is no QR code.
-- **After a reset of the authenticator, do not reload** before the new authenticator is set up. A reload loses the hand-over, and a new reset link is needed.
+- **After a reset of the authenticator, do not reload** before the new authenticator is set up. A reload loses the hand-over, and a new reset link is needed. When the new authenticator is active the service ends every session of the account: the sign-in form comes back and says so, and the owner signs in with the new password and a code.
 - **A secret is shown for 30 seconds**, a new token for 120 seconds. Both go when the tab is hidden, on a change of address and at sign-out. A token is shown once.
 - **Copy puts the value on the clipboard, and an export puts a file on the disk.** Both are outside MyKey from then on: the page cannot take them back.
 - **Clearing the page's memory is not erasing it.** The browser may keep freed text until it reuses the space (FR-1.22).

@@ -20,7 +20,7 @@ The project is in **Stage 1**, a 14-day plan of nine sessions.
 
 ## Where we stand
 
-_Last updated: 19 Nov 2026, after the Session 6 merge (PR #16, follow-up PR #17)._
+_Last updated: 20 Nov 2026, at the Session 7 gate (PR #19, waiting for the owner's merge)._
 
 | Session | Topic                                       | State                               |
 | ------- | ------------------------------------------- | ----------------------------------- |
@@ -30,13 +30,23 @@ _Last updated: 19 Nov 2026, after the Session 6 merge (PR #16, follow-up PR #17)
 | 4       | Operations engine and secret lifecycle      | **Done** (PASS WITH ISSUES), merged |
 | 5       | Machine access, CLI and API reference       | **Done** (PASS WITH ISSUES), merged |
 | 6       | Audit, limits, backup, recovery, deployment | **Done** (PASS WITH ISSUES), merged |
-| 7       | Web workspace                               | Not started (needs its plan)        |
-| 8       | Security review and controlled-use release  | Not started                         |
+| 7       | Web workspace                               | **Done** (PASS WITH ISSUES), PR #19 |
+| 8       | Security review and controlled-use release  | Not started (needs its plan)        |
 | 9       | Real use, agent experiment, stage exit      | Not started                         |
 
-Each session's detail is in `docs/evidence/session-N/report.md`. Session 6's report also has "What Sessions 7, 8 and 9 must know", which the Session 7 and 8 plans are built on.
+Each session's detail is in `docs/evidence/session-N/report.md`. Session 7's report has "What Sessions 8 and 9 must know", and Session 6's has the same for 7, 8 and 9: the Session 8 plan is built on both.
 
-### What the product has now (Session 6)
+### What the product has now (Session 7)
+
+- **The owner workspace** (`apps/web`), served by the API at the host's own address:
+  - sign-in, enrolment, the operator's reset link, password, recovery codes, sessions;
+  - the overview, projects and environments;
+  - secrets: list, create, edit, reveal, copy, history, delete, undelete, restore;
+  - import and export of dotenv files;
+  - machine credentials: issue, inventory, revoke;
+  - activity, audit, operations, and the summary as three tables.
+- **Three routes filled in:** `overview.get`, `credentials.summary`, `metrics.get` (D-61).
+- **Proofs:** one owner journey and a canary scan of everything the browser keeps (`tests/browser`), and the same journey on staging (`tests/staging/workspace.staging.test.ts`).
 
 - **Audit:**
   - the audit route and activity timeline;
@@ -63,21 +73,23 @@ Each session's detail is in `docs/evidence/session-N/report.md`. Session 6's rep
 
 ### Hosts
 
-- **Staging** runs `host-v0.6.5` (`7a9a1d4`), gate open, timers installed. PR #17's provisioner fix reaches it with the next release.
+- **Staging** runs `host-v0.7.0` (`236083a`), gate open, timers installed. Its host files are those of the Session 7 gate (`host.ts staging push`).
 - **Production** (reinstalled 19 Nov 2026) runs `host-v0.6.3` **closed**:
   - a closed v2 gate record;
   - no OpenBao and no owner;
   - migrations up to `0018`;
-  - in the probe as `inService: false`.
+  - in the probe as `inService: false`, with `checks_unknown` open (no OpenBao to read).
+  - its host files are older than the Session 7 gate's fix of `bao-audit-rotate.sh`: run `host.ts prod push` before OpenBao is ever started there.
 
   Production deploys need the owner's permission.
 
-- **Evidence registry:** 154 `SPIKE_PASS`, 37 `OPEN`, nothing `PASS`.
+- **Evidence registry:** 172 `SPIKE_PASS`, 19 `OPEN`, nothing `PASS`.
 
 ### Open items
 
-- **Session 7:** its plan is written first. Its gate also runs the staging files Session 6's gate skipped: `boundary`, `transport`, `identity`, `export`, `cli`, `key-loss`, `probe`, and `pnpm run test:consumers`.
+- **Session 8:** its plan is written first.
 - **Carried to Session 8:**
+  - the thirteen Minor findings and two open questions of Session 7's review (its report);
   - the resting custody root token (M1, Blocker candidate);
   - `reconcile-credentials --all`;
   - the OpenBao user lockout;
@@ -102,7 +114,7 @@ pnpm run test:integration   # own PostgreSQL + OpenBao stack in Docker; whole su
 pnpm run test:cloud         # real Cloudflare R2; exits 1 without the credential files in ~/.mykey/secrets/r2/
 pnpm run test:staging <file>   # the staging host over the VPN, one file at a time; needs ~/.mykey
 pnpm run test:cli           # the CLI in a Linux container (the only way on Windows); --release <dir> tests a downloaded release
-pnpm run test:browser       # the reference page in Chromium (once per workstation: pnpm exec playwright install chromium)
+pnpm run test:browser       # the workspace and the reference page in Chromium, against a local API with real PostgreSQL and OpenBao (once per workstation: pnpm exec playwright install chromium)
 pnpm run test:consumers     # the consumer runbooks rehearsed against staging from clean containers (WSL Ubuntu + Docker; ~17 min)
 ```
 
@@ -120,6 +132,7 @@ Other scripts:
 pnpm run stack:up | stack:down | stack:status   # the dev stack `mykey-dev`, for work by hand
 pnpm run contracts:openapi                      # regenerate packages/contracts/openapi after a route change
 pnpm run reference:asset                        # copy Scalar's build into apps/api/assets (without it /v1/reference answers 503)
+pnpm run web:build                              # build the workspace into apps/web's dist (without it the workspace's paths answer 503; the browser tests build their own)
 pnpm run cli:build | cli:release -- --version <v>   # the CLI bundle; a release (version = apps/cli/package.json)
 pnpm run db:migrate                             # apply migrations
 pnpm run evidence:build                         # rebuild docs/evidence/registry.json after editing registry-overrides.json
@@ -152,7 +165,8 @@ Scripts in `scripts/` and `infra/` are TypeScript run directly by Node (type str
 - **Two stores, one owner per fact.** Secret values and versions live only in OpenBao: one namespace per organization, KV v2. PostgreSQL holds metadata, permissions, operations and audit, and never a secret value or a machine token.
 - **`packages/contracts`** is the single source for limits (Doc 06 §11), name rules, ids, error codes (one HTTP status each), the operation envelope and the route table.
   - `openapi.json` is generated from the route table, and `contracts:check` fails when it is stale.
-  - The route list is frozen (D-15). Three routes still have pending bodies: `overview.get`, `credentials.summary` and `metrics.get`. The run that owns a route fills it in with a commit titled `contract: …`.
+  - The route list is frozen (D-15). Since Session 7 no route has a pending body.
+  - `WEB_ROUTES` is the table of the workspace's page paths; the API and the page's router both read it.
 - **`packages/db`** has five schemas:
   - `app`: 19 tables;
   - `audit`: `event` and `archive_segment`;
@@ -175,6 +189,11 @@ Scripts in `scripts/` and `infra/` are TypeScript run directly by Node (type str
   - every route goes through `mountRoute` from `ROUTES`;
   - authorization reads current rows on every request, and handlers never decide authority;
   - a mutation needs an `Idempotency-Key`, and a completed request is replayed before the state and freshness checks.
+- **The workspace (`apps/web`, D-59, D-60):** React, TanStack Query and zod, one esbuild bundle, served by the API itself where its terminal 404 would be: on the paths of `WEB_ROUTES` and for the files of the build's manifest, read into memory at start.
+  - **Policy:** `default-src 'none'`, scripts and styles from the own origin only, no framing. So no inline `style` attribute anywhere (bars are `<meter>`).
+  - **Secrets in the page:** a route of `SECRET_BEARING` is sent by `callSecret` from an event handler, never through the query cache; its answer lives in `useEphemeral` (30 seconds, gone on tab hide, navigation and sign-out). Nothing is written to any storage. `tests/unit/web/sources.test.ts` keeps these rules.
+  - **Errors:** one table (`errors/explain.ts`) gives every code its text; a screen never prints a code or the server's message.
+  - **Changes:** every change goes through `useAction`. It keeps the idempotency key while the outcome is open, and turns a 202 into "Not finished yet" unless the screen prints the operation's state itself.
 - **`@mykey/operations`** has three entry points: the root (jobs, outbox, gate, replay), `/operator` (organization provisioning, admin authority) and `/provisioner` (environment job, sweep). The API imports only the root, which the skeleton test checks.
 - **Shape (Doc 06):**
   - `apps/api` serves the routes;
@@ -203,9 +222,10 @@ Scripts in `scripts/` and `infra/` are TypeScript run directly by Node (type str
   - Every run ends with `pnpm run check` green, a commit and a run note `docs/evidence/session-N/run-N.M.md`.
   - Every session ends with a gate run: the full suite, a fresh-context review of the session's diff, and `docs/evidence/session-N/report.md`.
   - Each decision gets one page in `docs/decisions/D-NN-<slug>.md`.
-- **The full integration suite runs at the gate only, on CI** (owner, 17 and 18 Nov 2026).
+- **The full integration suite runs at the gate only, on CI** (owner, 17 to 19 Nov 2026; D-58).
   - A run proves itself with `pnpm run check`, the test files it adds or changes, and any existing file that exercises what it touched.
-  - At the gate, open the pull request as soon as the session's code is in: the first full run finds what crosses runs (13 failures at Session 6's gate). Write the review and the report while it runs.
+  - The session's pull request is opened as a draft at its start. Each run's push then costs about two minutes of CI (below); read it before the next run's first commit.
+  - At the gate, mark the pull request ready as soon as the session's code is in: the first full run finds what crosses runs (13 failures at Session 6's gate, 4 files at Session 7's). Run the review and write the report while it runs.
 - **Registry statuses:** `OPEN`, `SPIKE_PASS` (proven in isolation), `PASS` (proven on the integrated product), `FAIL`, `WATCH` and `CUT`. A status other than `OPEN` needs an evidence file that states the id and the status on one line; `CUT` needs a decision record.
 - **Git:** never commit on `main`. Work on a branch, open a pull request, and merge only when the owner says so. `main` has no branch protection, so nothing else stops a direct push.
 - **The repository is public.** Everything committed, history included, is visible.
@@ -233,12 +253,15 @@ Scripts in `scripts/` and `infra/` are TypeScript run directly by Node (type str
 - **One heavy job at a time.** Two suites, or a suite and a Docker build at once, exhaust the memory: workers fail to start (`0xC0000142`) and Claude Code stops background jobs.
   - The WSL VM keeps its memory after a job; quitting Docker Desktop (or `wsl --shutdown`) frees it.
   - After a killed job, find orphan vitest processes by command line (`Win32_Process`) and remove leftover `mykey-t-*` Compose projects.
+  - Claude Code also stops background jobs when memory is short while the session is idle. It asks that they are not started again without the owner's word: report, and wait.
+- **Long or quoted text never goes through the shell.** A heredoc holding `'''`, a regex or non-ASCII text breaks. Write a script file with the editor tools and run that.
 
 ### CI and scans
 
 - **When CI runs:** only on pull requests and by hand (`gh workflow run ci --ref <branch>`), never on a plain push.
+  - **Two weights (Session 7).** A draft pull request runs `check` (with the unit tests) and the secret scan, about two minutes. A ready pull request, or a run by hand, adds the scans, both integration shards and the `browser` job: about 16 minutes in all. `gh pr ready <n>` starts the full run.
   - A pull request whose changes are all under `docs/` or in `.md` files runs only `check` (with the unit tests) and the secret scan.
-  - Integration runs in two shards, about 16 and 21 minutes, each with a 30-minute limit.
+  - Integration runs in two shards, about 12 and 14 minutes, each with a 30-minute limit; `browser` takes about 7.
   - Runners cost nothing (the repository is public).
 - **Watch CI after every push** (`gh run list --branch <branch>`). Session 3 was red for its whole length unnoticed.
 - **Linux CI sees file ownership; Windows Docker hides it.** Test containers that write into a bind mount run as the caller (`tests/harness/restic.ts`).
@@ -252,7 +275,7 @@ Scripts in `scripts/` and `infra/` are TypeScript run directly by Node (type str
 
 ### Tests
 
-- **Staging files run one at a time.**
+- **Staging files run one at a time, and every one of them at every gate.** Session 6's gate skipped seven; Session 7's then found a defect of Session 6 (below) and five stale tests in them.
   - Staging tests go stale: a route that gains a handler, a container added to a host, a moved credential, a new limit, or a new gate format breaks a test written earlier.
   - A staging run rewrites committed evidence files of earlier runs; restore them before committing.
   - A staging test that changes state must undo it in `finally`.
@@ -266,6 +289,21 @@ Scripts in `scripts/` and `infra/` are TypeScript run directly by Node (type str
 - **CLI tests on Windows** run only through `pnpm run test:cli`. Its arguments may hold only letters, digits and `. _ / = -`: use `--testNamePattern=word`.
 - **The token sweep** (`token-sweep.staging.test.ts`): tokens are stored nowhere, so each test searches the tokens it holds, with a control per surface.
 - **Synthetic users:** sign-in lowercases e-mail, so synthetic users must be stored lower-case.
+
+### Browser tests (`tests/browser`, harness `tests/harness/web.ts`)
+
+- **The harness:** `startWebWithStores()` gives a built workspace, a test API with real stores, the tenants and Chromium mapped to the test origin. Every request to another origin is aborted and counted.
+- **No DOM types in the tests' TypeScript.** Use a string `page.evaluate<T>("…")`, or a callback whose element is `unknown` with a cast.
+- **A seeded answer:** `page.route` with `route.fulfill` and the contract's envelope. `route.fetch` cannot resolve the test host.
+- **A page of another origin** (the framing test) must be a real local server. A made-up public name is stopped by Chromium before it reaches the local API.
+- **Clocks:** `page.clock.install()` before the page loads.
+- **One-time codes:** a code works once per step. Take codes from `authenticator()` (`tests/harness/journey.ts`), which never gives a step twice; two tests of a file must not use the same user's codes at the same time.
+- **A history walk** crosses document loads: use `page.goBack()` and wait, not `history.back()` inside `evaluate`.
+- **Two React lessons:**
+  - a `<dialog>` must be closed in a layout effect, while it is still in the document, or the focus goes to nobody;
+  - a dialog that is a form (the step-up) is never nested in another form.
+- **One CSS lesson:** an absolutely positioned element inside a scrolling frame needs `position: relative` on the frame, or it widens the page.
+- **A runbook never names a generated directory in backticks** (the workspace's dist): the links test wants every such path to exist, and CI has no build.
 
 ### Database
 
@@ -286,6 +324,7 @@ Scripts in `scripts/` and `infra/` are TypeScript run directly by Node (type str
   - A KMS outage does not seal a running OpenBao.
   - A console KMS certificate is valid for 30 days only, and the console names it by ID.
 - **The audit device on staging is about 500 MB.** Search it on the host with `countOnHost` (values on fd 3, only counts come back). Never use `producer | grep -f /dev/stdin`: inside a pipeline, grep's stdin is the producer.
+- **Never signal a container with `docker kill --signal`.** Docker marks a container it signalled as stopped by hand, and `unless-stopped` then starts it neither after an exit nor at boot. The nightly audit rotation did that to OpenBao until the Session 7 gate; it now runs `kill -HUP 1` inside the container (`tests/unit/hosts/signals.test.ts`). A container that is `exited` after a reboot is started with `host.ts <host> up`.
 - **User lockout:** about 15 minutes of failed AppRole logins lock the role id out, even for the right secret id (`known-limits.md`).
 
 ### Cloudflare R2 (D-16)
@@ -326,6 +365,8 @@ Scripts in `scripts/` and `infra/` are TypeScript run directly by Node (type str
 
   A clean host for a restore needs `restore.md`'s whole "Before".
 
+- **Host files reach a host only by `host.ts <host> push`.** A release holds images; `deploy` does not carry `infra/hosts`.
+- **An edge outage of more than three minutes also opens `checks_unknown`:** the host reads its public certificate as the edge serves it.
 - **`probe.ts secrets` makes a new read token.** The owner must then set the repository secret `PROBE_READ_TOKEN` again (runbook `probe.md`); without it `probe-watch` fails and alerts "state route did not answer".
 - **The `provisioner_runtime` password** lives only on the host (`/etc/mykey/secrets/provisioner/db-password`).
 
