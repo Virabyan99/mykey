@@ -7,8 +7,8 @@
 //    the host the token's bytes are searched (on fd 3, counts only) in the
 //    API's log, a pg_dump and Traefik's access log: 0 each, with the controls
 //    found.
-// 2. The drill: five issuances (Run 6.3: five a minute per person), fired
-//    250 ms apart across the moment the OpenBao container is paused for 8 s,
+// 2. The drill: five issuances (Run 6.3: five a minute per person), aimed at
+//    the measured moment the OpenBao container's 8 s pause lands,
 //    each attempt in a fresh minute; one caught after its marker answers 503
 //    outcome_unknown. Then: the probe raises operations_unresolved; quiesce;
 //    ops reconcile-credentials --executors-excluded yes; resume; a redeploy of
@@ -246,14 +246,24 @@ describe("machine credentials on staging", () => {
       //    An issuance logs in before its marker: one sent into a paused
       //    OpenBao fails before the marker, so the pause must land mid-flight.
       let attempts = 0;
+      // The pause lands over SSH, more than a second after it is sent (the
+      // gate's run: all 25 shots fired within the first second finished first).
+      // Each attempt measures that delay and the next aims its five shots at it:
+      // four in the last 600 ms before it and one just after.
+      let landsAfterMs = 1500;
       for (let attempt = 1; attempt <= 5 && caught.size === 0; attempt += 1) {
         attempts = attempt;
         await nextMinute();
         ({ cookie } = await stagingOwnerSession());
         const answers: Record<string, number> = {};
-        const pausing = pauseOpenBao(true).then(() => now());
-        const shots = [0, 1, 2, 3, 4].map(async (i) => {
-          await sleep(i * 250);
+        const sentAt = Date.now();
+        const pausing = pauseOpenBao(true).then(() => {
+          landsAfterMs = Date.now() - sentAt;
+          return now();
+        });
+        const aim = landsAfterMs;
+        const shots = [-600, -450, -300, -150, 100].map(async (offset, i) => {
+          await sleep(Math.max(0, aim + offset));
           const environment = environments[i % environments.length]!;
           const { answer } = await issue(environment.path, 60);
           const code = errorOf(answer).code;
@@ -270,7 +280,7 @@ describe("machine credentials on staging", () => {
         await pauseOpenBao(false);
         paused = false;
         await Promise.all(shots);
-        record(`attempt${String(attempt)}`, { pausedAt, answers });
+        record(`attempt${String(attempt)}`, { pausedAt, aimMs: aim, answers });
         await revokeAll();
       }
       record("caught", { attempts, operations: Object.fromEntries(caught) });
