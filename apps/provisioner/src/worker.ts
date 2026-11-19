@@ -57,27 +57,29 @@ export async function startProvisioner(
   };
   // Run 6.7 (P-122): the record must admit all, and OpenBao (the organization
   // namespace's copy) must name this incarnation; read again after 5 s.
-  // A refused login (Session 6 gate): the provisioner's own secret id is bad or
-  // destroyed. It can change nothing, so the job runs and fails into review
-  // (provisioning_failed) instead of waiting for ever on a read it cannot make.
+  // A denied answer (Session 6 gate): OpenBao refused the provisioner's login
+  // (a bad or destroyed secret id) or its read (its policy is gone). Either way
+  // it can change nothing, so the job runs and fails into review
+  // (provisioning_failed), and the sweep runs and reports the drift, instead of
+  // both waiting for ever on a read they cannot make.
   // An unreachable OpenBao (Session 6 gate) proves nothing about which OpenBao
   // it is: the gate stays shut, as `unreachable` rather than `incarnation`, and
   // the failed read is not kept, so the first sweep after it returns reads again.
   interface BaoReading {
     value: string | null;
-    loginRefused: boolean;
+    denied: boolean;
     unanswered: boolean;
   }
   let baoIncarnation: BaoReading & { at: number } = {
     value: null,
-    loginRefused: false,
+    denied: false,
     unanswered: false,
     at: -Infinity,
   };
   const readBaoIncarnation = async (): Promise<BaoReading> => {
     if (Date.now() - baoIncarnation.at < 5_000) return baoIncarnation;
     let value: string | null = null;
-    let loginRefused = false;
+    let denied = false;
     let unanswered = false;
     const organizationId = readCredential(config.secretsDirectory)?.organizationId;
     const client =
@@ -86,13 +88,13 @@ export async function startProvisioner(
       try {
         const answer = await client.readIncarnation();
         value = answer.ok ? answer.value : null;
-        if (!answer.ok && answer.cause === "denied") loginRefused = await client.loginRefused();
-        unanswered = !answer.ok && answer.cause !== "denied";
+        denied = !answer.ok && answer.cause === "denied";
+        unanswered = !answer.ok && !denied;
       } finally {
         await client.close();
       }
     }
-    const reading = { value, loginRefused, unanswered };
+    const reading = { value, denied, unanswered };
     if (!unanswered) baoIncarnation = { ...reading, at: Date.now() };
     return reading;
   };
@@ -107,7 +109,7 @@ export async function startProvisioner(
     const found = await readBaoIncarnation().catch(() => null);
     if (found === null || found.unanswered) return "unreachable";
     if (found.value === config.backendIncarnation) return null;
-    return found.loginRefused ? null : "incarnation";
+    return found.denied ? null : "incarnation";
   };
   const sender = await createSender(pool);
   // P-118: no job and no sweep while a pair is captured.

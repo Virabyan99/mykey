@@ -200,13 +200,18 @@ describe("drift sweep", () => {
     try {
       const before = provisioner.logs.length;
       await provisioner.sweep();
-      // The log says OpenBao could not be read — not that it is equal. Since
-      // Run 6.7 the incarnation check comes first: an unreachable OpenBao skips
-      // the sweep (Session 6 gate: as `unreachable`, never as another incarnation).
-      expect(provisioner.logs.slice(before)).toContainEqual({
-        event: "sweep_skipped",
-        cause: "unreachable",
-      });
+      // The log says OpenBao could not be read — never that it is equal, never
+      // another incarnation. Two outcomes are right, and timing picks one: the
+      // incarnation check (Run 6.7) still holds a good reading from the last 5 s,
+      // so the sweep runs and counts the organization unread; or it reads now and
+      // the sweep is skipped as `unreachable` (Session 6 gate).
+      const outcome = provisioner.logs
+        .slice(before)
+        .find((entry) => entry.event === "sweep" || entry.event === "sweep_skipped");
+      expect([
+        { event: "sweep", reviewed: 0, unread: 1 },
+        { event: "sweep_skipped", cause: "unreachable" },
+      ]).toContainEqual(outcome);
       expect(await states()).toEqual({
         organization: "active",
         env1a: "active",

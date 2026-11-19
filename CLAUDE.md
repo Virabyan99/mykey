@@ -218,6 +218,7 @@ Session 6 (details in its run notes and report):
 - **OpenBao's user lockout**: about 15 minutes of failed AppRole logins lock the role id out, even for the right secret id (`known-limits.md`).
 - **The registry build ignores a status in `owners`**; `loadOverrides` now refuses an entry in the wrong list.
 - **A text alias hides an ORDER BY.** `SELECT sequence::text AS sequence … ORDER BY sequence` sorts the text (1, 10, 2): staging's archive stopped at segment 10. Name the column (`table.sequence`) when the select casts it.
+- **`probe.ts secrets` makes a new read token.** The repository secret `PROBE_READ_TOKEN` must be set again afterwards (runbook `probe.md`; the owner runs `gh secret set`, which the agent may not), or `probe-watch` fails and alerts "state route did not answer".
 - **A cached failure is a decision.** The provisioner kept a failed OpenBao read for 5 s and called it another incarnation, so a test passed or failed by timing. Cache only answers; an unreachable backend is `unreachable`.
 
 Open issues carried into Sessions 7 and 8 are listed in `docs/evidence/session-6/report.md` ("What Sessions 7, 8 and 9 must know").
