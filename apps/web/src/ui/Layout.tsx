@@ -4,14 +4,16 @@
 // everything the address names.
 import { useQueryClient } from "@tanstack/react-query";
 import { webPath } from "@mykey/contracts";
-import { useEffect, useId, type ChangeEvent, type ReactNode } from "react";
-import type { SessionView } from "../api/auth.ts";
+import { useEffect, useId, useState, type ChangeEvent, type ReactNode } from "react";
+import { signOut, type SessionView } from "../api/auth.ts";
 import { call } from "../api/client.ts";
 import { SESSION_KEY } from "../api/query.ts";
 import { ErrorPanel } from "../errors/ErrorPanel.tsx";
+import type { Failure } from "../errors/explain.ts";
 import { stateLabel } from "../labels.ts";
 import { Link, navigate } from "../router.tsx";
 import { ScopeProvider, useScopeState, type Scope } from "../state/scope.tsx";
+import { useSessionControl } from "../state/session.tsx";
 import { Loading } from "./StateBadge.tsx";
 
 const ACTIVITY_EVERY_MS = 60_000;
@@ -177,17 +179,38 @@ export function Layout(props: {
   children: ReactNode;
 }) {
   useActivity();
+  const control = useSessionControl();
+  const [notGone, setNotGone] = useState<Failure | null>(null);
   const state = useScopeState(props.session.userId, props.route.params);
+  // "Signed out" is said only when the server has ended the session.
+  const leave = async (): Promise<void> => {
+    const result = await signOut();
+    if (result.ok) control.drop("signed_out");
+    else setNotGone(result.failure);
+  };
   const scope = state.status === "ready" || state.status === "unknown" ? state.scope : null;
   return (
     <div className="frame">
       <header className="top">
         <p className="brand">MyKey</p>
         <ScopeBar scope={scope} params={props.route.params} />
-        <p className="who">{props.session.email}</p>
+        <p className="who">
+          {props.session.email}{" "}
+          <button
+            type="button"
+            onClick={() => {
+              void leave();
+            }}
+          >
+            Sign out
+          </button>
+        </p>
       </header>
       {scope === null ? null : <Sections scope={scope} current={props.route.id} />}
       <main>
+        {notGone === null ? null : (
+          <ErrorPanel failure={notGone} action="sign out (you are still signed in)" />
+        )}
         {state.status === "loading" ? <Loading what="the workspace" /> : null}
         {state.status === "error" ? (
           <ErrorPanel failure={state.failure} action="open this page" onReload={state.reload} />

@@ -8,8 +8,12 @@ import { useEffect, type ReactNode } from "react";
 import { forgetData } from "./api/query.ts";
 import { ErrorPanel } from "./errors/ErrorPanel.tsx";
 import { navigate, usePath } from "./router.tsx";
+import { Account } from "./screens/account.tsx";
+import { Enroll } from "./screens/enroll.tsx";
 import { Home } from "./screens/home.tsx";
-import { SignIn } from "./screens/sign-in.tsx";
+import { Reset } from "./screens/reset.tsx";
+import { SecondStep, SignIn } from "./screens/sign-in.tsx";
+import { useFlow } from "./state/flow.ts";
 import { useSession } from "./state/session.tsx";
 import { useScope } from "./state/scope.tsx";
 import { Layout } from "./ui/Layout.tsx";
@@ -17,7 +21,6 @@ import { Loading } from "./ui/StateBadge.tsx";
 
 /** The screens later runs of Session 7 build; until then, the name of the place. */
 const TITLES: Readonly<Record<string, string>> = {
-  account: "Account",
   help: "Help",
   overview: "Overview",
   activity: "Activity",
@@ -36,17 +39,19 @@ function Place(props: { id: string }) {
 
 function screenOf(route: { id: string; params: Record<string, string> }): ReactNode {
   if (route.id === "home") return <Home />;
+  if (route.id === "account") return <Account />;
   if (route.id === "secret") return <h1>{route.params.name}</h1>;
   return <Place id={route.id} />;
 }
 
-/** Paths for someone who is not signed in yet. */
-const OUTSIDE = new Set(["sign-in", "enroll", "reset"]);
+/** Paths a complete session has nothing to do on. */
+const OUTSIDE = new Set(["sign-in", "enroll"]);
 
 export function App() {
   const path = usePath();
   const route = matchWebRoute(path);
   const session = useSession();
+  const flow = useFlow();
   const client = useQueryClient();
   const userId =
     session.status === "complete" || session.status === "partial" ? session.session.userId : null;
@@ -83,7 +88,18 @@ export function App() {
       </main>
     );
   }
-  if (session.status !== "complete") return <SignIn />;
+  // A reset link is for someone who cannot sign in: it needs no session.
+  if (route?.id === "reset") return <Reset />;
+  if (session.status === "partial") {
+    // The password only (rule 6): the second step, or the first set-up of it. Never a workspace screen.
+    if (route?.id === "enroll" || session.session.phase === "enrollment") return <Enroll />;
+    return <SecondStep />;
+  }
+  if (session.status === "none") {
+    // A completed reset of kind `mfa` goes on to enrolment with a session the server does not show.
+    if (flow.enrolAfterReset && route?.id === "enroll") return <Enroll />;
+    return <SignIn />;
+  }
   if (route === null) {
     return (
       <main className="narrow">

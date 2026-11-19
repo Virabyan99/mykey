@@ -10,3 +10,11 @@ export {
   type Tone,
 } from "./labels.ts";
 export { POLL_DELAYS_MS, isTerminal, nextPollDelay } from "./api/poll.ts";
+export {
+  EMPTY_HOLD,
+  EPHEMERAL_TTL_MS,
+  hold,
+  type Held,
+  type HoldEvent,
+  type HoldRules,
+} from "./state/ephemeral.ts";

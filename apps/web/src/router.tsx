@@ -14,6 +14,9 @@ function subscribe(listener: () => void): () => void {
   };
 }
 
+/** Told of every change of address: a link, `navigate`, back and forward. */
+export const onNavigate = subscribe;
+
 /** The path of the address bar; a component that reads it renders again when it changes. */
 export function usePath(): string {
   return useSyncExternalStore(subscribe, () => window.location.pathname);

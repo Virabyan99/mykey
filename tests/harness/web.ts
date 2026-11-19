@@ -10,6 +10,7 @@
 // rewrites a header. The API's certificate is the stack's private one: the
 // context accepts it (this is not a test of TLS).
 // Needs Chromium: `pnpm exec playwright install chromium` (once per workstation or runner).
+import { randomBytes, randomUUID } from "node:crypto";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -55,6 +56,13 @@ export interface Web {
   signedIn(user: FixtureUser): Promise<WebSession>;
   /** A page with no cookie. */
   anonymous(): Promise<WebSession>;
+  /** A page with this `name=value` session cookie (a password-only session, a second session). */
+  withCookie(pair: string): Promise<WebSession>;
+  /**
+   * A new account of organization A that has a password and no authenticator
+   * yet (`enrollment_pending`), made as the tenants fixture makes its users.
+   */
+  pendingUser(): Promise<{ id: string; email: string; password: string }>;
   close(): Promise<void>;
 }
 
@@ -82,13 +90,14 @@ export async function startWeb(options: StartTestApiOptions = {}): Promise<Web> 
     });
     cleanup.push(() => browser.close());
 
-    const open = async (user: FixtureUser | null): Promise<WebSession> => {
+    const open = async (pair: string | null): Promise<WebSession> => {
       const context = await browser.newContext({
         ignoreHTTPSErrors: true,
         serviceWorkers: "block",
       });
-      if (user !== null) {
-        const pair = await tenants.cookie(user);
+      // The API is local: what is not there after 15 seconds will not come.
+      context.setDefaultTimeout(15_000);
+      if (pair !== null) {
         const at = pair.indexOf("=");
         await context.addCookies([
           {
@@ -139,8 +148,35 @@ export async function startWeb(options: StartTestApiOptions = {}): Promise<Web> 
       tenants,
       browser,
       origin: TEST_ORIGIN,
-      signedIn: (user) => open(user),
+      signedIn: async (user) => open(await tenants.cookie(user)),
       anonymous: () => open(null),
+      withCookie: (pair) => open(pair),
+      pendingUser: async () => {
+        const id = randomUUID();
+        const email = `pending-${randomBytes(3).toString("hex")}@mykey.invalid`;
+        const password = randomBytes(18).toString("base64url");
+        const hasher = (await api.auth.$context).password;
+        const db = api.superuser;
+        await db.query(
+          `INSERT INTO auth."user" (id, name, email, email_verified) VALUES ($1, $2, $3, true)`,
+          [id, "pending", email],
+        );
+        await db.query(
+          `INSERT INTO auth.account (id, account_id, provider_id, user_id, password)
+           VALUES (gen_random_uuid(), $1, 'credential', $2, $3)`,
+          [id, id, await hasher.hash(password)],
+        );
+        await db.query(
+          "INSERT INTO auth.account_state (user_id, state) VALUES ($1, 'enrollment_pending')",
+          [id],
+        );
+        await db.query(
+          `INSERT INTO app.membership (id, organization_id, user_id, role, state)
+           VALUES (gen_random_uuid(), $1, $2, 'admin', 'active')`,
+          [tenants.a.organizationId, id],
+        );
+        return { id, email, password };
+      },
       close,
     };
   } catch (error) {

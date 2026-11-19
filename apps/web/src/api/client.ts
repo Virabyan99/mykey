@@ -27,6 +27,7 @@ export interface Bodies {
   "session.activity": SessionActivityBody;
   "audit.list": AuditListBody;
   "activity.list": ActivityListBody;
+  "auth.reset.complete": { next: "sign_in" | "enroll" };
 }
 export type RouteId = keyof Bodies;
 

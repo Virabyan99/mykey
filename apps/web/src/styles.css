@@ -244,6 +244,150 @@ main.narrow {
   padding-left: 1.25rem;
 }
 
+/* Forms */
+form {
+  margin: 1rem 0;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  margin: 0 0 0.9rem;
+  max-width: 28rem;
+}
+
+.field label,
+.secret-line label {
+  font-weight: 600;
+}
+
+.field input {
+  padding: 0.45rem 0.6rem;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--bg);
+}
+
+.field input[aria-invalid="true"] {
+  border-color: var(--warn);
+  border-width: 2px;
+}
+
+.hint,
+.muted {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.field-error {
+  margin: 0;
+  color: var(--warn);
+  font-weight: 600;
+}
+
+button.danger {
+  border-color: var(--warn);
+  border-width: 2px;
+  font-weight: 600;
+}
+
+.actions.other {
+  margin-top: 1.5rem;
+}
+
+.confirm {
+  margin: 0.75rem 0;
+  padding: 0.75rem;
+  border: 2px solid var(--warn);
+  border-radius: 8px;
+}
+
+.confirm p {
+  margin: 0;
+}
+
+/* Secrets while they are shown */
+.secret-line {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  margin: 0.75rem 0;
+}
+
+.secret {
+  display: block;
+  padding: 0.5rem 0.6rem;
+  border: 1px dashed var(--line);
+  border-radius: 6px;
+  font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
+  overflow-wrap: anywhere;
+  user-select: all;
+}
+
+.codes {
+  columns: 2;
+  padding-left: 2rem;
+}
+
+.copy {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+/* Tables */
+.scroll {
+  overflow-x: auto;
+}
+
+table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 0.5rem 0 1rem;
+}
+
+th,
+td {
+  padding: 0.4rem 0.6rem;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+  vertical-align: top;
+}
+
+th {
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+section {
+  margin: 0 0 2rem;
+}
+
+dialog {
+  max-width: min(30rem, calc(100vw - 2rem));
+  padding: 1.25rem;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--bg);
+  color: var(--text);
+}
+
+dialog::backdrop {
+  background: rgb(0 0 0 / 55%);
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
 @media (max-width: 40rem) {
   .who {
     margin-left: 0;
