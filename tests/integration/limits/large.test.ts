@@ -119,8 +119,9 @@ describe("the in-flight gate (64 per process)", () => {
     expect(refused.status).toBe(503);
     expect(refused.headers.get("connection")).toBe("close");
     expect(await codeOf(refused)).toBe("busy");
+    // The one released is the first that reached the stub, which need not be the first sent.
     held.shift()?.release();
-    expect((await answers[0]!).status).toBe(204);
+    expect((await Promise.race(answers)).status).toBe(204);
     const next = list();
     await heldCount(max);
     for (const request of held.splice(0)) request.release();

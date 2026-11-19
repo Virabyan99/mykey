@@ -169,6 +169,8 @@ describe("product routes are closed to incomplete sessions (Task A)", () => {
       "openapi.get", // Run 5.9 (reference.get stays stubbed here: see stubRoutes)
       "audit.list", // Run 6.1
       "activity.list", // Run 6.1
+      "overview.get", // Run 7.3
+      "metrics.get", // Run 7.8
     ];
     const stubbed = HUMAN.filter(
       (route) => !handled.includes(route.id) && route.scope !== "operation",
