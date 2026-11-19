@@ -5,7 +5,7 @@
 // list of the projects they can see, without counts. The role only spares a
 // request the server would refuse; the server decides.
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { webPath, type OverviewBody } from "@mykey/contracts";
+import { CREDENTIAL_STATES, LIMITS, webPath, type OverviewBody } from "@mykey/contracts";
 import { useState } from "react";
 import { call, failureOf, need } from "../api/client.ts";
 import { ErrorPanel } from "../errors/ErrorPanel.tsx";
@@ -122,7 +122,94 @@ function Counted(props: { org: string; userId: string }) {
           Only the first {projects.length} projects are shown. The scope bar lists the others.
         </p>
       ) : null}
+      <CredentialSummary org={org} userId={userId} projects={projects} />
     </>
+  );
+}
+
+const WARNING_DAYS = Math.floor(LIMITS.machineToken.expiryWarningSeconds / 86_400);
+
+/** The organization's machine credentials in numbers (FR-1.91): the catalog's, at one time. */
+function CredentialSummary(props: { org: string; userId: string; projects: readonly Project[] }) {
+  const { org, userId, projects } = props;
+  const summary = useQuery({
+    queryKey: [userId, org, "credentials-summary"],
+    queryFn: () => need(call("credentials.summary", { params: { org } })),
+  });
+  const placeOf = (projectId: string, environmentId: string): string => {
+    const project = projects.find((candidate) => candidate.id === projectId);
+    const environment = project?.environments.find((candidate) => candidate.id === environmentId);
+    return project === undefined || environment === undefined
+      ? "an environment not shown above"
+      : `${project.name} / ${environment.name}`;
+  };
+  return (
+    <section aria-labelledby="credentials-summary">
+      <h2 id="credentials-summary">Machine credentials</h2>
+      {summary.isPending ? <Loading what="the credentials summary" /> : null}
+      {summary.isError ? (
+        <ErrorPanel
+          failure={failureOf(summary.error)}
+          action="read the credentials summary"
+          onReload={() => void summary.refetch()}
+        />
+      ) : null}
+      {summary.data === undefined ? null : (
+        <>
+          <p className="hint">
+            Counted from the catalog of this organization, as of{" "}
+            <Time at={summary.data.observedAt} />. A credential past its expiry counts as expired.
+          </p>
+          <div className="scroll">
+            <table aria-label="Credentials by state">
+              <thead>
+                <tr>
+                  <th scope="col">State</th>
+                  <th scope="col">Credentials</th>
+                </tr>
+              </thead>
+              <tbody>
+                {CREDENTIAL_STATES.map((state) => (
+                  <tr key={state}>
+                    <th scope="row">
+                      <StateBadge kind="credential" state={state} />
+                    </th>
+                    <td>{summary.data.byState[state]}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <h3 id="credentials-expiring">Expiring within {WARNING_DAYS} days</h3>
+          {summary.data.expiring.length === 0 ? (
+            <p>No active credential expires within {WARNING_DAYS} days.</p>
+          ) : (
+            <ul aria-labelledby="credentials-expiring" className="rows">
+              {summary.data.expiring.map((row) => (
+                <li key={row.credentialId}>
+                  {row.name}, in{" "}
+                  <Link
+                    to={webPath("credentials", {
+                      org,
+                      project: row.projectId,
+                      env: row.environmentId,
+                    })}
+                  >
+                    {placeOf(row.projectId, row.environmentId)}
+                  </Link>
+                  , expires <Time at={row.expiresAt} />
+                </li>
+              ))}
+            </ul>
+          )}
+          {summary.data.expiringTruncated ? (
+            <p role="status">
+              Only the {summary.data.expiring.length} that expire soonest are listed.
+            </p>
+          ) : null}
+        </>
+      )}
+    </section>
   );
 }
 

@@ -10,6 +10,7 @@ import { ErrorPanel } from "./errors/ErrorPanel.tsx";
 import { navigate, usePath } from "./router.tsx";
 import { Account } from "./screens/account.tsx";
 import { Enroll } from "./screens/enroll.tsx";
+import { Credentials } from "./screens/credentials.tsx";
 import { Help } from "./screens/help.tsx";
 import { Home } from "./screens/home.tsx";
 import { ImportExport } from "./screens/import.tsx";
@@ -30,7 +31,6 @@ import { Loading } from "./ui/StateBadge.tsx";
 const TITLES: Readonly<Record<string, string>> = {
   activity: "Activity",
   audit: "Audit",
-  credentials: "Machine credentials",
   operations: "Operations",
 };
 
@@ -51,6 +51,7 @@ function screenOf(route: { id: string; params: Record<string, string> }): ReactN
   if (route.id === "account") return <Account />;
   if (route.id === "overview") return <Overview />;
   if (route.id === "project") return <Project />;
+  if (route.id === "credentials") return <Credentials />;
   if (route.id === "help") return <Help />;
   if (route.id === "import") return <ImportExport />;
   if (route.id === "secrets") return <Secrets />;

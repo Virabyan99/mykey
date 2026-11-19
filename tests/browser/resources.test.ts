@@ -87,7 +87,7 @@ async function confirmTyped(dialog: Locator, name: string, button: string): Prom
 
 describe("the overview and the resource screens", () => {
   // First in the file: nothing is pending yet, so nothing has a reason to be asked again.
-  it("one overview load makes at most 4 API requests, and an idle minute makes none", async () => {
+  it("one overview load makes at most 5 API requests, and an idle minute makes none", async () => {
     const session = await web.signedIn("ownerA");
     const { page } = session;
     try {
@@ -103,8 +103,9 @@ describe("the overview and the resource screens", () => {
       expect(await first.locator("tbody tr").count()).toBe(2);
 
       const load = apiCalls(session);
-      expect(load.length, load.join(" ")).toBeLessThanOrEqual(4);
+      expect(load.length, load.join(" ")).toBeLessThanOrEqual(5);
       expect(load).toContain(`/v1/organizations/${org()}/overview`);
+      expect(load).toContain(`/v1/organizations/${org()}/credentials/summary`);
 
       await page.clock.fastForward(60_000);
       await sleep(1000);

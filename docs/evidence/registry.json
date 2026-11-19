@@ -1279,9 +1279,11 @@
       "ownerRun": "7.7",
       "contributingRuns": [],
       "oldSession": "D08-S36",
-      "status": "OPEN",
-      "evidence": [],
-      "note": ""
+      "status": "SPIKE_PASS",
+      "evidence": [
+        "docs/evidence/session-7/run-7.7.md"
+      ],
+      "note": "The credentials screen and credentials.summary: name, scope, effective expiry, issuer, state, last use only when known, the seven-day warning as text, the token once through the forgetting holder, the lost-delivery explanation, revocation by typed name and fixed replacement guidance. Local browser proof over real OpenBao; the staging demonstration is the gate's."
     },
     {
       "id": "FR-1.92",
@@ -2077,9 +2079,11 @@
       "ownerRun": "7.7",
       "contributingRuns": [],
       "oldSession": "D08-S36",
-      "status": "OPEN",
-      "evidence": [],
-      "note": ""
+      "status": "SPIKE_PASS",
+      "evidence": [
+        "docs/evidence/session-7/run-7.7.md"
+      ],
+      "note": "Every credential state issued through the product and shown; a revocation in the page is followed by machine.keys refusing the token; no token is shown twice. Local proof."
     },
     {
       "id": "AC-1.48",

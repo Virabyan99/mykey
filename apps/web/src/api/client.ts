@@ -12,7 +12,9 @@ import {
   type AuditListBody,
   type EnvironmentsBody,
   type ImportPreviewBody,
+  type CredentialIssuedBody,
   type CredentialsListBody,
+  type CredentialsSummaryBody,
   type OperationResponse,
   type OperationsListBody,
   type OrganizationsBody,
@@ -46,6 +48,8 @@ export interface Bodies {
   "environments.archive": OperationResponse;
   "environments.reactivate": OperationResponse;
   "credentials.list": CredentialsListBody;
+  "credentials.revoke": OperationResponse;
+  "credentials.summary": CredentialsSummaryBody;
   "operations.list": OperationsListBody;
   "secrets.list": SecretsListBody;
   "secrets.history": SecretsHistoryBody;
@@ -65,6 +69,7 @@ export interface SecretBodies {
   "import.preview": ImportPreviewBody;
   "import.apply": OperationResponse;
   "import.resume": OperationResponse;
+  "credentials.issue": CredentialIssuedBody;
 }
 export type SecretRouteId = Extract<keyof SecretBodies, SecretBearing>;
 

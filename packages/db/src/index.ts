@@ -140,6 +140,11 @@ export {
   type AuditRow,
 } from "./repos/audit-read.ts";
 export {
+  readCredentialsSummary,
+  type CredentialsSummary,
+  type ExpiringCredential,
+} from "./repos/credentials-summary.ts";
+export {
   readOverview,
   type Overview,
   type OverviewEnvironment,

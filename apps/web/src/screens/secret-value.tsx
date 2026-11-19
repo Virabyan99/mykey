@@ -77,7 +77,7 @@ export function useReveal(at: At, name: string): Revealer {
 }
 
 /** The time, once a second, while something counts down. */
-function useNow(active: boolean): number {
+export function useNow(active: boolean): number {
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
     if (!active) return;
