@@ -198,11 +198,14 @@ describe("drift sweep", () => {
   it("OpenBao stopped during a sweep → nothing changes state", async () => {
     await stopService(fx.stack, "openbao");
     try {
+      const before = provisioner.logs.length;
       await provisioner.sweep();
-      // The log says the organization could not be read — not that it is equal.
-      expect(provisioner.logs.filter((entry) => entry.event === "sweep").at(-1)).toMatchObject({
-        reviewed: 0,
-        unread: 1,
+      // The log says OpenBao could not be read — not that it is equal. Since
+      // Run 6.7 the incarnation check comes first: an unreachable OpenBao skips
+      // the sweep (Session 6 gate: as `unreachable`, never as another incarnation).
+      expect(provisioner.logs.slice(before)).toContainEqual({
+        event: "sweep_skipped",
+        cause: "unreachable",
       });
       expect(await states()).toEqual({
         organization: "active",

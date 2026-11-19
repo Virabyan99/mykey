@@ -60,19 +60,25 @@ export async function startProvisioner(
   // A refused login (Session 6 gate): the provisioner's own secret id is bad or
   // destroyed. It can change nothing, so the job runs and fails into review
   // (provisioning_failed) instead of waiting for ever on a read it cannot make.
+  // An unreachable OpenBao (Session 6 gate) proves nothing about which OpenBao
+  // it is: the gate stays shut, as `unreachable` rather than `incarnation`, and
+  // the failed read is not kept, so the first sweep after it returns reads again.
   interface BaoReading {
     value: string | null;
     loginRefused: boolean;
+    unanswered: boolean;
   }
   let baoIncarnation: BaoReading & { at: number } = {
     value: null,
     loginRefused: false,
+    unanswered: false,
     at: -Infinity,
   };
   const readBaoIncarnation = async (): Promise<BaoReading> => {
     if (Date.now() - baoIncarnation.at < 5_000) return baoIncarnation;
     let value: string | null = null;
     let loginRefused = false;
+    let unanswered = false;
     const organizationId = readCredential(config.secretsDirectory)?.organizationId;
     const client =
       organizationId === undefined ? null : await clientFor(organizationId as OrganizationId);
@@ -81,12 +87,14 @@ export async function startProvisioner(
         const answer = await client.readIncarnation();
         value = answer.ok ? answer.value : null;
         if (!answer.ok && answer.cause === "denied") loginRefused = await client.loginRefused();
+        unanswered = !answer.ok && answer.cause !== "denied";
       } finally {
         await client.close();
       }
     }
-    baoIncarnation = { value, loginRefused, at: Date.now() };
-    return baoIncarnation;
+    const reading = { value, loginRefused, unanswered };
+    if (!unanswered) baoIncarnation = { ...reading, at: Date.now() };
+    return reading;
   };
   const expect = {
     hostInstanceId: config.hostInstanceId,
@@ -97,8 +105,9 @@ export async function startProvisioner(
     const reading = readGate(config.gatePath, expect);
     if (reading.admits !== "all") return "gate_closed";
     const found = await readBaoIncarnation().catch(() => null);
-    if (found?.value === config.backendIncarnation) return null;
-    return found?.loginRefused === true ? null : "incarnation";
+    if (found === null || found.unanswered) return "unreachable";
+    if (found.value === config.backendIncarnation) return null;
+    return found.loginRefused ? null : "incarnation";
   };
   const sender = await createSender(pool);
   // P-118: no job and no sweep while a pair is captured.
