@@ -11,6 +11,7 @@ import { writeFileSync } from "node:fs";
 import { setTimeout as sleep } from "node:timers/promises";
 import { parseDotenv } from "@mykey/contracts";
 import { beforeAll, describe, expect, it } from "vitest";
+import { nextMinute } from "../harness/staging.ts";
 import { publicRequest, stagingOwnerSession, type PublicAnswer } from "../harness/staging-owner.ts";
 
 /** The staging owner's organization (Run 3.2). */
@@ -77,31 +78,49 @@ async function exportOf(
   return { answer, ms: performance.now() - started };
 }
 
+/**
+ * Run 6.3: preview, apply and resume share five requests a minute per person.
+ * A request that limit refuses did nothing: it is sent again in the next
+ * minute. The wait is not part of an import's measured time.
+ */
+let waitedMs = 0;
+async function paced(request: () => Promise<PublicAnswer>): Promise<PublicAnswer> {
+  for (let attempt = 0; ; attempt += 1) {
+    const answer = await request();
+    if (answer.status !== 429 || attempt === 3) return answer;
+    expect(codeOf(answer)).toBe("rate_limited");
+    const started = performance.now();
+    await nextMinute();
+    waitedMs += performance.now() - started;
+  }
+}
+
 /** Preview and apply a dotenv file; resumes while the import answers awaiting_input. */
 async function importFile(
   env: keyof typeof environments,
   text: Buffer,
 ): Promise<{ state: string; waits: number; ms: number; outcomes: string[] }> {
   const started = performance.now();
-  const preview = await publicRequest("POST", `${envPath(env)}/import/preview`, { text, cookie });
+  const waitedBefore = waitedMs;
+  const preview = await paced(() =>
+    publicRequest("POST", `${envPath(env)}/import/preview`, { text, cookie }),
+  );
   expect(preview.status, `preview ${codeOf(preview) ?? ""}`).toBe(200);
   expect(json(preview).applicable).toBe(true);
-  let answer = await send(
-    "POST",
-    `${envPath(env)}/import/${String(json(preview).previewId)}/apply`,
-    {
-      text,
-    },
+  let answer = await paced(() =>
+    send("POST", `${envPath(env)}/import/${String(json(preview).previewId)}/apply`, { text }),
   );
   let waits = 0;
   while (answer.status === 202) {
     expect(json(answer).state).toBe("awaiting_input");
     waits += 1;
     expect(waits, "resumes").toBeLessThan(10);
-    answer = await publicRequest(
-      "POST",
-      `${envPath(env)}/import-operations/${String(json(answer).operationId)}/resume`,
-      { text, cookie },
+    const operationId = String(json(answer).operationId);
+    answer = await paced(() =>
+      publicRequest("POST", `${envPath(env)}/import-operations/${operationId}/resume`, {
+        text,
+        cookie,
+      }),
     );
   }
   expect(answer.status, `apply ${codeOf(answer) ?? ""}`).toBe(200);
@@ -109,7 +128,7 @@ async function importFile(
   return {
     state: String(json(answer).state),
     waits,
-    ms: performance.now() - started,
+    ms: performance.now() - started - (waitedMs - waitedBefore),
     outcomes: entries.map((entry) => entry.outcome),
   };
 }

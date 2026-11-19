@@ -86,8 +86,13 @@ describe("the off-host probe", () => {
       expect(current.now - (current.state.lastHeartbeatAt ?? 0), host.name).toBeLessThan(90_000);
       // Production runs without a gate file (the owner opens it): its /health answers down by
       // design, and the probe marks it `inService: false`, so health_failing does not open there
-      // either (after Session 5). Nothing may be open on either host.
-      expect(Object.keys(current.state.open).sort(), host.name).toEqual([]);
+      // either (after Session 5). Nothing may be open on staging. Production has no OpenBao
+      // yet (reinstalled 19 Nov 2026): its heartbeat cannot read the seal, the KMS or the
+      // capacity record, and unknown is never healthy (Run 6.4), so checks_unknown is open
+      // there and nothing else. The day production gets its OpenBao this is [] again.
+      expect(Object.keys(current.state.open).sort(), host.name).toEqual(
+        host.name === "prod" ? ["checks_unknown"] : [],
+      );
     }
   });
 
@@ -195,10 +200,19 @@ describe("the off-host probe", () => {
       `dead endpoint: resolved ${Math.round((Date.now() - asked) / 1000)} s after edge stopped (restart at 300 s)`,
     );
     expect(heartbeatMissing).toBe(false);
-    const since = (resolved?.alerts ?? []).filter((a) => a.at >= asked);
-    expect(since.map((a) => `${a.condition} ${a.kind} ${a.delivered}`).sort()).toEqual([
+    const since = (resolved?.alerts ?? [])
+      .filter((a) => a.at >= asked)
+      .map((a) => `${a.condition} ${a.kind} ${a.delivered}`)
+      .sort();
+    // Since Run 6.4 the host reads its public certificate as the edge serves it. With the
+    // edge stopped that check is unknown, and after its grace (180 s) checks_unknown opens
+    // beside health_failing, then resolves. Whether the 300 s outage reaches that grace is
+    // timing: both outcomes are right. heartbeat_missing never is (the host is alive).
+    const unknown = ["checks_unknown opened 1", "checks_unknown resolved 1"];
+    expect(since.filter((line) => !unknown.includes(line))).toEqual([
       "health_failing opened 1",
       "health_failing resolved 1",
     ]);
+    expect([0, 2]).toContain(since.filter((line) => unknown.includes(line)).length);
   }, 900_000);
 });

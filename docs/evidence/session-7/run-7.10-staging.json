@@ -1,0 +1,16 @@
+{
+  "project": {
+    "name": "s7-web-c6ed25",
+    "id": "3c429f53-423f-49b5-a5f0-21448a4c50ea",
+    "environment": "b6011b79-18d4-4819-b5ec-1990b4637a03"
+  },
+  "journey": {
+    "secret": "WEB_C6DF353E",
+    "credential": "s7-web-983dc9",
+    "afterRevoke": 401,
+    "afterSignOut": 401
+  },
+  "archive": {
+    "status": 200
+  }
+}
