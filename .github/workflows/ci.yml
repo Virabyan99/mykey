@@ -1,10 +1,12 @@
 name: ci
 
-# Actions minutes are scarce on this private repository (2,000 a month), so CI
-# runs only on pull requests and by hand, never on a plain push. Every run on a
-# working branch is preceded by the local `pnpm run check` and test runs.
+# CI runs only on pull requests and by hand, never on a plain push. It has two
+# weights (Session 7, P-133). A draft pull request runs `check` (with the unit
+# tests) and the secret scan: about two minutes a push. Marking it ready, or a
+# manual run, adds the scans, the integration suite and the browser project.
 on:
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
   workflow_dispatch:
     inputs:
       jobs:
@@ -98,7 +100,7 @@ jobs:
   # The dependency and image scans and the scanners' self-test, in one job.
   scans:
     needs: check
-    if: needs.check.outputs.code == 'true'
+    if: needs.check.outputs.code == 'true' && (github.event_name == 'workflow_dispatch' || github.event.pull_request.draft == false)
     runs-on: ubuntu-24.04
     timeout-minutes: 25
     steps:
@@ -119,7 +121,7 @@ jobs:
 
   integration:
     needs: check
-    if: needs.check.outputs.code == 'true'
+    if: needs.check.outputs.code == 'true' && (github.event_name == 'workflow_dispatch' || github.event.pull_request.draft == false)
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     # Two shards by file (Run 4.9): the whole suite outgrew 30 minutes on one runner.
@@ -147,6 +149,30 @@ jobs:
       - run: pnpm run test:integration --shard="$SHARD/2"
         env:
           SHARD: ${{ matrix.shard }}
+      - name: Remove every test stack
+        if: always()
+        run: node scripts/stack.ts down --all
+
+  # The browser project (Session 7): the workspace and the reference in Chromium
+  # against a local test API with real PostgreSQL and OpenBao. Chromium is the
+  # build the pinned playwright names; `playwright install` fetches it.
+  browser:
+    needs: check
+    if: needs.check.outputs.code == 'true' && (github.event_name == 'workflow_dispatch' || github.event.pull_request.draft == false)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec playwright install --with-deps chromium
+      - run: pnpm run test:browser
       - name: Remove every test stack
         if: always()
         run: node scripts/stack.ts down --all
