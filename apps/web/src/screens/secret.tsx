@@ -1,143 +1,32 @@
-// One secret (FR-1.20 to FR-1.23, P-138). The page shows what the index says
-// about the name and no value. A value is read only when the owner presses
-// Reveal; it is held by the forgetting holder of this component and nowhere
-// else, and it is gone after 30 seconds, when the tab is hidden, on a change
-// of address and at sign-out. An edit names the version the form was opened
-// on: when the secret changed meanwhile, the server refuses and the page
-// offers to read it again or to cancel, and no way to save over it.
+// One secret (FR-1.20 to FR-1.29, P-138). The page shows what the index says
+// about the name, its history, and no value until the owner presses Reveal
+// (secret-value.tsx). Every change names the version the page last read: an
+// edit the version its form was opened on, a delete, undelete or restore the
+// version shown. When the secret changed meanwhile the server refuses, and
+// the page offers to read it again or to cancel, and no way to save over it.
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { checkSecretName, webPath, type SecretsListBody } from "@mykey/contracts";
-import { useEffect, useRef, useState, type SyntheticEvent } from "react";
+import { useRef, useState, type SyntheticEvent } from "react";
 import { call, callSecret, failureOf, need } from "../api/client.ts";
 import { ErrorPanel } from "../errors/ErrorPanel.tsx";
 import type { Failure } from "../errors/explain.ts";
 import { Link } from "../router.tsx";
-import { EPHEMERAL_TTL_MS } from "../state/ephemeral.ts";
 import { useScope } from "../state/scope.tsx";
-import { useSessionControl } from "../state/session.tsx";
 import { isCode, useAction } from "../state/use-action.ts";
-import { useEphemeral } from "../state/use-ephemeral.ts";
 import { AreaField } from "../ui/Field.tsx";
 import { EnvironmentNotice } from "../ui/Resource.tsx";
-import { CopyButton, SecretLine } from "../ui/Secret.tsx";
 import { Loading, StateBadge } from "../ui/StateBadge.tsx";
 import { Time } from "../ui/Time.tsx";
+import { ChangeDialog, History, type Change, type Expected } from "./secret-history.tsx";
 import { SECRET_VALUE_RULE, secretValueProblem, versionOf } from "./secret-rules.ts";
+import { ValuePanel, useReveal, type At } from "./secret-value.tsx";
 
 type Row = SecretsListBody["secrets"][number];
-
-/** The environment of the address: the parameters of every route below it. */
-type At = Readonly<Record<"org" | "project" | "env", string>>;
-
-/** What Reveal holds: the value, the version it is, and when it will be forgotten. */
-interface Shown {
-  value: string;
-  version: number;
-  until: number;
-}
-
-/** The time, once a second, while something counts down. */
-function useNow(active: boolean): number {
-  const [now, setNow] = useState(() => Date.now());
-  useEffect(() => {
-    if (!active) return;
-    const timer = window.setInterval(() => {
-      setNow(Date.now());
-    }, 1000);
-    return () => {
-      window.clearInterval(timer);
-    };
-  }, [active]);
-  return now;
-}
-
-function Reveal(props: { at: At; name: string }) {
-  const control = useSessionControl();
-  const [shown, show, hide] = useEphemeral<Shown>();
-  const [busy, setBusy] = useState(false);
-  const [failure, setFailure] = useState<Failure | null>(null);
-  const [missed, setMissed] = useState(false);
-  const now = useNow(shown !== null);
-
-  const reveal = async (): Promise<void> => {
-    if (busy) return;
-    setBusy(true);
-    setFailure(null);
-    setMissed(false);
-    const result = await callSecret("secrets.reveal", {
-      params: { ...props.at, name: props.name },
-      body: {},
-    });
-    setBusy(false);
-    if (!result.ok) {
-      if (!control.lost(result.failure)) setFailure(result.failure);
-      return;
-    }
-    // A value that arrives while nobody can be looking is not kept.
-    if (document.visibilityState === "hidden") {
-      setMissed(true);
-      return;
-    }
-    show({
-      value: result.body.value,
-      version: result.body.version,
-      until: Date.now() + EPHEMERAL_TTL_MS,
-    });
-  };
-
-  if (shown === null) {
-    return (
-      <section>
-        <h2>Value</h2>
-        <p>
-          The value is hidden. Reveal reads it from the secret store, records that you did, and
-          shows it here for {String(EPHEMERAL_TTL_MS / 1000)} seconds.
-        </p>
-        {missed ? (
-          <p role="status">
-            The value arrived while this tab was hidden, and it was not kept. Reveal it again.
-          </p>
-        ) : null}
-        {failure === null ? null : <ErrorPanel failure={failure} action="reveal the value" />}
-        <div className="actions">
-          <button type="button" onClick={() => void reveal()} disabled={busy}>
-            Reveal
-          </button>
-        </div>
-      </section>
-    );
-  }
-  // The clock of the countdown may be a second old; it is never older than the reveal.
-  const left = Math.ceil((shown.until - Math.max(now, shown.until - EPHEMERAL_TTL_MS)) / 1000);
-  return (
-    <section>
-      <h2>Value</h2>
-      <SecretLine label="Value" text={shown.value} wide />
-      {shown.value === "" ? <p className="hint">This value is empty.</p> : null}
-      <p>
-        Version {shown.version}. Hidden again in {Math.max(0, left)} s, or as soon as you leave this
-        page or this tab.
-      </p>
-      <div className="actions">
-        <CopyButton text={shown.value} label="Copy value" />
-        <button type="button" onClick={hide}>
-          Hide now
-        </button>
-      </div>
-    </section>
-  );
-}
-
-/** The version and tag a form was opened on: what the save will say it expects. */
-interface Opened {
-  version: number;
-  stateTag: string;
-}
 
 function EditForm(props: {
   at: At;
   name: string;
-  opened: Opened;
+  opened: Expected;
   onSaved: (text: string) => void;
   onConflict: (failure: Failure) => void;
   onCancel: () => void;
@@ -207,28 +96,45 @@ function EditForm(props: {
   );
 }
 
-type Editing =
-  { mode: "closed" } | { mode: "open"; opened: Opened } | { mode: "conflict"; failure: Failure };
+type Doing =
+  | { mode: "idle" }
+  | { mode: "edit"; opened: Expected }
+  | { mode: "change"; change: Change; expected: Expected }
+  /** A stale change: the page offers to read again or to cancel. `edit` reopens the form after. */
+  | { mode: "conflict"; failure: Failure; edit: boolean };
+
+const IDLE: Doing = { mode: "idle" };
 
 function Found(props: {
   at: At;
+  userId: string;
   row: Row;
+  /** The environment is active. */
   writable: boolean;
   reload: () => Promise<Row | null>;
-  changed: () => void;
+  changed: () => Promise<void>;
 }) {
   const { at, row, writable } = props;
-  const [editing, setEditing] = useState<Editing>({ mode: "closed" });
+  const revealer = useReveal(at, row.name);
+  const [doing, setDoing] = useState<Doing>(IDLE);
   const [notice, setNotice] = useState<string | null>(null);
+  const review = row.state === "needs_review";
   const live = row.state === "live" && row.version !== null;
+  const expected: Expected | null =
+    row.version === null ? null : { version: row.version, stateTag: row.stateTag };
 
-  const open = (from: Row): void => {
+  const edit = (from: Row): void => {
     if (from.state !== "live" || from.version === null) {
-      setEditing({ mode: "closed" });
+      setDoing(IDLE);
       return;
     }
     setNotice(null);
-    setEditing({ mode: "open", opened: { version: from.version, stateTag: from.stateTag } });
+    setDoing({ mode: "edit", opened: { version: from.version, stateTag: from.stateTag } });
+  };
+  const start = (change: Change): void => {
+    if (expected === null) return;
+    setNotice(null);
+    setDoing({ mode: "change", change, expected });
   };
 
   return (
@@ -245,70 +151,124 @@ function Found(props: {
           <Time at={row.changedAt} />
         </dd>
       </dl>
-      {row.state === "needs_review" ? (
+      {review ? (
         <p className="review">
-          An earlier change to this secret has an outcome that is not known, so it is closed. An
-          operator settles this from the host (runbook reconciliation.md). Nothing here can.
+          An earlier change to this secret has an outcome that is not known, so it is closed: no
+          value can be read and nothing can be changed. An operator settles this from the host
+          (runbook reconciliation.md). Nothing here can.
         </p>
       ) : null}
-      {row.state === "deleted" ? (
-        <p>This secret is deleted. It has no current value to reveal or to edit.</p>
-      ) : null}
       {notice === null ? null : <p role="status">{notice}</p>}
-      {live ? <Reveal at={at} name={row.name} /> : null}
-      {editing.mode === "open" ? (
+      {review ? null : <ValuePanel revealer={revealer} live={live} />}
+
+      {doing.mode === "edit" ? (
         <EditForm
-          key={`${String(editing.opened.version)} ${editing.opened.stateTag}`}
+          key={`${String(doing.opened.version)} ${doing.opened.stateTag}`}
           at={at}
           name={row.name}
-          opened={editing.opened}
+          opened={doing.opened}
           onSaved={(text) => {
-            setEditing({ mode: "closed" });
+            setDoing(IDLE);
             setNotice(text);
-            props.changed();
+            void props.changed();
           }}
           onConflict={(failure) => {
-            setEditing({ mode: "conflict", failure });
+            setDoing({ mode: "conflict", failure, edit: true });
           }}
           onCancel={() => {
-            setEditing({ mode: "closed" });
+            setDoing(IDLE);
           }}
         />
       ) : null}
-      {editing.mode === "conflict" ? (
+      {doing.mode === "change" ? (
+        <ChangeDialog
+          at={at}
+          name={row.name}
+          change={doing.change}
+          expected={doing.expected}
+          refresh={props.changed}
+          onDone={(text) => {
+            setDoing(IDLE);
+            setNotice(text);
+          }}
+          onConflict={(failure) => {
+            setDoing({ mode: "conflict", failure, edit: false });
+          }}
+          onCancel={() => {
+            setDoing(IDLE);
+          }}
+        />
+      ) : null}
+      {doing.mode === "conflict" ? (
         <ErrorPanel
-          failure={editing.failure}
-          action="save the new value"
+          failure={doing.failure}
+          action="change the secret"
           onReload={() => {
+            const reopen = doing.edit;
+            void props.changed();
             void props.reload().then((fresh) => {
-              if (fresh === null) setEditing({ mode: "closed" });
-              else open(fresh);
+              if (reopen && fresh !== null) edit(fresh);
+              else setDoing(IDLE);
             });
           }}
         >
           <button
             type="button"
             onClick={() => {
-              setEditing({ mode: "closed" });
-              props.changed();
+              setDoing(IDLE);
+              void props.changed();
             }}
           >
             Cancel
           </button>
         </ErrorPanel>
       ) : null}
-      {editing.mode === "closed" && live && writable ? (
+      {doing.mode === "idle" && writable && !review && expected !== null ? (
         <div className="actions">
-          <button
-            type="button"
-            onClick={() => {
-              open(row);
-            }}
-          >
-            Edit value
-          </button>
+          {live ? (
+            <>
+              <button
+                type="button"
+                onClick={() => {
+                  edit(row);
+                }}
+              >
+                Edit value
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  start({ kind: "delete" });
+                }}
+              >
+                Delete
+              </button>
+            </>
+          ) : null}
+          {row.state === "deleted" ? (
+            <button
+              type="button"
+              onClick={() => {
+                start({ kind: "undelete" });
+              }}
+            >
+              Undelete
+            </button>
+          ) : null}
         </div>
       ) : null}
+
+      <History
+        at={at}
+        name={row.name}
+        userId={props.userId}
+        writable={writable && !review && doing.mode === "idle"}
+        readable={!review}
+        revealer={revealer}
+        onRestore={(source) => {
+          start({ kind: "restore", source });
+        }}
+      />
     </>
   );
 }
@@ -365,12 +325,11 @@ export function Secret(props: { name: string }) {
         <Found
           key={`${env} ${name}`}
           at={at}
+          userId={userId}
           row={query.data}
           writable={environment.state === "active"}
           reload={async () => (await query.refetch()).data ?? null}
-          changed={() => {
-            void client.invalidateQueries({ queryKey: [userId, org] });
-          }}
+          changed={() => client.invalidateQueries({ queryKey: [userId, org] })}
         />
       )}
     </>

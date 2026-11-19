@@ -18,6 +18,7 @@ import {
   type OverviewBody,
   type ProjectsBody,
   type RouteDef,
+  type SecretsHistoryBody,
   type SecretsListBody,
   type SecretsRevealBody,
   type SessionActivityBody,
@@ -46,6 +47,10 @@ export interface Bodies {
   "credentials.list": CredentialsListBody;
   "operations.list": OperationsListBody;
   "secrets.list": SecretsListBody;
+  "secrets.history": SecretsHistoryBody;
+  "secrets.delete": OperationResponse;
+  "secrets.undelete": OperationResponse;
+  "secrets.restore": OperationResponse;
 }
 /** A route of SECRET_BEARING is not one of these, whatever `Bodies` says. */
 export type RouteId = Exclude<keyof Bodies, SecretBearing>;
