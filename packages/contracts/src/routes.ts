@@ -500,6 +500,35 @@ const credentialsListBody = z.strictObject({
   credentials: z.array(credentialView),
   nextCursor: z.string().nullable(),
 });
+/**
+ * credentials.summary (Run 7.7, P-139, FR-1.91): the organization's machine
+ * credentials counted by state at one database time, and the active ones
+ * within the expiry warning, soonest first. States are derived as
+ * `credentials.list` derives them. Never a token, never an accessor.
+ */
+const credentialCount = z.int().nonnegative();
+const credentialsSummaryBody = z.strictObject({
+  observedAt: z.iso.datetime(),
+  byState: z.strictObject({
+    issuing: credentialCount,
+    active: credentialCount,
+    revoking: credentialCount,
+    revoked: credentialCount,
+    expired: credentialCount,
+    needs_review: credentialCount,
+  }),
+  expiring: z.array(
+    z.strictObject({
+      credentialId: z.uuid(),
+      name: z.string(),
+      projectId: z.uuid(),
+      environmentId: z.uuid(),
+      expiresAt: z.iso.datetime(),
+    }),
+  ),
+  /** True when more credentials are expiring than the answer holds. */
+  expiringTruncated: z.boolean(),
+});
 
 // ----------------------------------------------------------------- error lists
 
@@ -837,6 +866,7 @@ export const ROUTES: readonly RouteDef[] = Object.freeze([
   }),
   define("credentials.summary", "GET", `${O}/credentials/summary`, "human", false, "7.7", {
     action: "credentials.manage",
+    responses: { 200: credentialsSummaryBody },
   }),
   define("metrics.get", "GET", `${O}/metrics`, "human", false, "7.8", { action: "audit.view" }),
 
@@ -891,6 +921,7 @@ export type AuditListBody = z.infer<typeof auditListBody>;
 export type ActivityListBody = z.infer<typeof activityListBody>;
 export type SessionActivityBody = z.infer<typeof activityBody>;
 export type OverviewBody = z.infer<typeof overviewBody>;
+export type CredentialsSummaryBody = z.infer<typeof credentialsSummaryBody>;
 
 /** The two machine bodies, for the CLI's validator (Run 5.5, P-96). */
 export { keysBody as machineKeysBody, resolveBody as machineResolveBody };
