@@ -14,6 +14,7 @@
     "@mykey/operations": "workspace:*",
     "@mykey/ops": "workspace:*",
     "@mykey/probe": "workspace:*",
+    "@mykey/web": "workspace:*",
     "@next/env": "catalog:",
     "@scalar/openapi-parser": "catalog:",
     "@types/pg": "catalog:",

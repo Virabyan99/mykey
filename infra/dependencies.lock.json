@@ -187,18 +187,28 @@
     },
     "react": {
       "version": "19.3.1",
-      "advisoriesChecked": "2026-11-15",
-      "note": "Consumer fixture only (Run 5.8, P-100): tests/fixtures/consumers/next-app; never part of the product."
+      "advisoriesChecked": "2026-11-19",
+      "note": "The owner workspace (Run 7.1, apps/web: bundled by esbuild into the API image's static files, never in a runtime node_modules) and the consumer fixture tests/fixtures/consumers/next-app (Run 5.8, P-100)."
     },
     "react-dom": {
       "version": "19.3.1",
-      "advisoriesChecked": "2026-11-15",
-      "note": "Consumer fixture only (Run 5.8, P-100): tests/fixtures/consumers/next-app; never part of the product."
+      "advisoriesChecked": "2026-11-19",
+      "note": "The owner workspace (Run 7.1, apps/web: bundled by esbuild into the API image's static files, never in a runtime node_modules) and the consumer fixture tests/fixtures/consumers/next-app (Run 5.8, P-100)."
     },
     "@tanstack/react-query": {
       "version": "5.107.1",
-      "advisoriesChecked": "2026-11-10",
-      "note": "catalog only until Run 7.1"
+      "advisoriesChecked": "2026-11-19",
+      "note": "The owner workspace (Run 7.1): metadata only, in memory only, no persister (P-138)."
+    },
+    "@types/react": {
+      "version": "19.3.0",
+      "advisoriesChecked": "2026-11-19",
+      "note": "Development only (Run 7.1): types of apps/web; no runtime code."
+    },
+    "@types/react-dom": {
+      "version": "19.3.0",
+      "advisoriesChecked": "2026-11-19",
+      "note": "Development only (Run 7.1): types of apps/web; no runtime code."
     },
     "@scalar/api-reference": {
       "version": "1.77.0",

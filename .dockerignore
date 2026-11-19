@@ -31,3 +31,7 @@
 !infra/openbao/policies
 # The API reference asset script (Run 5.9); the asset stage of apps/api/Dockerfile runs it.
 !scripts/reference-asset.ts
+# The owner workspace (Run 7.1); the web stage of apps/api/Dockerfile bundles it.
+!apps/web/package.json
+!apps/web/src
+!apps/web/build.ts

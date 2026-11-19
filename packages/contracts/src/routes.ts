@@ -119,12 +119,14 @@ const resetCompleteBody = z.strictObject({
 });
 
 /** organizations.list (Run 3.7): the caller's active memberships; no namespace, no digest. */
+/** The states of an organization. */
+export const ORGANIZATION_STATES = ["provisioning", "active", "failed", "needs_review"] as const;
 const organizationsBody = z.strictObject({
   organizations: z.array(
     z.strictObject({
       id: z.uuid(),
       role: z.enum(["owner", "admin", "member"]),
-      state: z.enum(["provisioning", "active", "failed", "needs_review"]),
+      state: z.enum(ORGANIZATION_STATES),
       /** Why the organization is `needs_review`; null in every other state. */
       reviewReason: z.string().nullable(),
     }),
@@ -174,7 +176,9 @@ const secretsListQuery = z.strictObject({
 });
 
 /** Run 4.3 (P-73): the index's view of a name. Never a value. */
-const indexState = z.enum(["live", "deleted", "needs_review"]);
+/** The states of a secret's index row. */
+export const INDEX_STATES = ["live", "deleted", "needs_review"] as const;
+const indexState = z.enum(INDEX_STATES);
 const secretsListBody = z.strictObject({
   secrets: z.array(
     z.strictObject({
@@ -350,7 +354,15 @@ const pageQuery = z.strictObject({
   limit: z.int().min(1).max(LIMITS.listing.maxLimit).default(LIMITS.listing.defaultLimit),
   cursor: z.string().min(1).optional(),
 });
-const resourceState = z.enum(["pending", "active", "revoking", "archived", "needs_review"]);
+/** The states of a project or an environment (exported for the workspace, Session 7). */
+export const RESOURCE_STATES = [
+  "pending",
+  "active",
+  "revoking",
+  "archived",
+  "needs_review",
+] as const;
+const resourceState = z.enum(RESOURCE_STATES);
 const projectsBody = z.strictObject({
   projects: z.array(
     z.strictObject({
@@ -822,6 +834,23 @@ export const ROUTES: readonly RouteDef[] = Object.freeze([
     errors: ["environment_changed", "capacity_exceeded", ...VALUE_READ],
   }),
 ]);
+
+// The types of the bodies above, for the owner workspace (Session 7, P-136).
+// An export is not a contract change.
+export type OrganizationsBody = z.infer<typeof organizationsBody>;
+export type ProjectsBody = z.infer<typeof projectsBody>;
+export type EnvironmentsBody = z.infer<typeof environmentsBody>;
+export type SecretsListBody = z.infer<typeof secretsListBody>;
+export type SecretsHistoryBody = z.infer<typeof secretsHistoryBody>;
+export type SecretsRevealBody = z.infer<typeof secretsRevealBody>;
+export type ImportPreviewBody = z.infer<typeof importPreviewBody>;
+export type OperationsListBody = z.infer<typeof operationsListBody>;
+export type CredentialView = z.infer<typeof credentialView>;
+export type CredentialIssuedBody = z.infer<typeof credentialIssuedBody>;
+export type CredentialsListBody = z.infer<typeof credentialsListBody>;
+export type AuditListBody = z.infer<typeof auditListBody>;
+export type ActivityListBody = z.infer<typeof activityListBody>;
+export type SessionActivityBody = z.infer<typeof activityBody>;
 
 /** The two machine bodies, for the CLI's validator (Run 5.5, P-96). */
 export { keysBody as machineKeysBody, resolveBody as machineResolveBody };
