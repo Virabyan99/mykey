@@ -11,6 +11,24 @@ FR-1.75 (P-130). This is an honest list: each line names what the service does n
 - **Import is limited to 1 MiB, an environment to 8 MiB.** A large export cannot be imported again in one piece. The `@next/env` reader can lose a key in one case, and the export warns about it (Session 4).
 - **Better Auth writes `expires_at` with the API's clock.** A session's expiry depends on the API host's time (Session 3; chrony is checked in `status`).
 
+## The workspace
+
+- **There is no QR code at enrolment.** The setup key is shown as text and as an `otpauth://` address (P-135; the owner is asked in Run 8.8).
+- **A closed host answers JSON, not a page.** With the gate closed, the workspace's own address answers `quarantined` like every other path (D-59).
+- **The clipboard and a saved export are outside the product.** A copied value and an exported file stay where the owner put them; the page says so at the copy (D-60).
+- **Clearing the page's state is not erasing memory.** The browser may keep freed text until it reuses the space (FR-1.22).
+- **After a reset of the authenticator, a reload loses the hand-over to enrolment.** A new reset link is needed (Run 7.2).
+- **The script is about 875 kB, 216 kB compressed.** It is one file with no splitting (Run 7.9).
+- **The history does not say which version a restore copied.** The server keeps the source with the operation, not in `secrets.history` (Run 7.5).
+- **An import that waits for its file shows no progress per entry**, and only the member who started it can resume it (Run 7.6).
+- **An exported file is held for 30 seconds before it must be saved.** Waiting longer means a second export and a second audit row (Run 7.6).
+- **The page names runbooks by their path.** It serves no document: the owner reads them in the repository (Run 7.6).
+- **The summary counts the audit rows the database still holds.** After the purge, older days read "not measured"; the archive is not read (D-61).
+- **The analytics are tables.** There is no chart (D-62).
+- **On a narrow screen a wide table moves inside its own frame.** Rows are not stacked (Run 7.9).
+- **Contrast was not measured, and no accessibility standard is claimed.** Keyboard use, labels, focus and a 360-pixel screen were tested in Chromium only (Run 7.9).
+- **The CLI's error line has no next step and no operation id.** The page's text for the same code is the fuller one (Run 7.9).
+
 ## Alerts and the probe
 
 - **A certificate that lives 60 days or less alerts at a third of its life.** A 30-day KMS certificate alerts 10 days before it ends, not 30 (D-50).

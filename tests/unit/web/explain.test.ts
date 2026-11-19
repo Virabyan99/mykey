@@ -81,6 +81,18 @@ describe("explain", () => {
     expect(explain(api("action_denied"), context).text).toContain("save the secret");
   });
 
+  it("no two codes share a title or a text: every class of failure has its own words (Run 7.9)", () => {
+    const explained = ERROR_CODE_NAMES.map((code) => explain(api(code), context));
+    expect(new Set(explained.map((entry) => entry.title)).size).toBe(ERROR_CODE_NAMES.length);
+    expect(new Set(explained.map((entry) => entry.text)).size).toBe(ERROR_CODE_NAMES.length);
+    // The raw code is in no part of any explanation (a code of one word, like busy, is a word).
+    for (const code of ERROR_CODE_NAMES.filter((name) => name.includes("_"))) {
+      for (const entry of explained) {
+        expect(`${entry.title} ${entry.text} ${entry.next}`).not.toContain(code);
+      }
+    }
+  });
+
   it("no explanation holds a code in angle brackets, a stack or the server's message", () => {
     for (const code of ERROR_CODE_NAMES) {
       const explained = explain(api(code, { message: "SERVER-TEXT-MARKER" }), context);

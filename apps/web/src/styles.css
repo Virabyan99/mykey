@@ -340,6 +340,8 @@ button.danger {
 
 /* Tables */
 .scroll {
+  /* The frame of whatever is positioned inside the table (a visually hidden header): without it such an element widens the page. */
+  position: relative;
   overflow-x: auto;
 }
 

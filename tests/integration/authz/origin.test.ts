@@ -90,6 +90,15 @@ function withHeaders(init: Target["init"], extra: Record<string, string>) {
 describe("the Origin check", () => {
   it("covers every non-GET human, fresh and reset route and every POST auth route", () => {
     const names = targets().map((target) => target.name);
+    // Run 7.9: said without naming the kinds, so that a new kind of route cannot stay outside.
+    expect(names).toEqual([
+      ...ROUTES.filter((route) => route.method !== "GET" && route.auth !== "machine").map(
+        (route) => route.id,
+      ),
+      ...servedAuthRoutes()
+        .filter((route) => route.method !== "GET")
+        .map((route) => `${route.method} ${route.path}`),
+    ]);
     expect(names).toContain("auth.reset.complete");
     expect(names).toContain("POST /v1/auth/sign-in/email");
     expect(names).toContain("projects.create");

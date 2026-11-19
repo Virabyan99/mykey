@@ -40,6 +40,17 @@ describe("the workspace's shell in the app", () => {
     expect(script.status).toBe(200);
     expect(script.headers.get("content-type")).toBe("text/javascript; charset=utf-8");
     expect(await script.text()).toBe(FIXTURE_DIST["assets/app-BBBB2222.js"]!.text);
+    // Run 7.9 (P-141): every asset carries the shell's headers, not only the index.
+    const assets = Object.keys(FIXTURE_DIST).filter((path) => path.startsWith("assets/"));
+    expect(assets.length).toBeGreaterThanOrEqual(2);
+    for (const path of assets) {
+      const asset = await api.request("GET", `/${path}`);
+      expect(asset.status, path).toBe(200);
+      for (const [name, value] of Object.entries(SHELL_HEADERS)) {
+        expect(asset.headers.get(name), `${path}: ${name}`).toBe(value);
+      }
+      expect(asset.headers.get("cache-control"), path).toBe("no-store");
+    }
     const unknown = await api.request("GET", "/assets/unknown.js");
     expect(unknown.status).toBe(404);
     expect((await errorOf(unknown)).code).toBe("not_found");

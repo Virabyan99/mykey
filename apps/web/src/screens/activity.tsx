@@ -296,6 +296,19 @@ export function Activity() {
           </select>
         </div>
       </form>
+      {environments.isError ? (
+        <>
+          <p role="status">
+            The environments of this project could not be read. The timeline below is the whole
+            project&apos;s.
+          </p>
+          <ErrorPanel
+            failure={failureOf(environments.error)}
+            action="read the environments of this project"
+            onReload={() => void environments.refetch()}
+          />
+        </>
+      ) : null}
       <Timeline org={org} userId={userId} project={project} environment={environment} />
     </>
   );

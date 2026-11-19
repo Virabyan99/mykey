@@ -1009,6 +1009,54 @@
       "status": "SPIKE_PASS",
       "evidence": ["docs/evidence/session-7/run-7.8.md"],
       "note": "The summary from real audit rows: not measured, a counted zero, counted days and unresolved operations equal to a direct count; organization B counted nowhere and a member refused. Local proof."
+    },
+    {
+      "id": "FR-1.76",
+      "status": "SPIKE_PASS",
+      "evidence": ["docs/evidence/session-7/run-7.9.md"],
+      "note": "Every cookie-authenticated change needs this origin on every route and auth path that is not a GET; no GET changes a row; the page and every asset carry the content policy; injected inline and third-party scripts and framing are refused by Chromium. Local proof."
+    },
+    {
+      "id": "FR-1.89",
+      "status": "SPIKE_PASS",
+      "evidence": ["docs/evidence/session-7/run-7.9.md"],
+      "note": "Every owner screen is reached from the navigation after a complete sign-in and shows the server's states in the server's words; no placeholder screen is left. Local browser proof."
+    },
+    {
+      "id": "FR-1.93",
+      "status": "SPIKE_PASS",
+      "evidence": ["docs/evidence/session-7/run-7.9.md"],
+      "note": "One table maps every code to what happened, the safe next step and the ids; the nine failure classes each show their own words in a real screen, never the code or the server's text; an unknown outcome never invites a second send. Five classes by the server's own answer, four answered by the harness with the contract's envelope."
+    },
+    {
+      "id": "FR-1.96",
+      "status": "SPIKE_PASS",
+      "evidence": ["docs/evidence/session-7/run-7.9.md"],
+      "note": "Labels on every control, errors tied to fields, Tab in reading order with a visible focus ring, dialogs that hold and return the focus, typed-name confirmation, words beside every colour, and no sideways movement at 360 pixels. Chromium only; no conformance to a standard is claimed."
+    },
+    {
+      "id": "AC-1.29",
+      "status": "SPIKE_PASS",
+      "evidence": ["docs/evidence/session-7/run-7.9.md"],
+      "note": "The page's part: errors read by the envelope's schema; a cut connection or a proxy's page is 'No usable answer came back' and never a claim about the change; hidden and absent read the same. The CLI's and API's parts are Sessions 3 and 5's."
+    },
+    {
+      "id": "AC-1.34",
+      "status": "SPIKE_PASS",
+      "evidence": ["docs/evidence/session-7/run-7.9.md"],
+      "note": "Cross-site changes refused on product and auth routes; an inline script, a third-party script and an inline style refused by the browser; framing refused; referrer policy no-referrer. Local proof."
+    },
+    {
+      "id": "AC-1.51",
+      "status": "SPIKE_PASS",
+      "evidence": ["docs/evidence/session-7/run-7.9.md"],
+      "note": "The main flow done with the keyboard only; narrow layout, labels, focus placement and return and textual equivalents inspected in Chromium; three defects found and repaired. Contrast not measured."
+    },
+    {
+      "id": "PO-12",
+      "status": "SPIKE_PASS",
+      "evidence": ["docs/evidence/session-7/run-7.9.md"],
+      "note": "The browser's content policy on the workspace: headers on the page and every asset, enforced by Chromium (framing and injected scripts refused, no violation from any screen). Local proof; the staging check is the gate's."
     }
   ]
 }

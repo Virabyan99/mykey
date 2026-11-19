@@ -1,8 +1,17 @@
 // The confirmation of an action that ends or reopens something (FR-1.17,
 // FR-1.96). Its text is fixed and names the thing; the action's button works
 // only after the thing's name was typed exactly. A native modal dialog: the
-// browser keeps the focus inside it and gives it back on close.
-import { useEffect, useId, useRef, useState, type ReactNode, type SyntheticEvent } from "react";
+// browser keeps the focus inside it and gives it back on close. It is closed
+// in a layout effect: that runs while the dialog is still in the document,
+// and a dialog removed while open gives the focus to nobody.
+import {
+  useId,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type ReactNode,
+  type SyntheticEvent,
+} from "react";
 import { Field } from "./Field.tsx";
 
 export function ConfirmDialog(props: {
@@ -23,7 +32,7 @@ export function ConfirmDialog(props: {
   const title = useId();
   const [typed, setTyped] = useState("");
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const element = dialog.current;
     if (element !== null && !element.open) element.showModal();
     return () => {
