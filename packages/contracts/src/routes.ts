@@ -349,6 +349,44 @@ export const activityListBody = z.strictObject({
   anchor: z.iso.datetime(),
 });
 
+/**
+ * metrics.get (Run 7.8, P-139, FR-1.94): what happened in the organization,
+ * by UTC day, counted from the audit rows its listings serve. `days` is how
+ * many UTC days end with today; today is counted up to `observedAt`.
+ * `success`, `failure` and `unknown` are the outcomes of the product's
+ * actions (the rows of `activity.list`); `denied` is the action
+ * `access.denied` (rows of `audit.list`). A day before `measuredFrom`, the
+ * organization's oldest row, has `counts: null`: it was not measured, which
+ * is not zero. `operations` are top-level operations now: `unresolved` have
+ * no end yet (accepted, executing, awaiting input, or uncertain and not
+ * settled by an operator); `uncertain` is every operation in that state.
+ */
+export const METRICS_MAX_DAYS = 30;
+const metricsQuery = z.strictObject({
+  days: z.int().min(1).max(METRICS_MAX_DAYS).default(7),
+});
+const metricCount = z.int().nonnegative();
+const metricsBody = z.strictObject({
+  observedAt: z.iso.datetime(),
+  source: z.literal("audit.event"),
+  window: z.strictObject({ from: z.iso.datetime(), to: z.iso.datetime() }),
+  measuredFrom: z.iso.datetime().nullable(),
+  days: z.array(
+    z.strictObject({
+      day: z.iso.date(),
+      counts: z
+        .strictObject({
+          success: metricCount,
+          failure: metricCount,
+          unknown: metricCount,
+          denied: metricCount,
+        })
+        .nullable(),
+    }),
+  ),
+  operations: z.strictObject({ unresolved: metricCount, uncertain: metricCount }),
+});
+
 /** projects.list and environments.list (Run 3.9, P-59): keyset pages in id order. */
 const pageQuery = z.strictObject({
   limit: z.int().min(1).max(LIMITS.listing.maxLimit).default(LIMITS.listing.defaultLimit),
@@ -868,7 +906,11 @@ export const ROUTES: readonly RouteDef[] = Object.freeze([
     action: "credentials.manage",
     responses: { 200: credentialsSummaryBody },
   }),
-  define("metrics.get", "GET", `${O}/metrics`, "human", false, "7.8", { action: "audit.view" }),
+  define("metrics.get", "GET", `${O}/metrics`, "human", false, "7.8", {
+    action: "audit.view",
+    query: metricsQuery,
+    responses: { 200: metricsBody },
+  }),
 
   define("session.activity", "POST", "/v1/session/activity", "human", false, "3.5", {
     action: null,
@@ -922,6 +964,7 @@ export type ActivityListBody = z.infer<typeof activityListBody>;
 export type SessionActivityBody = z.infer<typeof activityBody>;
 export type OverviewBody = z.infer<typeof overviewBody>;
 export type CredentialsSummaryBody = z.infer<typeof credentialsSummaryBody>;
+export type MetricsBody = z.infer<typeof metricsBody>;
 
 /** The two machine bodies, for the CLI's validator (Run 5.5, P-96). */
 export { keysBody as machineKeysBody, resolveBody as machineResolveBody };
