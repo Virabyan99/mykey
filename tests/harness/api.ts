@@ -353,6 +353,8 @@ export async function startTestApi(opts: StartTestApiOptions = {}): Promise<Test
       gatePath,
       hostInstanceId,
       trustedProxy: null,
+      // Session 7 (P-134): no workspace unless a suite asks for one.
+      webDirectory: null,
       ...opts.config,
       backendIncarnation,
     };

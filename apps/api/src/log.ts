@@ -48,6 +48,8 @@ export type LogEntry =
   | { event: "outbox"; time: string; outcome: "failed"; errorClass: string }
   /** Run 5.9: the reference's asset is not in the image; reference.get answers 503. */
   | { event: "reference_asset_missing"; time: string }
+  /** Run 7.1 (P-134): the built workspace is not in the image; its paths answer 503. */
+  | { event: "web_shell_missing"; time: string }
   | { event: "throttle_sweep"; time: string; outcome: "failed"; errorClass: string }
   | { event: "session_cleanup"; time: string; outcome: "failed"; errorClass: string }
   | { event: "operation_sweep"; time: string; outcome: "failed"; errorClass: string }
