@@ -14,6 +14,8 @@ import { Home } from "./screens/home.tsx";
 import { Overview } from "./screens/overview.tsx";
 import { Project } from "./screens/project.tsx";
 import { Reset } from "./screens/reset.tsx";
+import { Secret } from "./screens/secret.tsx";
+import { Secrets } from "./screens/secrets.tsx";
 import { SecondStep, SignIn } from "./screens/sign-in.tsx";
 import { useFlow } from "./state/flow.ts";
 import { useSession } from "./state/session.tsx";
@@ -27,7 +29,6 @@ const TITLES: Readonly<Record<string, string>> = {
   help: "Help",
   activity: "Activity",
   audit: "Audit",
-  secrets: "Secrets",
   import: "Import",
   credentials: "Machine credentials",
   operations: "Operations",
@@ -50,7 +51,8 @@ function screenOf(route: { id: string; params: Record<string, string> }): ReactN
   if (route.id === "account") return <Account />;
   if (route.id === "overview") return <Overview />;
   if (route.id === "project") return <Project />;
-  if (route.id === "secret") return <h1>{route.params.name}</h1>;
+  if (route.id === "secrets") return <Secrets />;
+  if (route.id === "secret") return <Secret name={route.params.name ?? ""} />;
   return <Place id={route.id} />;
 }
 

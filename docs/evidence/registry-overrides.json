@@ -961,6 +961,18 @@
       "status": "SPIKE_PASS",
       "evidence": ["docs/evidence/session-7/run-7.3.md"],
       "note": "Active, pending, archived, revoking and review resources shown with counts, times and the actions their state allows; a member is denied and organization B gets the hidden 404. FR-1.94's part is Run 7.8's."
+    },
+    {
+      "id": "FR-1.22",
+      "status": "SPIKE_PASS",
+      "evidence": ["docs/evidence/session-7/run-7.4.md"],
+      "note": "Masked until an explicit Reveal; the value is held only by the displaying component and is gone after 30 s, on hide, on a change of address and at sign-out; no secret-bearing route goes through the query cache (D-60). Local browser proof over real OpenBao; a historical version's reveal is Run 7.5's and the storage scan Run 7.10's."
+    },
+    {
+      "id": "FR-1.23",
+      "status": "SPIKE_PASS",
+      "evidence": ["docs/evidence/session-7/run-7.4.md"],
+      "note": "Copy is an explicit button; the page then says the clipboard is outside MyKey and the copy cannot be taken back; no value in a notice or an error text."
     }
   ]
 }

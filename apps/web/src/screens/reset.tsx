@@ -7,7 +7,7 @@
 // used link, a wrong code), so the page has one text for it.
 import { LIMITS, PASSWORD_MIN_CHARACTERS, checkPassword } from "@mykey/contracts";
 import { useEffect, useRef, useState, type SyntheticEvent } from "react";
-import { call } from "../api/client.ts";
+import { callSecret } from "../api/client.ts";
 import { ErrorPanel } from "../errors/ErrorPanel.tsx";
 import type { Failure } from "../errors/explain.ts";
 import { Link, navigate } from "../router.tsx";
@@ -52,7 +52,7 @@ export function Reset() {
     setProblem(null);
     setBusy(true);
     const given = code.current?.value.trim() ?? "";
-    const result = await call("auth.reset.complete", {
+    const result = await callSecret("auth.reset.complete", {
       body: { token: link.token, newPassword, ...(given === "" ? {} : { code: given }) },
     });
     first.current.value = "";

@@ -10,6 +10,7 @@ export {
   type Tone,
 } from "./labels.ts";
 export { POLL_DELAYS_MS, isTerminal, nextPollDelay } from "./api/poll.ts";
+export { SECRET_BEARING, type SecretBearing } from "./api/secret-routes.ts";
 export {
   EMPTY_HOLD,
   EPHEMERAL_TTL_MS,

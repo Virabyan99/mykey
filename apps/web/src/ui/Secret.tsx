@@ -26,7 +26,7 @@ export function CopyButton(props: { text: string; label: string }) {
       </button>
       <span role="status">
         {state === "copied"
-          ? "Copied. The clipboard is outside MyKey: other programs can read it."
+          ? "Copied. The clipboard is outside MyKey: other programs can read it, and MyKey cannot take it back."
           : state === "failed"
             ? "The browser did not allow copying. Select the text instead."
             : ""}
@@ -36,12 +36,18 @@ export function CopyButton(props: { text: string; label: string }) {
 }
 
 /** One secret line with its label. */
-export function SecretLine(props: { label: string; text: string; shown?: string }) {
+export function SecretLine(props: {
+  label: string;
+  text: string;
+  shown?: string;
+  /** A value of any length and of several lines, shown as it is. */
+  wide?: boolean;
+}) {
   const id = useId();
   return (
     <div className="secret-line">
       <label htmlFor={id}>{props.label}</label>
-      <output id={id} className="secret">
+      <output id={id} className={props.wide === true ? "secret value" : "secret"}>
         {props.shown ?? props.text}
       </output>
     </div>

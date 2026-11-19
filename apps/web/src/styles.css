@@ -417,3 +417,40 @@ h2 .badge {
     flex: 1 1 100%;
   }
 }
+
+/* Secrets: the value field and the revealed value */
+.field.wide {
+  max-width: 44rem;
+}
+
+.field textarea {
+  padding: 0.45rem 0.6rem;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--bg);
+  font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
+  resize: vertical;
+}
+
+.field textarea[aria-invalid="true"] {
+  border-color: var(--warn);
+  border-width: 2px;
+}
+
+.secret.value {
+  max-height: 16rem;
+  overflow: auto;
+  white-space: pre-wrap;
+  user-select: text;
+}
+
+.search {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 0.75rem;
+}
+
+.search .field {
+  margin: 0;
+}

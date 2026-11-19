@@ -18,10 +18,13 @@ import {
   type OverviewBody,
   type ProjectsBody,
   type RouteDef,
+  type SecretsListBody,
+  type SecretsRevealBody,
   type SessionActivityBody,
 } from "@mykey/contracts";
 import type { z } from "zod";
 import type { Failure } from "../errors/explain.ts";
+import { SECRET_BEARING, type SecretBearing } from "./secret-routes.ts";
 
 /** The routes the workspace calls, with the body of their success. A run adds its routes here. */
 export interface Bodies {
@@ -31,7 +34,6 @@ export interface Bodies {
   "session.activity": SessionActivityBody;
   "audit.list": AuditListBody;
   "activity.list": ActivityListBody;
-  "auth.reset.complete": { next: "sign_in" | "enroll" };
   "overview.get": OverviewBody;
   "projects.create": OperationResponse;
   "projects.rename": OperationResponse;
@@ -43,8 +45,21 @@ export interface Bodies {
   "environments.reactivate": OperationResponse;
   "credentials.list": CredentialsListBody;
   "operations.list": OperationsListBody;
+  "secrets.list": SecretsListBody;
 }
-export type RouteId = keyof Bodies;
+/** A route of SECRET_BEARING is not one of these, whatever `Bodies` says. */
+export type RouteId = Exclude<keyof Bodies, SecretBearing>;
+
+/** The routes that carry a secret in the request or in the answer: only `callSecret` sends them. */
+export interface SecretBodies {
+  "auth.reset.complete": { next: "sign_in" | "enroll" };
+  "secrets.reveal": SecretsRevealBody;
+  "secrets.create": OperationResponse;
+  "secrets.update": OperationResponse;
+}
+export type SecretRouteId = Extract<keyof SecretBodies, SecretBearing>;
+
+const CARRIES_SECRET: ReadonlySet<string> = new Set(SECRET_BEARING);
 
 export interface CallInput {
   /** The `:name` parts of the route's path. */
@@ -157,10 +172,7 @@ function pathOf(route: RouteDef, input: CallInput): string {
   return text === "" ? path : `${path}?${text}`;
 }
 
-export async function call<Id extends RouteId>(
-  id: Id,
-  input: CallInput = {},
-): Promise<CallResult<Bodies[Id]>> {
+async function request<T>(id: string, input: CallInput): Promise<CallResult<T>> {
   const route = BY_ID.get(id);
   if (route === undefined) throw new Error(`not a route of the contract: ${id}`);
   const headers: Record<string, string> = {};
@@ -181,9 +193,32 @@ export async function call<Id extends RouteId>(
   if (schema === undefined || typeof schema === "string") {
     return { ok: false, failure: failureFrom(answer) };
   }
-  const parsed = (schema as z.ZodType<Bodies[Id]>).safeParse(answer.json);
+  const parsed = (schema as z.ZodType<T>).safeParse(answer.json);
   if (!parsed.success) return { ok: false, failure: { kind: "transport", status: answer.status } };
   return { ok: true, status: answer.status, body: parsed.data, requestId: answer.requestId };
+}
+
+/** A route that carries no secret. Its answer may be kept by the query cache. */
+export function call<Id extends RouteId>(
+  id: Id,
+  input: CallInput = {},
+): Promise<CallResult<Bodies[Id]>> {
+  if (CARRIES_SECRET.has(id)) throw new Error(`${id} carries a secret: it is sent by callSecret`);
+  return request<Bodies[Id]>(id, input);
+}
+
+/**
+ * A route of SECRET_BEARING (P-138): the same request as `call`, and a rule
+ * about where it may be written. It is called from an event handler, never
+ * from a query, and its answer goes to the forgetting holder (use-ephemeral.ts)
+ * or is dropped.
+ */
+export function callSecret<Id extends SecretRouteId>(
+  id: Id,
+  input: CallInput = {},
+): Promise<CallResult<SecretBodies[Id]>> {
+  if (!CARRIES_SECRET.has(id)) throw new Error(`${id} carries no secret: it is sent by call`);
+  return request<SecretBodies[Id]>(id, input);
 }
 
 /** For a query function: the body, or a CallError the screen explains. */

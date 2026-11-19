@@ -3,6 +3,8 @@
 // memory, writes nothing to the console, and builds no markup from text.
 import { readFileSync, readdirSync } from "node:fs";
 import { join, relative, resolve } from "node:path";
+import { ROUTES } from "@mykey/contracts";
+import { SECRET_BEARING } from "@mykey/web";
 import { describe, expect, it } from "vitest";
 
 const ROOT = resolve(import.meta.dirname, "../../../apps/web/src");
@@ -53,5 +55,125 @@ describe("the workspace's sources", () => {
     const pattern = BANNED.find(([what]) => what === "the console")![1];
     expect(pattern.test(sample)).toBe(true);
     expect(pattern.test("a console is a desk")).toBe(false);
+  });
+});
+
+// Run 7.4 (P-138, D-60): a route whose request or answer carries a secret is
+// never called through the query cache, which would keep the answer for as
+// long as the cache lives. They go through `callSecret` and the auth
+// functions, called from an event handler, and their answers live in the
+// forgetting holder.
+describe("the secret-bearing routes", () => {
+  const files = sources().filter((file) => !file.endsWith(".css"));
+  const text = (file: string): string => readFileSync(file, "utf8");
+  const name = (file: string): string => relative(ROOT, file).replaceAll("\\", "/");
+
+  /** The text of every call of `fn(` in `source`, by matching brackets. */
+  function calls(source: string, fn: string): string[] {
+    const found: string[] = [];
+    const pattern = new RegExp(`\\b${fn}\\s*(<[^>(]*>)?\\(`, "g");
+    for (let match = pattern.exec(source); match !== null; match = pattern.exec(source)) {
+      let depth = 0;
+      let end = match.index + match[0].length - 1;
+      for (; end < source.length; end += 1) {
+        if (source[end] === "(") depth += 1;
+        if (source[end] === ")") depth -= 1;
+        if (depth === 0) break;
+      }
+      found.push(source.slice(match.index, end + 1));
+    }
+    return found;
+  }
+
+  /** Every way an answer gets into the query cache. */
+  const CACHED = [
+    "useQuery",
+    "useInfiniteQuery",
+    "useQueries",
+    "useSuspenseQuery",
+    "fetchQuery",
+    "prefetchQuery",
+    "ensureQueryData",
+    "setQueryData",
+  ];
+
+  /** The exported functions of auth.ts that post to a secret-bearing path. */
+  function secretAuthFunctions(): string[] {
+    const auth = text(join(ROOT, "api/auth.ts"));
+    const names: string[] = [];
+    const pattern = /export const (\w+) =[\s\S]*?post\(\s*"([^"]+)"/g;
+    for (let match = pattern.exec(auth); match !== null; match = pattern.exec(auth)) {
+      if ((SECRET_BEARING as readonly string[]).includes(`/v1/auth${match[2] ?? ""}`)) {
+        names.push(match[1] ?? "");
+      }
+    }
+    return names;
+  }
+
+  it("are the list of P-138, and each is a route of the contract or a path of the auth module", () => {
+    expect([...SECRET_BEARING].sort()).toEqual(
+      [
+        "secrets.reveal",
+        "secrets.create",
+        "secrets.update",
+        "import.preview",
+        "import.apply",
+        "import.resume",
+        "export.create",
+        "credentials.issue",
+        "auth.reset.complete",
+        "/v1/auth/totp/enroll",
+        "/v1/auth/totp/activate",
+        "/v1/auth/recovery/regenerate",
+        "/v1/auth/change-password",
+        "/v1/auth/sign-in/email",
+      ].sort(),
+    );
+    const ids = new Set(ROUTES.map((route) => route.id));
+    for (const entry of SECRET_BEARING) {
+      if (!entry.startsWith("/")) expect(ids.has(entry), entry).toBe(true);
+    }
+    expect(secretAuthFunctions().sort()).toEqual(
+      ["activateTotp", "changePassword", "enrollTotp", "regenerateRecovery", "signIn"].sort(),
+    );
+  });
+
+  it("no route of SECRET_BEARING is called through useQuery or useMutation", () => {
+    const forbidden = [
+      "callSecret",
+      ...secretAuthFunctions(),
+      ...SECRET_BEARING.filter((entry) => !entry.startsWith("/")).map((id) => `"${id}"`),
+    ];
+    const hits: string[] = [];
+    for (const file of files) {
+      const source = text(file);
+      // The workspace has no mutation hook at all: a change is sent by use-action.ts.
+      if (/\buseMutation\b/.test(source)) hits.push(`${name(file)}: useMutation`);
+      for (const hook of CACHED) {
+        for (const call of calls(source, hook)) {
+          for (const word of forbidden) {
+            if (call.includes(word)) hits.push(`${name(file)}: ${hook} with ${word}`);
+          }
+        }
+      }
+      // The plain client cannot name them either: `call` and `callSecret` share no route.
+      for (const call of calls(source, "call")) {
+        for (const id of SECRET_BEARING) {
+          if (call.startsWith(`call("${id}"`)) hits.push(`${name(file)}: call("${id}")`);
+        }
+      }
+    }
+    expect(hits).toEqual([]);
+  });
+
+  it("the search finds such a call when one is there (control)", () => {
+    const sample = `const q = useQuery({ queryKey: ["x"], queryFn: () => need(callSecret("secrets.reveal", { params: at(1) })) });`;
+    const found = calls(sample, "useQuery");
+    expect(found).toHaveLength(1);
+    expect(found[0]).toContain("callSecret");
+    expect(found[0]?.endsWith("})")).toBe(true);
+    expect(
+      calls(`call("secrets.reveal", {})`, "call")[0]?.startsWith(`call("secrets.reveal"`),
+    ).toBe(true);
   });
 });
