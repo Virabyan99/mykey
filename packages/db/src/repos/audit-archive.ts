@@ -27,6 +27,9 @@ export interface SegmentRow {
 const ISO = (column: string): string =>
   `to_char((${column}) AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"')`;
 
+// The select names `sequence` as text: ORDER BY must name the column itself
+// (archive_segment.sequence), or PostgreSQL sorts the text alias and 10 comes
+// before 2 (Session 6 gate, staging's archive stopped at segment 10).
 const SEGMENT_COLUMNS = `sequence::text AS sequence, stream, host, source,
   ${ISO("from_at")} AS from_at, ${ISO("to_at")} AS to_at, row_count, sha256,
   previous_sha256, object_key, uploaded_at, verified_at, purged_at`;
@@ -66,7 +69,7 @@ const segmentOf = (row: SegmentDbRow): SegmentRow => ({
 /** Every segment, in sequence order. */
 export async function listSegments(db: Queryable): Promise<SegmentRow[]> {
   const result = await db.query<SegmentDbRow>(
-    `SELECT ${SEGMENT_COLUMNS} FROM audit.archive_segment ORDER BY sequence`,
+    `SELECT ${SEGMENT_COLUMNS} FROM audit.archive_segment ORDER BY archive_segment.sequence`,
   );
   return result.rows.map(segmentOf);
 }
@@ -189,7 +192,7 @@ export async function intervalSegments(
   const result = await db.query<SegmentDbRow>(
     `SELECT ${SEGMENT_COLUMNS} FROM audit.archive_segment
       WHERE stream = 'app' AND from_at = $1::timestamptz AND to_at = $2::timestamptz
-      ORDER BY sequence`,
+      ORDER BY archive_segment.sequence`,
     [from, to],
   );
   return result.rows.map(segmentOf);
