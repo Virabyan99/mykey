@@ -18,6 +18,8 @@ const NOTICES: Readonly<Record<Notice, string>> = {
   session_ended: "Your session ended. Sign in again.",
   signed_out: "You are signed out.",
   password_reset: "The new password is set. Sign in with it.",
+  authenticator_reset:
+    "The new authenticator is active. Sign in with your new password and a code from it.",
 };
 
 const isRefusal = (failure: Failure): boolean =>

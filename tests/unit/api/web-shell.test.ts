@@ -1,7 +1,8 @@
 // Run 7.1 Task A (P-134, P-141): the workspace's shell as the API serves it.
 // The files are read once into memory; an answer comes from that map and from
 // the table of client paths, never from a path of the request on disk.
-import { rmSync } from "node:fs";
+import { createHash, randomBytes } from "node:crypto";
+import { rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -57,11 +58,24 @@ describe("loadWebShell", () => {
   });
 
   it("answers null when the manifest names a path outside the directory", () => {
+    // The file exists, and its digest and type are right: only its path is wrong.
+    const outside = `outside-${randomBytes(4).toString("hex")}.js`;
+    const text = "document.title = 'outside';";
     const directory = writeDist((_files, manifest) => {
-      manifest.push({ path: "../package.json" });
+      (manifest as Record<string, string>[]).push({
+        path: `../${outside}`,
+        sha256: createHash("sha256").update(text).digest("hex"),
+        contentType: "text/javascript; charset=utf-8",
+      });
     });
     directories.push(directory);
-    expect(loadWebShell(directory)).toBeNull();
+    const path = join(directory, "..", outside);
+    writeFileSync(path, text);
+    try {
+      expect(loadWebShell(directory)).toBeNull();
+    } finally {
+      rmSync(path, { force: true });
+    }
   });
 
   it("answers null without an index", () => {

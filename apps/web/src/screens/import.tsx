@@ -378,12 +378,16 @@ function ImportPanel(props: { at: At; userId: string }) {
     const file = bytes.current;
     const previewId = preview?.previewId ?? null;
     if (file === null || previewId === null) return;
-    const answer = await action.run(`import.apply ${previewId}`, (key) =>
-      callSecret("import.apply", {
-        params: { ...at, preview: previewId },
-        body: file,
-        idempotencyKey: key,
-      }),
+    // A 202 is read here: the result below prints the state the answer carries, and follows it.
+    const answer = await action.run(
+      `import.apply ${previewId}`,
+      (key) =>
+        callSecret("import.apply", {
+          params: { ...at, preview: previewId },
+          body: file,
+          idempotencyKey: key,
+        }),
+      { unfinished: "caller" },
     );
     if (answer.ok) finished(answer.body);
   };

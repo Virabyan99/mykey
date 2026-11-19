@@ -150,8 +150,12 @@ export function ArchiveDialog(props: {
 
   const archive = async (): Promise<void> => {
     const route = routeOf(target, "archive");
-    const result = await action.run(`${route} ${target.env ?? target.project}`, (key) =>
-      call(route, { params: paramsOf(target), body: { confirmed: true }, idempotencyKey: key }),
+    // A 202 is read here: the notice below prints that the operation is still running.
+    const result = await action.run(
+      `${route} ${target.env ?? target.project}`,
+      (key) =>
+        call(route, { params: paramsOf(target), body: { confirmed: true }, idempotencyKey: key }),
+      { unfinished: "caller" },
     );
     // Whatever the answer, the lists are read again: the server's state is the one shown.
     await client.invalidateQueries({ queryKey: [userId, target.org] });
@@ -217,8 +221,12 @@ export function ReactivateDialog(props: {
 
   const reactivate = async (): Promise<void> => {
     const route = routeOf(target, "reactivate");
-    const result = await action.run(`${route} ${target.env ?? target.project}`, (key) =>
-      call(route, { params: paramsOf(target), body: { confirmed: true }, idempotencyKey: key }),
+    // A 202 is read here: the notice below prints that the operation is still running.
+    const result = await action.run(
+      `${route} ${target.env ?? target.project}`,
+      (key) =>
+        call(route, { params: paramsOf(target), body: { confirmed: true }, idempotencyKey: key }),
+      { unfinished: "caller" },
     );
     await client.invalidateQueries({ queryKey: [userId, target.org] });
     if (!result.ok) return;

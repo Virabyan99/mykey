@@ -238,6 +238,11 @@ describe("the canary scan", () => {
       await page.getByRole("button", { name: "I saved them" }).click();
 
       // --- the end of a reset is a new sign-in (P-51): the form, the new password
+      // The page says why the sign-in form is back.
+      await page
+        .getByRole("status")
+        .filter({ hasText: "The new authenticator is active. Sign in with your new password" })
+        .waitFor();
       await signInByForm(page, { email: account.email, password }, codes.next);
 
       // --- the journey, every value a canary --------------------------------

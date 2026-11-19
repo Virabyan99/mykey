@@ -12,7 +12,7 @@ import { activateTotp, enrollTotp } from "../api/auth.ts";
 import { ErrorPanel } from "../errors/ErrorPanel.tsx";
 import type { Failure } from "../errors/explain.ts";
 import { navigate } from "../router.tsx";
-import { setFlow } from "../state/flow.ts";
+import { setFlow, useFlow } from "../state/flow.ts";
 import { useSessionControl } from "../state/session.tsx";
 import { useEphemeral } from "../state/use-ephemeral.ts";
 import { CODE_INPUT, Field } from "../ui/Field.tsx";
@@ -25,6 +25,7 @@ const grouped = (key: string): string => (key.match(/.{1,4}/g) ?? [key]).join(" 
 
 export function Enroll() {
   const control = useSessionControl();
+  const { enrolAfterReset } = useFlow();
   const code = useRef<HTMLInputElement>(null);
   const [key, setKey, clearKey] = useEphemeral<{ secret: string; uri: string }>(HOLD_MS, PATIENT);
   const [codes, setCodes, clearCodes] = useEphemeral<string[]>(HOLD_MS, PATIENT);
@@ -73,10 +74,12 @@ export function Enroll() {
   };
 
   // The server has made the session complete at activation; the page asks only now.
+  // At the end of a reset it has ended every session instead (P-51): the sign-in
+  // form comes back, and says why.
   const finish = async (): Promise<void> => {
     clearCodes();
     await control.refresh();
-    setFlow({ enrolAfterReset: false, notice: null });
+    setFlow({ enrolAfterReset: false, notice: enrolAfterReset ? "authenticator_reset" : null });
     navigate("/", { replace: true });
   };
 

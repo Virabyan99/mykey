@@ -77,6 +77,33 @@ describe("explain", () => {
     }
   });
 
+  it("a request the server has not finished is not said done, not said failed, and not offered again", () => {
+    const explained = explain(
+      { kind: "unfinished", requestId: REQUEST, operationId: OPERATION },
+      context,
+    );
+    const all = `${explained.title} ${explained.text} ${explained.next}`;
+    expect(explained.title).toBe("Not finished yet");
+    expect(all).not.toMatch(/\bfailed\b|was not (saved|made|done)|succeeded|was saved|is saved/i);
+    expect(all).not.toMatch(AGAIN);
+    expect(all).toMatch(/Operations/);
+    expect(explained.ids).toEqual({ requestId: REQUEST, operationId: OPERATION });
+  });
+
+  it("an unavailable dependency never claims that nothing was changed; with an operation it says the service continues it", () => {
+    const bare = explain(api("dependency_unavailable"), context);
+    const named = explain(api("dependency_unavailable", { operationId: OPERATION }), context);
+    for (const explained of [bare, named]) {
+      const all = `${explained.title} ${explained.text} ${explained.next}`;
+      expect(all).not.toMatch(/before anything was changed|nothing was changed|changed nothing/i);
+    }
+    expect(bare.text).toMatch(/not completed/);
+    expect(`${named.text} ${named.next}`).toMatch(/accepted/);
+    expect(`${named.text} ${named.next}`).toMatch(/Operations/);
+    expect(named.text).not.toBe(bare.text);
+    expect(named.ids.operationId).toBe(OPERATION);
+  });
+
   it("the action is named in the title of a refusal", () => {
     expect(explain(api("action_denied"), context).text).toContain("save the secret");
   });

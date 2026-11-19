@@ -1,8 +1,24 @@
 // How every refusal and every missing answer is shown (FR-1.93): the text of
 // the one table in explain.ts, the ids to quote, and at most the actions the
 // caller passes. Never the server's message, never a stack.
+import { matchWebRoute, webPath } from "@mykey/contracts";
 import type { ReactNode } from "react";
+import { Link, usePath } from "../router.tsx";
 import { explain, type Failure } from "./explain.ts";
+
+/**
+ * Where an answer that names an operation leads (P-140): to the operations of
+ * the environment the screen is in, where the operation's state can be read.
+ * A link and nothing more: nothing here sends a change again.
+ */
+function OperationsLink() {
+  const params = matchWebRoute(usePath())?.params;
+  const { org, project, env } = params ?? {};
+  if (org === undefined || project === undefined || env === undefined) return null;
+  return (
+    <Link to={webPath("operations", { org, project, env })}>Operations of this environment</Link>
+  );
+}
 
 export function ErrorPanel(props: {
   failure: Failure;
@@ -45,6 +61,7 @@ export function ErrorPanel(props: {
             Reload
           </button>
         )}
+        {operationId === null ? null : <OperationsLink />}
         {props.children}
       </div>
     </section>

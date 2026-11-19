@@ -17,7 +17,6 @@ import { ConfirmDialog } from "../ui/Dialog.tsx";
 import { Field } from "../ui/Field.tsx";
 import { EnvironmentNotice } from "../ui/Resource.tsx";
 import { CopyButton, SecretLine } from "../ui/Secret.tsx";
-import { OperationsLink } from "../ui/OperationsLink.tsx";
 import { Loading, StateBadge } from "../ui/StateBadge.tsx";
 import { StepUp } from "../ui/StepUp.tsx";
 import { Time } from "../ui/Time.tsx";
@@ -159,9 +158,7 @@ function IssueForm(props: {
         />
         {note === null ? null : <p role="status">{note}</p>}
         {action.failure === null ? null : (
-          <ErrorPanel failure={action.failure} action="issue the credential">
-            <OperationsLink failure={action.failure} at={at} />
-          </ErrorPanel>
+          <ErrorPanel failure={action.failure} action="issue the credential" />
         )}
         <div className="actions">
           {blocked === null ? (
@@ -222,9 +219,7 @@ function RevokeDialog(props: {
         A revocation cannot be undone. To give the consumer access again, issue a new credential.
       </p>
       {action.failure === null ? null : (
-        <ErrorPanel failure={action.failure} action="revoke the credential">
-          <OperationsLink failure={action.failure} at={at} />
-        </ErrorPanel>
+        <ErrorPanel failure={action.failure} action="revoke the credential" />
       )}
     </ConfirmDialog>
   );

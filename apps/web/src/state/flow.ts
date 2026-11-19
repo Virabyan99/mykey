@@ -9,7 +9,9 @@ export type Notice =
   | "session_ended"
   | "signed_out"
   /** A reset link set a new password: sign in with it. */
-  | "password_reset";
+  | "password_reset"
+  /** A reset link ended with a new authenticator: the server ended every session (P-51). */
+  | "authenticator_reset";
 
 interface Flow {
   notice: Notice | null;

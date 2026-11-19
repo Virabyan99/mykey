@@ -168,6 +168,18 @@ describe("the secret-bearing routes", () => {
     expect(hits).toEqual([]);
   });
 
+  it("only the screens that print the operation's own state read a 202 themselves", () => {
+    // use-action.ts turns a 202 into "not finished yet" for every other screen:
+    // a screen that takes it for itself must show the state it carries.
+    const takers = files
+      .filter((file) => /unfinished:\s*"caller"/.test(text(file)))
+      .map((file) => name(file))
+      // The hook itself names the option.
+      .filter((file) => file !== "state/use-action.ts")
+      .sort();
+    expect(takers).toEqual(["screens/import.tsx", "screens/lifecycle.tsx"]);
+  });
+
   it("the search finds such a call when one is there (control)", () => {
     const sample = `const q = useQuery({ queryKey: ["x"], queryFn: () => need(callSecret("secrets.reveal", { params: at(1) })) });`;
     const found = calls(sample, "useQuery");

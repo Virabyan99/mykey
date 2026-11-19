@@ -9,8 +9,13 @@ import type { CallResult } from "../api/client.ts";
 import type { Failure } from "../errors/explain.ts";
 import { useSessionControl } from "./session.tsx";
 
-/** No usable answer, or a failure of the service: whether the change happened is open. */
-const open = (failure: Failure): boolean => failure.kind === "transport" || failure.status >= 500;
+/** No usable answer, a failure of the service, or a request not finished: whether the change happened is open. */
+const open = (failure: Failure): boolean => failure.kind !== "api" || failure.status >= 500;
+
+const operationOf = (body: unknown): string | null => {
+  const id = (body as { operationId?: unknown } | null)?.operationId;
+  return typeof id === "string" ? id : null;
+};
 
 export interface Action {
   busy: boolean;
@@ -19,7 +24,16 @@ export interface Action {
    * Sends one change. `print` describes the request (route and input, never
    * a secret value): the key is kept while it stays the same.
    */
-  run: <T>(print: string, send: (key: string) => Promise<CallResult<T>>) => Promise<CallResult<T>>;
+  run: <T>(
+    print: string,
+    send: (key: string) => Promise<CallResult<T>>,
+    /**
+     * A 202 means the server has not finished. By default that is shown as
+     * "not finished yet" and the caller gets no success. A screen that prints
+     * the state the answer carries takes the 202 itself.
+     */
+    options?: { unfinished: "caller" },
+  ) => Promise<CallResult<T>>;
   /** Forgets the failure shown (the form was changed or closed). */
   clear: () => void;
 }
@@ -35,6 +49,7 @@ export function useAction(): Action {
     async <T>(
       print: string,
       send: (key: string) => Promise<CallResult<T>>,
+      options?: { unfinished: "caller" },
     ): Promise<CallResult<T>> => {
       if (running.current) return { ok: false, failure: { kind: "transport", status: null } };
       running.current = true;
@@ -43,6 +58,16 @@ export function useAction(): Action {
       const result = await send(key.current.key);
       running.current = false;
       setBusy(false);
+      if (result.ok && result.status === 202 && options?.unfinished !== "caller") {
+        // Not done: the key stays, so the same request sent again is answered, not done twice.
+        const unfinished: Failure = {
+          kind: "unfinished",
+          requestId: result.requestId,
+          operationId: operationOf(result.body),
+        };
+        setFailure(unfinished);
+        return { ok: false, failure: unfinished };
+      }
       if (result.ok) {
         key.current = null;
         setFailure(null);

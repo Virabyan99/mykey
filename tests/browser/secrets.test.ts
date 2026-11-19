@@ -351,6 +351,47 @@ describe("secrets in the workspace", () => {
     }
   });
 
+  it("a save the server has not finished (202, as a repeated request gets while the first is executing) is shown as not finished, never as saved", async () => {
+    const { name } = await seeded();
+    const session = await web.signedIn("ownerA");
+    const { page } = session;
+    const operationId = randomUUID();
+    const requestId = randomUUID();
+    try {
+      await openSecret(page, name);
+      await page.getByRole("button", { name: "Edit value" }).click();
+      await page.getByLabel("New value").fill(canary());
+      // The contract's answer for an operation that is accepted and not finished.
+      await page.route(new RegExp(`/secrets/${name}$`), async (route) => {
+        if (route.request().method() !== "PATCH") return route.fallback();
+        await route.fulfill({
+          status: 202,
+          contentType: "application/json; charset=utf-8",
+          headers: { "x-request-id": requestId },
+          body: JSON.stringify({
+            operationId,
+            state: "executing",
+            statusUrl: `/v1/organizations/${web.tenants.a.organizationId}/operations/${operationId}`,
+            replayExpiresAt: null,
+          }),
+        });
+      });
+      await page.getByRole("button", { name: "Save" }).click();
+      const alert = page
+        .getByRole("alert")
+        .filter({ has: page.getByRole("heading", { name: "Not finished yet", exact: true }) });
+      await alert.waitFor();
+      expect(await page.getByRole("status").filter({ hasText: /Saved/ }).count()).toBe(0);
+      // The operation to look up is named, and the way to it is offered.
+      expect(await alert.locator("dd code").allTextContents()).toContain(operationId);
+      await alert.getByRole("link", { name: "Operations of this environment" }).waitFor();
+      // Nothing was written: the server never got this request.
+      expect((await backendDigest(name)).version).toBe(1);
+    } finally {
+      await session.close();
+    }
+  });
+
   it("507 capacity_exceeded and 503 busy on a write show their texts and leave the form's value in place for the owner", async () => {
     const session = await web.signedIn("ownerA");
     const { page } = session;

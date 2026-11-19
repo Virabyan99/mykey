@@ -18,7 +18,12 @@ export type Failure =
       retryAfterSeconds: number | null;
     }
   /** Anything that is not the contract's envelope: a proxy's page, a cut connection, a body that fails its schema. */
-  | { kind: "transport"; status: number | null };
+  | { kind: "transport"; status: number | null }
+  /**
+   * A 202 where the screen expected the end: the server has the request and is
+   * still doing it (a repeated request gets this while the first is executing).
+   */
+  | { kind: "unfinished"; requestId: string | null; operationId: string | null };
 
 export interface Explanation {
   title: string;
@@ -180,8 +185,8 @@ const ENTRIES: Readonly<Record<ErrorCode, Entry>> = Object.freeze({
   },
   dependency_unavailable: {
     title: "A part of the service is unavailable",
-    text: "Something the service needs did not answer. This request was refused before anything was changed.",
-    next: "Submit it once more in a minute.",
+    text: "Something the service needs did not answer, and this request was not completed.",
+    next: "Look at the current state, then submit the same request once more in a minute. The service does not do the same request twice.",
   },
   capacity_exceeded: {
     title: "No room for this",
@@ -201,6 +206,23 @@ export function explain(failure: Failure, context: { action: string }): Explanat
       text: "The connection was cut, or something between you and the service answered in its place. Whether the request arrived is not known.",
       next: "Reload the page and look at the current state before doing anything else.",
       ids: { requestId: null, operationId: null },
+    };
+  }
+  if (failure.kind === "unfinished") {
+    return {
+      title: "Not finished yet",
+      text: "The service has this request and is still working on it. It is not done, and nothing says it will not be.",
+      next: "Read how it ends under Operations. Do not enter it a second time.",
+      ids: { requestId: failure.requestId, operationId: failure.operationId },
+    };
+  }
+  // The service names an operation: the request was accepted before the failure, and goes on.
+  if (failure.code === "dependency_unavailable" && failure.operationId !== null) {
+    return {
+      title: ENTRIES.dependency_unavailable.title,
+      text: "Something the service needs did not answer. The request was accepted before that, and the service continues it by itself.",
+      next: "Read how it ends under Operations. Do not enter it a second time.",
+      ids: { requestId: failure.requestId, operationId: failure.operationId },
     };
   }
   const entry = ENTRIES[failure.code];
