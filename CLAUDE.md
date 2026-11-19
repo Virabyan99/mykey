@@ -16,58 +16,42 @@ The project is in **Stage 1**, a 14-day plan of nine sessions.
 
 ## Where we stand
 
-_Last updated: 16 Nov 2026, at the Session 5 gate (pull request `session-5` → `main`, not merged yet)._
+_Last updated: 19 Nov 2026, at the Session 6 gate (pull request #16 `session-6` → `main`, not merged yet)._
 
-| Session | Topic                                                       | State                                |
-| ------- | ----------------------------------------------------------- | ------------------------------------ |
-| 1       | Foundation                                                  | **Done** (PASS WITH ISSUES), merged  |
-| 2       | Infrastructure and make-or-break proofs                     | **Done** (GO, no fallback), merged   |
-| 3       | Identity, access and resources                              | **Done** (PASS WITH ISSUES), merged  |
-| 4       | Operations engine and secret lifecycle                      | **Done** (PASS WITH ISSUES), merged  |
-| 5       | Machine access, CLI and API reference                       | **Done** (PASS WITH ISSUES), PR open |
-| 6 ∥ 7   | Audit, limits, backup, recovery, deployment ∥ Web workspace | Not started                          |
-| 8       | Security review and controlled-use release                  | Not started                          |
-| 9       | Real use, agent experiment, stage exit                      | Not started                          |
+| Session | Topic                                       | State                                |
+| ------- | ------------------------------------------- | ------------------------------------ |
+| 1       | Foundation                                  | **Done** (PASS WITH ISSUES), merged  |
+| 2       | Infrastructure and make-or-break proofs     | **Done** (GO, no fallback), merged   |
+| 3       | Identity, access and resources              | **Done** (PASS WITH ISSUES), merged  |
+| 4       | Operations engine and secret lifecycle      | **Done** (PASS WITH ISSUES), merged  |
+| 5       | Machine access, CLI and API reference       | **Done** (PASS WITH ISSUES), merged  |
+| 6       | Audit, limits, backup, recovery, deployment | **Done** (PASS WITH ISSUES), PR open |
+| 7       | Web workspace                               | Not started                          |
+| 8       | Security review and controlled-use release  | Not started                          |
+| 9       | Real use, agent experiment, stage exit      | Not started                          |
 
-What exists after Session 5 (details: `docs/evidence/session-5/report.md`, run notes `run-5.1.md` … `run-5.9.md`, D-40 … D-45; the base: `docs/evidence/session-4/report.md` and `session-3/report.md`):
+What Session 6 added (details: `docs/evidence/session-6/report.md`, run notes `run-6.1.md` … `run-6.10.md`, D-46 … D-57; earlier sessions: their reports):
 
-- **API (`apps/api`):** the Session 3 pipeline (`mountRoute`) with handlers for every route of Sessions 3–5. The Session 4 secret, import, export and operation routes are unchanged. New in Session 5:
-  - `credentials.list|issue|revoke`, `projects.archive|reactivate`, `environments.archive|reactivate`;
-  - the machine routes `machine.keys|resolve`, authenticated by the bearer's own `lookup-self`;
-  - `openapi.get` and `reference.get` (owner and admin; `/v1/reference` is a self-contained Scalar page, D-45).
+- **Audit:** the audit route and activity timeline with a coverage table (`AUDIT_COVERAGE`; a route without a decision fails `check`); both audit streams archived to R2 as verified, locked segments (keys hold the backend incarnation); a purge that never outruns them (migrations `0015`, `0016`).
+- **Limits:** every limit of Doc 06 §11 in the pipeline, failing closed: 429 with `retry-after`, 507 from the host's capacity record (written each minute by the heartbeat; without it expanding changes answer 503), `busy` during a capture.
+- **Status and alerts:** `host.ts <host> status`; fifteen probe conditions (`workers/probe/src/evaluate.ts` `CONDITIONS`), each with a section in `docs/runbooks/alerts.md`; the watcher `probe-watch.yml`.
+- **Backup:** a nightly pair (03:00 UTC) under a capture barrier (migration `0017`), eligible only after read-back, `restic check --read-data`, a scratch restore and a signature; retention at 05:00 that never deletes the newest eligible pair.
+- **Gate v2 and restore:** a gate record bound to host, backend incarnation (migration `0018`), release and a verification report; `host.ts <host> restore` + `restore-verify` (runbook `restore.md`); a restore resets every account and revokes every token.
+- **Releases:** `pnpm run host:release` builds once; `host.ts <host> deploy --release <dir>` promotes through the closed gate. A v2 gate opens only with a report: after `quiesce` + `resume`, redeploy the running release (`reconciliation.md`).
+- **The drill (D-56):** staging's pair restored on a clean server from R2 and custody alone; 42 minutes of work, 27 of them `reconcile-credentials`.
+- **Hosts:** staging runs `host-v0.6.5` (`7a9a1d4`), gate open, timers installed. Production (reinstalled 19 Nov) runs `host-v0.6.3` **closed**: a closed v2 record, no OpenBao, no owner, migrations up to `0018`, in the probe as `inService: false`. Production deploys need the owner's permission.
+- **Evidence registry:** 154 `SPIKE_PASS`, 37 `OPEN`, nothing `PASS`.
 
-  The API holds two OpenBao identities: `runtime` (inline AppRole) and `issuer` (short sessions, for issuance and revocation). Machine reads use the presented token itself. Its 30 s sweep also settles stale credential work and drives archives.
+Before Session 7 (and 8) can start:
 
-- **Operations (`@mykey/operations`):**
-  - Session 4's engine;
-  - credential issuance and revocation with markers, and their sweep (D-40);
-  - archive (close first, revoke and verify, then archived) and reactivation (D-41, migration `0014`'s guarded transition function);
-  - the complete read with a machine reader, with the admission rechecked at commit (D-42).
-
-  `/operator` adds `reconcileCredentials`, run as `ops reconcile-credentials` (runbooks `machine-credentials.md`, `reconciliation.md`). Migrations up to `0014`.
-
-- **CLI (`apps/cli`):**
-  - `secrets keys | run | export`: one esbuild bundle on the pinned Node, released as `cli-v0.1.1` with `install.sh` (D-43, D-44);
-  - consumer runbooks `consumer-local.md` and `consumer-deploy.md`, with the launch wrapper `tests/fixtures/consumers/secrets-launch.sh`.
-
-  Proven from the release on Linux x64 and arm64 and macOS x64 and arm64 (`cli-matrix.md`, run 43857539084).
-
-- **Staging** runs API `45b5c1f3cc3a` and the matching provisioner, gate open, nothing in review or unresolved. The staging owner is `owner@mykey-staging.invalid` (credentials in `~/.mykey/secrets/hosts/staging/`), with organization `e2350312-…`. **Production** runs the same API with migrations up to `0014` and no gate file (every route `quarantined`; no OpenBao, provisioner or owner there). The probe marks it `inService: false`, so its by-design `/health` failure sends no `health_failing`; remove the flag when production goes into service (runbook `probe.md`). Production deploys need the owner's permission.
-- **Evidence registry:** 116 `SPIKE_PASS`, 75 `OPEN`, nothing `PASS`.
-
-Before Sessions 6 ∥ 7 can start:
-
-- **Merged and answered:** PR #12 is merged, production is updated, and the macOS matrix passed (16 Nov 2026).
-- **Plans:** each session needs its plan (`docs/plans/session-6-plan.md`, `session-7-plan.md`) built on the report's "What Sessions 6 and 7 must know". In short:
-  - the new audit actions and the machine actor;
-  - every rate limit, including unauthenticated machine requests (Run 6.3);
-  - `ops reconcile-credentials` for every environment after a restore;
-  - host timers for the sweeps (Run 6.9);
-  - the workspace's credential, archive and reference screens (Session 7).
+- **Merged:** PR #16, on the owner's word.
+- **Plans:** built on the report's "What Sessions 7, 8 and 9 must know" (audit and activity contracts and filters; the new error answers; the verification listener; a restore resets everyone; `known-limits.md`).
+- **Carried to Session 8:** the resting custody root token (M1, Blocker candidate); `reconcile-credentials --all`; the OpenBao user lockout; review findings C–I (the report).
 - **Dated items:**
-  - The R2 fixture guard: `test:cloud` fails on purpose from 15 Nov 2026 09:42 UTC until Run 6.6.
+  - **All KMS certificates expire on 12 Dec 2026** (staging seal 10:50 UTC); replace them before then (runbook `kms-and-unseal.md`). Checkpoint `kms-cert-expiry` from 12 Dec 2026 09:57 UTC. `certificate_expiring` opens 10 days before.
   - `.trivyignore.images` expires on 14 Dec 2026.
-  - **All KMS certificates expire on 12 Dec 2026** (staging seal 10:50 UTC); replace them before then (runbook `kms-and-unseal.md`). Checkpoint `kms-cert-expiry` from 12 Dec 2026 09:57 UTC.
+  - Checkpoint `pair-30-day` from 17 Dec 2026 19:00 UTC (before the 05:00 retention of 18 Dec).
+  - OWN-4: the owner's offline copy of `~/.mykey/custody/staging/backup/` is not confirmed.
 
 ## Commands
 
@@ -90,6 +74,7 @@ One file or one test:
 ```sh
 pnpm exec vitest run --project unit tests/unit/dotenv/parse.test.ts
 pnpm exec vitest run --project integration tests/integration/database -t "second run applies nothing"
+pnpm run test:staging tests/staging/status.staging.test.ts   # never `-- <file>`: pnpm passes `--` through and vitest would run every staging file (vitest.config.ts refuses it)
 ```
 
 Other scripts:
@@ -102,6 +87,9 @@ pnpm run cli:build | cli:release -- --version <v>   # the CLI bundle; a release 
 pnpm run db:migrate                             # apply migrations
 pnpm run evidence:build                         # rebuild docs/evidence/registry.json after editing registry-overrides.json
 node scripts/host.ts <staging|prod> <command>   # operator tool for the hosts (usage: run it without arguments)
+pnpm run host:release -- --version <v> --out ~/mykey-release/host-v<v>   # from a clean clone outside OneDrive (deploy.md); then gh release create
+MSYS_NO_PATHCONV=1 node scripts/host.ts <host> deploy --release C:/Users/<you>/mykey-release/host-v<v> [--stay-closed]   # Windows path: MSYS_NO_PATHCONV keeps $HOME unconverted
+MSYS_NO_PATHCONV=1 node scripts/host.ts <host> restore --source <host> --newest | restore-verify …   # runbook restore.md
 node scripts/probe.ts deploy | secrets | state <host>   # the probe Worker
 node scripts/ci-scan.ts secrets | dependencies | images | selftest   # the CI scanners, locally
 MSYS_NO_PATHCONV=1 node scripts/host.ts <host> ops <command> [--flag v]   # operator commands (apps/ops) as maintenance over a tunnel
@@ -117,7 +105,7 @@ Scripts in `scripts/` and `infra/` are TypeScript run directly by Node (type str
 ## Architecture
 
 - **Two stores, one owner per fact.** Secret values and versions live only in OpenBao (one namespace per organization, KV v2). PostgreSQL holds metadata, permissions, operations and audit, and never a secret value or a machine token.
-- **`packages/contracts`** is the single source for limits (Doc 06 §11), name rules, ids, error codes (one HTTP status each), the operation envelope and the route table. `openapi.json` is generated from the route table and `contracts:check` fails when it is stale. The route list is frozen (D-15); 21 routes still have pending bodies, and the run that owns a route fills it in with a commit titled `contract: …`.
+- **`packages/contracts`** is the single source for limits (Doc 06 §11), name rules, ids, error codes (one HTTP status each), the operation envelope and the route table. `openapi.json` is generated from the route table and `contracts:check` fails when it is stale. The route list is frozen (D-15); 3 routes still have pending bodies (`overview.get`, `credentials.summary`, `metrics.get`), and the run that owns a route fills it in with a commit titled `contract: …`.
 - **`packages/db`**: schemas `app` (18 tables), `audit` (`event`), `meta` (`schema_migration`), `auth` (Better Auth's 8 tables, migration `0003`) and `jobs` (empty, reserved for the job queue). Roles: `migration_owner`, `api_runtime`, `provisioner_runtime`, `backup_reader`, `maintenance`. Tenancy is enforced by composite foreign keys that carry `organization_id`. `migrate()` refuses a changed, missing or out-of-order migration file.
 - **`@mykey/openbao`:** one namespace `org-<organizationId>` per organization, KV v2 at `kv`; policies and AppRole roles `runtime`, `issuer`, `provisioner`; token roles `machine-env-<environmentId>`. Runtime authenticates with inline AppRole (D-17); the provisioner never runs in the API process. A change whose answer is unclear is `unknown`, never a failure.
 - **Request pipeline (D-26, D-31, D-33):** every route goes through `mountRoute` from `ROUTES`; authorization reads current rows on every request; a mutation needs an `Idempotency-Key` and replays a completed request before state and freshness checks. Handlers never decide authority. `@mykey/operations` has three entry points: root (jobs, outbox, gate, replay), `/operator` (organization provisioning, admin authority) and `/provisioner` (environment job, sweep); the API imports only the root (skeleton test).
@@ -219,4 +207,17 @@ Session 5 (details in its run notes and report):
 - **macOS has BSD tools.** BSD `script` needs its own stdin to be a terminal and refuses a Node-spawned socket. The CLI's terminal test uses Python's `pty.spawn` on macOS (`MYKEY_TEST_PTY=python` takes that path on Linux). A matrix failure without output is first made to say why, then fixed.
 - **The token sweep** is `tests/staging/token-sweep.staging.test.ts`. Tokens are stored nowhere, so each test searches the tokens it holds, with a control per surface (the provisioner's log names operation ids, not environment ids).
 
-Open issues carried into Sessions 6 ∥ 7 are listed in `docs/evidence/session-5/report.md` ("What Sessions 6 and 7 must know").
+Session 6 (details in its run notes and report):
+
+- **Per-run proving leaves cross-run breakage for the gate.** The first full integration run (CI, at the gate) failed 13 tests in 7 files: one product defect of Run 6.7 (a refused provisioner login deferred jobs for ever) and six stale tests or CI settings. Run the whole suite on CI as soon as a session's code is in, not only at the end.
+- **Linux CI sees ownership; Windows Docker hides it.** Containers that write into a bind mount as root leave files the test cannot remove on Linux. Test containers run as the caller (`tests/harness/restic.ts`).
+- **A v2 gate opens only with a report.** A bare `gate open` is refused; after `quiesce` + `resume`, redeploy the running release. A v1 record reads as closed (cause `version`): never write one to a v2 host.
+- **Staging tests and Run 6.3's limits.** Five sign-ins a minute per source, five issuances a minute per person, 120 requests a minute per session, on fixed 60 s windows of database time. A drill that needs its budget starts in a fresh minute (`nextMinute` in `tests/harness/staging.ts`).
+- **A fresh production host** (no OpenBao): `up` first (it writes `host.env`), then pull postgres and traefik by digest with plain `docker pull` in a `maint` window (`compose pull` interpolates the provisioner's OpenBao address, unset there), `up`, `db-init`, `deploy --stay-closed`, `keys init` (the API refuses to start without key rings), `acme production` + `up`, `probe.ts secrets`. A clean host for a restore needs `restore.md`'s whole "Before".
+- **A reinstall leaves the `ubuntu` password expired**; the owner changes it in a terminal. `bootstrap` gives the host a new WireGuard key, so the tunnel needs a restart after it.
+- **OpenBao's user lockout**: about 15 minutes of failed AppRole logins lock the role id out, even for the right secret id (`known-limits.md`).
+- **The registry build ignores a status in `owners`**; `loadOverrides` now refuses an entry in the wrong list.
+- **A text alias hides an ORDER BY.** `SELECT sequence::text AS sequence … ORDER BY sequence` sorts the text (1, 10, 2): staging's archive stopped at segment 10. Name the column (`table.sequence`) when the select casts it.
+- **A cached failure is a decision.** The provisioner kept a failed OpenBao read for 5 s and called it another incarnation, so a test passed or failed by timing. Cache only answers; an unreachable backend is `unreachable`.
+
+Open issues carried into Sessions 7 and 8 are listed in `docs/evidence/session-6/report.md` ("What Sessions 7, 8 and 9 must know").

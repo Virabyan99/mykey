@@ -251,7 +251,7 @@ describe("machine credentials on staging", () => {
       // Each attempt measures that delay and the next aims its five shots at it:
       // four in the last 600 ms before it and one just after.
       let landsAfterMs = 1500;
-      for (let attempt = 1; attempt <= 5 && caught.size === 0; attempt += 1) {
+      for (let attempt = 1; attempt <= 10 && caught.size === 0; attempt += 1) {
         attempts = attempt;
         await nextMinute();
         ({ cookie } = await stagingOwnerSession());
@@ -300,6 +300,8 @@ describe("machine credentials on staging", () => {
       const caughtState = unresolved[0]!.state;
       record("caughtState", caughtState);
       if (caughtState === "needs_review") {
+        // The attempt spent the minute's five issuances: a sixth would be 429.
+        await nextMinute();
         const blocked = await send("POST", `${environment.path}/credentials`, {
           name: "s5-machine",
           ttlSeconds: 60,
