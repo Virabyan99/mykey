@@ -29,7 +29,7 @@ If SSH does not answer, use the break-glass path of `network.md`.
 
 - Timer stopped: `sudo systemctl enable --now mykey-heartbeat.timer` on the host.
 - Egress to the probe blocked: `mykey-egress.sh counts` (set `probe`), then `refresh`.
-- Host down: reboot it from the OVHcloud console; after a reboot check `sealed` and the gate.
+- Host down: reboot it from the OVHcloud console; after a reboot check `sealed` and the gate. If `sealed` reads `unknown`, OpenBao's container did not start: `node scripts/host.ts <host> up` starts it (Session 7 gate).
 
 ### Confirm
 

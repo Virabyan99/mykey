@@ -11,8 +11,8 @@
 #  5. copies it out to the rotated directory, compares the size, and only
 #     then removes it from the container.
 #
-# It works through `docker exec` and `docker cp`, so it needs no path of the
-# volume. A failure exits 1 and leaves the renamed file where it is: the next
+# It works through `docker exec` and `docker cp` only, so it needs no path of
+# the volume. A failure exits 1 and leaves the renamed file where it is: the next
 # run (or an operator) finds it. Prints names and counts only.
 #
 # Settings: MYKEY_BAO_CONTAINER (default: the compose service `openbao` of
@@ -49,7 +49,11 @@ if inside "test -s $live"; then
 	name="audit-$(date -u +%Y%m%dT%H%M%SZ).log"
 	inside "test ! -e $audit_dir/$name" || fail "$name exists already"
 	inside "mv $live $audit_dir/$name"
-	docker kill --signal HUP "$container" >/dev/null
+	# Never `docker kill --signal`: Docker marks a container it signalled as
+	# stopped by hand, and `unless-stopped` then starts it neither after an
+	# exit nor at boot (Session 7 gate: staging's OpenBao stayed down after a
+	# reboot). The signal is sent from inside, to the container's first process.
+	inside "kill -HUP 1"
 	tries=0
 	until inside "test -e $live"; do
 		tries=$((tries + 1))

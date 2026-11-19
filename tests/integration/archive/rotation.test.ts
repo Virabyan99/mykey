@@ -73,6 +73,19 @@ function rotate(rotatedDir: string): Promise<{ code: number | null; out: string 
   });
 }
 
+function docker(args: string[]): Promise<{ code: number | null; out: string }> {
+  return new Promise((done, fail) => {
+    const child = spawn("docker", args, { env: { ...process.env, MSYS_NO_PATHCONV: "1" } });
+    let out = "";
+    child.stdout.on("data", (chunk: Buffer) => (out += chunk.toString()));
+    child.stderr.on("data", (chunk: Buffer) => (out += chunk.toString()));
+    child.on("error", fail);
+    child.on("close", (code) => {
+      done({ code, out });
+    });
+  });
+}
+
 /** 400 reads of distinct missing paths, eight at a time; the ids. */
 async function writer(count: number, during?: () => Promise<void>): Promise<string[]> {
   const ids = Array.from({ length: count }, () => randomUUID());
@@ -140,4 +153,28 @@ describe("rotating OpenBao's audit file (P-110)", () => {
     const left = await execInService(stack, "openbao", ["sh", "-c", "ls /openbao/audit"]);
     expect(left.trim().split(/\s+/)).toEqual(["audit.log"]);
   });
+
+  // Session 7 gate: staging's OpenBao stayed down after a reboot. A signal
+  // sent through Docker's kill call marks the container as stopped by hand,
+  // and `unless-stopped` (the host's policy) then starts it neither after an
+  // exit nor at boot. The rotation must leave Docker's restart duty alone.
+  it("after a rotation Docker still restarts OpenBao when it exits by itself", async () => {
+    expect((await docker(["update", "--restart", "unless-stopped", container])).code).toBe(0);
+    await writer(8);
+    const run = await rotate(mkdtempSync(join(tmpdir(), "mykey-bao-rotated-")));
+    expect(run.code, run.out).toBe(0);
+    const started = async () =>
+      (await docker(["inspect", "--format", "{{.State.StartedAt}}", container])).out.trim();
+    const before = await started();
+    // The exit is the process's own: no Docker call stops the container.
+    expect((await docker(["exec", container, "kill", "-TERM", "1"])).code).toBe(0);
+    let after = before;
+    for (let i = 0; i < 120 && after === before; i += 1) {
+      await new Promise((done) => setTimeout(done, 500));
+      after = await started();
+    }
+    expect(after).not.toBe(before);
+    const state = await docker(["inspect", "--format", "{{.State.Running}}", container]);
+    expect(state.out.trim()).toBe("true");
+  }, 180_000);
 });
