@@ -49,6 +49,8 @@ export async function createCredentialsFixture(
     stackOverrides?: readonly string[];
     /** Run 6.3: the product's rate limits. */
     rateLimits?: "product";
+    /** Run 7.3: the built workspace the in-process API serves. */
+    webDirectory?: string;
   } = {},
 ): Promise<CredentialsFixture> {
   const base = await createSecretsFixture({
@@ -59,6 +61,7 @@ export async function createCredentialsFixture(
     ...(opts.processes === undefined ? {} : { processes: opts.processes }),
     ...(opts.runtime === undefined ? {} : { runtime: opts.runtime }),
     ...(opts.rateLimits === undefined ? {} : { rateLimits: opts.rateLimits }),
+    ...(opts.webDirectory === undefined ? {} : { webDirectory: opts.webDirectory }),
   });
   const admin = new OpenBaoAdmin(base.stack.bao, base.stack.bao.rootToken);
   const freshen = async (): Promise<void> => {

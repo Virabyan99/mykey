@@ -1261,9 +1261,11 @@
       "ownerRun": "7.3",
       "contributingRuns": [],
       "oldSession": "D08-S39",
-      "status": "OPEN",
-      "evidence": [],
-      "note": ""
+      "status": "SPIKE_PASS",
+      "evidence": [
+        "docs/evidence/session-7/run-7.3.md"
+      ],
+      "note": "The overview route and screen: names, immutable ids, state, review reason, last change and the index's key counts with source and time; a count that was not made is null and reads \"not available\". Local browser and integration proof; the staging demonstration is the gate's."
     },
     {
       "id": "FR-1.91",
@@ -2057,9 +2059,11 @@
       "ownerRun": "7.3",
       "contributingRuns": [],
       "oldSession": "D08-S39",
-      "status": "OPEN",
-      "evidence": [],
-      "note": ""
+      "status": "SPIKE_PASS",
+      "evidence": [
+        "docs/evidence/session-7/run-7.3.md"
+      ],
+      "note": "Active, pending, archived, revoking and review resources shown with counts, times and the actions their state allows; a member is denied and organization B gets the hidden 404. FR-1.94's part is Run 7.8's."
     },
     {
       "id": "AC-1.47",

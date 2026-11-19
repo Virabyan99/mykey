@@ -34,6 +34,7 @@ import { machineKeysHandler, machineResolveHandler } from "./routes/machine.ts";
 import { healthHandler } from "./routes/health.ts";
 import { importApplyHandler, importPreviewHandler, importResumeHandler } from "./routes/imports.ts";
 import { activityListHandler } from "./routes/activity.ts";
+import { overviewGetHandler } from "./routes/overview.ts";
 import { auditListHandler } from "./routes/audit.ts";
 import { operationsGetHandler, operationsListHandler } from "./routes/operations.ts";
 import { organizationsListHandler } from "./routes/organizations.ts";
@@ -128,6 +129,7 @@ function handlers(
     "operations.list": operationsListHandler,
     "audit.list": auditListHandler,
     "activity.list": activityListHandler,
+    "overview.get": overviewGetHandler,
     "secrets.list": secretsListHandler,
     "secrets.history": secretsHistoryHandler,
     "secrets.reveal": secretsRevealHandler,
@@ -304,7 +306,7 @@ export function createApp(given: AppDeps): Hono<ApiEnv> {
   if (deps.auth !== undefined) mountAuth(app, deps, deps.auth);
 
   // Run 7.1 (P-134): the workspace's shell answers where the terminal 404
-  // would be — on the paths of WEB_ROUTES and for the files of its manifest,
+  // would be, on the paths of WEB_ROUTES and for the files of its manifest,
   // after the gate and the source limit like every request. No route is
   // registered for it.
   const webDirectory =

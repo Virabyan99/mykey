@@ -11,7 +11,11 @@ import {
   type ActivityListBody,
   type AuditListBody,
   type EnvironmentsBody,
+  type CredentialsListBody,
+  type OperationResponse,
+  type OperationsListBody,
   type OrganizationsBody,
+  type OverviewBody,
   type ProjectsBody,
   type RouteDef,
   type SessionActivityBody,
@@ -28,6 +32,17 @@ export interface Bodies {
   "audit.list": AuditListBody;
   "activity.list": ActivityListBody;
   "auth.reset.complete": { next: "sign_in" | "enroll" };
+  "overview.get": OverviewBody;
+  "projects.create": OperationResponse;
+  "projects.rename": OperationResponse;
+  "projects.archive": OperationResponse;
+  "projects.reactivate": OperationResponse;
+  "environments.create": OperationResponse;
+  "environments.rename": OperationResponse;
+  "environments.archive": OperationResponse;
+  "environments.reactivate": OperationResponse;
+  "credentials.list": CredentialsListBody;
+  "operations.list": OperationsListBody;
 }
 export type RouteId = keyof Bodies;
 

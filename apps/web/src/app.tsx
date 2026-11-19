@@ -11,18 +11,20 @@ import { navigate, usePath } from "./router.tsx";
 import { Account } from "./screens/account.tsx";
 import { Enroll } from "./screens/enroll.tsx";
 import { Home } from "./screens/home.tsx";
+import { Overview } from "./screens/overview.tsx";
+import { Project } from "./screens/project.tsx";
 import { Reset } from "./screens/reset.tsx";
 import { SecondStep, SignIn } from "./screens/sign-in.tsx";
 import { useFlow } from "./state/flow.ts";
 import { useSession } from "./state/session.tsx";
 import { useScope } from "./state/scope.tsx";
 import { Layout } from "./ui/Layout.tsx";
+import { EnvironmentNotice } from "./ui/Resource.tsx";
 import { Loading } from "./ui/StateBadge.tsx";
 
 /** The screens later runs of Session 7 build; until then, the name of the place. */
 const TITLES: Readonly<Record<string, string>> = {
   help: "Help",
-  overview: "Overview",
   activity: "Activity",
   audit: "Audit",
   secrets: "Secrets",
@@ -32,14 +34,22 @@ const TITLES: Readonly<Record<string, string>> = {
 };
 
 function Place(props: { id: string }) {
-  const scope = useScope();
-  if (props.id === "project") return <h1>{scope.project?.name}</h1>;
-  return <h1>{TITLES[props.id] ?? "MyKey"}</h1>;
+  const { environment } = useScope();
+  return (
+    <>
+      <h1>{TITLES[props.id] ?? "MyKey"}</h1>
+      {environment === null ? null : (
+        <EnvironmentNotice state={environment.state} reason={environment.reviewReason} />
+      )}
+    </>
+  );
 }
 
 function screenOf(route: { id: string; params: Record<string, string> }): ReactNode {
   if (route.id === "home") return <Home />;
   if (route.id === "account") return <Account />;
+  if (route.id === "overview") return <Overview />;
+  if (route.id === "project") return <Project />;
   if (route.id === "secret") return <h1>{route.params.name}</h1>;
   return <Place id={route.id} />;
 }

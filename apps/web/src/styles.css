@@ -388,6 +388,26 @@ dialog::backdrop {
   white-space: nowrap;
 }
 
+/* Resources */
+.review {
+  margin: 0.25rem 0 0;
+  color: var(--warn);
+}
+
+.facts {
+  margin: 0.75rem 0;
+  padding-left: 1.25rem;
+}
+
+td .actions {
+  margin: 0;
+}
+
+h2 .badge {
+  font-size: 0.9rem;
+  font-weight: 400;
+}
+
 @media (max-width: 40rem) {
   .who {
     margin-left: 0;

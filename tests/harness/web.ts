@@ -17,6 +17,7 @@ import { join } from "node:path";
 import { chromium, type Browser, type BrowserContext, type Page } from "playwright";
 import { buildWeb } from "../../apps/web/build.ts";
 import { startTestApi, TEST_ORIGIN, type StartTestApiOptions, type TestApi } from "./api.ts";
+import { createCredentialsFixture, type CredentialsFixture } from "./credentials-fixture.ts";
 import { createTenants, type FixtureUser, type Tenants } from "./tenants.ts";
 
 export interface Capture {
@@ -67,6 +68,43 @@ export interface Web {
 }
 
 export async function startWeb(options: StartTestApiOptions = {}): Promise<Web> {
+  return assemble(async (directory, cleanup) => {
+    const api = await startTestApi({
+      ...options,
+      config: { ...options.config, webDirectory: directory },
+    });
+    cleanup.push(() => api.close());
+    return { api, tenants: await createTenants(api) };
+  });
+}
+
+/** The workspace over both stores: OpenBao, the provisioner's objects and machine credentials. */
+export interface StoresWeb extends Web {
+  f: CredentialsFixture;
+}
+
+/**
+ * The workspace served by the API of the credentials fixture (Run 7.3 on):
+ * real OpenBao, environments made by the real provisioning job, real tokens.
+ */
+export async function startWebWithStores(): Promise<StoresWeb> {
+  let fixture: CredentialsFixture | undefined;
+  const web = await assemble(async (directory, cleanup) => {
+    const f = await createCredentialsFixture({ webDirectory: directory });
+    cleanup.push(() => f.close());
+    fixture = f;
+    return { api: f.api, tenants: f.tenants };
+  });
+  if (fixture === undefined) throw new Error("no fixture");
+  return { ...web, f: fixture };
+}
+
+async function assemble(
+  start: (
+    directory: string,
+    cleanup: (() => Promise<void> | void)[],
+  ) => Promise<{ api: TestApi; tenants: Tenants }>,
+): Promise<Web> {
   const directory = mkdtempSync(join(tmpdir(), "mykey-web-"));
   const cleanup: (() => Promise<void> | void)[] = [
     () => {
@@ -78,12 +116,7 @@ export async function startWeb(options: StartTestApiOptions = {}): Promise<Web> 
   };
   try {
     await buildWeb({ directory, build: "test" });
-    const api = await startTestApi({
-      ...options,
-      config: { ...options.config, webDirectory: directory },
-    });
-    cleanup.push(() => api.close());
-    const tenants = await createTenants(api);
+    const { api, tenants } = await start(directory, cleanup);
     const host = new URL(TEST_ORIGIN).host;
     const browser = await chromium.launch({
       args: [`--host-resolver-rules=MAP ${host} 127.0.0.1:${String(api.port)}`],

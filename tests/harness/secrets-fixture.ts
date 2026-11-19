@@ -214,6 +214,8 @@ export async function createSecretsFixture(
     stackOverrides?: readonly string[];
     /** Run 6.3: the product's rate limits in both processes (default: never refusing). */
     rateLimits?: "product";
+    /** Run 7.3: the built workspace the in-process API serves (the browser project). */
+    webDirectory?: string;
   } = {},
 ): Promise<SecretsFixture> {
   const directory = mkdtempSync(join(tmpdir(), "mykey-secrets-"));
@@ -240,6 +242,7 @@ export async function createSecretsFixture(
         },
         importBudgetMs: () => importBudget ?? undefined,
         ...(opts.rateLimits === undefined ? {} : { rateLimits: opts.rateLimits }),
+        ...(opts.webDirectory === undefined ? {} : { config: { webDirectory: opts.webDirectory } }),
         routes: [{ def: TEST_READ_ROUTE, handler: testReadHandler() }, ...(opts.routes ?? [])],
       };
     },
