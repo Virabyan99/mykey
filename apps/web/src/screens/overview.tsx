@@ -5,7 +5,13 @@
 // list of the projects they can see, without counts. The role only spares a
 // request the server would refuse; the server decides.
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { CREDENTIAL_STATES, LIMITS, webPath, type OverviewBody } from "@mykey/contracts";
+import {
+  CREDENTIAL_STATES,
+  LIMITS,
+  webPath,
+  type MetricsBody,
+  type OverviewBody,
+} from "@mykey/contracts";
 import { useState } from "react";
 import { call, failureOf, need } from "../api/client.ts";
 import { ErrorPanel } from "../errors/ErrorPanel.tsx";
@@ -157,8 +163,9 @@ function CredentialSummary(props: { org: string; userId: string; projects: reado
       {summary.data === undefined ? null : (
         <>
           <p className="hint">
-            Counted from the catalog of this organization, as of{" "}
-            <Time at={summary.data.observedAt} />. A credential past its expiry counts as expired.
+            Source: the credential catalog of this organization. Window: every credential it lists.
+            Observed <Time at={summary.data.observedAt} />. A credential past its expiry counts as
+            expired.
           </p>
           <div className="scroll">
             <table aria-label="Credentials by state">
@@ -213,11 +220,145 @@ function CredentialSummary(props: { org: string; userId: string; projects: reado
   );
 }
 
+const OUTCOME_COLUMNS = [
+  ["success", "Succeeded"],
+  ["failure", "Failed"],
+  ["unknown", "Not known"],
+  ["denied", "Denied"],
+] as const;
+
+const utcDay = (at: string): string => at.slice(0, 10);
+
+/**
+ * The summary of FR-1.94 as tables (P-142). Every table names its source, its
+ * window and the time it was observed. A day the audit log does not cover is
+ * "not measured"; a 0 is a day that was counted and had nothing.
+ */
+function Summary(props: { org: string; userId: string }) {
+  const { org, userId } = props;
+  const metrics = useQuery({
+    queryKey: [userId, org, "metrics"],
+    queryFn: () => need(call("metrics.get", { params: { org }, query: {} })),
+  });
+  if (metrics.isPending) return <Loading what="the summary" />;
+  if (metrics.isError) {
+    return (
+      <ErrorPanel
+        failure={failureOf(metrics.error)}
+        action="read the summary"
+        onReload={() => void metrics.refetch()}
+      />
+    );
+  }
+  const { days, window, observedAt, measuredFrom, operations } = metrics.data;
+  const totalOf = (counts: NonNullable<MetricsBody["days"][number]["counts"]>): number =>
+    counts.success + counts.failure + counts.unknown + counts.denied;
+  const most = Math.max(1, ...days.map((day) => (day.counts === null ? 0 : totalOf(day.counts))));
+  return (
+    <>
+      <section aria-labelledby="summary-outcomes">
+        <h2 id="summary-outcomes">Outcomes by day</h2>
+        <p className="hint">
+          Source: the audit log of this organization. Window: {utcDay(window.from)} to{" "}
+          {utcDay(window.to)}, in UTC days; the last day is counted up to the observation. Observed{" "}
+          <Time at={observedAt} />.{" "}
+          {measuredFrom === null
+            ? "Nothing was measured: the audit log has no event of this organization."
+            : `Nothing was measured before ${utcDay(measuredFrom)}, the day of the oldest event the audit log holds.`}
+        </p>
+        <div className="scroll">
+          <table aria-label="Outcomes by day">
+            <thead>
+              <tr>
+                <th scope="col">Day (UTC)</th>
+                {OUTCOME_COLUMNS.map(([key, title]) => (
+                  <th key={key} scope="col">
+                    {title}
+                  </th>
+                ))}
+                <th scope="col">All</th>
+              </tr>
+            </thead>
+            <tbody>
+              {days.map(({ day, counts }) => (
+                <tr key={day}>
+                  <th scope="row">{day}</th>
+                  {counts === null ? (
+                    <td colSpan={OUTCOME_COLUMNS.length + 1} className="muted">
+                      not measured
+                    </td>
+                  ) : (
+                    <>
+                      {OUTCOME_COLUMNS.map(([key]) => (
+                        <td key={key}>{counts[key]}</td>
+                      ))}
+                      <td>
+                        {totalOf(counts)}
+                        {/* Decoration: the number is the text before it. */}
+                        <meter
+                          className="bar"
+                          aria-hidden="true"
+                          min={0}
+                          max={most}
+                          value={totalOf(counts)}
+                        />
+                      </td>
+                    </>
+                  )}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <p className="hint">
+          Succeeded, failed and not known count the events of the activity timeline by their
+          outcome. Denied counts the requests the service refused for lack of permission.
+        </p>
+      </section>
+      <section aria-labelledby="summary-operations">
+        <h2 id="summary-operations">Operations without an end</h2>
+        <p className="hint">
+          Source: the operations of this organization. Window: every operation the server still
+          holds. Observed <Time at={observedAt} />.
+        </p>
+        <div className="scroll">
+          <table aria-label="Operations without an end">
+            <thead>
+              <tr>
+                <th scope="col">What</th>
+                <th scope="col">Operations</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <th scope="row">
+                  Not ended: accepted, executing, waiting for a file, or not known
+                </th>
+                <td>{operations.unresolved}</td>
+              </tr>
+              <tr>
+                <th scope="row">Outcome not known, settled or not</th>
+                <td>{operations.uncertain}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <p className="hint">
+          Each is listed, with its state, under Operations of its environment. An operation whose
+          outcome is not known is settled by an operator from the host (runbook reconciliation.md).
+        </p>
+      </section>
+    </>
+  );
+}
+
 function Listed(props: { org: string }) {
   const { projects } = useScope();
   return (
     <>
-      <p className="hint">Key counts are shown to owners and admins of the organization.</p>
+      <p className="hint">
+        Key counts and the summary are shown to owners and admins of the organization.
+      </p>
       {projects === null || projects.items.length === 0 ? (
         <p>There is no project you can see.</p>
       ) : (
@@ -302,6 +443,7 @@ export function Overview() {
         <>
           <NewProject org={organization.id} userId={userId} />
           <Counted org={organization.id} userId={userId} />
+          <Summary org={organization.id} userId={userId} />
         </>
       ) : (
         <Listed org={organization.id} />

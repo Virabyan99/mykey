@@ -17,6 +17,7 @@ import { ConfirmDialog } from "../ui/Dialog.tsx";
 import { Field } from "../ui/Field.tsx";
 import { EnvironmentNotice } from "../ui/Resource.tsx";
 import { CopyButton, SecretLine } from "../ui/Secret.tsx";
+import { OperationsLink } from "../ui/OperationsLink.tsx";
 import { Loading, StateBadge } from "../ui/StateBadge.tsx";
 import { StepUp } from "../ui/StepUp.tsx";
 import { Time } from "../ui/Time.tsx";
@@ -75,8 +76,10 @@ function IssueForm(props: {
   /** Any answer or none: the catalog may have a new row. */
   onAnswer: () => void;
   onCancel: () => void;
+  /** Why nothing can be issued now, or null. The last answer of the form stays readable. */
+  blocked: string | null;
 }) {
-  const { at } = props;
+  const { at, blocked } = props;
   const action = useAction();
   const [name, setName] = useState("");
   const [days, setDays] = useState(String(MAX_DAYS));
@@ -98,6 +101,7 @@ function IssueForm(props: {
     };
     setProblems(found);
     if (found.name !== null || found.days !== null) return;
+    if (blocked !== null) return;
     const result = await action.run(
       `credentials.issue ${at.env} ${wanted} ${String(lifetime)}`,
       (key) =>
@@ -129,8 +133,10 @@ function IssueForm(props: {
           nothing else. Its token is shown once, right after it is issued. Issuing needs a code from
           your authenticator of the last ten minutes.
         </p>
+        {blocked === null ? null : <p role="status">{blocked}</p>}
         <Field
           label="Name"
+          disabled={blocked !== null}
           value={name}
           onChange={(event) => {
             setName(event.target.value);
@@ -141,6 +147,7 @@ function IssueForm(props: {
         />
         <Field
           label="Lifetime in days"
+          disabled={blocked !== null}
           value={days}
           onChange={(event) => {
             setDays(event.target.value);
@@ -152,14 +159,18 @@ function IssueForm(props: {
         />
         {note === null ? null : <p role="status">{note}</p>}
         {action.failure === null ? null : (
-          <ErrorPanel failure={action.failure} action="issue the credential" />
+          <ErrorPanel failure={action.failure} action="issue the credential">
+            <OperationsLink failure={action.failure} at={at} />
+          </ErrorPanel>
         )}
         <div className="actions">
-          <button type="submit" disabled={action.busy}>
-            Issue credential
-          </button>
+          {blocked === null ? (
+            <button type="submit" disabled={action.busy}>
+              Issue credential
+            </button>
+          ) : null}
           <button type="button" onClick={props.onCancel} disabled={action.busy}>
-            Cancel
+            {blocked === null ? "Cancel" : "Close"}
           </button>
         </div>
       </form>
@@ -211,7 +222,9 @@ function RevokeDialog(props: {
         A revocation cannot be undone. To give the consumer access again, issue a new credential.
       </p>
       {action.failure === null ? null : (
-        <ErrorPanel failure={action.failure} action="revoke the credential" />
+        <ErrorPanel failure={action.failure} action="revoke the credential">
+          <OperationsLink failure={action.failure} at={at} />
+        </ErrorPanel>
       )}
     </ConfirmDialog>
   );
@@ -276,19 +289,21 @@ function Inventory(props: { at: At; userId: string; scope: string; writable: boo
   const rows = list.data?.pages.flatMap((page) => page.credentials) ?? [];
   // One unresolved issuance closes the environment for the next one (the server's rule).
   const blocking = rows.find((row) => row.state === "needs_review" || row.state === "issuing");
+  const blocked =
+    blocking === undefined
+      ? null
+      : `No credential can be issued for this environment until ${blocking.name} (${
+          blocking.state === "issuing" ? "being issued" : "needs review"
+        }) is settled.`;
 
   return (
     <>
       {shown === null ? null : <TokenPanel shown={shown} onHide={hide} />}
       {notice === null ? null : <p role="status">{notice}</p>}
-      {!writable || list.data === undefined ? null : blocking !== undefined ? (
-        <p role="status">
-          No credential can be issued for this environment until {blocking.name} (
-          {blocking.state === "issuing" ? "being issued" : "needs review"}) is settled.
-        </p>
-      ) : form ? (
+      {!writable || list.data === undefined ? null : form ? (
         <IssueForm
           at={at}
+          blocked={blocked}
           onAnswer={refresh}
           onIssued={(name, token) => {
             setForm(false);
@@ -305,6 +320,8 @@ function Inventory(props: { at: At; userId: string; scope: string; writable: boo
             setForm(false);
           }}
         />
+      ) : blocked !== null ? (
+        <p role="status">{blocked}</p>
       ) : (
         <div className="actions">
           <button

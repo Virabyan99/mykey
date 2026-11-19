@@ -9,11 +9,14 @@ import { forgetData } from "./api/query.ts";
 import { ErrorPanel } from "./errors/ErrorPanel.tsx";
 import { navigate, usePath } from "./router.tsx";
 import { Account } from "./screens/account.tsx";
+import { Activity } from "./screens/activity.tsx";
+import { Audit } from "./screens/audit.tsx";
 import { Enroll } from "./screens/enroll.tsx";
 import { Credentials } from "./screens/credentials.tsx";
 import { Help } from "./screens/help.tsx";
 import { Home } from "./screens/home.tsx";
 import { ImportExport } from "./screens/import.tsx";
+import { Operations } from "./screens/operations.tsx";
 import { Overview } from "./screens/overview.tsx";
 import { Project } from "./screens/project.tsx";
 import { Reset } from "./screens/reset.tsx";
@@ -22,41 +25,23 @@ import { Secrets } from "./screens/secrets.tsx";
 import { SecondStep, SignIn } from "./screens/sign-in.tsx";
 import { useFlow } from "./state/flow.ts";
 import { useSession } from "./state/session.tsx";
-import { useScope } from "./state/scope.tsx";
 import { Layout } from "./ui/Layout.tsx";
-import { EnvironmentNotice } from "./ui/Resource.tsx";
 import { Loading } from "./ui/StateBadge.tsx";
-
-/** The screens later runs of Session 7 build; until then, the name of the place. */
-const TITLES: Readonly<Record<string, string>> = {
-  activity: "Activity",
-  audit: "Audit",
-  operations: "Operations",
-};
-
-function Place(props: { id: string }) {
-  const { environment } = useScope();
-  return (
-    <>
-      <h1>{TITLES[props.id] ?? "MyKey"}</h1>
-      {environment === null ? null : (
-        <EnvironmentNotice state={environment.state} reason={environment.reviewReason} />
-      )}
-    </>
-  );
-}
 
 function screenOf(route: { id: string; params: Record<string, string> }): ReactNode {
   if (route.id === "home") return <Home />;
   if (route.id === "account") return <Account />;
   if (route.id === "overview") return <Overview />;
   if (route.id === "project") return <Project />;
+  if (route.id === "activity") return <Activity />;
+  if (route.id === "audit") return <Audit />;
   if (route.id === "credentials") return <Credentials />;
+  if (route.id === "operations") return <Operations />;
   if (route.id === "help") return <Help />;
   if (route.id === "import") return <ImportExport />;
   if (route.id === "secrets") return <Secrets />;
   if (route.id === "secret") return <Secret name={route.params.name ?? ""} />;
-  return <Place id={route.id} />;
+  return null;
 }
 
 /** Paths a complete session has nothing to do on. */

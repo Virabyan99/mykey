@@ -26,7 +26,8 @@ import {
 /** The environment of the address: the parameters of every route below it. */
 type At = Readonly<Record<"org" | "project" | "env", string>>;
 
-const LIST_CHANGED = "The list changed while it was being read. It was read again from the start.";
+export const LIST_CHANGED =
+  "The list changed while it was being read. It was read again from the start.";
 
 function NewSecret(props: { at: At; onCreated: (text: string) => void; onCancel: () => void }) {
   const { at } = props;

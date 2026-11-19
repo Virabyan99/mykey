@@ -103,9 +103,10 @@ describe("the overview and the resource screens", () => {
       expect(await first.locator("tbody tr").count()).toBe(2);
 
       const load = apiCalls(session);
-      expect(load.length, load.join(" ")).toBeLessThanOrEqual(5);
+      expect(load.length, load.join(" ")).toBeLessThanOrEqual(6);
       expect(load).toContain(`/v1/organizations/${org()}/overview`);
       expect(load).toContain(`/v1/organizations/${org()}/credentials/summary`);
+      expect(load).toContain(`/v1/organizations/${org()}/metrics`);
 
       await page.clock.fastForward(60_000);
       await sleep(1000);

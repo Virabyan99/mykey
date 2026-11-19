@@ -12,6 +12,7 @@ import {
   type AuditListBody,
   type EnvironmentsBody,
   type ImportPreviewBody,
+  type MetricsBody,
   type CredentialIssuedBody,
   type CredentialsListBody,
   type CredentialsSummaryBody,
@@ -51,6 +52,8 @@ export interface Bodies {
   "credentials.revoke": OperationResponse;
   "credentials.summary": CredentialsSummaryBody;
   "operations.list": OperationsListBody;
+  "operations.get": OperationResponse;
+  "metrics.get": MetricsBody;
   "secrets.list": SecretsListBody;
   "secrets.history": SecretsHistoryBody;
   "secrets.delete": OperationResponse;

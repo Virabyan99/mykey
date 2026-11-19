@@ -35,6 +35,7 @@ import { machineKeysHandler, machineResolveHandler } from "./routes/machine.ts";
 import { healthHandler } from "./routes/health.ts";
 import { importApplyHandler, importPreviewHandler, importResumeHandler } from "./routes/imports.ts";
 import { activityListHandler } from "./routes/activity.ts";
+import { metricsGetHandler } from "./routes/metrics.ts";
 import { overviewGetHandler } from "./routes/overview.ts";
 import { auditListHandler } from "./routes/audit.ts";
 import { operationsGetHandler, operationsListHandler } from "./routes/operations.ts";
@@ -131,6 +132,7 @@ function handlers(
     "audit.list": auditListHandler,
     "activity.list": activityListHandler,
     "overview.get": overviewGetHandler,
+    "metrics.get": metricsGetHandler,
     "secrets.list": secretsListHandler,
     "secrets.history": secretsHistoryHandler,
     "secrets.reveal": secretsRevealHandler,

@@ -144,6 +144,7 @@ export {
   type CredentialsSummary,
   type ExpiringCredential,
 } from "./repos/credentials-summary.ts";
+export { readMetrics, type DayCounts, type Metrics } from "./repos/metrics.ts";
 export {
   readOverview,
   type Overview,

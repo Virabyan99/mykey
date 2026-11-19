@@ -454,3 +454,20 @@ h2 .badge {
 .search .field {
   margin: 0;
 }
+
+/* The summary's bar: decoration beside a number that is in the cell. */
+.bar {
+  width: 6rem;
+  height: 0.6rem;
+  margin-left: 0.5rem;
+  vertical-align: middle;
+}
+
+/* Filters of the activity and audit screens */
+.filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1rem;
+  align-items: flex-end;
+  margin: 0.75rem 0;
+}

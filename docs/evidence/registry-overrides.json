@@ -985,6 +985,30 @@
       "status": "SPIKE_PASS",
       "evidence": ["docs/evidence/session-7/run-7.7.md"],
       "note": "Every credential state issued through the product and shown; a revocation in the page is followed by machine.keys refusing the token; no token is shown twice. Local proof."
+    },
+    {
+      "id": "FR-1.92",
+      "status": "SPIKE_PASS",
+      "evidence": ["docs/evidence/session-7/run-7.8.md"],
+      "note": "The operations screen and the activity timeline: paged, scoped, the server's seven states by their own word, an uncertain operation never called failed, the operator sentence with the runbook's name, and nothing on the screens that reconciles. Local browser proof over real OpenBao."
+    },
+    {
+      "id": "FR-1.94",
+      "status": "SPIKE_PASS",
+      "evidence": ["docs/evidence/session-7/run-7.8.md"],
+      "note": "metrics.get and the overview's summary: outcomes by day, credentials by state and operations without an end, each with source, window and observation time; a day not measured is a null and reads \"not measured\", never zero; members are refused by the server. Local proof."
+    },
+    {
+      "id": "AC-1.48",
+      "status": "SPIKE_PASS",
+      "evidence": ["docs/evidence/session-7/run-7.8.md"],
+      "note": "A delayed write, an unknown issuance and an interrupted import forced through the fixtures' fault hooks and shown as executing then succeeded, needs review with uncertain, and awaiting input with the way to resume; ids and operator escalation shown, no retry. Local proof; the staging demonstration is the gate's."
+    },
+    {
+      "id": "AC-1.55",
+      "status": "SPIKE_PASS",
+      "evidence": ["docs/evidence/session-7/run-7.8.md"],
+      "note": "The summary from real audit rows: not measured, a counted zero, counted days and unresolved operations equal to a direct count; organization B counted nowhere and a member refused. Local proof."
     }
   ]
 }
