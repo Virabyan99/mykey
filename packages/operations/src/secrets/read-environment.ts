@@ -38,7 +38,7 @@ import {
 import { environmentPrefix, secretPath, type BaoFailure, type OpenBaoClient } from "@mykey/openbao";
 import type pg from "pg";
 import type { ReadDeps, Refused } from "./history.ts";
-import { Busy, inTransaction, withEnvironmentLock, type Locked } from "./lock.ts";
+import { Busy, READ_COOLDOWN_MS, inTransaction, withEnvironmentLock, type Locked } from "./lock.ts";
 import { backendRefusal } from "./protocol.ts";
 
 export interface EnvironmentRead {
@@ -58,6 +58,8 @@ export interface EnvironmentReadRequest {
   audit: (tx: pg.PoolClient, read: { names: number; generation: bigint }) => Promise<void>;
   /** A machine request: every backend read uses this client and deps.bao is never asked. */
   reader?: { client: OpenBaoClient; alive: () => Promise<boolean> };
+  /** Run 6.3 (P-114): one read at a time for this key (the machine credential); else busy at once. */
+  exclusive?: string;
 }
 
 export type EnvironmentReadOutcome = { kind: "ok"; read: EnvironmentRead } | Refused;
@@ -207,12 +209,16 @@ async function commitRead(
 /** Runs `work` under the environment's lock; busy and stops become refusals. */
 async function underLock<T>(
   deps: ReadDeps,
-  scope: EnvironmentScope,
+  request: EnvironmentReadRequest,
   work: (locked: Locked) => Promise<T | Refused>,
+  cooldownMs?: number,
 ): Promise<T | Refused> {
-  const { lockKey } = await environmentCounters(deps.pool, scope);
+  const { lockKey } = await environmentCounters(deps.pool, request.scope);
   try {
-    return await withEnvironmentLock(deps.lockPool, lockKey, work);
+    return await withEnvironmentLock(deps.lockPool, lockKey, work, undefined, {
+      ...(request.exclusive === undefined ? {} : { exclusive: request.exclusive }),
+      ...(cooldownMs === undefined ? {} : { cooldownMs }),
+    });
   } catch (error) {
     if (error instanceof Busy) return refused("busy");
     if (error instanceof Stop) return error.outcome;
@@ -227,59 +233,69 @@ export async function readEnvironment(
   const { scope } = request;
   const bao = clientOf(deps, request);
   if (bao === null) return refused("dependency_unavailable");
-  return underLock(deps, scope, async (locked): Promise<EnvironmentReadOutcome> => {
-    const { rows, generation } = await admit(locked, request);
-    const differ = await compareNames(deps, request, bao, rows);
-    if (differ !== null) return differ;
+  return underLock(
+    deps,
+    request,
+    async (locked): Promise<EnvironmentReadOutcome> => {
+      const { rows, generation } = await admit(locked, request);
+      const differ = await compareNames(deps, request, bao, rows);
+      if (differ !== null) return differ;
 
-    // (3) Every live value, eight at a time.
-    const live = rows.filter((row) => row.state === "live");
-    const entries: EnvironmentRead["entries"] = [];
-    let valueBytes = 0;
-    for (let start = 0; start < live.length; start += READ_BATCH) {
-      const batch = live.slice(start, start + READ_BATCH);
-      const reads = await Promise.all(
-        batch.map((row) => bao.kvRead(secretPath(scope.projectId, scope.environmentId, row.name))),
-      );
-      for (const [position, row] of batch.entries()) {
-        const result = reads[position];
-        if (result === undefined) throw new Error("read batch out of step");
-        if (!result.ok) {
-          if (result.kind === "not_found" || (result.kind === "invalid" && result.status === 200)) {
+      // (3) Every live value, eight at a time.
+      const live = rows.filter((row) => row.state === "live");
+      const entries: EnvironmentRead["entries"] = [];
+      let valueBytes = 0;
+      for (let start = 0; start < live.length; start += READ_BATCH) {
+        const batch = live.slice(start, start + READ_BATCH);
+        const reads = await Promise.all(
+          batch.map((row) =>
+            bao.kvRead(secretPath(scope.projectId, scope.environmentId, row.name)),
+          ),
+        );
+        for (const [position, row] of batch.entries()) {
+          const result = reads[position];
+          if (result === undefined) throw new Error("read batch out of step");
+          if (!result.ok) {
+            if (
+              result.kind === "not_found" ||
+              (result.kind === "invalid" && result.status === 200)
+            ) {
+              await markKeyReview(deps.pool, scope, row.name, null);
+              return refused("backend_inconsistent");
+            }
+            return refusalOf(deps, request, result);
+          }
+          // A version that is not a format-1 envelope reads as invalid 200 (above).
+          const value = result.data.envelope.value;
+          if (
+            result.data.version !== row.currentVersion ||
+            byteLength(value) !== row.liveValueBytes
+          ) {
             await markKeyReview(deps.pool, scope, row.name, null);
             return refused("backend_inconsistent");
           }
-          return refusalOf(deps, request, result);
+          entries.push({ name: row.name, value, version: result.data.version });
+          valueBytes += byteLength(value);
         }
-        // A version that is not a format-1 envelope reads as invalid 200 (above).
-        const value = result.data.envelope.value;
-        if (
-          result.data.version !== row.currentVersion ||
-          byteLength(value) !== row.liveValueBytes
-        ) {
-          await markKeyReview(deps.pool, scope, row.name, null);
-          return refused("backend_inconsistent");
-        }
-        entries.push({ name: row.name, value, version: result.data.version });
-        valueBytes += byteLength(value);
       }
-    }
-    await deps.faults?.("after_backend_read");
-    if (locked.lost()) return refused("dependency_unavailable");
+      await deps.faults?.("after_backend_read");
+      if (locked.lost()) return refused("dependency_unavailable");
 
-    // (4) The response size.
-    const nameBytes = entries.reduce((sum, entry) => sum + byteLength(entry.name), 0);
-    if (
-      valueBytes + nameBytes + ENTRY_OVERHEAD_BYTES * entries.length >
-      LIMITS.completeResponse.maxBodyBytes
-    ) {
-      return refused("capacity_exceeded", { details: { limit: "response" } });
-    }
+      // (4) The response size.
+      const nameBytes = entries.reduce((sum, entry) => sum + byteLength(entry.name), 0);
+      if (
+        valueBytes + nameBytes + ENTRY_OVERHEAD_BYTES * entries.length >
+        LIMITS.completeResponse.maxBodyBytes
+      ) {
+        return refused("capacity_exceeded", { details: { limit: "response" } });
+      }
 
-    const failed = await commitRead(deps, request, locked, { names: entries.length, generation });
-    if (failed !== null) return failed;
-    return { kind: "ok", read: { generation, entries, valueBytes } };
-  });
+      const failed = await commitRead(deps, request, locked, { names: entries.length, generation });
+      if (failed !== null) return failed;
+      return { kind: "ok", read: { generation, entries, valueBytes } };
+    },
+    READ_COOLDOWN_MS,
+  );
 }
 
 /**
@@ -294,7 +310,7 @@ export async function readEnvironmentNames(
 ): Promise<EnvironmentNamesOutcome> {
   const bao = clientOf(deps, request);
   if (bao === null) return refused("dependency_unavailable");
-  return underLock(deps, request.scope, async (locked): Promise<EnvironmentNamesOutcome> => {
+  return underLock(deps, request, async (locked): Promise<EnvironmentNamesOutcome> => {
     const { rows, generation } = await admit(locked, request);
     const differ = await compareNames(deps, request, bao, rows);
     if (differ !== null) return differ;

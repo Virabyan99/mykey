@@ -22,12 +22,18 @@ export {
 } from "./provisioning/plan.ts";
 export {
   GATE_MAX_BYTES,
+  mayOpen,
   readGate,
+  reportSha256,
+  type GateAdmits,
   type GateCause,
+  type GateExpect,
   type GateIo,
   type GateReading,
   type GateRecord,
 } from "./gate.ts";
+export { CAPACITY_MAX_AGE_MS, readCapacity, type CapacityReading } from "./capacity.ts";
+export { CAPTURE_SQLSTATE, isCaptureRefusal } from "./capture/barrier.ts";
 export {
   beginOperation,
   intentFingerprint,
@@ -53,6 +59,7 @@ export {
   ARCHIVE_FAULT_POINTS,
   beginArchive,
   continueArchives,
+  driveEach,
   driveArchive,
   type ArchiveDriveDeps,
   type ArchiveFaultPoint,

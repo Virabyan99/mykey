@@ -38,27 +38,29 @@
     },
     {
       "id": "PO-9",
-      "status": "OPEN",
+      "status": "SPIKE_PASS",
       "evidence": [
         "docs/evidence/session-1/run-1.9.md",
-        "docs/evidence/session-1/retention-fixture.json"
+        "docs/evidence/session-1/retention-fixture.json",
+        "docs/evidence/session-6/run-6.6.md"
       ],
-      "note": "Started, nothing passed: a synthetic fixture was uploaded on 11 Nov 2026 and is locked until 15 Nov 2026. Clean-up after expiry and restore of the oldest eligible pair belong to Run 6.6."
+      "note": "Daily pair, retention by its own unit, oldest-eligible restore: the fixture's oldest pair restored and the fixture cleaned up verified (Run 6.6, cleanup.ts); staging's pairs restore on the workstation (Run 6.5); the 30-day deletion on staging is checkpoint pair-30-day."
     },
     {
       "id": "R2-L1",
-      "status": "OPEN",
+      "status": "SPIKE_PASS",
       "evidence": [
         "docs/evidence/session-1/run-1.9.md",
-        "docs/evidence/session-1/retention-fixture.json"
+        "docs/evidence/session-1/retention-fixture.json",
+        "docs/evidence/session-6/run-6.6.md"
       ],
-      "note": "Started, nothing passed: on the fixture bucket R2 refused overwrite, delete and bulk delete of locked objects and refused a lock-rule change by every object token; a ten-minute lock expired as configured. The 30-day production rule is read back but not aged."
+      "note": "Real lock aging: probe objects deleted after their 600 s lock by a later run and proven gone; locked ones refused (409, bulk 200 with per-object errors) and reported by applyRetention, not thrown; the fixture's 4-day pairs deleted after their lock and its oldest pair recovered (Run 6.6)."
     },
     {
       "id": "COST-B1",
-      "status": "OPEN",
-      "evidence": ["docs/evidence/cost-sheet.md"],
-      "note": "Started, nothing passed: rates looked up on 11 Nov 2026 and operations counted on a synthetic fixture. The size of a real pair is not known."
+      "status": "SPIKE_PASS",
+      "evidence": ["docs/evidence/cost-sheet.md", "docs/evidence/session-6/run-6.6.md"],
+      "note": "A used staging pair measured (44.3 MB, 6,784 secrets), the audit archive per day, operations per night and per retention run; 32 pairs ≈ 1.42 GB-month. No invoice figure yet (Run 9.x)."
     },
     {
       "id": "PO-3",
@@ -129,8 +131,8 @@
     {
       "id": "PO-14",
       "status": "SPIKE_PASS",
-      "evidence": ["docs/evidence/session-2/run-2.6.md"],
-      "note": "Off-host alert path on staging with the real Telegram channel; the Worker's own disappearance is Run 6.4."
+      "evidence": ["docs/evidence/session-2/run-2.6.md", "docs/evidence/session-6/run-6.4.md"],
+      "note": "Off-host alert path on staging with the real Telegram channel (Run 2.6); every Run 6.4 condition delivered and resolved, and a watcher for the Worker itself."
     },
     {
       "id": "FR-1.64",
@@ -159,25 +161,25 @@
     {
       "id": "KMS-L1",
       "status": "SPIKE_PASS",
-      "evidence": ["docs/evidence/session-2/run-2.7.md"],
+      "evidence": ["docs/evidence/session-2/run-2.7.md", "docs/evidence/session-6/run-6.8.md"],
       "note": "Seal key lost: unrecoverable, proven on disposable instances in the losstest domain."
     },
     {
       "id": "PO-13",
       "status": "SPIKE_PASS",
-      "evidence": ["docs/evidence/session-2/run-2.9.md"],
-      "note": "One paired backup of staging captured at a boundary and restored into new stores (spike; owner runs in Session 6)."
+      "evidence": ["docs/evidence/session-2/run-2.9.md", "docs/evidence/session-6/run-6.5.md"],
+      "note": "One paired backup of staging restored into new stores (Run 2.9 spike); the product's daily pair on staging made by its unit, restored on the workstation with the custody password (Run 6.5)."
     },
     {
       "id": "PO-21",
       "status": "SPIKE_PASS",
-      "evidence": ["docs/evidence/session-2/run-2.9.md"],
-      "note": "The bucket holds ciphertext only; a swapped manifest is refused (spike)."
+      "evidence": ["docs/evidence/session-2/run-2.9.md", "docs/evidence/session-6/run-6.5.md"],
+      "note": "The bucket holds ciphertext only (spike); the product's pairs are Restic ciphertext and an eligible.json signed with the host's key, verified against the committed trust anchor (Run 6.5)."
     },
     {
       "id": "DB-G1",
       "status": "SPIKE_PASS",
-      "evidence": ["docs/evidence/session-2/run-2.9.md"],
+      "evidence": ["docs/evidence/session-2/run-2.9.md", "docs/evidence/session-6/run-6.8.md"],
       "note": "Database globals re-created from roles.sql plus applyDatabaseAccess; matrix passes on the restored database (spike)."
     },
     {
@@ -737,6 +739,216 @@
         "docs/evidence/session-5/reference-capture.json"
       ],
       "note": "Local Scalar under the page's CSP in Chromium: zero violations, zero third-party attempts; the asset under Node's permission model loads with a covering grant, null when refused. Staging at the gate."
+    },
+    {
+      "id": "FR-1.56",
+      "status": "SPIKE_PASS",
+      "evidence": ["docs/evidence/session-6/run-6.1.md"],
+      "note": "Audit coverage is a table checked both ways; one journey leaves a row for every action whose writer exists (PENDING_WRITERS for Runs 6.2-6.9); api rows carry their response's request id."
+    },
+    {
+      "id": "FR-1.58",
+      "status": "SPIKE_PASS",
+      "evidence": ["docs/evidence/session-6/run-6.1.md"],
+      "note": "Owners and admins read the tenant trail and current members' account rows; no foreign, global or anonymous row; filters, stable keyset pages, bound cursors; invalid details served empty and logged."
+    },
+    {
+      "id": "FR-1.59",
+      "status": "SPIKE_PASS",
+      "evidence": ["docs/evidence/session-6/run-6.1.md"],
+      "note": "The request id is the API's own and is on every audit row of a request; an incoming x-request-id is neither echoed nor logged; activity items carry the operation's current state."
+    },
+    {
+      "id": "FR-1.80",
+      "status": "SPIKE_PASS",
+      "evidence": ["docs/evidence/session-6/run-6.1.md"],
+      "note": "Canary sweep over the API, PostgreSQL and OpenBao logs, audit rows and error bodies, with controls; log fields checked by format; no diagnostic flags; core dumps off."
+    },
+    {
+      "id": "FR-1.81",
+      "status": "SPIKE_PASS",
+      "evidence": ["docs/evidence/session-6/run-6.2.md"],
+      "note": "Chained audit segments (closed UTC days, rotated OpenBao files) read back from R2 before verified_at; late rows archived once; audit.purge_archived() the only delete, whole verified days 365 days old; locally and on staging."
+    },
+    {
+      "id": "FR-1.60",
+      "status": "SPIKE_PASS",
+      "evidence": ["docs/evidence/session-6/run-6.3.md"],
+      "note": "Rate limits as pipeline steps (source before the body, session, credential, reveal/import/export/issue per person, machine misses per source); 429 with retry-after; a counter that cannot be written is 503; across two processes; locally."
+    },
+    {
+      "id": "FR-1.61",
+      "status": "SPIKE_PASS",
+      "evidence": ["docs/evidence/session-6/run-6.3.md"],
+      "note": "Disk pressure: 507 {limit: disk} on expanding mutations, reduction and sign-in continue, no record 503, real exhaustion 503 without value; locally and on staging (limits.staging.test.ts)."
+    },
+    {
+      "id": "AC-1.24",
+      "status": "SPIKE_PASS",
+      "evidence": ["docs/evidence/session-6/run-6.3.md"],
+      "note": "Rate, concurrency, large-request and disk limits reject before exhaustion; locally and on staging."
+    },
+    {
+      "id": "FR-1.57",
+      "status": "SPIKE_PASS",
+      "evidence": ["docs/evidence/session-6/run-6.4.md"],
+      "note": "OpenBao's audit device is part of readiness: an audited call per 15 s; audit_failing opened, delivered and resolved on staging (alerts.md)."
+    },
+    {
+      "id": "FR-1.62",
+      "status": "SPIKE_PASS",
+      "evidence": ["docs/evidence/session-6/run-6.4.md"],
+      "note": "Health, readiness and heartbeat v2 with twelve checks; unknown is not healthy; every condition drilled on staging (alerts.md)."
+    },
+    {
+      "id": "FR-1.63",
+      "status": "SPIKE_PASS",
+      "evidence": ["docs/evidence/session-6/run-6.4.md"],
+      "note": "Fifteen alert conditions, each opened, delivered on the real Telegram channel and resolved on staging; a test alert on demand; detection from outside the host."
+    },
+    {
+      "id": "FR-1.95",
+      "status": "SPIKE_PASS",
+      "evidence": ["docs/evidence/session-6/run-6.4.md"],
+      "note": "The private operator status view (host.ts status), every line with its observation time; no diagnostic route on the API (status.staging.test.ts)."
+    },
+    {
+      "id": "AC-1.18",
+      "status": "SPIKE_PASS",
+      "evidence": ["docs/evidence/session-6/run-6.4.md"],
+      "note": "Alerts arrive and stop: every condition opened and resolved on staging with its timings (alerts.md)."
+    },
+    {
+      "id": "AC-1.23",
+      "status": "SPIKE_PASS",
+      "evidence": ["docs/evidence/session-6/run-6.4.md"],
+      "note": "Readiness fails on an unwritable audit table or an audited OpenBao call that cannot be audited (readiness.test.ts); the body names no cause."
+    },
+    {
+      "id": "AC-1.25",
+      "status": "SPIKE_PASS",
+      "evidence": ["docs/evidence/session-6/run-6.4.md"],
+      "note": "A name that does not resolve, a name not in the certificate, and staging with its API stopped each open health_failing from outside the host (sink-test Worker)."
+    },
+    {
+      "id": "AC-1.49",
+      "status": "SPIKE_PASS",
+      "evidence": ["docs/evidence/session-6/run-6.4.md"],
+      "note": "The operator status view shows each check with its time and marks a stale or missing one unknown; no secret path, token or address in it."
+    },
+    {
+      "id": "PO-23",
+      "status": "SPIKE_PASS",
+      "evidence": ["docs/evidence/session-6/run-6.4.md"],
+      "note": "Who watches the Worker: probe-watch.yml every 15 minutes; proven locally with the probe's cron removed. The scheduled Actions run starts after the merge to main."
+    },
+    {
+      "id": "FR-1.66",
+      "status": "SPIKE_PASS",
+      "evidence": ["docs/evidence/session-6/run-6.5.md"],
+      "note": "The daily pair on staging: writing closed by a trigger, captured, uploaded, read back, checked, signed and eligible by its own unit; 40 local captures under load restored whole."
+    },
+    {
+      "id": "AC-1.27",
+      "status": "SPIKE_PASS",
+      "evidence": ["docs/evidence/session-6/run-6.5.md"],
+      "note": "Pairs crossed by an access reduction are ineligible; an eligible pair restores whole (compete 20/20, staging restore on the workstation)."
+    },
+    {
+      "id": "FR-1.78",
+      "status": "SPIKE_PASS",
+      "evidence": ["docs/evidence/session-6/run-6.6.md"],
+      "note": "Retention keeps the newest eligible pair always, deletes expired and released pairs verified and in order (eligible.json, row, bundle); the unit runs on staging; key readability probed on the KMS."
+    },
+    {
+      "id": "AC-1.36",
+      "status": "SPIKE_PASS",
+      "evidence": ["docs/evidence/session-6/run-6.6.md"],
+      "note": "Eligibility (30 days) and physical retention (lock: capture + 30 d + 2 h) follow D-53; a refused or still-present object stops that pair and fails the unit after three days; checkpoint pair-30-day on staging."
+    },
+    {
+      "id": "FR-1.67",
+      "status": "SPIKE_PASS",
+      "evidence": ["docs/evidence/session-6/run-6.7.md"],
+      "note": "A restore ends closed + verifying: gate v2 binds host, incarnation and build; the public listener is quarantined at every step a restore can stop at; gate open needs a fresh, complete report and re-checks it (local proof; the drill in Run 6.8)."
+    },
+    {
+      "id": "FR-1.68",
+      "status": "SPIKE_PASS",
+      "evidence": ["docs/evidence/session-6/run-6.7.md"],
+      "note": "Access is revalidated by class: sessions, reset tokens, verifications deleted, accounts recovery_pending, credentials revoked, every accessor in every namespace revoked, AppRole secret ids rotated; nine old credentials each refused after a local restore."
+    },
+    {
+      "id": "FR-1.69",
+      "status": "SPIKE_PASS",
+      "evidence": ["docs/evidence/session-6/run-6.7.md"],
+      "note": "restoreMeasurements records capture time, age at restore, restore and revalidation time and result; host.ts writes them beside the report. Measured values, never an SLA."
+    },
+    {
+      "id": "FR-1.86",
+      "status": "SPIKE_PASS",
+      "evidence": ["docs/evidence/session-6/run-6.7.md"],
+      "note": "Human recovery: the operator's mfa reset, then enrolment, sign-in, reveal digest and a refused change through the verification listener; the owner can do what an owner can after opening, and no more."
+    },
+    {
+      "id": "FR-1.87",
+      "status": "SPIKE_PASS",
+      "evidence": ["docs/evidence/session-6/run-6.7.md"],
+      "note": "Restore readiness: host.ts restore and restore-verify with runbook restore.md; refusals before anything is written (data present, KMS key unusable, unknown role in globals.sql); a stopped restore completes from step 1."
+    },
+    {
+      "id": "FR-1.73",
+      "status": "SPIKE_PASS",
+      "evidence": ["docs/evidence/session-6/run-6.9.md"],
+      "note": "A host release is built once on a clean clone: three images with the commit's build id, no npm/npx/corepack, scanned as the archives that ship (history, dependencies, images); release.json and SHA256SUMS only after every scan passes; published as host-vX.Y.Z (D-57)."
+    },
+    {
+      "id": "FR-1.74",
+      "status": "SPIKE_PASS",
+      "evidence": ["docs/evidence/session-6/run-6.9.md"],
+      "note": "host.ts deploy promotes a release through the closed gate with the owner's journey and a deploy report, resumes a stopped deploy, and rolls back by deploying the previous release; staging converted to gate v2 and went forward, back and forward again (deploy.staging.test.ts); runbook deploy.md."
+    },
+    {
+      "id": "AC-1.32",
+      "status": "SPIKE_PASS",
+      "evidence": ["docs/evidence/session-6/run-6.9.md"],
+      "note": "The release build refuses a failing scan and writes no release.json (host-build.test.ts); the scanners' self-test detects the seeded secret and the seeded vulnerable dependency (Session 1 fixtures); images are scanned as the archives that ship, with no seeded image."
+    },
+    {
+      "id": "AC-1.28",
+      "status": "SPIKE_PASS",
+      "evidence": ["docs/evidence/session-6/run-6.8.md", "docs/evidence/session-6/drill.json"],
+      "note": "The clean-host drill: the restored host stayed closed + verifying until a report with every check ok opened it; open without a report, with a report older than 30 min and with another incarnation's report were refused (D-56)."
+    },
+    {
+      "id": "AC-1.43",
+      "status": "SPIKE_PASS",
+      "evidence": ["docs/evidence/session-6/run-6.8.md", "docs/evidence/session-6/drill.json"],
+      "note": "A stale pair: after P the owner reset (password, TOTP, codes, link used), a session signed out, a token revoked, the admin removed, a secret and a token added; on the restored host all nine old credentials answered 401 and the after-P secret is absent (D-56)."
+    },
+    {
+      "id": "AC-1.44",
+      "status": "SPIKE_PASS",
+      "evidence": ["docs/evidence/session-6/run-6.8.md", "docs/evidence/session-6/drill.json"],
+      "note": "Recovered on a reinstalled VPS from R2 and the custody set alone (pair by listing, trust anchor, backup password, custody root, KMS certificate under staging's domain) while staging was fenced; restore.md's Before is the full list (D-56)."
+    },
+    {
+      "id": "PO-22",
+      "status": "SPIKE_PASS",
+      "evidence": ["docs/evidence/session-6/run-6.8.md", "docs/evidence/session-6/drill.json"],
+      "note": "The paired capture P restored on a clean host: signature, digests, Restic check, seal-key check, pg_restore, the snapshot; 50 secrets revealed with their digests; timed (drill.json). A pair taken on the restored host is not proven (no pairs/drill/ bucket)."
+    },
+    {
+      "id": "FR-1.75",
+      "status": "SPIKE_PASS",
+      "evidence": ["docs/evidence/session-6/run-6.10.md"],
+      "note": "docs/runbooks/known-limits.md: what the service does not do, each with where it was measured or decided; one runbook section per probe condition (alerts.md)."
+    },
+    {
+      "id": "AC-1.33",
+      "status": "SPIKE_PASS",
+      "evidence": ["docs/evidence/session-6/run-6.10.md", "docs/evidence/session-6/alerts.md"],
+      "note": "Every probe condition seen to fire and resolve on staging with a dated delivery line, and a runbook section (Means, Check, Fix, Confirm, a command) kept equal to CONDITIONS by tests/unit/runbooks/alerts.test.ts; links and commands of every runbook checked (P-130)."
     }
   ]
 }

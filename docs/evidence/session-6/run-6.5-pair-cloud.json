@@ -1,0 +1,9 @@
+{
+  "measuredAt": "2026-11-17T16:11:18.685Z",
+  "bucket": "mykey-staging-pairs",
+  "token": "mykey-staging-pairs-upload",
+  "bundleBytes": 155136,
+  "uploadMs": 803,
+  "readBackEqual": true,
+  "probeDeleted": true
+}

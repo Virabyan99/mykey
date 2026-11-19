@@ -102,8 +102,25 @@ describe("provision plan", () => {
       ["fixture-pairs-4d", "pairs/"],
       ["fixture-probe-10m", "probe/"],
     ]);
-    expect(LOCK_RULES["mykey-staging-pairs"]).toEqual([]);
-    expect(LOCK_RULES["mykey-audit-archive"]).toEqual([]);
+    // Run 6.5: 30 days on pairs/, set once the spike objects were removed.
+    expect(
+      LOCK_RULES["mykey-staging-pairs"].map((rule) => [
+        rule.id,
+        rule.prefix,
+        rule.condition.maxAgeSeconds,
+      ]),
+    ).toEqual([["pairs-30d", "pairs/", 2_592_000]]);
+    expect(
+      LOCK_RULES["mykey-audit-archive"].map((rule) => [
+        rule.id,
+        rule.prefix,
+        rule.condition.maxAgeSeconds,
+      ]),
+    ).toEqual([
+      ["audit-prod-365d", "prod/", 31_536_000],
+      ["audit-staging-30d", "staging/", 2_592_000],
+      ["audit-probe-10m", "probe/", 600],
+    ]);
   });
 
   it("compares lock rules by content, not by order or extra fields", () => {

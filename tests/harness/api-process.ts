@@ -15,16 +15,20 @@ import { createInterface } from "node:readline";
 import {
   createApp,
   createHealthCheck,
+  createServiceGate,
   issuerBaoFromDirectory,
   listen,
+  capacityPathOf,
   runtimeBaoFromDirectory,
   type ApiConfig,
+  type AppDeps,
 } from "@mykey/api";
 import { createAuth, createThrottle, loadAuthKeys } from "@mykey/auth";
 import { createPool, type DbTarget } from "@mykey/db";
 import type { OpenBaoTarget } from "@mykey/openbao";
-import { continueArchives } from "@mykey/operations";
+import { continueArchives, readCapacity } from "@mykey/operations";
 import { drizzle } from "drizzle-orm/node-postgres";
+import { testLimiter, type RateLimitsMode } from "./rate.ts";
 
 export type FaultAction = "crash" | "hang" | "throw" | "terminate_lock";
 
@@ -36,6 +40,9 @@ interface Settings {
   runtime?: { openBao: OpenBaoTarget; secretsDirectory: string };
   fault?: { point: string; action: FaultAction };
   archiveTick?: { intervalMs: number; staleSeconds: number };
+  rateLimits?: RateLimitsMode;
+  /** Run 6.7 (P-123): a second listener, the verification one, on the same gate. */
+  verifyListener?: boolean;
 }
 
 const lines = createInterface({ input: process.stdin })[Symbol.asyncIterator]();
@@ -77,7 +84,10 @@ const issuer =
   settings.runtime === undefined
     ? undefined
     : issuerBaoFromDirectory(settings.runtime.openBao, settings.runtime.secretsDirectory);
-const app = createApp({
+// Run 6.7: one gate for both listeners, as in startServer.
+const gate = createServiceGate(settings.api, pool);
+const deps: AppDeps = {
+  gate,
   pool,
   ...(lockPool === undefined ? {} : { lockPool }),
   ...(settings.runtime === undefined || issuer === undefined
@@ -93,6 +103,9 @@ const app = createApp({
   log: (entry) => {
     process.stderr.write(`${JSON.stringify(entry)}\n`);
   },
+  limiter: testLimiter(pool, keys.rateLimit, settings.rateLimits),
+  // P-115: the parent test API writes the record beside the shared gate file.
+  capacity: { read: (nowMs) => readCapacity(capacityPathOf(settings.api.gatePath), nowMs) },
   auth: { auth, keys, throttle: createThrottle({ pool, ring: keys.rateLimit }) },
   // TOTP codes are checked at the time a test sends (Run 3.4), as in tests/harness/api.ts.
   test: {
@@ -102,9 +115,20 @@ const app = createApp({
     },
     ...(fault === undefined ? {} : { faults: (point: string) => meet(point) }),
   },
-});
+};
+const app = createApp({ ...deps, listener: "public" });
 const server = await listen(app, { hostname: "127.0.0.1", port: 0, tls: settings.tls });
-process.stdout.write(`${JSON.stringify({ port: server.port })}\n`);
+const verifyServer =
+  settings.verifyListener === true
+    ? await listen(createApp({ ...deps, listener: "verify" }), {
+        hostname: "127.0.0.1",
+        port: 0,
+        tls: settings.tls,
+      })
+    : undefined;
+process.stdout.write(
+  `${JSON.stringify({ port: server.port, ...(verifyServer === undefined ? {} : { verifyPort: verifyServer.port }) })}\n`,
+);
 
 const tick = settings.archiveTick;
 let ticking = false;

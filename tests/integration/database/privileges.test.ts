@@ -266,7 +266,8 @@ const CASES: Case[] = [
   ["backup_reader", "cannot create a table", "CREATE TABLE app.x ()", DENIED],
   ["backup_reader", "cannot alter a table", "ALTER TABLE app.project ADD COLUMN x integer", DENIED],
 
-  ["maintenance", "deletes audit events", "DELETE FROM audit.event", "ok"],
+  // Run 6.2 (migration 0016): only through audit.purge_archived().
+  ["maintenance", "cannot delete audit events", "DELETE FROM audit.event", DENIED],
   ["maintenance", "selects audit events", "SELECT * FROM audit.event", "ok"],
   ["maintenance", "deletes projects", "DELETE FROM app.project", "ok"],
   ["maintenance", "reads the migration history", "SELECT * FROM meta.schema_migration", "ok"],

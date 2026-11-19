@@ -1,9 +1,11 @@
-import { existsSync, readFileSync, readdirSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   REGISTRY_FILE,
   buildRegistry,
+  loadOverrides,
   serialiseRegistry,
   type Registry,
 } from "../../../scripts/registry-build.ts";
@@ -175,7 +177,7 @@ describe("evidence:verify", () => {
       tamper((copy) => (copy.items[0]!.evidence = ["docs/evidence/does-not-exist.md"])).join("\n"),
     ).toMatch(/does-not-exist/);
     expect(tamper((copy) => (copy.items[200 - 60]!.gate = "F")).join("\n")).toMatch(/gate/);
-  });
+  }, 30_000); // six whole registry scans: about 5 s on a loaded workstation
 
   it("refuses a claim its evidence file does not state", () => {
     const claim = (id: string, status: Registry["items"][number]["status"], evidence: string[]) => {
@@ -208,6 +210,31 @@ describe("evidence:verify", () => {
     expect(claim("FR-1.33", "CUT", ["docs/evidence/session-1/run-1.8.md"])).toMatch(
       /FR-1\.33: CUT needs a decision record under docs\/decisions\//,
     );
+  });
+
+  // Run 6.10: Run 6.9's and 6.8's claims sat in `owners`, where the build
+  // ignores a status, and nothing said so.
+  it("refuses an overrides entry in the wrong list: a status among the owners, an owner among the statuses", () => {
+    const dir = mkdtempSync(join(tmpdir(), "mykey-overrides-"));
+    try {
+      const file = join(dir, "o.json");
+      writeFileSync(
+        file,
+        JSON.stringify({
+          owners: [{ id: "FR-1.73", status: "SPIKE_PASS", evidence: [], note: "" }],
+          statuses: [],
+        }),
+      );
+      expect(() => loadOverrides(file)).toThrow(/FR-1.73.*owners/);
+      writeFileSync(
+        file,
+        JSON.stringify({ owners: [], statuses: [{ id: "PO-24", ownerRun: "1.3", reason: "x" }] }),
+      );
+      expect(() => loadOverrides(file)).toThrow(/PO-24.*statuses/);
+      expect(() => loadOverrides()).not.toThrow();
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 
   it("reports a registry that differs from a rebuild", () => {

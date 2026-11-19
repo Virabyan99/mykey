@@ -24,6 +24,9 @@ services:
   # exists is never written again. The only root process, without a network.
   pki-init:
     image: postgres@sha256:e3d24f6906d0760bf4da0dae872415391ededefad23fd471c47dc53b0ddf3c42
+    # Run 6.1 (P-109, FR-1.80): no core dump of a process that holds secrets.
+    ulimits:
+      core: 0
     user: "0:0"
     network_mode: none
     read_only: true
@@ -52,6 +55,9 @@ services:
   postgres:
     <<: *hardening
     image: postgres@sha256:e3d24f6906d0760bf4da0dae872415391ededefad23fd471c47dc53b0ddf3c42
+    # Run 6.1 (P-109, FR-1.80): no core dump of a process that holds secrets.
+    ulimits:
+      core: 0
     user: "999:999"
     depends_on:
       pki-init:
@@ -84,6 +90,9 @@ services:
   api:
     <<: *hardening
     image: ${API_IMAGE:?load the image first - node scripts/host.ts <host> image api <tar>}
+    # Run 6.1 (P-109, FR-1.80): no core dump of a process that holds secrets.
+    ulimits:
+      core: 0
     user: "1000:1000"
     depends_on:
       postgres:
@@ -106,6 +115,9 @@ services:
       # writes the host instance id (once) and the base URL into host.env.
       MYKEY_GATE_PATH: /run/mykey/gate/gate.json
       MYKEY_HOST_INSTANCE_ID: ${MYKEY_HOST_INSTANCE_ID:?run node scripts/host.ts <host> up}
+      # Run 6.7 (P-122, P-123): empty until db-init writes it; the API then refuses to start.
+      MYKEY_BACKEND_INCARNATION: ${MYKEY_BACKEND_INCARNATION:-}
+      MYKEY_VERIFY_LISTEN: 0.0.0.0:8444
       MYKEY_BASE_URL: ${MYKEY_BASE_URL:?run node scripts/host.ts <host> up}
       MYKEY_TRUSTED_PROXY: 10.78.1.2
       # Run 3.2: the auth key rings (host.ts <host> keys init), read-only.
@@ -138,6 +150,9 @@ services:
     <<: *hardening
     profiles: [openbao]
     image: openbao/openbao@sha256:5046911075e137e154ce49ab051502f4ec7cf367d484ae4a4dce665d9b90561f
+    # Run 6.1 (P-109, FR-1.80): no core dump of a process that holds secrets.
+    ulimits:
+      core: 0
     user: "100:1000"
     depends_on:
       pki-init:
@@ -175,6 +190,9 @@ services:
     <<: *hardening
     profiles: [openbao]
     image: ${PROVISIONER_IMAGE:?load the image first - node scripts/host.ts <host> image provisioner <tar>}
+    # Run 6.1 (P-109, FR-1.80): no core dump of a process that holds secrets.
+    ulimits:
+      core: 0
     user: "1000:1000"
     depends_on:
       postgres:
@@ -194,6 +212,7 @@ services:
       MYKEY_PROVISIONER_CREDENTIALS_DIR: /run/mykey/secrets
       MYKEY_GATE_PATH: /run/mykey/gate/gate.json
       MYKEY_HOST_INSTANCE_ID: ${MYKEY_HOST_INSTANCE_ID:?run node scripts/host.ts <host> up}
+      MYKEY_BACKEND_INCARNATION: ${MYKEY_BACKEND_INCARNATION:-}
       MYKEY_SWEEP_SECONDS: ${MYKEY_SWEEP_SECONDS:-300}
       MYKEY_PROVISIONER_STATE_FILE: /tmp/mykey-provisioner/last-sweep
     pids_limit: 100
@@ -217,6 +236,9 @@ services:
   edge:
     <<: *hardening
     image: traefik@sha256:f4bb143d1135a579b630ed491e17ec50f6f7c9c6a30585ff3d385471d2a86f5a
+    # Run 6.1 (P-109, FR-1.80): no core dump of a process that holds secrets.
+    ulimits:
+      core: 0
     user: "65532:65532"
     depends_on:
       pki-init:

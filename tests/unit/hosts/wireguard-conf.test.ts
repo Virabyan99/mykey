@@ -72,6 +72,42 @@ describe("wireguardKeyPair", () => {
   });
 });
 
+// Run 6.8 (P-125, D-56): production's server is lent to the drill; the drill
+// entry takes production's VPN address and its place in the tunnel.
+describe("the drill host in place of a lent production", () => {
+  const drill: HostEntry = {
+    name: "drill",
+    publicIp: "192.0.2.48",
+    vpnIp: "10.77.1.1",
+    hostname: "drill.example.test",
+    sshUser: "ubuntu",
+  };
+  const lent = { ...hosts, prod: { ...hosts.prod, lent: true as const }, drill };
+
+  it("renders the drill peer, not production's, at the same addresses", () => {
+    const drillKey = wireguardKeyPair().publicKey;
+    const text = renderWireguardConfig({
+      privateKey: wireguardKeyPair().privateKey,
+      hosts: lent,
+      peerKeys: { drill: drillKey, prod: wireguardKeyPair().publicKey },
+    });
+    expect(text).toContain(`# drill drill.example.test
+PublicKey = ${drillKey}`);
+    expect(text).not.toContain("# prod ");
+    expect(text.match(/^\[Peer\]/gm)).toHaveLength(1);
+  });
+
+  it("a new drill key replaces the old production peer in the file", () => {
+    const file = tempFile();
+    writeWireguardConfig(file, hosts, { prod: wireguardKeyPair().publicKey });
+    const drillKey = wireguardKeyPair().publicKey;
+    writeWireguardConfig(file, lent, { drill: drillKey });
+    const text = readFileSync(file, "utf8");
+    expect(text.match(/^\[Peer\]/gm)).toHaveLength(1);
+    expect(text).toContain(`PublicKey = ${drillKey}`);
+  });
+});
+
 describe("renderWireguardConfig", () => {
   const { privateKey } = wireguardKeyPair();
   const prodKey = wireguardKeyPair().publicKey;

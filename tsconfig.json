@@ -12,6 +12,7 @@
     { "path": "./packages/openbao" },
     { "path": "./packages/operations" },
     { "path": "./packages/audit" },
+    { "path": "./packages/backup" },
     { "path": "./workers/probe" },
     { "path": "./tsconfig.root.json" }
   ]

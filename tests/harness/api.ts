@@ -14,12 +14,15 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   createApp,
+  createServiceGate,
+  auditedBaoCall,
   createHealthCheck,
   issuerBaoFromDirectory,
   listen,
   runtimeBaoFromDirectory,
   startOutboxDispatcher,
   type ApiConfig,
+  type AppDeps,
   type ApiServer,
   type Handler,
   type LogEntry,
@@ -39,12 +42,18 @@ import { drizzle } from "drizzle-orm/node-postgres";
 import * as OTPAuth from "otpauth";
 import { createPool } from "@mykey/db";
 import type { OpenBaoTarget } from "@mykey/openbao";
-import { ensureQueues, type IssuerBao, type RuntimeBao } from "@mykey/operations";
+import { ensureQueues, readCapacity, type IssuerBao, type RuntimeBao } from "@mykey/operations";
 import type pg from "pg";
 import { prepareDatabase, type TestDatabase } from "../integration/database/setup.ts";
 import { getSharedStack, type Stack } from "./stack.ts";
+import { testLimiter, type RateLimitsMode } from "./rate.ts";
+import { TEST_BUILD, gateText, setIncarnation } from "./gate.ts";
 
-export type GateState = "open" | "closed" | "missing" | { raw: string };
+/** Run 6.7: "verifying" is closed + verifying (the verification listener serves). */
+export type GateState = "open" | "closed" | "verifying" | "missing" | { raw: string };
+
+/** Run 6.3 (P-115): what the test host's capacity record says; "ok" by default. */
+export type CapacityMode = "ok" | "low" | "missing" | "stale" | "invalid";
 
 export interface TestRoute {
   def: RouteDef;
@@ -92,12 +101,16 @@ export interface StartTestApiOptions {
    * scope, P-101); its RuntimeBao gives no OpenBao client. Read on every call.
    */
   processOrganization?: () => string | null;
+  /** Run 6.7 (P-123): a second listener, the verification one, on the same deps and gate. */
+  verifyListener?: boolean;
   /** The auth keys (default: fresh ephemeral ones); shared with a child API process. */
   keys?: AuthKeys;
   /** Fault hooks of the secret protocol (Run 4.2), read on every call. */
   faults?: () => FaultHook | undefined;
   /** An import's time budget per request (Run 4.7), read on every request. */
   importBudgetMs?: () => number | undefined;
+  /** Run 6.3: the product's rate limits, or (default) limits that never refuse. */
+  rateLimits?: RateLimitsMode;
 }
 
 export type FaultHook = (point: string, operationId: string) => void | Promise<void>;
@@ -195,8 +208,13 @@ export interface TestApi {
   routes: { method: string; path: string }[];
   /** Route ids whose stub ran (with `stubs: true`). */
   reached: string[];
-  /** The gate file and host id the API reads (for a child process on the same gate). */
-  gate: { gatePath: string; hostInstanceId: string };
+  /** The gate file and host binding the API reads (for a child process on the same gate). */
+  gate: {
+    gatePath: string;
+    hostInstanceId: string;
+    backendIncarnation: string;
+    releaseBuild: string;
+  };
   /** The lock pool of the runtime identity (Run 4.2); undefined without `runtime`. */
   lockPool: pg.Pool | undefined;
   /** The current app's boot id (a new one after restart()). */
@@ -207,7 +225,14 @@ export interface TestApi {
    */
   restart(): Promise<TestApi>;
   setGate(state: GateState): void;
+  /** Run 6.3 (P-115): the capacity record every process of this gate directory reads. */
+  setCapacity(mode: CapacityMode): void;
   request(method: string, path: string, init?: RequestInit): Promise<Response>;
+  /**
+   * Run 6.7 (P-123): a request on the verification listener; only with
+   * `verifyListener: true`.
+   */
+  verifyRequest(method: string, path: string, init?: RequestInit): Promise<Response>;
   /** Closes everything; fails when a log entry `unlisted_error` was not consumed by its test. */
   close(): Promise<void>;
 }
@@ -244,6 +269,10 @@ export async function startTestApi(opts: StartTestApiOptions = {}): Promise<Test
     });
     const gatePath = join(gateDirectory, "gate.json");
     const hostInstanceId = randomUUID();
+    // Run 6.7 (P-122): the incarnation this API, its gate record and its database share.
+    const backendIncarnation = opts.config?.backendIncarnation ?? randomUUID();
+    const releaseBuild = opts.config?.build ?? TEST_BUILD;
+    await setIncarnation(database.pool("superuser"), backendIncarnation);
     let epoch = 0;
     const setGate = (state: GateState): void => {
       if (state === "missing") {
@@ -253,18 +282,45 @@ export async function startTestApi(opts: StartTestApiOptions = {}): Promise<Test
       const text =
         typeof state === "object"
           ? state.raw
-          : JSON.stringify({
-              version: 1,
-              state,
-              gateEpoch: (epoch += 1),
-              hostInstanceId,
-              writtenAt: new Date().toISOString(),
-            });
+          : gateText({ hostInstanceId, backendIncarnation, releaseBuild }, state, (epoch += 1));
       // Written beside and renamed, as `host.ts gate` does: never read half-written.
       writeFileSync(`${gatePath}.tmp`, text);
       renameSync(`${gatePath}.tmp`, gatePath);
     };
     setGate(opts.gate ?? "open");
+    // Run 6.3 (P-115): the capacity record beside the gate, refreshed every
+    // 30 s as the host's heartbeat refreshes it every minute.
+    const capacityPath = join(gateDirectory, "capacity.json");
+    let capacityMode: CapacityMode = "ok";
+    const writeCapacity = (): void => {
+      if (capacityMode === "missing") {
+        rmSync(capacityPath, { force: true });
+        return;
+      }
+      const text =
+        capacityMode === "invalid"
+          ? "{not json"
+          : JSON.stringify({
+              version: 1,
+              observedAt: new Date(
+                Date.now() - (capacityMode === "stale" ? 181_000 : 0),
+              ).toISOString(),
+              state: capacityMode === "low" ? "low" : "ok",
+              volumes: { test: { freeBytes: 2 ** 40, sizeBytes: 2 ** 41, freeInodesPercent: 50 } },
+            });
+      writeFileSync(`${capacityPath}.tmp`, text);
+      renameSync(`${capacityPath}.tmp`, capacityPath);
+    };
+    writeCapacity();
+    const refresher = setInterval(writeCapacity, 30_000);
+    refresher.unref();
+    cleanup.push(() => {
+      clearInterval(refresher);
+    });
+    const setCapacity = (mode: CapacityMode): void => {
+      capacityMode = mode;
+      writeCapacity();
+    };
 
     const pool = createPool(database.targets.api_runtime, { max: 10, queryTimeoutMs: 30_000 });
     cleanup.push(() => pool.end());
@@ -281,22 +337,31 @@ export async function startTestApi(opts: StartTestApiOptions = {}): Promise<Test
           : organizationOnly(opts.processOrganization);
     const issuer = opts.runtime === undefined ? undefined : switchableIssuer(opts.runtime);
     let bootId = randomUUID();
-    const health = createHealthCheck(database.targets.api_runtime);
+    // Run 6.4 (P-116): with a runtime identity, the audited OpenBao call as on a host.
+    const health = createHealthCheck(database.targets.api_runtime, undefined, {
+      ...(opts.runtime === undefined || bao === undefined
+        ? {}
+        : { auditedCall: auditedBaoCall(bao) }),
+    });
     cleanup.push(() => health.close());
     const logs: LogEntry[] = [];
     const keys = opts.keys ?? ephemeralKeys();
     const reached: string[] = [];
     const config: ApiConfig = {
       baseUrl: TEST_ORIGIN,
-      build: "0000000",
+      build: releaseBuild,
       gatePath,
       hostInstanceId,
       trustedProxy: null,
       ...opts.config,
+      backendIncarnation,
     };
+    // Run 6.7 (P-122): one gate for both listeners, as in startServer.
+    const gate = createServiceGate(config, pool);
     const build = () => {
       const auth = createAuth({ db: drizzle(pool), keys, baseURL: TEST_ORIGIN });
-      const app = createApp({
+      const deps: AppDeps = {
+        gate,
         pool,
         ...(lockPool === undefined ? {} : { lockPool }),
         ...(bao === undefined ? {} : { bao }),
@@ -305,6 +370,8 @@ export async function startTestApi(opts: StartTestApiOptions = {}): Promise<Test
         config,
         health: () => health.check(),
         log: (entry) => logs.push(entry),
+        limiter: testLimiter(pool, keys.rateLimit, opts.rateLimits),
+        capacity: { read: (nowMs) => readCapacity(capacityPath, nowMs) },
         auth: { auth, keys, throttle: createThrottle({ pool, ring: keys.rateLimit }) },
         test: {
           ...(opts.routes === undefined ? {} : { routes: opts.routes }),
@@ -333,76 +400,91 @@ export async function startTestApi(opts: StartTestApiOptions = {}): Promise<Test
             return value === null ? undefined : new Date(value);
           },
         },
-      });
-      return { auth, app };
+      };
+      const app = createApp({ ...deps, listener: "public" });
+      const verifyApp =
+        opts.verifyListener === true ? createApp({ ...deps, listener: "verify" }) : null;
+      return { auth, app, verifyApp };
     };
     let built = build();
     const tls = { certPath: database.stack.api.certPath, keyPath: database.stack.api.keyPath };
     let server: ApiServer = await listen(built.app, { hostname: "127.0.0.1", port: 0, tls });
     cleanup.push(() => server.close());
+    const verifyServer =
+      built.verifyApp === null
+        ? null
+        : await listen(built.verifyApp, { hostname: "127.0.0.1", port: 0, tls });
+    if (verifyServer !== null) cleanup.push(() => verifyServer.close());
     if (opts.dispatcher !== false) {
       const dispatcher = startOutboxDispatcher(pool, (entry) => logs.push(entry));
       cleanup.push(() => dispatcher.stop());
     }
     const ca = readFileSync(database.stack.api.certAuthorityPath);
 
-    const request = (method: string, path: string, init: RequestInit = {}): Promise<Response> =>
-      new Promise((resolve, reject) => {
-        const headers: Record<string, string> = {
-          origin: TEST_ORIGIN,
-          "sec-fetch-site": "same-origin",
-        };
-        let payload: Buffer | undefined;
-        if (init.rawBody !== undefined) {
-          payload = Buffer.from(init.rawBody);
-        } else if (init.body !== undefined) {
-          payload = Buffer.from(JSON.stringify(init.body), "utf8");
-          headers["content-type"] = "application/json";
-        }
-        if (payload !== undefined) headers["content-length"] = String(payload.length);
-        if (init.cookie !== undefined) headers.cookie = init.cookie;
-        for (const [name, value] of Object.entries(init.headers ?? {})) {
-          headers[name.toLowerCase()] = value;
-        }
-        const outgoing = https.request(
-          {
-            host: "127.0.0.1",
-            port: server.port,
-            path,
-            method,
-            headers: withoutEmpty(headers),
-            ca,
-            agent: false,
-          },
-          (response) => {
-            answered = true;
-            const chunks: Buffer[] = [];
-            response.on("data", (chunk: Buffer) => chunks.push(chunk));
-            response.on("end", () => {
-              const status = response.statusCode ?? 0;
-              const answerHeaders = new Headers();
-              for (const [name, value] of Object.entries(response.headers)) {
-                if (Array.isArray(value)) for (const v of value) answerHeaders.append(name, v);
-                else if (value !== undefined) answerHeaders.set(name, value);
-              }
-              const body = [101, 204, 205, 304].includes(status) ? null : Buffer.concat(chunks);
-              resolve(new Response(body, { status, headers: answerHeaders }));
-            });
-            response.on("error", (error: NodeJS.ErrnoException) => {
-              if (error.code === "ECONNRESET" && chunks.length > 0) return;
-              reject(error);
-            });
-          },
-        );
-        // The API may answer (400 for an oversized body) while the client is
-        // still uploading; the reset that follows does not undo that answer.
-        let answered = false;
-        outgoing.on("error", (error: NodeJS.ErrnoException) => {
-          if (answered && (error.code === "ECONNRESET" || error.code === "EPIPE")) return;
-          reject(error);
+    const requestOn =
+      (port: () => number) =>
+      (method: string, path: string, init: RequestInit = {}): Promise<Response> =>
+        new Promise((resolve, reject) => {
+          const headers: Record<string, string> = {
+            origin: TEST_ORIGIN,
+            "sec-fetch-site": "same-origin",
+          };
+          let payload: Buffer | undefined;
+          if (init.rawBody !== undefined) {
+            payload = Buffer.from(init.rawBody);
+          } else if (init.body !== undefined) {
+            payload = Buffer.from(JSON.stringify(init.body), "utf8");
+            headers["content-type"] = "application/json";
+          }
+          if (payload !== undefined) headers["content-length"] = String(payload.length);
+          if (init.cookie !== undefined) headers.cookie = init.cookie;
+          for (const [name, value] of Object.entries(init.headers ?? {})) {
+            headers[name.toLowerCase()] = value;
+          }
+          const outgoing = https.request(
+            {
+              host: "127.0.0.1",
+              port: port(),
+              path,
+              method,
+              headers: withoutEmpty(headers),
+              ca,
+              agent: false,
+            },
+            (response) => {
+              answered = true;
+              const chunks: Buffer[] = [];
+              response.on("data", (chunk: Buffer) => chunks.push(chunk));
+              response.on("end", () => {
+                const status = response.statusCode ?? 0;
+                const answerHeaders = new Headers();
+                for (const [name, value] of Object.entries(response.headers)) {
+                  if (Array.isArray(value)) for (const v of value) answerHeaders.append(name, v);
+                  else if (value !== undefined) answerHeaders.set(name, value);
+                }
+                const body = [101, 204, 205, 304].includes(status) ? null : Buffer.concat(chunks);
+                resolve(new Response(body, { status, headers: answerHeaders }));
+              });
+              response.on("error", (error: NodeJS.ErrnoException) => {
+                if (error.code === "ECONNRESET" && chunks.length > 0) return;
+                reject(error);
+              });
+            },
+          );
+          // The API may answer (400 for an oversized body) while the client is
+          // still uploading; the reset that follows does not undo that answer.
+          let answered = false;
+          outgoing.on("error", (error: NodeJS.ErrnoException) => {
+            if (answered && (error.code === "ECONNRESET" || error.code === "EPIPE")) return;
+            reject(error);
+          });
+          outgoing.end(payload);
         });
-        outgoing.end(payload);
-      });
+    const request = requestOn(() => server.port);
+    const verifyRequest = requestOn(() => {
+      if (verifyServer === null) throw new Error("startTestApi: no verifyListener");
+      return verifyServer.port;
+    });
 
     const api: TestApi = {
       get auth() {
@@ -417,7 +499,7 @@ export async function startTestApi(opts: StartTestApiOptions = {}): Promise<Test
         return server.port;
       },
       reached,
-      gate: { gatePath, hostInstanceId },
+      gate: { gatePath, hostInstanceId, backendIncarnation, releaseBuild },
       lockPool,
       get bootId() {
         return bootId;
@@ -439,7 +521,9 @@ export async function startTestApi(opts: StartTestApiOptions = {}): Promise<Test
           .map((route) => ({ method: route.method, path: route.path }));
       },
       setGate,
+      setCapacity,
       request,
+      verifyRequest,
       async close() {
         await release();
         const unlisted = logs.filter((entry) => entry.event === "unlisted_error");

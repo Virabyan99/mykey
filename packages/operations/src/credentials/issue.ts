@@ -40,6 +40,7 @@ import {
   type EnvironmentScope,
   type OperationRow,
   type Queryable,
+  isCaptureRefusal,
 } from "@mykey/db";
 import { machineName, namespaceFor, type BaoFailure, type Correlation } from "@mykey/openbao";
 import type pg from "pg";
@@ -259,10 +260,6 @@ async function withSession(
         return { replay: found } as const;
       }
       await tx.query("UPDATE app.operation SET dispatched_at = now() WHERE id = $1", [operationId]);
-      const capture = await tx.query<{ capture_mode: string }>(
-        "SELECT capture_mode FROM app.service_control FOR SHARE",
-      );
-      if (capture.rows[0]?.capture_mode !== "idle") throw new Refusal(refused("busy"));
       if (!deps.gateOpen()) throw new Refusal(refused("quarantined"));
       const code = await request.recheck(tx);
       if (code !== null) throw new Refusal(refused(code));
@@ -295,6 +292,8 @@ async function withSession(
     if (error instanceof Refusal) return error.outcome;
     if (error instanceof AuditUnavailable) return refused("audit_unavailable");
     if (isLockTimeout(error)) return refused("busy");
+    // P-118: the barrier refused the admission; nothing committed.
+    if (isCaptureRefusal(error)) return refused("busy");
     // The marker may or may not have committed; nothing was sent either way.
     const row = await findOperation(deps.pool, operationId).catch(() => null);
     if (row === null) return refused("dependency_unavailable");

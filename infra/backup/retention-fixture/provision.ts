@@ -8,7 +8,7 @@ import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
-import { r2CredentialFile, type R2Credentials } from "./r2.ts";
+import { loadR2ApiToken, r2CredentialFile, type R2Credentials } from "./r2.ts";
 
 export const BUCKETS = [
   "mykey-prod-pairs",
@@ -35,8 +35,16 @@ const ageRule = (id: string, prefix: string, maxAgeSeconds: number): LockRule =>
 /** The lock rules each bucket must have. An empty list means "no rule today". */
 export const LOCK_RULES: Record<BucketName, LockRule[]> = {
   "mykey-prod-pairs": [ageRule("pairs-30d", "pairs/", 2_592_000)],
-  "mykey-staging-pairs": [],
-  "mykey-audit-archive": [],
+  // Run 6.5 (P-119): set once the spike objects were removed (17 Nov 2026).
+  "mykey-staging-pairs": [ageRule("pairs-30d", "pairs/", 2_592_000)],
+  // Run 6.2 (P-112, D-48): a year on production's segments, a month on staging's
+  // (synthetic rows: a year would hold the bucket for nothing), ten minutes for
+  // the cloud test's probe objects.
+  "mykey-audit-archive": [
+    ageRule("audit-prod-365d", "prod/", 31_536_000),
+    ageRule("audit-staging-30d", "staging/", 2_592_000),
+    ageRule("audit-probe-10m", "probe/", 600),
+  ],
   "mykey-retention-fixture": [
     ageRule("fixture-pairs-4d", "pairs/", 345_600),
     ageRule("fixture-probe-10m", "probe/", 600),
@@ -434,6 +442,23 @@ async function attemptLockChange(
   };
 }
 
+/**
+ * Run 6.2: only the lock rules of the four buckets, with the account-wide R2
+ * token `mykey-r2-admin` (bucket configuration needs no token administration).
+ * Never weakens a live rule; records the rules read back in the evidence file.
+ */
+export async function provisionLockRules(accountId: string): Promise<void> {
+  const bearer = loadR2ApiToken("mykey-r2-admin");
+  const previous = readEvidence();
+  const buckets: RetentionFixture["buckets"] = [];
+  for (const bucket of BUCKETS) {
+    const { rules, action } = await ensureLockRules(bearer, accountId, bucket);
+    buckets.push({ name: bucket, lockRules: rules });
+    console.log(`bucket ${bucket}: lock rules ${action} (${String(rules.length)})`);
+  }
+  if (previous !== undefined) writeEvidence({ ...previous, buckets });
+}
+
 export async function provision(
   accountId: string,
   options: { roll?: string[]; home?: string } = {},
@@ -583,11 +608,14 @@ if (import.meta.main) {
   const accountId = valuesOf("--account")[0] ?? process.env.MYKEY_R2_ACCOUNT_ID;
   if (!accountId || !/^[0-9a-f]{32}$/.test(accountId)) {
     console.error(
-      "usage: node infra/backup/retention-fixture/provision.ts --account <account id> [--roll <token name>]…",
+      "usage: node infra/backup/retention-fixture/provision.ts --account <account id> [--roll <token name>]… | --locks-only",
     );
     process.exit(1);
   }
-  provision(accountId, { roll: valuesOf("--roll") }).then(
+  const run = args.includes("--locks-only")
+    ? provisionLockRules(accountId)
+    : provision(accountId, { roll: valuesOf("--roll") });
+  run.then(
     () => {
       console.log("provisioned.");
     },

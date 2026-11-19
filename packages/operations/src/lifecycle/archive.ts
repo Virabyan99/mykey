@@ -47,12 +47,13 @@ import {
   withTransaction,
   type EnvironmentScope,
   type OperationRow,
+  invalidateCapture,
 } from "@mykey/db";
 import type pg from "pg";
 import { intentFingerprint, sameIntent, type Intent } from "../replay.ts";
 import type { CredentialDeps } from "../credentials/issue.ts";
 import { revokeAndVerify } from "../credentials/verify.ts";
-import type { RuntimeBao } from "../runtime.ts";
+import type { IssuerSession, RuntimeBao } from "../runtime.ts";
 import { Busy, inTransaction, withEnvironmentLock } from "../secrets/lock.ts";
 
 export const ARCHIVE_FAULT_POINTS = [
@@ -112,6 +113,9 @@ class Refusal extends Error {
   }
 }
 
+/** P-114: an issuer session is reused while it is younger than this (it lives 60 s). */
+const ISSUER_REUSE_MS = (LIMITS.machineToken.issuerSessionSeconds - 15) * 1000;
+
 const AUDIT: Record<(typeof ARCHIVE_ACTIONS)[number], AuditAction> = {
   "projects.archive": "project.archive",
   "environments.archive": "environment.archive",
@@ -161,6 +165,8 @@ export async function beginArchive(
   let admitted: OperationRow | { replay: OperationRow };
   try {
     admitted = await withTransaction(deps.pool, async (tx) => {
+      // P-118: an archive reduces access; while a pair is captured it records that and proceeds.
+      await invalidateCapture(tx, "archive");
       const { digest, keyId } = intentFingerprint(deps.ring, request.intent);
       const inserted = await insertOperation(tx, {
         ...key,
@@ -183,10 +189,6 @@ export async function beginArchive(
         }
         return { replay: found };
       }
-      const capture = await tx.query<{ capture_mode: string }>(
-        "SELECT capture_mode FROM app.service_control FOR SHARE",
-      );
-      if (capture.rows[0]?.capture_mode !== "idle") throw new Refusal("busy");
       if (!deps.gateOpen()) throw new Refusal("quarantined");
       // The rows in the order every admission takes them — organization (share),
       // project, environment, the target FOR UPDATE — so a concurrent create,
@@ -303,61 +305,85 @@ export async function driveArchive(
     await deps.faults?.(point, operationId);
   };
   let revokedHere = 0;
-  for (const environment of scope.environments) {
-    const done = await (async (): Promise<boolean> => {
-      try {
-        return await withEnvironmentLock(deps.lockPool, environment.lockKey, async (locked) => {
-          // A credential that became active meanwhile (an issuance finalized before admission) closes too.
-          const closedNow = await closeCredentials(locked.client, environment);
-          if (closedNow > 0) {
-            await locked.client.query(
-              `UPDATE app.operation
-                  SET expected = jsonb_set(expected, '{closed}',
-                                 to_jsonb(coalesce((expected->>'closed')::int, 0) + $2))
-                WHERE id = $1`,
-              [operationId, closedNow],
-            );
-          }
-          const work = await openCredentialWork(locked.client, environment);
-          if (work.revoking.length > 0) {
-            const opened = await deps.issuer.open(scope.organizationId);
-            if (!opened?.ok) return false;
-            try {
+  // P-114: one issuer session for as many environments as fit in its first
+  // 45 s (it lives LIMITS.machineToken.issuerSessionSeconds); then a new one.
+  let session: { data: IssuerSession; openedAt: number } | null = null;
+  const issuerSession = async (): Promise<IssuerSession | null> => {
+    if (session !== null && Date.now() - session.openedAt < ISSUER_REUSE_MS) return session.data;
+    if (session !== null) {
+      await session.data.close();
+      session = null;
+    }
+    const opened = await deps.issuer.open(scope.organizationId);
+    if (!opened?.ok) return null;
+    session = { data: opened.data, openedAt: Date.now() };
+    return opened.data;
+  };
+  try {
+    for (const environment of scope.environments) {
+      const done = await (async (): Promise<boolean> => {
+        try {
+          return await withEnvironmentLock(deps.lockPool, environment.lockKey, async (locked) => {
+            // A credential that became active meanwhile (an issuance finalized before admission) closes too.
+            // P-118: one transaction, so the invalidation that lets it pass a capture covers both writes.
+            await inTransaction(locked.client, async (tx) => {
+              await invalidateCapture(tx, "archive");
+              const closedNow = await closeCredentials(tx, environment);
+              if (closedNow > 0) {
+                await tx.query(
+                  `UPDATE app.operation
+                    SET expected = jsonb_set(expected, '{closed}',
+                                   to_jsonb(coalesce((expected->>'closed')::int, 0) + $2))
+                  WHERE id = $1`,
+                  [operationId, closedNow],
+                );
+              }
+            });
+            const work = await openCredentialWork(locked.client, environment);
+            if (work.revoking.length > 0) {
               for (const credential of work.revoking) {
                 if (credential.accessor === null) return false;
-                const proof = await revokeAndVerify(opened.data, credential.accessor, {
-                  operationId,
-                  dispatchId: randomUUID(),
-                });
-                if (proof !== "absent") return false;
-                await inTransaction(locked.client, async (tx) => {
-                  if (await moveCredential(tx, credential.id, ["revoking"], "revoked")) {
-                    await settleRevocations(
-                      tx,
-                      credential.id,
-                      LIMITS.operation.terminalRetentionDays,
-                    );
-                  }
-                });
-                revokedHere += 1;
-                if (revokedHere === 1) await fault("archive_after_revoke_sent");
+                const issuer = await issuerSession();
+                if (issuer === null) return false;
+                {
+                  const proof = await revokeAndVerify(issuer, credential.accessor, {
+                    operationId,
+                    dispatchId: randomUUID(),
+                  });
+                  if (proof !== "absent") return false;
+                  await inTransaction(locked.client, async (tx) => {
+                    await invalidateCapture(tx, "archive");
+                    if (await moveCredential(tx, credential.id, ["revoking"], "revoked")) {
+                      await settleRevocations(
+                        tx,
+                        credential.id,
+                        LIMITS.operation.terminalRetentionDays,
+                      );
+                    }
+                  });
+                  revokedHere += 1;
+                  if (revokedHere === 1) await fault("archive_after_revoke_sent");
+                }
               }
-            } finally {
-              await opened.data.close();
             }
-          }
-          return work.blocking === 0;
-        });
-      } catch (error) {
-        if (error instanceof Busy) return false;
-        throw error;
-      }
-    })();
-    if (!done) return "waiting";
+            return work.blocking === 0;
+          });
+        } catch (error) {
+          if (error instanceof Busy) return false;
+          throw error;
+        }
+      })();
+      if (!done) return "waiting";
+    }
+  } finally {
+    // A null session was never opened; the cast undoes the narrowing of the closure's writes.
+    const open = session as { data: IssuerSession } | null;
+    if (open !== null) await open.data.close();
   }
 
   // Every credential of the scope is revoked: finish, once.
   const finished = await withTransaction(deps.pool, async (tx) => {
+    await invalidateCapture(tx, "archive");
     const moved = await lifecycleTransition(tx, {
       kind: scope.kind,
       organizationId: scope.organizationId,
@@ -405,10 +431,35 @@ export async function driveArchive(
 }
 
 /** The tick (P-91): every archive executing with a heartbeat older than the stale time, driven again. */
+/**
+ * Run 6.9 (P-129): each due archive is driven on its own; one that throws is
+ * reported (by its error's class, never its message) and the next is driven.
+ */
+export async function driveEach<Id extends string>(
+  ids: readonly Id[],
+  drive: (id: Id) => Promise<"archived" | "waiting">,
+): Promise<{ archived: Id[]; waiting: Id[]; failed: { id: Id; error: string }[] }> {
+  const archived: Id[] = [];
+  const waiting: Id[] = [];
+  const failed: { id: Id; error: string }[] = [];
+  for (const id of ids) {
+    try {
+      ((await drive(id)) === "archived" ? archived : waiting).push(id);
+    } catch (error) {
+      failed.push({ id, error: error instanceof Error ? error.constructor.name : "error" });
+    }
+  }
+  return { archived, waiting, failed };
+}
+
 export async function continueArchives(
   deps: ArchiveDriveDeps,
   opts: { staleSeconds?: number } = {},
-): Promise<{ archived: OperationId[]; waiting: OperationId[] }> {
+): Promise<{
+  archived: OperationId[];
+  waiting: OperationId[];
+  failed: { id: OperationId; error: string }[];
+}> {
   const staleSeconds = opts.staleSeconds ?? LIMITS.operation.stuckAlertSeconds;
   const due = await deps.pool.query<{ id: OperationId }>(
     `SELECT id FROM app.operation
@@ -417,10 +468,8 @@ export async function continueArchives(
       ORDER BY created_at`,
     [[...ARCHIVE_ACTIONS], staleSeconds],
   );
-  const archived: OperationId[] = [];
-  const waiting: OperationId[] = [];
-  for (const { id } of due.rows) {
-    ((await driveArchive(deps, id)) === "archived" ? archived : waiting).push(id);
-  }
-  return { archived, waiting };
+  return driveEach(
+    due.rows.map((row) => row.id),
+    async (id) => ((await driveArchive(deps, id)) === "archived" ? "archived" : "waiting"),
+  );
 }

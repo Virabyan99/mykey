@@ -276,6 +276,75 @@ const importPreviewBody = z.strictObject({
   ),
 });
 
+/**
+ * audit.list (Run 6.1, P-107): the organization's audit trail, newest first.
+ * `from` and `to` are RFC 3339 (default: the last 30 days before the first
+ * page's anchor; at most 92 days apart). `action` is one of the served
+ * actions (checked by the handler against @mykey/audit). A cursor is bound to
+ * the filters it was made with: another filter is `409 listing_changed`.
+ */
+const auditId = z.uuid();
+const auditTime = z.iso.datetime({ offset: true });
+export const auditListQuery = z.strictObject({
+  limit: z.int().min(1).max(LIMITS.listing.maxLimit).default(LIMITS.listing.defaultLimit),
+  cursor: z.string().min(1).max(2048).optional(),
+  from: auditTime.optional(),
+  to: auditTime.optional(),
+  action: z
+    .string()
+    .max(48)
+    .regex(/^[a-z]+(?:[._][a-z]+)+$/)
+    .optional(),
+  outcome: z.enum(["success", "denied", "failure", "intent", "unknown"]).optional(),
+  actorKind: z.enum(["user", "machine", "operator", "system", "anonymous"]).optional(),
+  actorId: auditId.optional(),
+  projectId: auditId.optional(),
+  environmentId: auditId.optional(),
+  operationId: auditId.optional(),
+  requestId: auditId.optional(),
+});
+const auditItem = z.strictObject({
+  id: z.uuid(),
+  occurredAt: z.iso.datetime(),
+  actor: z.strictObject({ kind: z.string(), id: z.string().nullable() }),
+  source: z.string().nullable(),
+  action: z.string(),
+  target: z.strictObject({ kind: z.string(), id: z.string().nullable() }).nullable(),
+  outcome: z.string(),
+  requestId: z.string().nullable(),
+  operationId: z.uuid().nullable(),
+  /** Parsed again with the action's own schema on the way out; `{}` when the row fails it. */
+  details: z.record(z.string(), z.union([z.string(), z.number(), z.boolean(), z.null()])),
+});
+export const auditListBody = z.strictObject({
+  items: z.array(auditItem),
+  nextCursor: z.string().nullable(),
+  /** The first page's database time; no row after it is served by this listing. */
+  anchor: z.iso.datetime(),
+});
+
+/** activity.list (Run 6.1, P-108): the product's events, for the workspace's timeline. */
+export const activityListQuery = z.strictObject({
+  limit: z.int().min(1).max(LIMITS.listing.maxLimit).default(LIMITS.listing.defaultLimit),
+  cursor: z.string().min(1).max(2048).optional(),
+  projectId: auditId.optional(),
+  environmentId: auditId.optional(),
+});
+export const activityListBody = z.strictObject({
+  items: z.array(
+    auditItem.extend({
+      /** The operation's state now (read at request time), or null. */
+      operation: z
+        .strictObject({ id: z.uuid(), state: z.enum(OPERATION_STATES), action: z.string() })
+        .nullable(),
+      /** The current name of the project or environment the event targets, or null. */
+      targetName: z.string().nullable(),
+    }),
+  ),
+  nextCursor: z.string().nullable(),
+  anchor: z.iso.datetime(),
+});
+
 /** projects.list and environments.list (Run 3.9, P-59): keyset pages in id order. */
 const pageQuery = z.strictObject({
   limit: z.int().min(1).max(LIMITS.listing.maxLimit).default(LIMITS.listing.defaultLimit),
@@ -530,12 +599,12 @@ export const ROUTES: readonly RouteDef[] = Object.freeze([
     action: "resources.manage",
     body: nameBody(projectName),
     completed: 201,
-    errors: ["already_exists"],
+    errors: ["capacity_exceeded", "already_exists"],
   }),
   define("projects.rename", "PATCH", P, "human", true, "3.9", {
     action: "resources.manage",
     body: nameBody(projectName),
-    errors: ["already_exists", "state_conflict"],
+    errors: ["capacity_exceeded", "already_exists", "state_conflict"],
   }),
   define("projects.archive", "POST", `${P}/archive`, "human", true, "5.3", {
     action: "resources.manage",
@@ -547,7 +616,7 @@ export const ROUTES: readonly RouteDef[] = Object.freeze([
     action: "resources.manage",
     body: confirmedBody,
     responses: { 200: reactivatedBody },
-    errors: ["state_conflict", ...BACKEND],
+    errors: ["capacity_exceeded", "state_conflict", ...BACKEND],
   }),
 
   define("environments.list", "GET", `${P}/environments`, "human", false, "3.9", {
@@ -559,12 +628,12 @@ export const ROUTES: readonly RouteDef[] = Object.freeze([
     action: "resources.manage",
     body: nameBody(environmentName),
     completed: 201,
-    errors: ["already_exists", "state_conflict", ...BACKEND],
+    errors: ["capacity_exceeded", "already_exists", "state_conflict", ...BACKEND],
   }),
   define("environments.rename", "PATCH", E, "human", true, "3.9", {
     action: "resources.manage",
     body: nameBody(environmentName),
-    errors: ["already_exists", "state_conflict"],
+    errors: ["capacity_exceeded", "already_exists", "state_conflict"],
   }),
   define("environments.archive", "POST", `${E}/archive`, "human", true, "5.3", {
     action: "resources.manage",
@@ -576,7 +645,7 @@ export const ROUTES: readonly RouteDef[] = Object.freeze([
     action: "resources.manage",
     body: confirmedBody,
     responses: { 200: reactivatedBody },
-    errors: ["state_conflict", ...BACKEND],
+    errors: ["capacity_exceeded", "state_conflict", ...BACKEND],
   }),
 
   define("secrets.list", "GET", `${E}/secrets`, "human", false, "4.3", {
@@ -609,7 +678,7 @@ export const ROUTES: readonly RouteDef[] = Object.freeze([
   define("secrets.delete", "POST", `${E}/secrets/:name/delete`, "human", true, "4.4", {
     action: "secrets.write",
     body: deleteBody,
-    errors: VERSIONED,
+    errors: ["capacity_exceeded", ...VERSIONED],
   }),
   define("secrets.undelete", "POST", `${E}/secrets/:name/undelete`, "human", true, "4.4", {
     action: "secrets.write",
@@ -644,7 +713,8 @@ export const ROUTES: readonly RouteDef[] = Object.freeze([
       action: "secrets.write",
       body: "raw-dotenv",
       responses: { 200: operationResponseSchema, 202: operationResponseSchema },
-      errors: ["outcome_unknown", "audit_unavailable", ...IMPORT_WRITE],
+      // Run 6.9 (M-7): an import expired while it waited cannot be resumed.
+      errors: ["outcome_unknown", "audit_unavailable", "replay_expired", ...IMPORT_WRITE],
     },
   ),
   define("export.create", "POST", `${E}/export`, "human_fresh_totp", false, "4.9", {
@@ -671,7 +741,7 @@ export const ROUTES: readonly RouteDef[] = Object.freeze([
     }),
     completed: 201,
     responses: { 201: credentialIssuedBody },
-    errors: ["credential_not_replayable", "state_conflict", ...BACKEND],
+    errors: ["capacity_exceeded", "credential_not_replayable", "state_conflict", ...BACKEND],
   }),
   define(
     "credentials.revoke",
@@ -703,8 +773,16 @@ export const ROUTES: readonly RouteDef[] = Object.freeze([
     responses: { 200: operationsListBody },
   }),
 
-  define("audit.list", "GET", `${O}/audit`, "human", false, "6.1", { action: "audit.view" }),
-  define("activity.list", "GET", `${O}/activity`, "human", false, "6.1", { action: "audit.view" }),
+  define("audit.list", "GET", `${O}/audit`, "human", false, "6.1", {
+    action: "audit.view",
+    query: auditListQuery,
+    responses: { 200: auditListBody },
+  }),
+  define("activity.list", "GET", `${O}/activity`, "human", false, "6.1", {
+    action: "audit.view",
+    query: activityListQuery,
+    responses: { 200: activityListBody },
+  }),
   define("overview.get", "GET", `${O}/overview`, "human", false, "7.3", { action: "audit.view" }),
   define("credentials.summary", "GET", `${O}/credentials/summary`, "human", false, "7.7", {
     action: "credentials.manage",
@@ -718,7 +796,7 @@ export const ROUTES: readonly RouteDef[] = Object.freeze([
   define("auth.reset.complete", "POST", "/v1/auth/reset/complete", "reset_flow", false, "3.6", {
     body: resetCompleteBody,
     responses: { 200: z.strictObject({ next: z.enum(["sign_in", "enroll"]) }) },
-    errors: ["audit_unavailable"],
+    errors: ["capacity_exceeded", "audit_unavailable"],
   }),
   // Run 5.9 (P-101): the process's own organization is the scope (no :org in
   // the path); owner and admins see them, everyone else gets the hidden 404.

@@ -1,0 +1,9 @@
+[Unit]
+Description=MyKey pair retention: expired pairs deleted, verified, never the newest eligible (Run 6.6)
+After=network-online.target docker.service mykey-backup.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/opt/mykey/hosts/ops-run.sh pair-retention -- pair --step retention
+TimeoutStartSec=1h

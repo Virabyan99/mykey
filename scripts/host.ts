@@ -22,16 +22,20 @@ import {
   readdirSync,
   readFileSync,
   rmSync,
+  statSync,
   writeFileSync,
 } from "node:fs";
+import { spawnSync } from "node:child_process";
 import { homedir, tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import {
   REMOTE,
   SshError,
   expectSuccess,
+  formatStatusView,
   hostStatus,
   isHostname,
+  statusView,
   loadHosts,
   mentionsSecretPath,
   openTunnel,
@@ -41,10 +45,15 @@ import {
   shQuote,
   sshExec,
   type HostEntry,
+  type HostName,
   type Hosts,
+  usableHost,
 } from "@mykey/ops/remote";
 import { KEY_RINGS } from "@mykey/auth";
+import { loadR2Credentials } from "@mykey/backup";
 import type { RoleName } from "@mykey/db";
+import { readOpsJobs } from "./ops-jobs.ts";
+import { probeState } from "./probe.ts";
 
 const REPOSITORY = resolve(import.meta.dirname, "..");
 const FIREWALL = `${REMOTE.hostsDir}/firewall`;
@@ -61,7 +70,7 @@ const COMPOSE = `docker compose --env-file ${REMOTE.hostEnv} -f ${REMOTE.compose
 const BASE64_KEY = /^[A-Za-z0-9+/]{43}=$/;
 
 type Address = "vpn" | "public";
-type HostName = "staging" | "prod";
+export { usableHost };
 
 // -------------------------------------------------------------------- logger
 
@@ -108,10 +117,21 @@ export const USAGE = `usage: node scripts/host.ts <staging|prod> <command> [--pu
   up                             create missing host secrets, then docker compose up -d
   db-init                        roles and migrations through an SSH tunnel
   bao-init                       initialise OpenBao once; custody copy; root-namespace setup (staging only)
-  status                         print the host status as JSON
+  status [--json]                the private status view: every check with its observation time (P-117)
   gate <open|close|status>       the service gate record (P-43); every deploy starts closed
   keys init                      the auth key rings: new files on the workstation, installed on the host
   ops <command> [--flag value]   an operator command (apps/ops) as maintenance, through a tunnel
+  ops-secrets                    role passwords for ops jobs on the host; MYKEY_HOST_NAME in host.env
+  r2-install <audit-archive|pairs|pairs-cleanup>  the S3 credentials of that job's R2 token, on stdin
+  backup-init                    backup password and signing key made on the host; trust anchor; AppRole backup
+  backup-custody                 copy the backup password and signing key to ~/.mykey/custody/<host>/backup/
+  timers                         install and start the job timers (ops-jobs.json, audit rotation)
+  gate open --report <file>      opens with a verification report (v2; Run 6.7)
+  gate close [--verifying]       closes; --verifying lets the verification listener serve
+  tunnel verify                  a local port to the API's verification listener (Ctrl-C ends it)
+  deploy --release <dir> [--resume] [--install-only|--stay-closed]   P-128: a release through the closed gate
+  restore --source <host> (--pair <id> | --newest)   P-124 steps 1–7: restore a pair, start closed + verifying
+  restore-verify --confirm-members <n> (--journey | --owner-confirmed) [--open]   the report; --open opens
   quiesce                        gate close, stop api and provisioner, restart OpenBao (staging only)
   resume                         start api and provisioner; the gate stays closed until gate open
 --public uses the public address instead of the VPN (bootstrap always does).`;
@@ -124,11 +144,15 @@ export type HostCommand = { host: HostName; via: Address } & (
         | "confirm"
         | "up"
         | "db-init"
-        | "status"
         | "bao-init"
         | "quiesce"
-        | "resume";
+        | "resume"
+        | "ops-secrets"
+        | "backup-init"
+        | "backup-custody"
+        | "timers";
     }
+  | { command: "status"; json: boolean }
   | { command: "apply"; target: "firewall" | "ssh" }
   | { command: "image"; name: string; tar: string }
   | { command: "acme"; directory: AcmeDirectory }
@@ -141,12 +165,163 @@ export type HostCommand = { host: HostName; via: Address } & (
   | { command: "kms"; name: string; argv: string[] }
   | { command: "env"; key: OpenBaoEnvKey; value: string }
   | { command: "maint"; minutes: number; argv: string[] }
-  | { command: "gate"; action: GateAction }
+  | { command: "gate"; action: GateAction; report?: string; verifying?: true }
+  | { command: "tunnel"; target: "verify" }
+  | { command: "restore"; source: HostName; pair: string; organization?: string }
+  | {
+      command: "deploy";
+      release: string;
+      resume: boolean;
+      installOnly: boolean;
+      stayClosed: boolean;
+      images: string[];
+    }
+  | {
+      command: "restore-verify";
+      confirmMembers: number;
+      journey: "run" | "owner-confirmed";
+      open: boolean;
+    }
   | { command: "keys"; action: "init" }
   | { command: "ops"; argv: string[] }
+  | { command: "r2-install"; name: R2InstallName }
 );
 
 export type GateAction = "open" | "close" | "status";
+
+/**
+ * Run 6.7 (P-122): `gate open [--report <file>]`, `gate close [--verifying]`,
+ * `gate status`. A v2 host needs the report to open; a v1 host (no incarnation
+ * in host.env yet, until Run 6.9's first deploy) opens without one.
+ */
+const PAIR_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+
+/** `deploy --release <dir> [--resume] [--install-only | --stay-closed] [--image <id>]…` (P-128). */
+function parseDeployArgs(host: HostName, rest: string[]): HostCommand {
+  let release: string | null = null;
+  const images: string[] = [];
+  const flags = { resume: false, installOnly: false, stayClosed: false };
+  for (let i = 0; i < rest.length; i += 1) {
+    const word = rest[i];
+    const value = rest[i + 1];
+    if (word === "--release" && value !== undefined && !value.startsWith("--")) {
+      release = value;
+      i += 1;
+    } else if (word === "--image" && value !== undefined && /^sha256:[0-9a-f]{64}$/.test(value)) {
+      images.push(value);
+      i += 1;
+    } else if (word === "--resume") {
+      flags.resume = true;
+    } else if (word === "--install-only") {
+      flags.installOnly = true;
+    } else if (word === "--stay-closed") {
+      flags.stayClosed = true;
+    } else {
+      throw new Error(`deploy: unexpected ${String(word)} (deploy --release <dir> …)`);
+    }
+  }
+  if (release === null) throw new Error("deploy needs --release <dir>");
+  if (flags.installOnly && flags.stayClosed) {
+    throw new Error("deploy: --install-only and --stay-closed exclude each other");
+  }
+  return { host, via: "vpn", command: "deploy", release, images, ...flags };
+}
+
+/** `restore --source <host> (--pair <id> | --newest) [--organization <id>]`: P-124 steps 1–7. */
+function parseRestoreArgs(host: HostName, rest: string[]): HostCommand {
+  let source: HostName | null = null;
+  let organization: string | null = null;
+  const pairs: string[] = [];
+  for (let i = 0; i < rest.length; i += 1) {
+    const word = rest[i];
+    const value = rest[i + 1];
+    if (word === "--source") {
+      if (value !== "staging" && value !== "prod") {
+        throw new Error("restore --source needs staging or prod");
+      }
+      source = value;
+      i += 1;
+    } else if (word === "--organization") {
+      if (value === undefined || !PAIR_ID.test(value)) {
+        throw new Error("restore --organization needs an organization id");
+      }
+      organization = value;
+      i += 1;
+    } else if (word === "--newest") {
+      pairs.push("newest");
+    } else if (word === "--pair") {
+      if (value === undefined || !PAIR_ID.test(value))
+        throw new Error("restore --pair needs a pair id");
+      pairs.push(value);
+      i += 1;
+    } else {
+      throw new Error(`restore: unknown word ${String(word)}`);
+    }
+  }
+  if (source === null) throw new Error("restore needs --source <staging|prod>");
+  const [pair] = pairs;
+  if (pairs.length !== 1 || pair === undefined) {
+    throw new Error("restore needs exactly one of --pair <id> or --newest");
+  }
+  return {
+    host,
+    via: "vpn",
+    command: "restore",
+    source,
+    pair,
+    ...(organization === null ? {} : { organization }),
+  };
+}
+
+/** `restore-verify --confirm-members <n> (--journey | --owner-confirmed) [--open]`: steps 8–9. */
+function parseRestoreVerifyArgs(host: HostName, rest: string[]): HostCommand {
+  let confirmMembers: number | null = null;
+  const journeys: ("run" | "owner-confirmed")[] = [];
+  let open = false;
+  for (let i = 0; i < rest.length; i += 1) {
+    const word = rest[i];
+    if (word === "--confirm-members") {
+      const value = rest[i + 1] ?? "";
+      if (!/^[0-9]{1,6}$/.test(value)) throw new Error("--confirm-members needs a count");
+      confirmMembers = Number(value);
+      i += 1;
+    } else if (word === "--journey") {
+      journeys.push("run");
+    } else if (word === "--owner-confirmed") {
+      journeys.push("owner-confirmed");
+    } else if (word === "--open") {
+      open = true;
+    } else {
+      throw new Error(`restore-verify: unknown word ${String(word)}`);
+    }
+  }
+  if (confirmMembers === null) throw new Error("restore-verify needs --confirm-members <count>");
+  const [journey] = journeys;
+  if (journeys.length !== 1 || journey === undefined) {
+    throw new Error("restore-verify needs exactly one of --journey or --owner-confirmed");
+  }
+  return { host, via: "vpn", command: "restore-verify", confirmMembers, journey, open };
+}
+
+function parseGateArgs(host: HostName, rest: string[]): HostCommand {
+  const [action, ...more] = rest;
+  const base = { host, via: "vpn", command: "gate" } as const;
+  if (action === "open") {
+    if (more.length === 0) return { ...base, action };
+    if (more[0] === "--report") {
+      if (more.length !== 2 || more[1] === undefined || more[1].startsWith("--")) {
+        throw new Error("gate open --report needs one file");
+      }
+      return { ...base, action, report: more[1] };
+    }
+  } else if (action === "close") {
+    if (more.length === 0) return { ...base, action };
+    if (more.length === 1 && more[0] === "--verifying") return { ...base, action, verifying: true };
+  } else if (action === "status" && more.length === 0) {
+    return { ...base, action };
+  }
+  throw new Error("gate needs open [--report <file>], close [--verifying] or status");
+}
 
 /** The host.env settings `env` may write: OpenBao and its KMS (Run 2.7). */
 export const OPENBAO_ENV_KEYS = [
@@ -175,8 +350,8 @@ const CERT_NAME = /^[a-z][a-z0-9-]{0,39}$/;
 export function parseHostArgs(argv: string[]): HostCommand {
   const [host, command, ...rest] = argv;
   if (host === undefined || command === undefined) throw new Error(USAGE);
-  if (host !== "staging" && host !== "prod") {
-    throw new Error(`unknown host "${host}": use staging or prod`);
+  if (host !== "staging" && host !== "prod" && host !== "drill") {
+    throw new Error(`unknown host "${host}": use staging, prod or drill`);
   }
   if (host === "prod" && STAGING_ONLY.has(command)) {
     throw new Error(`${command}: production holds no OpenBao or KMS material in Session 2`);
@@ -185,6 +360,14 @@ export function parseHostArgs(argv: string[]): HostCommand {
     // Everything after `ops` belongs to the operator tool, flags included.
     if (rest.length === 0) throw new Error("ops needs a command (see apps/ops)");
     return { host, via: "vpn", command, argv: rest };
+  }
+  if (command === "gate") return parseGateArgs(host, rest);
+  if (command === "restore") return parseRestoreArgs(host, rest);
+  if (command === "deploy") return parseDeployArgs(host, rest);
+  if (command === "restore-verify") return parseRestoreVerifyArgs(host, rest);
+  if (command === "tunnel") {
+    if (rest.length !== 1 || rest[0] !== "verify") throw new Error("tunnel needs verify");
+    return { host, via: "vpn", command, target: "verify" };
   }
   let words = rest;
   let tail: string[] = [];
@@ -197,7 +380,9 @@ export function parseHostArgs(argv: string[]): HostCommand {
   const options = words.filter((word) => word.startsWith("--"));
   const positional = words.filter((word) => !word.startsWith("--"));
   for (const option of options) {
-    if (option !== "--public") throw new Error(`unknown option ${option}`);
+    if (option !== "--public" && !(option === "--json" && command === "status")) {
+      throw new Error(`unknown option ${option}`);
+    }
   }
   const via: Address = command === "bootstrap" || options.includes("--public") ? "public" : "vpn";
   const base = { host, via } as const;
@@ -207,12 +392,18 @@ export function parseHostArgs(argv: string[]): HostCommand {
     case "confirm":
     case "up":
     case "db-init":
-    case "status":
     case "bao-init":
     case "quiesce":
     case "resume":
+    case "ops-secrets":
+    case "backup-init":
+    case "backup-custody":
+    case "timers":
       if (positional.length !== 0) throw new Error(USAGE);
       return { ...base, command };
+    case "status":
+      if (positional.length !== 0) throw new Error(USAGE);
+      return { ...base, command, json: options.includes("--json") };
     case "apply": {
       const target = positional[0];
       if (positional.length !== 1 || (target !== "firewall" && target !== "ssh")) {
@@ -318,15 +509,12 @@ export function parseHostArgs(argv: string[]): HostCommand {
       }
       return { ...base, command, action: "init" };
     }
-    case "gate": {
-      const [action] = positional;
-      if (
-        positional.length !== 1 ||
-        (action !== "open" && action !== "close" && action !== "status")
-      ) {
-        throw new Error("gate needs open, close or status");
+    case "r2-install": {
+      const [name] = positional;
+      if (positional.length !== 1 || !(name !== undefined && name in R2_INSTALLS)) {
+        throw new Error(`r2-install needs one of: ${Object.keys(R2_INSTALLS).join(", ")}`);
       }
-      return { ...base, command, action };
+      return { ...base, command, name: name as R2InstallName };
     }
     case "maint": {
       const minutes = Number(positional[0]);
@@ -672,6 +860,65 @@ export function gateRecordText(
   return JSON.stringify({ version: 1, state, gateEpoch: epoch + 1, hostInstanceId, writtenAt });
 }
 
+/** Run 6.7 (P-123): the API's verification listener, inside the host (never published). */
+export const REMOTE_API_VERIFY = { address: "10.78.2.3", port: 8444 } as const;
+
+/** Run 6.7 (P-122): the running API's MYKEY_BUILD, and nothing else of its environment. */
+export function apiBuildCommand(): string {
+  return "docker inspect --format '{{range .Config.Env}}{{println .}}{{end}}' mykey-api-1 | sed -n 's/^MYKEY_BUILD=//p'";
+}
+
+/** The origin a close keeps: the previous v2 record's, else a fresh install of this host. */
+export function gateOriginOf(
+  previous: string | null,
+  hostInstanceId: string,
+): { kind: "fresh_install"; id: string } | { kind: "restore"; pairId: string } {
+  const fresh = { kind: "fresh_install", id: hostInstanceId } as const;
+  if (previous === null) return fresh;
+  try {
+    const record = JSON.parse(previous) as { version?: unknown; origin?: unknown };
+    if (record.version !== 2) return fresh;
+    const origin = record.origin as { kind?: unknown; id?: unknown; pairId?: unknown } | undefined;
+    if (
+      origin?.kind === "restore" &&
+      typeof origin.pairId === "string" &&
+      UUID.test(origin.pairId)
+    ) {
+      return { kind: "restore", pairId: origin.pairId };
+    }
+    if (origin?.kind === "fresh_install" && typeof origin.id === "string" && UUID.test(origin.id)) {
+      return { kind: "fresh_install", id: origin.id };
+    }
+  } catch {
+    // An unreadable record: the host's own fresh install.
+  }
+  return fresh;
+}
+
+/**
+ * Run 6.7 (P-122): db-init's incarnation. New when neither the database nor
+ * host.env holds one; copied to the side that lacks it; two different ones are
+ * an unfinished restore, and db-init stops.
+ */
+export function planIncarnation(
+  database: string | null,
+  hostEnv: string | undefined,
+  fresh: () => string,
+): { incarnation: string; writeDatabase: boolean; writeHostEnv: boolean } {
+  for (const value of [database, hostEnv]) {
+    if (value !== null && value !== undefined && !UUID.test(value)) {
+      throw new Error("db-init: the incarnation is not a uuid");
+    }
+  }
+  if (database !== null && hostEnv !== undefined && database !== hostEnv) {
+    throw new Error(
+      "db-init: the database and host.env name different incarnations (an unfinished restore?)",
+    );
+  }
+  const incarnation = database ?? hostEnv ?? fresh();
+  return { incarnation, writeDatabase: database === null, writeHostEnv: hostEnv === undefined };
+}
+
 /**
  * Installs the record from stdin atomically: a temporary file beside it,
  * fsync, rename, fsync of the directory. Root-owned, readable by the API's uid.
@@ -708,6 +955,15 @@ export function quiesceCommands(): { stop: string; restartOpenBao: string } {
 /** Starts both executors again; the gate is left as quiesce left it (closed). */
 export function resumeCommand(): string {
   return `${COMPOSE} start api provisioner`;
+}
+
+/**
+ * Run 6.8: the restore's step 7 starts the executors from the host.env it has
+ * just written (new incarnation, new host instance id). `start` would reuse
+ * containers made with the old values, which refuse to start.
+ */
+export function restoreStartCommand(): string {
+  return `${COMPOSE} up -d --force-recreate --no-deps api provisioner`;
 }
 
 /**
@@ -870,6 +1126,59 @@ export function custodyCopyPath(host: HostName, home: string = homedir()): strin
   return join(home, ".mykey", "custody", host, "openbao-init.json");
 }
 
+/**
+ * Run 6.8: the organization a restored host's API serves (its credentials are
+ * the ones the restore delivers): the host's own file, or on a clean host the
+ * one named with --organization. Two different ones are refused.
+ */
+export function restoreOrganization(onHost: string | null, named: string | null): string {
+  if (onHost !== null && named !== null && onHost !== named) {
+    throw new Error(`restore refused: this host serves ${onHost}, not ${named}`);
+  }
+  const chosen = onHost ?? named;
+  if (chosen === null) {
+    throw new Error(
+      "restore: a clean host serves no organization yet; name it with --organization <id>",
+    );
+  }
+  return chosen;
+}
+
+/**
+ * Run 6.8: where a restore keeps a role's new password. A host service's
+ * role on the host; a workstation role in custody, and for maintenance and
+ * backup_reader also the copy the host jobs read (ops-secrets), which would
+ * otherwise keep the old password and fail every job after a restore.
+ */
+export function restorePasswordPlaces(role: RoleName): { workstation: boolean; host: string[] } {
+  const onHost = ROLE_HOST_SECRET[role];
+  if (ROLE_PASSWORD_PLACE[role] === "host" && onHost !== undefined) {
+    return { workstation: false, host: [onHost.path] };
+  }
+  const ops = (OPS_ROLE_SECRETS as Partial<Record<RoleName, string>>)[role];
+  return { workstation: true, host: ops === undefined ? [] : [ops] };
+}
+
+/**
+ * The OpenBao token `ops` uses on a host (Run 6.8). While a restore waits for
+ * its report, the restore's own root token: the snapshot replaced the token
+ * store the custody copy's token lived in. Otherwise the custody copy.
+ */
+export function opsRootToken(
+  host: HostName,
+  home: string = homedir(),
+): { token: string; from: "restore" | "custody" } | null {
+  const restoreToken = join(home, ".mykey", "secrets", "hosts", host, "restore-root-token");
+  if (existsSync(restoreToken)) {
+    const token = readFileSync(restoreToken, "utf8").trim();
+    if (token !== "") return { token, from: "restore" };
+  }
+  const custody = custodyCopyPath(host, home);
+  if (!existsSync(custody)) return null;
+  const token = (JSON.parse(readFileSync(custody, "utf8")) as { root_token?: unknown }).root_token;
+  return typeof token === "string" && token !== "" ? { token, from: "custody" } : null;
+}
+
 /** okms with one certificate, through infra/hosts/kms/okms.sh (prints identifiers, not secrets). */
 export function okmsCommand(name: string, argv: string[]): string {
   if (!CERT_NAME.test(name)) throw new Error("invalid certificate name");
@@ -877,6 +1186,39 @@ export function okmsCommand(name: string, argv: string[]): string {
     if (!/^[A-Za-z0-9_.,:=@/-]+$/.test(arg)) throw new Error(`kms: unexpected argument ${arg}`);
   }
   return [`${REMOTE.hostsDir}/kms/okms.sh`, name, ...argv].join(" ");
+}
+
+/** Run 6.6 (P-121): a KMS key's attributes, as JSON (no key material). */
+export function kmsKeyStateCommand(cert: string, keyId: string): string {
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(keyId)) {
+    throw new Error("kms: not a key id");
+  }
+  return okmsCommand(cert, ["kmip", "attributes", "get", keyId, "--output", "json"]);
+}
+
+/**
+ * The State attribute (Active, Deactivated, Destroyed, …) in okms's answer,
+ * which may follow a line of its own; null when the answer holds none.
+ */
+export function kmsKeyState(output: string): string | null {
+  const start = output.search(/[[{]/);
+  if (start < 0) return null;
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(output.slice(start));
+  } catch {
+    return null;
+  }
+  const list = Array.isArray(parsed)
+    ? parsed
+    : ((parsed as { Attribute?: unknown } | null)?.Attribute ?? []);
+  if (!Array.isArray(list)) return null;
+  for (const entry of list as { AttributeName?: unknown; AttributeValue?: unknown }[]) {
+    if (entry.AttributeName === "State" && typeof entry.AttributeValue === "string") {
+      return entry.AttributeValue;
+    }
+  }
+  return null;
 }
 
 export function acmeCommands(directory: AcmeDirectory): string[] {
@@ -1284,12 +1626,24 @@ type PeerKeys = Partial<Record<HostName, string>>;
 
 const operatorAddress = (vpnIp: string): string => vpnIp.replace(/\.\d+$/, ".10");
 
+interface TunnelHosts {
+  prod: HostEntry;
+  staging: HostEntry;
+  drill?: HostEntry;
+}
+
+/** The tunnel's peers: production, or the drill host in its place while production is lent (Run 6.8). */
+function tunnelHosts(hosts: TunnelHosts): [HostEntry, HostEntry] {
+  const first = hosts.prod.lent === true && hosts.drill !== undefined ? hosts.drill : hosts.prod;
+  return [first, hosts.staging];
+}
+
 export function renderWireguardConfig(config: {
   privateKey: string;
-  hosts: { prod: HostEntry; staging: HostEntry };
+  hosts: TunnelHosts;
   peerKeys: PeerKeys;
 }): string {
-  const order = [config.hosts.prod, config.hosts.staging];
+  const order = tunnelHosts(config.hosts);
   const lines = [
     "# MyKey operator tunnel, written by scripts/host.ts. Holds a private key: keep it 0600.",
     "[Interface]",
@@ -1314,7 +1668,7 @@ export function renderWireguardConfig(config: {
 
 function parseWireguardConfig(
   text: string,
-  hosts: { prod: HostEntry; staging: HostEntry },
+  hosts: TunnelHosts,
 ): { privateKey: string | undefined; peerKeys: PeerKeys } {
   const peerKeys: PeerKeys = {};
   let privateKey: string | undefined;
@@ -1324,7 +1678,7 @@ function parseWireguardConfig(
     if (!block.startsWith("[Peer]")) continue;
     const allowed = value("AllowedIPs");
     const publicKey = value("PublicKey");
-    for (const host of [hosts.prod, hosts.staging]) {
+    for (const host of tunnelHosts(hosts)) {
       if (allowed === `${host.vpnIp}/32` && publicKey !== undefined)
         peerKeys[host.name] = publicKey;
     }
@@ -1343,7 +1697,7 @@ export function defaultWireguardFile(home: string = homedir()): string {
  */
 export function writeWireguardConfig(
   file: string,
-  hosts: { prod: HostEntry; staging: HostEntry },
+  hosts: TunnelHosts,
   peerKeys: PeerKeys,
 ): { file: string; publicKey: string } {
   for (const key of Object.values(peerKeys)) {
@@ -1376,7 +1730,7 @@ export function bootstrapCommands(
   hosts: Hosts,
   operatorPublicKey: string,
 ): string[] {
-  const host = hosts[name];
+  const host = usableHost(hosts[name], name);
   const wireguardEnv = [
     `WG_ADDRESS=${host.vpnIp}/24`,
     `WG_PEER_ADDRESS=${operatorAddress(host.vpnIp)}/32`,
@@ -1396,7 +1750,7 @@ export function bootstrapCommands(
 }
 
 async function runBootstrap(name: HostName, hosts: Hosts, log: Logger): Promise<void> {
-  const host = hosts[name];
+  const host = usableHost(hosts[name], name);
   const wireguardFile = defaultWireguardFile();
   const { publicKey } = writeWireguardConfig(wireguardFile, hosts, {});
   await pushFiles(host, collectPushFiles(), { address: "public" });
@@ -1454,6 +1808,36 @@ async function runDbInit(host: HostEntry, address: Address, log: Logger): Promis
       await ensureQueues(ownerPool);
     } finally {
       await ownerPool.end();
+    }
+    // Run 6.7 (P-122): the incarnation in the database and in host.env.
+    const { readIncarnation, writeIncarnation } = await import("@mykey/db");
+    const superPool = createPool(
+      { ...base, user: "postgres", password: superuserPassword },
+      { max: 1 },
+    );
+    try {
+      const hostEnv = parseHostEnv(
+        expectSuccess(await sshExec(host, `cat ${REMOTE.hostEnv}`, { address }), "reading host.env")
+          .stdout,
+      );
+      const plan = planIncarnation(
+        await readIncarnation(superPool),
+        hostEnv.MYKEY_BACKEND_INCARNATION,
+        () => randomUUID(),
+      );
+      if (plan.writeDatabase) await writeIncarnation(superPool, plan.incarnation, null);
+      if (plan.writeHostEnv) {
+        expectSuccess(
+          await sshExec(host, hostEnvSetCommand("MYKEY_BACKEND_INCARNATION", plan.incarnation), {
+            sudo: true,
+            address,
+          }),
+          "writing the incarnation into host.env",
+        );
+      }
+      log.info(`${host.name}: incarnation ${plan.incarnation}`);
+    } finally {
+      await superPool.end();
     }
     log.info(`${host.name}: roles ${ROLE_NAMES.join(", ")}`);
     log.info(
@@ -1549,7 +1933,13 @@ async function main(argv: string[], log: Logger): Promise<number> {
     return 2;
   }
   const hosts = loadHosts();
-  const host = hosts[command.host];
+  let host: HostEntry;
+  try {
+    host = usableHost(hosts[command.host], command.host);
+  } catch (error) {
+    log.error((error as Error).message);
+    return 2;
+  }
   const address = command.via;
   switch (command.command) {
     case "bootstrap":
@@ -1704,11 +2094,28 @@ async function main(argv: string[], log: Logger): Promise<number> {
     case "bao-init":
       await runBaoInit(host, address, log);
       return 0;
-    case "status":
-      log.info(JSON.stringify(await hostStatus(host, address), null, 2));
+    case "status": {
+      // P-117: the private status view — the host's report and the probe's state, each check with its time.
+      const report = await hostStatus(host, address);
+      const probe = await probeState(host.name);
+      const lines = statusView(report, probe, Date.now());
+      log.info(
+        command.json
+          ? JSON.stringify({ status: report, probe, lines }, null, 2)
+          : formatStatusView(lines),
+      );
       return 0;
+    }
     case "gate":
-      return runGate(host, command.action, address, log);
+      return runGate(host, command, address, log);
+    case "tunnel":
+      return runVerifyTunnel(host, log);
+    case "restore":
+      return runRestore(host, command, address, log);
+    case "restore-verify":
+      return runRestoreVerify(host, command, address, log);
+    case "deploy":
+      return runDeployCommand(host, command, address, log);
     case "quiesce":
       return runQuiesce(host, address, log);
     case "resume":
@@ -1720,7 +2127,289 @@ async function main(argv: string[], log: Logger): Promise<number> {
       return 0;
     case "ops":
       return runOpsOnHost(host, command.argv, address);
+    case "ops-secrets":
+      await runOpsSecrets(host, address, log);
+      return 0;
+    case "r2-install":
+      await runR2Install(host, command.name, address, log);
+      return 0;
+    case "backup-init":
+      await runBackupInit(host, address, log);
+      return 0;
+    case "backup-custody":
+      await runBackupCustody(host, address, log);
+      return 0;
+    case "timers":
+      await runTimers(host, address, log);
+      return 0;
   }
+}
+
+/** Run 6.2 (P-112): which R2 token each host job uses, and where its three files go. */
+export const R2_INSTALLS = {
+  "audit-archive": {
+    token: () => "mykey-audit-archive-upload",
+    directory: "/etc/mykey/secrets/r2-audit-archive",
+  },
+  /** Run 6.5 (P-119): the pair job; the token reads back what it wrote (Item Write). */
+  pairs: {
+    token: (host: HostName) => `mykey-${host}-pairs-upload`,
+    directory: "/etc/mykey/secrets/r2-pairs",
+  },
+  /** Run 6.6 (P-121): the retention job deletes through its own token. */
+  "pairs-cleanup": {
+    token: (host: HostName) => `mykey-${host}-pairs-cleanup`,
+    directory: "/etc/mykey/secrets/r2-pairs-cleanup",
+  },
+} as const;
+export type R2InstallName = keyof typeof R2_INSTALLS;
+
+/** The three files of a job's R2 credentials, as ops-run.sh mounts them. */
+export function r2InstallFiles(
+  name: R2InstallName,
+): Record<"accountId" | "accessKeyId" | "secretAccessKey", string> {
+  const { directory } = R2_INSTALLS[name];
+  return {
+    accountId: `${directory}/account-id`,
+    accessKeyId: `${directory}/access-key-id`,
+    secretAccessKey: `${directory}/secret-access-key`,
+  };
+}
+
+/** Installs a job's R2 credentials from workstation custody (owner 1000, mode 0400), on stdin. */
+async function runR2Install(
+  host: HostEntry,
+  name: R2InstallName,
+  address: Address,
+  log: Logger,
+): Promise<void> {
+  const credentials = loadR2Credentials(R2_INSTALLS[name].token(host.name));
+  registerSecret(credentials.secretAccessKey);
+  const files = r2InstallFiles(name);
+  for (const field of ["accountId", "accessKeyId", "secretAccessKey"] as const) {
+    expectSuccess(
+      await sshExec(host, secretInstallCommand(files[field], "1000:1000"), {
+        sudo: true,
+        address,
+        secretOutput: true,
+        stdin: credentials[field],
+      }),
+      `installing ${files[field]}`,
+    );
+    log.info(`${host.name}: ${files[field]} installed`);
+  }
+}
+
+/** Run 6.5 (P-119): the backup secrets of a host, as files on it. */
+export const BACKUP_FILES = {
+  /** Restic's password; owner 1000 (the ops user), mode 0400. */
+  password: "/etc/mykey/secrets/backup/password",
+  /** The Ed25519 key that signs eligible.json; owner 1000, mode 0400. */
+  signingKey: "/etc/mykey/secrets/backup/signing-key",
+  /** The root AppRole backup, read by backup.sh as root. */
+  roleId: "/etc/mykey/secrets/backup-approle/role-id",
+  secretId: "/etc/mykey/secrets/backup-approle/secret-id",
+} as const;
+/** The signing key's id (ops-jobs.json: MYKEY_PAIR_SIGNER). */
+export const BACKUP_KEY_ID = "k1";
+/** The token of the AppRole backup lives 600 s (P-119). */
+const BACKUP_TOKEN_SECONDS = 600;
+
+/** Makes the backup password and the signing key on the host, once; never prints them. */
+export function backupKeysCommand(): string {
+  const make = (path: string, generate: string): string =>
+    `( test -s ${path} || ( ${generate} > ${path}.new && chown 1000:1000 ${path}.new && chmod 0400 ${path}.new && mv ${path}.new ${path} ) )`;
+  return [
+    "umask 077",
+    "install -d -m 0700 -o 1000 -g 1000 /etc/mykey/secrets/backup",
+    make(BACKUP_FILES.password, "openssl rand -hex 32"),
+    make(BACKUP_FILES.signingKey, "openssl genpkey -algorithm ed25519"),
+  ].join(" && ");
+}
+
+/** The committed public key of a host (the trust anchor a restore checks against). */
+export function trustFile(host: HostName): string {
+  return resolve(
+    import.meta.dirname,
+    "..",
+    "infra/hosts/backup/trust",
+    `${host}-${BACKUP_KEY_ID}.pub`,
+  );
+}
+
+/**
+ * P-119: the backup password and the signing key are made on the host; the
+ * public key is written to infra/hosts/backup/trust/ (commit it); the root
+ * AppRole backup (policy backup, 600 s tokens) gets a new secret id, installed
+ * for backup.sh. Safe to run again: the keys are never replaced.
+ */
+async function runBackupInit(host: HostEntry, address: Address, log: Logger): Promise<void> {
+  const remote = { sudo: true, address, secretOutput: true } as const;
+  expectSuccess(await sshExec(host, backupKeysCommand(), remote), "the backup password and key");
+  const answer = expectSuccess(
+    await sshExec(host, `openssl pkey -in ${BACKUP_FILES.signingKey} -pubout`, remote),
+    "the public signing key",
+  ).stdout;
+  const key = createPublicKey(answer);
+  if (key.asymmetricKeyType !== "ed25519") throw new Error("the signing key is not Ed25519");
+  const pem = key.export({ format: "pem", type: "spki" }).toString();
+  const file = trustFile(host.name);
+  if (existsSync(file) && readFileSync(file, "utf8") !== pem) {
+    throw new Error(`${file} differs from the host's key: a new key needs a new key id`);
+  }
+  mkdirSync(dirname(file), { recursive: true });
+  writeFileSync(file, pem);
+  log.info(`${host.name}: trust anchor ${file} (commit it)`);
+
+  const custody = custodyCopyPath(host.name);
+  const rootToken = (JSON.parse(readFileSync(custody, "utf8")) as { root_token?: unknown })
+    .root_token;
+  if (typeof rootToken !== "string" || rootToken === "") {
+    throw new Error(`${custody} holds no root token`);
+  }
+  registerSecret(rootToken);
+  const { OpenBaoAdmin } = await import("@mykey/openbao/admin");
+  const dir = mkdtempSync(join(tmpdir(), "mykey-backup-init-"));
+  const tunnel = await openTunnel(host, REMOTE.openbao);
+  try {
+    const caCertPath = join(dir, "ca.crt");
+    writeFileSync(
+      caCertPath,
+      expectSuccess(await sshExec(host, `cat ${REMOTE.caCert}`, { address }), "reading the host CA")
+        .stdout,
+    );
+    const admin = new OpenBaoAdmin(
+      { url: `https://127.0.0.1:${tunnel.localPort}`, caCertPath },
+      rootToken,
+    );
+    if ((await admin.readAuthMount("", "approle")) === null) await admin.enableAppRole("");
+    // The role of the Run 2.9 spike gave secret ids 60 s; this one lives until
+    // backup-init replaces it (it is installed on the host, never on a workstation).
+    const { roleId } = await admin.putAppRole("", "backup", BACKUP_TOKEN_SECONDS, [], 0);
+    const { secretId } = await admin.newSecretId("", "backup");
+    registerSecret(secretId);
+    for (const [path, value] of [
+      [BACKUP_FILES.roleId, roleId],
+      [BACKUP_FILES.secretId, secretId],
+    ] as const) {
+      expectSuccess(
+        await sshExec(host, secretInstallCommand(path, "0:0"), { ...remote, stdin: value }),
+        `installing ${path}`,
+      );
+      log.info(`${host.name}: ${path} installed`);
+    }
+  } finally {
+    await tunnel.close();
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+/** OWN-4: the backup password and signing key, copied unseen to workstation custody. */
+async function runBackupCustody(host: HostEntry, address: Address, log: Logger): Promise<void> {
+  const dir = join(homedir(), ".mykey", "custody", host.name, "backup");
+  mkdirSync(dir, { recursive: true, mode: 0o700 });
+  for (const [name, path] of [
+    ["password", BACKUP_FILES.password],
+    ["signing-key", BACKUP_FILES.signingKey],
+  ] as const) {
+    const value = expectSuccess(
+      await sshExec(host, `cat ${path}`, { sudo: true, address, secretOutput: true }),
+      `reading ${name}`,
+    ).stdout;
+    if (value.trim() === "") throw new Error(`${path} is empty: run backup-init first`);
+    registerSecret(value.trim());
+    const target = join(dir, name);
+    if (existsSync(target)) {
+      if (readFileSync(target, "utf8") !== value) {
+        throw new Error(`${target} differs from the host's ${name}; it is never overwritten`);
+      }
+      log.info(`${host.name}: ${target} already holds the host's ${name}`);
+    } else {
+      writeFileSync(target, value, { mode: 0o600, flag: "wx" });
+      log.info(`${host.name}: ${target} written`);
+    }
+  }
+}
+
+/** The timers of host jobs: every unit of ops-jobs.json, and the rotation of OpenBao's audit file. */
+export function jobTimers(): string[] {
+  const units = Object.values(readOpsJobs().jobs).flatMap((job) =>
+    job.unit === null ? [] : [job.unit],
+  );
+  // Run 6.5 (P-119): the daily pair, run by backup.sh rather than ops-run.sh.
+  return ["mykey-bao-audit-rotate", ...units, "mykey-backup"];
+}
+
+/** Run 6.5 (P-120): services enabled at boot without a timer. */
+export const BOOT_SERVICES = ["mykey-capture-recover"] as const;
+
+export function timersCommand(units: readonly string[]): string {
+  for (const unit of units) {
+    if (!/^mykey-[a-z0-9-]+$/.test(unit)) throw new Error(`unusable unit name ${unit}`);
+  }
+  const files = [
+    ...units.flatMap((unit) => [
+      `${REMOTE.hostsDir}/systemd/${unit}.service`,
+      `${REMOTE.hostsDir}/systemd/${unit}.timer`,
+    ]),
+    ...BOOT_SERVICES.map((unit) => `${REMOTE.hostsDir}/systemd/${unit}.service`),
+  ];
+  return [
+    // Run 6.8: measured by status.sh for the capacity record from the first minute
+    // (the rotation creates it only at its first run, 01:15 UTC).
+    "install -d -m 0700 -o 1000 -g 1000 /var/lib/mykey/bao-audit/rotated",
+    `install -m 0644 ${files.join(" ")} /etc/systemd/system/`,
+    "systemctl daemon-reload",
+    `systemctl enable --now ${units.map((unit) => `${unit}.timer`).join(" ")}`,
+    `systemctl enable ${BOOT_SERVICES.map((unit) => `${unit}.service`).join(" ")}`,
+    // The heartbeat expects a pair from now on (status.sh: backup_stale).
+    hostEnvSetCommand("MYKEY_BACKUP_EXPECTED", "yes"),
+  ].join(" && ");
+}
+
+async function runTimers(host: HostEntry, address: Address, log: Logger): Promise<void> {
+  const units = jobTimers();
+  expectSuccess(
+    await sshExec(host, timersCommand(units), { sudo: true, address }),
+    "installing the job timers",
+  );
+  log.info(`${host.name}: timers enabled: ${units.join(", ")}`);
+}
+
+/** Run 6.2 (P-111): the role passwords ops jobs log in with, where ops-run.sh mounts them. */
+export const OPS_ROLE_SECRETS = {
+  maintenance: "/etc/mykey/secrets/ops/maintenance",
+  backup_reader: "/etc/mykey/secrets/ops/backup_reader",
+} as const;
+
+/**
+ * Installs the workstation's custody copies of the maintenance and
+ * backup_reader passwords for the ops image (owner 1000:1000, mode 0400) and
+ * records MYKEY_HOST_NAME. Values cross on stdin only; names are printed.
+ */
+async function runOpsSecrets(host: HostEntry, address: Address, log: Logger): Promise<void> {
+  for (const [role, path] of Object.entries(OPS_ROLE_SECRETS)) {
+    const file = workstationRoleSecretFile(host.name, role as RoleName);
+    if (!existsSync(file)) throw new Error(`no custody copy of the ${role} password: ${file}`);
+    const value = readFileSync(file, "utf8").trim();
+    if (value === "") throw new Error(`the custody copy of the ${role} password is empty`);
+    registerSecret(value);
+    expectSuccess(
+      await sshExec(host, secretInstallCommand(path, "1000:1000"), {
+        sudo: true,
+        address,
+        secretOutput: true,
+        stdin: value,
+      }),
+      `installing ${path}`,
+    );
+    log.info(`${host.name}: ${path} installed`);
+  }
+  expectSuccess(
+    await sshExec(host, hostEnvSetCommand("MYKEY_HOST_NAME", host.name), { sudo: true, address }),
+    "writing MYKEY_HOST_NAME",
+  );
+  log.info(`${host.name}: MYKEY_HOST_NAME=${host.name}`);
 }
 
 /**
@@ -1779,18 +2468,14 @@ async function runOpsOnHost(host: HostEntry, argv: string[], address: Address): 
         .stdout,
     );
     let openBao: { target: { url: string; caCertPath: string }; rootToken: string } | undefined;
-    const custody = custodyCopyPath(host.name);
-    if (env.MYKEY_OPENBAO === "1" && existsSync(custody)) {
-      const token = (JSON.parse(readFileSync(custody, "utf8")) as { root_token?: unknown })
-        .root_token;
-      if (typeof token === "string" && token !== "") {
-        registerSecret(token);
-        baoTunnel = await openTunnel(host, REMOTE.openbao);
-        openBao = {
-          target: { url: `https://127.0.0.1:${String(baoTunnel.localPort)}`, caCertPath },
-          rootToken: token,
-        };
-      }
+    const chosen = env.MYKEY_OPENBAO === "1" ? opsRootToken(host.name) : null;
+    if (chosen !== null) {
+      registerSecret(chosen.token);
+      baoTunnel = await openTunnel(host, REMOTE.openbao);
+      openBao = {
+        target: { url: `https://127.0.0.1:${String(baoTunnel.localPort)}`, caCertPath },
+        rootToken: chosen.token,
+      };
     }
     const flagAt = argv.indexOf("--organization");
     const organizationId = flagAt === -1 ? undefined : argv[flagAt + 1];
@@ -1843,10 +2528,11 @@ async function runOpsOnHost(host: HostEntry, argv: string[], address: Address): 
 
 async function runGate(
   host: HostEntry,
-  action: GateAction,
+  command: { action: GateAction; report?: string; verifying?: true; releaseBuild?: string },
   address: Address,
   log: Logger,
 ): Promise<number> {
+  const { action } = command;
   const current = await sshExec(host, `cat ${GATE_FILE}`, { sudo: true, address });
   const previous = current.code === 0 ? current.stdout : null;
   if (action === "status") {
@@ -1860,6 +2546,22 @@ async function runGate(
   const hostInstanceId = env.MYKEY_HOST_INSTANCE_ID;
   if (hostInstanceId === undefined)
     throw new Error("host.env has no MYKEY_HOST_INSTANCE_ID: run up first");
+  const backendIncarnation = env.MYKEY_BACKEND_INCARNATION;
+  if (backendIncarnation !== undefined) {
+    return runGateV2(
+      host,
+      { ...command, action },
+      { hostInstanceId, backendIncarnation },
+      address,
+      log,
+    );
+  }
+  // Ruling (Run 6.7): a host without an incarnation still runs a v1 release
+  // (until Run 6.9's first deploy); it keeps v1 records, which that release reads.
+  if (command.report !== undefined || command.verifying === true) {
+    throw new Error("gate: this host has no MYKEY_BACKEND_INCARNATION yet (a v1 release)");
+  }
+  log.info(`${host.name}: v1 record (host.env has no MYKEY_BACKEND_INCARNATION)`);
   const record = gateRecordText(
     action === "open" ? "open" : "closed",
     previous,
@@ -1874,8 +2576,1143 @@ async function runGate(
   return 0;
 }
 
+/**
+ * Run 6.7 (P-122, D-54): the v2 record. Open needs a report `mayOpen` accepts
+ * and `operator.gate_open` committed first (as maintenance, through a tunnel);
+ * close is written first and audited when PostgreSQL answers.
+ */
+async function runGateV2(
+  host: HostEntry,
+  command: { action: "open" | "close"; report?: string; verifying?: true; releaseBuild?: string },
+  binding: { hostInstanceId: string; backendIncarnation: string },
+  address: Address,
+  log: Logger,
+): Promise<number> {
+  const { closeGate, openGate } = await import("@mykey/operations/operator");
+  // A deploy binds the release it brings, not the build still running (Run 6.9).
+  const releaseBuild =
+    command.releaseBuild ??
+    expectSuccess(
+      await sshExec(host, apiBuildCommand(), { sudo: true, address }),
+      "reading the API's build",
+    ).stdout.trim();
+  if (command.action === "open" && !/^[0-9a-f]{7,40}$/.test(releaseBuild)) {
+    throw new Error("gate open: the API container is not running or names no build");
+  }
+  const expect = { ...binding, releaseBuild };
+  const writer = {
+    read: async (): Promise<string | null> => {
+      const answer = await sshExec(host, `cat ${GATE_FILE}`, { sudo: true, address });
+      return answer.code === 0 ? answer.stdout : null;
+    },
+    write: async (text: string): Promise<void> => {
+      expectSuccess(
+        await sshExec(host, gateWriteCommand(), { sudo: true, address, stdin: text }),
+        `gate ${command.action}`,
+      );
+    },
+  };
+  let report: unknown = null;
+  if (command.action === "open") {
+    if (command.report === undefined) {
+      throw new Error("gate open: this host needs --report <file> (a verification report)");
+    }
+    report = JSON.parse(readFileSync(command.report, "utf8"));
+  }
+  const { createPool } = await import("@mykey/db");
+  const password = localSecret(workstationRoleSecretFile(host.name, "maintenance"));
+  const dir = mkdtempSync(join(tmpdir(), "mykey-gate-"));
+  const tunnel = await openTunnel(host, REMOTE.postgres).catch(() => null);
+  let pool: ReturnType<typeof createPool> | null = null;
+  try {
+    if (tunnel !== null) {
+      const caCertPath = join(dir, "ca.crt");
+      const ca = await sshExec(host, `cat ${REMOTE.caCert}`, { address });
+      if (ca.code === 0) {
+        writeFileSync(caCertPath, ca.stdout);
+        pool = createPool(
+          {
+            host: "127.0.0.1",
+            port: tunnel.localPort,
+            database: "postgres",
+            user: "maintenance",
+            password,
+            caCertPath,
+          },
+          { max: 1 },
+        );
+      }
+    }
+    if (command.action === "close") {
+      const closed = await closeGate({
+        writer,
+        pool,
+        expect,
+        origin: gateOriginOf(await writer.read(), binding.hostInstanceId),
+        phase: command.verifying === true ? "verifying" : "serving",
+        now: () => new Date(),
+      });
+      log.info(`${host.name}: ${JSON.stringify(closed.record)}`);
+      if (!closed.audited) log.error(`${host.name}: closed; operator.gate_close not audited`);
+      return 0;
+    }
+    if (pool === null) throw new Error("gate open: PostgreSQL is not reachable for the audit");
+    const opened = await openGate({
+      writer,
+      pool,
+      expect,
+      report,
+      kind:
+        (report as { origin?: { kind?: unknown } }).origin?.kind === "restore"
+          ? "restore"
+          : "deploy",
+      now: () => new Date(),
+    });
+    if (!opened.ok) {
+      log.error(`${host.name}: gate open refused: ${opened.cause}`);
+      return 1;
+    }
+    log.info(`${host.name}: ${JSON.stringify(opened.record)}`);
+    return 0;
+  } finally {
+    await pool?.end();
+    await tunnel?.close();
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+// ------------------------------------------------------------------ restore (Run 6.7)
+
+/** Where `restore` leaves what `restore-verify` needs, on the workstation (0600). */
+export function restoreHandoffFiles(
+  host: HostName,
+  home: string = homedir(),
+): { state: string; token: string; report: string; measurements: string } {
+  const directory = join(home, ".mykey", "secrets", "hosts", host);
+  return {
+    state: join(directory, "restore.json"),
+    token: join(directory, "restore-root-token"),
+    report: join(directory, "restore-report.json"),
+    measurements: join(directory, "restore-measurements.json"),
+  };
+}
+
+interface RestoreHandoff {
+  pairId: string;
+  /** Run 6.8: the host the pair came from (its deploy-journey.json names a secret to reveal). */
+  source?: HostName;
+  restoreStartedAt: string;
+  backendIncarnation: string;
+  hostInstanceId: string;
+  schemaRevision: string;
+  given: Record<string, { state: "ok" | "failed" | "unknown"; observed: string }>;
+  /** FR-1.69. */
+  captureStartedAt: string;
+  startedAt: string;
+  restoredAt: string;
+}
+
+function hostGateWriter(host: HostEntry, address: Address) {
+  return {
+    read: async (): Promise<string | null> => {
+      const answer = await sshExec(host, `cat ${GATE_FILE}`, { sudo: true, address });
+      return answer.code === 0 ? answer.stdout : null;
+    },
+    write: async (text: string): Promise<void> => {
+      expectSuccess(
+        await sshExec(host, gateWriteCommand(), { sudo: true, address, stdin: text }),
+        "writing the gate",
+      );
+    },
+  };
+}
+
+/** The host's CA certificate in a local temporary directory. */
+async function localCaCert(host: HostEntry, address: Address, dir: string): Promise<string> {
+  const path = join(dir, "ca.crt");
+  writeFileSync(
+    path,
+    expectSuccess(await sshExec(host, `cat ${REMOTE.caCert}`, { address }), "reading the CA")
+      .stdout,
+  );
+  return path;
+}
+
+/**
+ * P-124 steps 1–7 on a host: the pair from R2 (signature, bundle, Restic,
+ * digests), PostgreSQL with new role passwords, OpenBao from the snapshot,
+ * every credential class invalidated, started closed + verifying. The
+ * restore's root token and the report's inputs stay on the workstation for
+ * `restore-verify`.
+ */
+async function runRestore(
+  host: HostEntry,
+  command: { source: HostName; pair: string; organization?: string },
+  address: Address,
+  log: Logger,
+): Promise<number> {
+  const { loadTrust, newestEligiblePrefix, r2Store } = await import("@mykey/backup");
+  const { restoreToVerifying } = await import("@mykey/ops");
+  const { OpenBaoAdmin } = await import("@mykey/openbao/admin");
+  const { createPool } = await import("@mykey/db");
+  const { hostRestoreTarget, pairPrefixFor } = await import("./host-restore.ts");
+  const store = r2Store(
+    loadR2Credentials(`mykey-${command.source}-pairs-upload`),
+    `mykey-${command.source}-pairs`,
+  );
+  const prefix =
+    command.pair === "newest"
+      ? await newestEligiblePrefix(store, command.source)
+      : await pairPrefixFor(store, command.source, command.pair);
+  if (prefix === null)
+    throw new Error(`restore: no eligible pair ${command.pair} of ${command.source}`);
+  const trust = loadTrust(
+    resolve(import.meta.dirname, "..", "infra/hosts/backup/trust"),
+    command.source,
+  );
+  const custody = custodyCopyPath(command.source);
+  const pairRootToken = (JSON.parse(readFileSync(custody, "utf8")) as { root_token?: unknown })
+    .root_token;
+  if (typeof pairRootToken !== "string" || pairRootToken === "") {
+    throw new Error(`${custody} holds no root token`);
+  }
+  registerSecret(pairRootToken);
+  const oldMaintenance = localSecret(workstationRoleSecretFile(host.name, "maintenance"));
+  const superuserPassword = await hostSecret(host, HOST_SECRETS.postgresSuperuser, address);
+  const organizationFile = await sshExec(
+    host,
+    `if test -s ${credentialFiles("runtime").organizationId}; then cat ${credentialFiles("runtime").organizationId}; fi`,
+    { sudo: true, address, secretOutput: true },
+  );
+  const organizationId = restoreOrganization(
+    organizationFile.stdout.trim() === "" ? null : organizationFile.stdout.trim(),
+    command.organization ?? null,
+  );
+  const dir = mkdtempSync(join(tmpdir(), "mykey-restore-"));
+  const restoreStartedAt = new Date();
+  const files = restoreHandoffFiles(host.name);
+  const target = await hostRestoreTarget(
+    {
+      exec: async (cmd, opts = {}) => {
+        const answer = await sshExec(host, cmd, {
+          sudo: true,
+          address,
+          ...(opts.stdin === undefined ? {} : { stdin: opts.stdin }),
+          ...(opts.secretOutput === true || mentionsSecretPath(cmd) ? { secretOutput: true } : {}),
+          ...(opts.timeoutMs === undefined ? {} : { timeoutMs: opts.timeoutMs }),
+        });
+        return { code: answer.code, stdout: answer.stdout };
+      },
+      tunnel: (remote) => openTunnel(host, remote),
+      caCertPath: await localCaCert(host, address, dir),
+      superuserPassword,
+      pairRootToken,
+      sourceBackupPassword: ((): string => {
+        const file = join(homedir(), ".mykey", "custody", command.source, "backup", "password");
+        if (!existsSync(file))
+          throw new Error(`no ${file} (host.ts ${command.source} backup-custody)`);
+        const password = readFileSync(file, "utf8");
+        registerSecret(password.trim());
+        return password;
+      })(),
+      // Run 6.8: the host's own root token; after a first restore's snapshot
+      // that is the restore's own (a second run of the same pair).
+      targetRootToken: ((): string => {
+        const chosen = opsRootToken(host.name);
+        if (chosen === null)
+          throw new Error(`${host.name}: no root token (bao-init's custody copy)`);
+        registerSecret(chosen.token);
+        return chosen.token;
+      })(),
+      kmsKeyUsable: async (keyId) => {
+        try {
+          const answer = await sshExec(host, kmsKeyStateCommand("seal", keyId), {
+            sudo: true,
+            address,
+          });
+          return answer.code === 0 && kmsKeyState(answer.stdout) === "Active";
+        } catch {
+          return false;
+        }
+      },
+      keepPassword: async (role, password) => {
+        registerSecret(password);
+        const places = restorePasswordPlaces(role);
+        for (const path of places.host) {
+          expectSuccess(
+            await sshExec(host, secretInstallCommand(path, "1000:1000"), {
+              sudo: true,
+              address,
+              stdin: password,
+              secretOutput: true,
+            }),
+            `storing the ${role} password`,
+          );
+        }
+        if (places.workstation) {
+          const file = workstationRoleSecretFile(host.name, role);
+          mkdirSync(dirname(file), { recursive: true, mode: 0o700 });
+          writeFileSync(file, password, { mode: 0o600 });
+          chmodSync(file, 0o600);
+        }
+      },
+      setHostEnv: async (key, value) => {
+        expectSuccess(
+          await sshExec(host, hostEnvSetCommand(key, value), { sudo: true, address }),
+          `host.env ${key}`,
+        );
+      },
+      startExecutors: async () => {
+        expectSuccess(
+          await sshExec(host, restoreStartCommand(), { sudo: true, address, timeoutMs: 300_000 }),
+          "starting api and provisioner from host.env",
+        );
+        return expectSuccess(
+          await sshExec(host, apiBuildCommand(), { sudo: true, address }),
+          "reading the API's build",
+        ).stdout.trim();
+      },
+      organizationId,
+      log: (line) => {
+        log.info(`${host.name}: ${line}`);
+      },
+    },
+    { store, prefix, trust },
+  );
+  try {
+    const restored = await restoreToVerifying(target);
+    registerSecret(restored.rootToken);
+    try {
+      // Two of the old world's credentials the workstation holds: both refused.
+      const oldRoot = await new OpenBaoAdmin(target.openbao.target, pairRootToken)
+        .lookupSelf()
+        .then(() => "accepted")
+        .catch(() => "refused");
+      const oldPassword = await (async () => {
+        const pool = createPool(
+          { ...target.postgres.superuser, user: "maintenance", password: oldMaintenance },
+          { max: 1 },
+        );
+        try {
+          await pool.query("SELECT 1");
+          return "accepted";
+        } catch {
+          return "refused";
+        } finally {
+          await pool.end();
+        }
+      })();
+      const handoff: RestoreHandoff = {
+        pairId: restored.manifest.pairId,
+        source: command.source,
+        restoreStartedAt: restoreStartedAt.toISOString(),
+        backendIncarnation: restored.backendIncarnation,
+        hostInstanceId: restored.hostInstanceId,
+        schemaRevision: restored.manifest.schemaRevision,
+        captureStartedAt: restored.manifest.captureStartedAt,
+        startedAt: restored.startedAt.toISOString(),
+        restoredAt: restored.restoredAt.toISOString(),
+        given: {
+          ...restored.given,
+          old_credentials_refused:
+            oldRoot === "refused" && oldPassword === "refused"
+              ? {
+                  state: "ok",
+                  observed: "the pair's root token and the old maintenance password refused",
+                }
+              : {
+                  state: "failed",
+                  observed: `root token ${oldRoot}, maintenance password ${oldPassword}`,
+                },
+        },
+      };
+      mkdirSync(dirname(files.state), { recursive: true, mode: 0o700 });
+      writeFileSync(files.token, restored.rootToken, { mode: 0o600 });
+      chmodSync(files.token, 0o600);
+      writeFileSync(files.state, JSON.stringify(handoff, null, 2), { mode: 0o600 });
+      log.info(
+        `${host.name}: pair ${handoff.pairId} restored; closed + verifying; incarnation ${handoff.backendIncarnation}`,
+      );
+      log.info(`${host.name}: measured (FR-1.69): ${JSON.stringify(restored.measurements)}`);
+      log.info(
+        `${host.name}: next: ops reset-account for the owner, the journey through tunnel verify, then restore-verify`,
+      );
+    } finally {
+      await restored.pool.end();
+    }
+    return 0;
+  } finally {
+    await target.close();
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+/**
+ * P-124 steps 8–9 on a host: the report from both stores (the journey run by
+ * the operator, or confirmed by the owner who ran it in a browser); with
+ * --open, gate open re-checks what may have changed since, then the
+ * restore's root token is revoked and its copy removed.
+ */
+async function runRestoreVerify(
+  host: HostEntry,
+  command: { confirmMembers: number; journey: "run" | "owner-confirmed"; open: boolean },
+  address: Address,
+  log: Logger,
+): Promise<number> {
+  const files = restoreHandoffFiles(host.name);
+  if (!existsSync(files.state) || !existsSync(files.token)) {
+    throw new Error(`restore-verify: no restore of ${host.name} to verify (${files.state})`);
+  }
+  const handoff = JSON.parse(readFileSync(files.state, "utf8")) as RestoreHandoff;
+  const token = readFileSync(files.token, "utf8").trim();
+  registerSecret(token);
+  const { restoreVerify, recheckForOpen } = await import("@mykey/ops");
+  const { openGate } = await import("@mykey/operations/operator");
+  const { OpenBaoAdmin } = await import("@mykey/openbao/admin");
+  const { createPool } = await import("@mykey/db");
+  const dir = mkdtempSync(join(tmpdir(), "mykey-restore-verify-"));
+  const pgTunnel = await openTunnel(host, REMOTE.postgres);
+  const baoTunnel = await openTunnel(host, REMOTE.openbao);
+  try {
+    const caCertPath = await localCaCert(host, address, dir);
+    const pool = createPool(
+      {
+        host: "127.0.0.1",
+        port: pgTunnel.localPort,
+        database: "postgres",
+        user: "postgres",
+        password: await hostSecret(host, HOST_SECRETS.postgresSuperuser, address),
+        caCertPath,
+      },
+      { max: 2 },
+    );
+    try {
+      const admin = new OpenBaoAdmin(
+        { url: `https://127.0.0.1:${String(baoTunnel.localPort)}`, caCertPath },
+        token,
+      );
+      const releaseBuild = expectSuccess(
+        await sshExec(host, apiBuildCommand(), { sudo: true, address }),
+        "reading the API's build",
+      ).stdout.trim();
+      const deps = {
+        pool,
+        admin,
+        host: host.name,
+        expect: {
+          hostInstanceId: handoff.hostInstanceId,
+          backendIncarnation: handoff.backendIncarnation,
+          releaseBuild,
+        },
+        origin: { kind: "restore" as const, pairId: handoff.pairId },
+        schemaRevision: handoff.schemaRevision,
+        restoreStartedAt: new Date(handoff.restoreStartedAt),
+        given: handoff.given,
+        confirmMembers: command.confirmMembers,
+        boundCidrs: HOST_BOUND_CIDRS,
+      };
+      const confirmed = { state: "ok" as const, observed: "owner confirmed (--owner-confirmed)" };
+      const report = await restoreVerify(deps, {
+        checks:
+          command.journey === "run"
+            ? await hostRestoreJourney(host, handoff, pool, caCertPath, log)
+            : {
+                journey_owner_enrolled: confirmed,
+                journey_reveal_digest: confirmed,
+                journey_mutation_refused: confirmed,
+              },
+      });
+      writeFileSync(files.report, JSON.stringify(report, null, 2));
+      const failed = report.checks.filter((c) => c.state !== "ok");
+      const { restoreMeasurements } = await import("@mykey/ops");
+      const measured = restoreMeasurements({
+        captureStartedAt: handoff.captureStartedAt,
+        startedAt: new Date(handoff.startedAt),
+        restoredAt: new Date(handoff.restoredAt),
+        report: { createdAt: report.createdAt, failed: failed.length },
+      });
+      writeFileSync(
+        files.measurements,
+        JSON.stringify({ host: host.name, pairId: handoff.pairId, ...measured }, null, 2),
+      );
+      log.info(`${host.name}: measured (FR-1.69): ${JSON.stringify(measured)}`);
+      log.info(
+        `${host.name}: report ${files.report}: ${String(report.checks.length - failed.length)}/${String(report.checks.length)} ok, members ${String(report.members)}`,
+      );
+      for (const c of failed) log.error(`${host.name}:   ${c.id}: ${c.state} (${c.observed})`);
+      if (!command.open) return failed.length === 0 ? 0 : 1;
+      const opened = await openGate({
+        writer: hostGateWriter(host, address),
+        pool,
+        expect: deps.expect,
+        report,
+        kind: "restore",
+        now: () => new Date(),
+        recheck: () => recheckForOpen(deps),
+      });
+      if (!opened.ok) {
+        log.error(`${host.name}: gate open refused: ${opened.cause}`);
+        return 1;
+      }
+      await admin.revokeSelf();
+      rmSync(files.token, { force: true });
+      rmSync(files.state, { force: true });
+      expectSuccess(
+        await sshExec(host, `rm -f /var/lib/mykey/restore-state.json`, { sudo: true, address }),
+        "removing the restore state",
+      );
+      log.info(`${host.name}: ${JSON.stringify(opened.record)}; the restore's root token revoked`);
+      return 0;
+    } finally {
+      await pool.end();
+    }
+  } finally {
+    await pgTunnel.close();
+    await baoTunnel.close();
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+// ------------------------------------------------------------------- deploy (Run 6.9)
+
+const DEPLOY_STATE_FILE = "/var/lib/mykey/deploy-state.json";
+
+/** What a deploy keeps on the workstation: the gate before it, its report, the journey's secret. */
+export function deployFiles(
+  host: HostName,
+  home: string = homedir(),
+): { report: string; journey: string; journeyChecks: string } {
+  const directory = join(home, ".mykey", "secrets", "hosts", host);
+  return {
+    report: join(directory, "deploy-report.json"),
+    journey: join(directory, "deploy-journey.json"),
+    // Kept until gate_open, so a deploy resumed at report still has them.
+    journeyChecks: join(directory, "deploy-journey-checks.json"),
+  };
+}
+
+/** RFC 4648 base32 (the TOTP seed's form) to bytes. */
+export function base32Bytes(text: string): Uint8Array {
+  const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
+  let bits = 0;
+  let value = 0;
+  const out: number[] = [];
+  for (const char of text.replace(/=+$/, "").toUpperCase()) {
+    const index = alphabet.indexOf(char);
+    if (index < 0) throw new Error("base32: unexpected character");
+    value = (value << 5) | index;
+    bits += 5;
+    if (bits >= 8) {
+      out.push((value >>> (bits - 8)) & 0xff);
+      bits -= 8;
+    }
+  }
+  return Uint8Array.from(out);
+}
+
+/** One HTTPS request to the API through a local tunnel, with the host's CA and its origin. */
+async function apiThrough(
+  port: number,
+  ca: string,
+  origin: string,
+  method: string,
+  path: string,
+  init: { body?: unknown; cookie?: string; headers?: Record<string, string> } = {},
+): Promise<Response> {
+  const { request } = await import("node:https");
+  const body = init.body === undefined ? undefined : JSON.stringify(init.body);
+  return new Promise((done, fail) => {
+    const req = request(
+      {
+        host: "127.0.0.1",
+        port,
+        method,
+        path,
+        ca,
+        headers: {
+          origin,
+          ...(body === undefined ? {} : { "content-type": "application/json" }),
+          ...(init.cookie === undefined ? {} : { cookie: init.cookie }),
+          ...init.headers,
+        },
+      },
+      (res) => {
+        const chunks: Buffer[] = [];
+        res.on("data", (chunk: Buffer) => chunks.push(chunk));
+        res.on("end", () => {
+          const headers = new Headers();
+          for (const [k, v] of Object.entries(res.headers)) {
+            for (const one of Array.isArray(v) ? v : v === undefined ? [] : [v])
+              headers.append(k, one);
+          }
+          done(new Response(Buffer.concat(chunks), { status: res.statusCode ?? 0, headers }));
+        });
+      },
+    );
+    req.on("error", fail);
+    req.end(body);
+  });
+}
+
+function sessionPairOf(response: Response): string | null {
+  for (const cookie of response.headers.getSetCookie()) {
+    const pair = cookie.split(";")[0] ?? "";
+    if (pair.startsWith("__Secure-better-auth.session_token=") && pair.length > 40) return pair;
+  }
+  return null;
+}
+
+/**
+ * P-128: `deploy --release <dir>` promotes a release built by
+ * `pnpm run host:release` through the closed gate: verify, load, close, migrate,
+ * start, the owner's journey through the verification listener, the report,
+ * open. `--resume` continues a stopped deploy; a rollback is a deploy of the
+ * previous release.
+ */
+async function runDeployCommand(
+  host: HostEntry,
+  command: {
+    release: string;
+    resume: boolean;
+    installOnly: boolean;
+    stayClosed: boolean;
+    images: string[];
+  },
+  address: Address,
+  log: Logger,
+): Promise<number> {
+  const { releaseSchema } = await import("../infra/release/release-schema.ts");
+  const { deployPlan, runDeploy } = await import("./host-deploy.ts");
+  const { createPool } = await import("@mykey/db");
+  const { openGate } = await import("@mykey/operations/operator");
+  const { OpenBaoAdmin } = await import("@mykey/openbao/admin");
+  const { codeAt, stepAt } = await import("@mykey/auth");
+  const { deployJourney, deployVerify } = await import("@mykey/ops");
+  const dir = resolve(command.release);
+  const release = releaseSchema.parse(JSON.parse(readFileSync(join(dir, "release.json"), "utf8")));
+  const build = release.commit.slice(0, 12);
+  const files = deployFiles(host.name);
+  const remote = { sudo: true, address } as const;
+  const hostEnv = async () =>
+    parseHostEnv(
+      expectSuccess(await sshExec(host, `cat ${REMOTE.hostEnv}`, { address }), "reading host.env")
+        .stdout,
+    );
+  const runningBuild = async () => (await sshExec(host, apiBuildCommand(), remote)).stdout.trim();
+  const tmp = mkdtempSync(join(tmpdir(), "mykey-deploy-"));
+  const caCertPath = join(tmp, "ca.crt");
+  // Read when a step first needs it: a fresh host has no CA until its first `up`.
+  const ensureCa = async (): Promise<string> => {
+    if (!existsSync(caCertPath)) {
+      writeFileSync(
+        caCertPath,
+        expectSuccess(await sshExec(host, `cat ${REMOTE.caCert}`, { address }), "reading the CA")
+          .stdout,
+      );
+    }
+    return caCertPath;
+  };
+  const withMaintenance = async <T>(work: (pool: ReturnType<typeof createPool>) => Promise<T>) => {
+    const tunnel = await openTunnel(host, REMOTE.postgres);
+    const pool = createPool(
+      {
+        host: "127.0.0.1",
+        port: tunnel.localPort,
+        database: "postgres",
+        user: "maintenance",
+        password: localSecret(workstationRoleSecretFile(host.name, "maintenance")),
+        caCertPath: await ensureCa(),
+      },
+      { max: 2 },
+    );
+    try {
+      return await work(pool);
+    } finally {
+      await pool.end();
+      await tunnel.close();
+    }
+  };
+  const withAdmin = async <T>(work: (admin: InstanceType<typeof OpenBaoAdmin>) => Promise<T>) => {
+    const custody = custodyCopyPath(host.name);
+    const token = (JSON.parse(readFileSync(custody, "utf8")) as { root_token?: unknown })
+      .root_token;
+    if (typeof token !== "string" || token === "")
+      throw new Error(`${custody} holds no root token`);
+    registerSecret(token);
+    const tunnel = await openTunnel(host, REMOTE.openbao);
+    try {
+      return await work(
+        new OpenBaoAdmin(
+          { url: `https://127.0.0.1:${String(tunnel.localPort)}`, caCertPath: await ensureCa() },
+          token,
+        ),
+      );
+    } finally {
+      await tunnel.close();
+    }
+  };
+  const binding = async () => {
+    const env = await hostEnv();
+    const hostInstanceId = env.MYKEY_HOST_INSTANCE_ID;
+    const backendIncarnation = env.MYKEY_BACKEND_INCARNATION;
+    if (hostInstanceId === undefined || backendIncarnation === undefined) {
+      throw new Error("host.env holds no host instance id or incarnation");
+    }
+    return { hostInstanceId, backendIncarnation, releaseBuild: build };
+  };
+  // Every gate write of a deploy binds the release's build, not the one still running.
+  const gateCommand = (action: "open" | "close", verifying: boolean) => ({
+    action,
+    releaseBuild: build,
+    ...(verifying ? { verifying: true as const } : {}),
+  });
+
+  try {
+    const build0 = await runningBuild();
+    const current = {
+      build: build0,
+      // A host with no API container is fresh (the drill host before its restore,
+      // Run 6.8): no database to read yet, and no migration applied.
+      lastMigration:
+        build0 === ""
+          ? ""
+          : await withMaintenance(async (pool) =>
+              (
+                (
+                  await pool.query<{ name: string }>(
+                    "SELECT name FROM meta.schema_migration ORDER BY name DESC LIMIT 1",
+                  )
+                ).rows[0]?.name ?? ""
+              ).replace(/\.sql$/, ""),
+            ),
+    };
+    const related =
+      current.build === "" ||
+      [
+        ["merge-base", "--is-ancestor", current.build, release.commit],
+        ["merge-base", "--is-ancestor", release.commit, current.build],
+      ].some((args) => spawnSync("git", args, { stdio: "ignore" }).status === 0);
+    const plan = deployPlan(
+      current,
+      release,
+      { related, imageIds: command.images },
+      { installOnly: command.installOnly, stayClosed: command.stayClosed },
+    );
+    if ("refused" in plan) {
+      log.error(`${host.name}: deploy refused: ${plan.refused}`);
+      return 1;
+    }
+    log.info(
+      `${host.name}: deploy ${release.version} (${build}) over ${current.build || "nothing"}: ${plan.steps.join(", ")}`,
+    );
+
+    await runDeploy(
+      {
+        state: {
+          read: async () => {
+            const text = (
+              await sshExec(
+                host,
+                `if test -s ${DEPLOY_STATE_FILE}; then cat ${DEPLOY_STATE_FILE}; fi`,
+                remote,
+              )
+            ).stdout.trim();
+            return text === ""
+              ? null
+              : (JSON.parse(text) as import("./host-deploy.ts").DeployState);
+          },
+          write: async (state) => {
+            expectSuccess(
+              await sshExec(
+                host,
+                state === null
+                  ? `rm -f ${DEPLOY_STATE_FILE}`
+                  : `install -d -m 0755 /var/lib/mykey && cat > ${DEPLOY_STATE_FILE}.tmp && mv -f ${DEPLOY_STATE_FILE}.tmp ${DEPLOY_STATE_FILE}`,
+                { ...remote, ...(state === null ? {} : { stdin: JSON.stringify(state) }) },
+              ),
+              "the deploy state",
+            );
+          },
+        },
+        step: async (step) => {
+          const started = Date.now();
+          switch (step) {
+            case "verify_release": {
+              const sums = readFileSync(join(dir, "SHA256SUMS"), "utf8").trim().split("\n");
+              for (const line of sums) {
+                const [sum, file] = line.split("  ");
+                if (sum === undefined || file === undefined)
+                  throw new Error("SHA256SUMS: bad line");
+                const actual = createHash("sha256")
+                  .update(readFileSync(join(dir, file)))
+                  .digest("hex");
+                if (actual !== sum) throw new Error(`release: ${file} does not match SHA256SUMS`);
+              }
+              for (const image of release.images) {
+                if (!sums.includes(`${image.archiveSha256}  ${image.archive}`)) {
+                  throw new Error(
+                    `release: ${image.archive} is not the archive release.json lists`,
+                  );
+                }
+              }
+              break;
+            }
+            case "load_images": {
+              for (const image of release.images) {
+                const inspect = `docker image inspect --format '{{.Id}}' ${image.imageId}`;
+                if ((await sshExec(host, inspect, remote)).code !== 0) {
+                  await runImage(host, image.name, join(dir, image.archive), { address, log });
+                }
+                const loaded = expectSuccess(
+                  await sshExec(host, inspect, remote),
+                  `inspect ${image.name}`,
+                ).stdout.trim();
+                if (loaded !== image.imageId) throw new Error(`${image.name}: loaded ${loaded}`);
+                expectSuccess(
+                  await sshExec(
+                    host,
+                    hostEnvSetCommand(imageEnvKey(image.name), image.imageId),
+                    remote,
+                  ),
+                  `host.env ${imageEnvKey(image.name)}`,
+                );
+              }
+              break;
+            }
+            case "gate_close": {
+              const v2 = (await hostEnv()).MYKEY_BACKEND_INCARNATION !== undefined;
+              const code = await runGate(host, gateCommand("close", v2), address, log);
+              if (code !== 0) throw new Error("gate close failed");
+              break;
+            }
+            case "migrate": {
+              await runDbInit(host, address, log);
+              const { backendIncarnation } = await binding();
+              if (openBaoValuesFrom(host.name, await hostEnv()) !== null) {
+                // The copies where none is: never over a different one (that is a restore's to settle).
+                await withAdmin(async (admin) => {
+                  for (const namespace of ["", ...(await admin.listNamespaces())]) {
+                    if ((await admin.readIncarnation(namespace)) === null) {
+                      await admin.writeIncarnation(namespace, backendIncarnation);
+                    }
+                  }
+                });
+              }
+              // A host converted from a v1 record: closed + verifying in v2 now.
+              const record = await sshExec(host, `cat ${GATE_FILE}`, remote);
+              if (record.code !== 0 || !record.stdout.includes('"version":2')) {
+                const code = await runGate(host, gateCommand("close", true), address, log);
+                if (code !== 0) throw new Error("gate close (v2) failed");
+              }
+              break;
+            }
+            case "start": {
+              await runUp(host, address, log);
+              const deadline = Date.now() + 240_000;
+              while ((await runningBuild()) !== build) {
+                if (Date.now() > deadline) throw new Error(`the API does not run ${build}`);
+                await new Promise((r) => setTimeout(r, 5_000));
+              }
+              break;
+            }
+            case "journey": {
+              // The listener serves only a record bound to the build that runs: written
+              // here, so a deploy resumed after an older record still verifies.
+              if ((await runningBuild()) !== build)
+                throw new Error(`the API does not run ${build}`);
+              const code = await runGate(host, gateCommand("close", true), address, log);
+              if (code !== 0) throw new Error("gate close (verifying) failed");
+              const env = await hostEnv();
+              const origin = env.MYKEY_BASE_URL;
+              if (origin === undefined) throw new Error("host.env holds no MYKEY_BASE_URL");
+              const ownerDir = join(homedir(), ".mykey", "secrets", "hosts", host.name);
+              const password = readFileSync(join(ownerDir, "owner-password"), "utf8").trim();
+              const seed = readFileSync(join(ownerDir, "owner-totp-seed"), "utf8").trim();
+              registerSecret(password);
+              registerSecret(seed);
+              const ca = readFileSync(await ensureCa(), "utf8");
+              const tunnel = await openTunnel(host, REMOTE_API_VERIFY);
+              try {
+                const request = (
+                  method: string,
+                  path: string,
+                  init: Parameters<typeof apiThrough>[5] = {},
+                ) => apiThrough(tunnel.localPort, ca, origin, method, path, init);
+                const saved = existsSync(files.journey)
+                  ? (JSON.parse(readFileSync(files.journey, "utf8")) as {
+                      path: string;
+                      sha256: string;
+                      organizationId: string;
+                    })
+                  : null;
+                const owner = { email: `owner@mykey-${host.name}.invalid`, password };
+                const totp = async () => {
+                  const lastFile = join(ownerDir, "owner-totp-last-step");
+                  const last = existsSync(lastFile)
+                    ? Number(readFileSync(lastFile, "utf8").trim())
+                    : 0;
+                  while (stepAt(new Date()) <= last) await new Promise((r) => setTimeout(r, 1_000));
+                  const step = stepAt(new Date());
+                  writeFileSync(lastFile, `${String(step)}\n`, { mode: 0o600 });
+                  return { code: codeAt(base32Bytes(seed), step) };
+                };
+                // The first deploy picks the first secret it can list and records its path.
+                const target: { path: string; organizationId: string } =
+                  saved ?? (await firstSecret(request, owner, totp));
+                const journey = await deployJourney({
+                  request,
+                  cookieOf: sessionPairOf,
+                  owner,
+                  totp,
+                  reveal: { path: target.path, sha256: saved?.sha256 ?? null },
+                  mutation: {
+                    method: "POST",
+                    path: `/v1/organizations/${target.organizationId}/projects`,
+                    body: { name: "deploy-journey" },
+                  },
+                });
+                if (journey.revealedSha256 !== null) {
+                  writeFileSync(
+                    files.journey,
+                    JSON.stringify({ ...target, sha256: journey.revealedSha256 }, null, 2),
+                    { mode: 0o600 },
+                  );
+                }
+                writeFileSync(files.journeyChecks, JSON.stringify(journey.checks), { mode: 0o600 });
+              } finally {
+                await tunnel.close();
+              }
+              break;
+            }
+            case "report": {
+              const journeyFile = files.journeyChecks;
+              const checks = existsSync(journeyFile)
+                ? (JSON.parse(readFileSync(journeyFile, "utf8")) as Record<
+                    string,
+                    { state: "ok" | "failed" | "unknown"; observed: string }
+                  >)
+                : {};
+              // The record this opening replaces: the deploy's own closed one.
+              const current = await sshExec(host, `cat ${GATE_FILE}`, remote);
+              const previous = current.code === 0 ? current.stdout : null;
+              const expect = await binding();
+              const report = await withMaintenance((pool) =>
+                withAdmin((admin) =>
+                  deployVerify(
+                    {
+                      pool,
+                      admin,
+                      host: host.name,
+                      expect,
+                      origin: gateOriginOf(previous, expect.hostInstanceId),
+                      schemaRevision: release.migrations.last,
+                      previousGate: previous,
+                    },
+                    { checks },
+                  ),
+                ),
+              );
+              writeFileSync(files.report, JSON.stringify(report, null, 2));
+              const failed = report.checks.filter((c) => c.state !== "ok");
+              for (const c of failed)
+                log.error(`${host.name}:   ${c.id}: ${c.state} (${c.observed})`);
+              if (failed.length > 0)
+                throw new Error(
+                  `the report has ${String(failed.length)} checks not ok (${files.report})`,
+                );
+              break;
+            }
+            case "gate_open": {
+              const report = JSON.parse(readFileSync(files.report, "utf8")) as unknown;
+              const expect = await binding();
+              const opened = await withMaintenance((pool) =>
+                openGate({
+                  writer: hostGateWriter(host, address),
+                  pool,
+                  expect,
+                  report,
+                  kind: "deploy",
+                  now: () => new Date(),
+                }),
+              );
+              if (!opened.ok) throw new Error(`gate open refused: ${opened.cause}`);
+              log.info(`${host.name}: ${JSON.stringify(opened.record)}`);
+              rmSync(files.journeyChecks, { force: true });
+              break;
+            }
+          }
+          log.info(
+            `${host.name}: ${step} done (${String(Math.round((Date.now() - started) / 1000))} s)`,
+          );
+        },
+      },
+      release,
+      plan,
+      { resume: command.resume },
+    );
+    return 0;
+  } finally {
+    rmSync(tmp, { recursive: true, force: true });
+  }
+}
+
+/** The first secret the owner can list: the journey's reveal from now on. */
+async function firstSecret(
+  request: (
+    method: string,
+    path: string,
+    init?: { body?: unknown; cookie?: string; headers?: Record<string, string> },
+  ) => Promise<Response>,
+  owner: { email: string; password: string },
+  totp: () => Promise<{ code: string }>,
+): Promise<{ path: string; organizationId: string }> {
+  const signedIn = await request("POST", "/v1/auth/sign-in/email", { body: owner });
+  const first = sessionPairOf(signedIn);
+  if (first === null) throw new Error("journey: sign-in failed");
+  const verified = await request("POST", "/v1/auth/totp/verify", {
+    body: { code: (await totp()).code },
+    cookie: first,
+  });
+  const cookie = sessionPairOf(verified);
+  if (cookie === null) throw new Error("journey: TOTP failed");
+  try {
+    const list = async <T>(path: string, key: string): Promise<T[]> => {
+      const answer = await request("GET", path, { cookie });
+      if (answer.status !== 200)
+        throw new Error(`journey: ${path} answered ${String(answer.status)}`);
+      return ((await answer.json()) as Record<string, T[] | undefined>)[key] ?? [];
+    };
+    for (const org of await list<{ id: string }>("/v1/organizations", "organizations")) {
+      const o = `/v1/organizations/${org.id}`;
+      for (const project of await list<{ id: string }>(`${o}/projects`, "projects")) {
+        const p = `${o}/projects/${project.id}`;
+        for (const env of await list<{ id: string }>(`${p}/environments`, "environments")) {
+          const e = `${p}/environments/${env.id}`;
+          const [secret] = await list<{ name: string }>(`${e}/secrets`, "secrets");
+          if (secret !== undefined) {
+            return { path: `${e}/secrets/${secret.name}/reveal`, organizationId: org.id };
+          }
+        }
+      }
+    }
+    throw new Error("journey: the owner can list no secret to reveal");
+  } finally {
+    await request("POST", "/v1/auth/sign-out", { body: {}, cookie });
+  }
+}
+
+/**
+ * Run 6.8 (P-124): `restore-verify --journey` — the operator runs the owner's
+ * return through the verification listener, as restore.md's "Between 7 and 8":
+ * the newest reset link issued since the restore began (`ops reset-account
+ * --kind mfa`, ~/.mykey/out), a new password and authenticator, sign-in,
+ * the reveal of the secret the source's deploy journey recorded (its digest
+ * must be the same), a write that must answer quarantined, sign-out. The new
+ * password and TOTP seed go to this host's custody.
+ */
+async function hostRestoreJourney(
+  host: HostEntry,
+  handoff: RestoreHandoff,
+  pool: { query: (sql: string) => Promise<{ rows: unknown[] }> },
+  caCertPath: string,
+  log: Logger,
+): Promise<Record<string, { state: "ok" | "failed" | "unknown"; observed: string }>> {
+  const { verifyJourney } = await import("@mykey/ops");
+  const { codeAt, stepAt } = await import("@mykey/auth");
+  if (handoff.source === undefined)
+    throw new Error("restore-verify --journey: the hand-off names no source");
+  const sourceJourney = deployFiles(handoff.source).journey;
+  if (!existsSync(sourceJourney)) throw new Error(`restore-verify --journey: no ${sourceJourney}`);
+  const target = JSON.parse(readFileSync(sourceJourney, "utf8")) as {
+    path: string;
+    sha256: string;
+    organizationId: string;
+  };
+  const outDir = join(homedir(), ".mykey", "out");
+  const links = (existsSync(outDir) ? readdirSync(outDir) : [])
+    .filter((name) => name.endsWith("-reset-link"))
+    .map((name) => join(outDir, name))
+    .filter((file) => statSync(file).mtimeMs >= Date.parse(handoff.restoreStartedAt))
+    .sort();
+  const newest = links.at(-1);
+  if (newest === undefined) {
+    throw new Error(
+      "restore-verify --journey: no reset link since the restore began (ops reset-account --kind mfa)",
+    );
+  }
+  const resetToken = /#t=([^&\s]+)/.exec(readFileSync(newest, "utf8"))?.[1];
+  if (resetToken === undefined)
+    throw new Error(`restore-verify --journey: ${newest} holds no token`);
+  registerSecret(resetToken);
+  const ownerRow = (
+    await pool.query(
+      `SELECT u.email FROM app.membership m JOIN auth."user" u ON u.id = m.user_id
+        WHERE m.role = 'owner' AND m.state = 'active' AND m.organization_id = '${target.organizationId.replace(/[^0-9a-f-]/g, "")}'`,
+    )
+  ).rows[0] as { email?: string } | undefined;
+  if (ownerRow?.email === undefined)
+    throw new Error("restore-verify --journey: no active owner in the restored data");
+  const env = parseHostEnv(
+    expectSuccess(await sshExec(host, `cat ${REMOTE.hostEnv}`), "reading host.env").stdout,
+  );
+  const origin = env.MYKEY_BASE_URL;
+  if (origin === undefined) throw new Error("host.env holds no MYKEY_BASE_URL");
+  const { randomBytes } = await import("node:crypto");
+  const newPassword = `Restored-${randomBytes(18).toString("base64url")}`;
+  registerSecret(newPassword);
+  const ca = readFileSync(caCertPath, "utf8");
+  const custody = join(homedir(), ".mykey", "secrets", "hosts", host.name);
+  mkdirSync(custody, { recursive: true, mode: 0o700 });
+  const tunnel = await openTunnel(host, REMOTE_API_VERIFY);
+  try {
+    let lastStep = 0;
+    const journey = await verifyJourney({
+      request: (method, path, init) => apiThrough(tunnel.localPort, ca, origin, method, path, init),
+      cookieOf: sessionPairOf,
+      owner: { email: ownerRow.email, resetToken, newPassword },
+      totp: async (secret) => {
+        registerSecret(secret);
+        // Each step verifies once: wait for a step not used yet.
+        while (stepAt(new Date()) <= lastStep) await new Promise((r) => setTimeout(r, 1_000));
+        lastStep = stepAt(new Date());
+        writeFileSync(join(custody, "owner-password"), `${newPassword}\n`, { mode: 0o600 });
+        writeFileSync(join(custody, "owner-totp-seed"), `${secret}\n`, { mode: 0o600 });
+        writeFileSync(join(custody, "owner-totp-last-step"), `${String(lastStep)}\n`, {
+          mode: 0o600,
+        });
+        return { code: codeAt(base32Bytes(secret), lastStep) };
+      },
+      reveal: { path: target.path, sha256: target.sha256 },
+      mutation: {
+        method: "POST",
+        path: `/v1/organizations/${target.organizationId}/projects`,
+        body: { name: "restore-journey" },
+      },
+    });
+    log.info(`${host.name}: journey ${JSON.stringify(journey.checks)}`);
+    return journey.checks;
+  } finally {
+    await tunnel.close();
+  }
+}
+
+/** Run 6.7 (P-123): a local port to the verification listener until Ctrl-C. */
+async function runVerifyTunnel(host: HostEntry, log: Logger): Promise<number> {
+  const tunnel = await openTunnel(host, REMOTE_API_VERIFY);
+  log.info(
+    `${host.name}: the verification listener is at https://127.0.0.1:${String(tunnel.localPort)} (Ctrl-C ends it)`,
+  );
+  await new Promise<void>((resolveStop) => {
+    process.once("SIGINT", () => {
+      resolveStop();
+    });
+  });
+  await tunnel.close();
+  return 0;
+}
+
 async function runQuiesce(host: HostEntry, address: Address, log: Logger): Promise<number> {
-  await runGate(host, "close", address, log);
+  await runGate(host, { action: "close" }, address, log);
   const steps = quiesceCommands();
   expectSuccess(await sshExec(host, steps.stop, { sudo: true, address }), "stopping the executors");
   expectSuccess(

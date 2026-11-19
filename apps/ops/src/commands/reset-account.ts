@@ -1,3 +1,4 @@
+import { LIMITS } from "@mykey/contracts";
 // ops reset-account --email <address> --kind password|mfa   (Run 3.6, D-30)
 //
 // Blocks the account, ends its sessions, supersedes earlier links and issues a
@@ -24,7 +25,7 @@ export const resetAccountCommand: OpsCommand = {
       return EXIT.failed;
     }
     const keys = loadAuthKeys(keysDirectory);
-    const pool = createPool(database, { max: 2 });
+    const pool = createPool(database, { max: LIMITS.db.opsPool });
     try {
       const result = await initiateReset(
         { pool, keys, throttle: createThrottle({ pool, ring: keys.rateLimit }) },

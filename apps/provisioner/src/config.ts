@@ -13,6 +13,10 @@ export interface ProvisionerConfig {
   secretsDirectory: string;
   gatePath: string;
   hostInstanceId: string;
+  /** Run 6.7 (P-122): the incarnation OpenBao and the gate record must name. */
+  backendIncarnation: string;
+  /** Run 6.7 (P-122): the build the gate record must name (MYKEY_BUILD of the image). */
+  releaseBuild: string;
   sweepSeconds: number;
   /** Written after every sweep tick; the health check reads its time. */
   stateFile: string;
@@ -59,6 +63,8 @@ export function configFromEnvironment(env: NodeJS.ProcessEnv): ProvisionerConfig
     secretsDirectory: env.MYKEY_PROVISIONER_CREDENTIALS_DIR ?? "/run/mykey/secrets",
     gatePath: required(env, "MYKEY_GATE_PATH"),
     hostInstanceId: required(env, "MYKEY_HOST_INSTANCE_ID"),
+    backendIncarnation: required(env, "MYKEY_BACKEND_INCARNATION"),
+    releaseBuild: required(env, "MYKEY_BUILD"),
     sweepSeconds,
     stateFile: env.MYKEY_PROVISIONER_STATE_FILE ?? "/tmp/mykey-provisioner/last-sweep",
   };

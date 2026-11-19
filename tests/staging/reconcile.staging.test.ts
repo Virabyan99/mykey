@@ -11,15 +11,25 @@
 //
 // Then: the environment is blocked except for reveals of other keys; the probe
 // raises operations_unresolved; reconcile-operation without exclusion exits 3;
-// quiesce, reconcile with exclusion (exit 0), resume, gate open; the key
-// changes again with its new tag; the alert clears. Everything is undone in
-// `finally` (OpenBao unpaused, resume, gate open).
+// quiesce, reconcile with exclusion (exit 0), resume, then a redeploy of the
+// running release (a v2 gate opens only with a report); the key changes again
+// with its new tag; the alert clears. Everything is undone in `finally`
+// (OpenBao unpaused, resume, redeploy). Session 6 gate: each attempt starts in
+// a fresh minute and runs its loops for 1 s before the pause, under Run 6.3's
+// 120 requests a minute per session.
 import { spawnSync } from "node:child_process";
 import { randomBytes, randomUUID } from "node:crypto";
 import { writeFileSync } from "node:fs";
 import { setTimeout as sleep } from "node:timers/promises";
 import { beforeAll, describe, expect, it } from "vitest";
-import { expectSuccess, hostStatus, loadHosts, sshExec } from "../harness/staging.ts";
+import {
+  expectSuccess,
+  hostStatus,
+  loadHosts,
+  nextMinute,
+  sshExec,
+  stagingRelease,
+} from "../harness/staging.ts";
 import { publicRequest, stagingOwnerSession, type PublicAnswer } from "../harness/staging-owner.ts";
 
 const host = loadHosts().staging;
@@ -58,10 +68,10 @@ function send(method: string, path: string, body: unknown): Promise<PublicAnswer
 }
 
 /** `scripts/host.ts staging …` as a child process. */
-function hostTs(args: string[]): { code: number | null; out: string } {
+function hostTs(args: string[], timeoutMs = 600_000): { code: number | null; out: string } {
   const result = spawnSync(process.execPath, ["scripts/host.ts", "staging", ...args], {
     encoding: "utf8",
-    timeout: 600_000,
+    timeout: timeoutMs,
     env: { ...process.env, MSYS_NO_PATHCONV: "1" },
   });
   return { code: result.status, out: `${result.stdout}${result.stderr}` };
@@ -151,6 +161,7 @@ describe("the uncertainty drill (AC-1.16)", () => {
       // A holder: the loops below set it from their own closures.
       const found: { op: { operationId: string; name: string } | null } = { op: null };
       for (let attempt = 1; attempt <= 3 && found.op === null; attempt += 1) {
+        await nextMinute();
         const keys: [string, Current][] = [];
         for (let i = 0; i < 12; i += 1) {
           const name = `S4_DRILL_${randomBytes(4).toString("hex").toUpperCase()}`;
@@ -180,7 +191,7 @@ describe("the uncertainty drill (AC-1.16)", () => {
             current = json(answer).result as Current;
           }
         });
-        await sleep(3000);
+        await sleep(1000);
         await pauseOpenBao(true);
         paused = true;
         const pausedAt = now();
@@ -253,7 +264,9 @@ describe("the uncertainty drill (AC-1.16)", () => {
       expect(verdict).toBeDefined();
       record("verdict", verdict);
       expect(hostTs(["resume"]).code).toBe(0);
-      expect(hostTs(["gate", "open"]).code).toBe(0);
+      // A v2 gate opens only with a report: redeploy the running release.
+      const reopened = hostTs(["deploy", "--release", stagingRelease()], 1_800_000);
+      expect(reopened.code, reopened.out.slice(-500)).toBe(0);
       quiesced = false;
       record("resumed", now());
 
@@ -309,8 +322,8 @@ describe("the uncertainty drill (AC-1.16)", () => {
       }
       if (quiesced) {
         hostTs(["resume"]);
-        hostTs(["gate", "open"]);
+        hostTs(["deploy", "--release", stagingRelease()], 1_800_000);
       }
     }
-  }, 1_800_000);
+  }, 3_600_000);
 });

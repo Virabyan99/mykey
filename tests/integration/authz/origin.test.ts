@@ -63,14 +63,18 @@ const BAD: [string, Record<string, string>][] = [
   ["Sec-Fetch-Site: same-site", { "sec-fetch-site": "same-site" }],
 ];
 
-/** What a refused request must leave unchanged. */
+/**
+ * What a refused request must leave unchanged. The source counter is not part
+ * of it: since Run 6.3 (P-113) every request is counted for its source before
+ * anything of it is read.
+ */
 async function snapshot(): Promise<string> {
   const result = await api.superuser.query<{ snap: string }>(
     `SELECT concat_ws('|',
        (SELECT count(*) FROM auth.session),
        (SELECT string_agg(id || ':' || updated_at::text, ',' ORDER BY id) FROM auth.session),
-       (SELECT count(*) FROM app.rate_limit),
-       (SELECT coalesce(sum(count), 0) FROM app.rate_limit),
+       (SELECT count(*) FROM app.rate_limit WHERE scope <> 'rl:source'),
+       (SELECT coalesce(sum(count), 0) FROM app.rate_limit WHERE scope <> 'rl:source'),
        (SELECT count(*) FROM audit.event),
        (SELECT count(*) FROM app.operation),
        (SELECT string_agg(password, ',' ORDER BY id) FROM auth.account)) AS snap`,

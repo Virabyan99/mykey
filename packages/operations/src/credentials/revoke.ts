@@ -32,6 +32,7 @@ import {
   type EnvironmentScope,
   type OperationRow,
   type Queryable,
+  invalidateCapture,
 } from "@mykey/db";
 import type pg from "pg";
 import { intentFingerprint, sameIntent, type Intent } from "../replay.ts";
@@ -157,6 +158,8 @@ async function withSession(
   let accessor: string;
   try {
     const admitted = await inTransaction(locked.client, async (tx) => {
+      // P-118: a revocation reduces access; while a pair is captured it records that and proceeds.
+      await invalidateCapture(tx, "credential_revoke");
       const { digest, keyId } = intentFingerprint(deps.ring, request.intent);
       const inserted = await insertOperation(tx, {
         ...key,
@@ -180,10 +183,6 @@ async function withSession(
         return { replay: found } as const;
       }
       await tx.query("UPDATE app.operation SET dispatched_at = now() WHERE id = $1", [operationId]);
-      const capture = await tx.query<{ capture_mode: string }>(
-        "SELECT capture_mode FROM app.service_control FOR SHARE",
-      );
-      if (capture.rows[0]?.capture_mode !== "idle") throw new Refusal(refused("busy"));
       if (!deps.gateOpen()) throw new Refusal(refused("quarantined"));
       const code = await request.recheck(tx);
       if (code !== null) throw new Refusal(refused(code));
@@ -225,6 +224,7 @@ async function withSession(
     await fault("after_revoke_sent");
     if (proof === "absent" && !locked.lost()) {
       const row = await inTransaction(locked.client, async (tx) => {
+        await invalidateCapture(tx, "credential_revoke");
         if (!(await moveCredential(tx, request.credentialId, ["revoking"], "revoked"))) {
           throw new NotOwner();
         }
@@ -258,6 +258,7 @@ async function withSession(
     if (definite !== null && !locked.lost()) {
       // Nothing was revoked; the credential stays `revoking` (closed first).
       await inTransaction(locked.client, async (tx) => {
+        await invalidateCapture(tx, "credential_revoke");
         const row = await finishOperation(
           tx,
           operationId,
@@ -290,6 +291,7 @@ async function settleUnknown(
   operationId: OperationId,
 ): Promise<void> {
   const work = async (tx: pg.PoolClient): Promise<void> => {
+    await invalidateCapture(tx, "credential_revoke");
     const row = await finishOperation(tx, operationId, deps.bootId, { state: "uncertain" }, 0);
     if (row === null) throw new NotOwner();
     await audit(tx, request, operationId, "unknown");

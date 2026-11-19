@@ -28,9 +28,14 @@ COPY infra/openbao/policies infra/openbao/policies
 COPY apps/provisioner/src apps/provisioner/src
 
 FROM node@sha256:a34ab6d7f6f4813f4d0c5469d74685604b962fbdbf5793a7bc7b4998ecb867c8
+ARG MYKEY_BUILD
 ENV NODE_ENV=production
+# Run 6.7 (P-122): the build the gate record must name; without it the provisioner refuses to start.
+ENV MYKEY_BUILD=${MYKEY_BUILD}
 WORKDIR /app
 COPY --from=build /app /app
+# Run 6.9 (P-127): no package manager in a runtime image.
+RUN rm -rf /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/corepack /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/corepack
 USER 1000:1000
 # Unhealthy when the last sweep tick is older than three intervals (P-57).
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \

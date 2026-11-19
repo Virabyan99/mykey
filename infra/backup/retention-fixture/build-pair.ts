@@ -155,7 +155,7 @@ export function resticInBundle(
   }
 }
 
-const GLOBALS_SQL = [
+export const GLOBALS_SQL = [
   "-- Synthetic fixture. No real role, password or data.",
   "CREATE ROLE fixture_reader NOLOGIN;",
   "CREATE ROLE fixture_writer NOLOGIN;",

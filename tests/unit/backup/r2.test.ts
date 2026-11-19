@@ -121,17 +121,20 @@ describe("cloud credential guard", () => {
       "mykey-fixture-upload",
       "mykey-fixture-cleanup",
       "mykey-r2-admin",
+      "mykey-audit-archive-upload",
     ]);
     expect(missingCloudCredentials({ env: {}, home: homeWith({}) })).toEqual(REQUIRED_CLOUD_TOKENS);
     const partial = homeWith({ "mykey-fixture-upload": synthetic("u") });
     expect(missingCloudCredentials({ env: {}, home: partial })).toEqual([
       "mykey-fixture-cleanup",
       "mykey-r2-admin",
+      "mykey-audit-archive-upload",
     ]);
     const complete = homeWith({
       "mykey-fixture-upload": synthetic("u"),
       "mykey-fixture-cleanup": synthetic("c"),
       "mykey-r2-admin": synthetic("a"),
+      "mykey-audit-archive-upload": synthetic("r"),
     });
     expect(missingCloudCredentials({ env: {}, home: complete })).toEqual([]);
   });

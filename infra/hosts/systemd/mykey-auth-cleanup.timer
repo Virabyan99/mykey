@@ -1,0 +1,10 @@
+[Unit]
+Description=MyKey auth clean-up hourly at a quarter past (Run 6.9)
+
+[Timer]
+OnCalendar=*-*-* *:15:00 UTC
+Persistent=false
+RandomizedDelaySec=0
+
+[Install]
+WantedBy=timers.target

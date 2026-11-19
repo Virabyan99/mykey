@@ -12,6 +12,7 @@ import { join, resolve } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 import { OpenBaoAdmin } from "@mykey/openbao/admin";
 import pg from "pg";
+import type { DbTarget } from "@mykey/db";
 
 export interface Stack {
   /** Compose project name, unique per stack. */
@@ -71,6 +72,18 @@ function run(
   });
 }
 
+/** Run 6.1: a project's override files (infra/compose/dev/*.override.yml), kept beside its state. */
+const overridesFile = (project: string): string =>
+  join(stackDirectory(project), "compose-overrides.json");
+
+function overridesOf(project: string): string[] {
+  const file = overridesFile(project);
+  if (!existsSync(file)) return [];
+  return (JSON.parse(readFileSync(file, "utf8")) as string[]).map((name) =>
+    join(REPOSITORY, "infra/compose/dev", name),
+  );
+}
+
 function compose(
   project: string,
   args: string[],
@@ -79,7 +92,15 @@ function compose(
 ): Promise<string> {
   return run(
     "docker",
-    ["compose", "-p", project, "-f", COMPOSE_FILE, ...args],
+    [
+      "compose",
+      "-p",
+      project,
+      "-f",
+      COMPOSE_FILE,
+      ...overridesOf(project).flatMap((file) => ["-f", file]),
+      ...args,
+    ],
     // The Compose file needs the state directory even for commands that do not start anything.
     { MYKEY_STACK_DIR: stackDirectory(project), ...env },
     maxBuffer,
@@ -278,10 +299,15 @@ function attach(state: StackState): Stack {
 export async function startStack(opts?: {
   project?: string;
   fixedPorts?: boolean;
+  /** Run 6.1: override files of infra/compose/dev (by file name), applied to every command. */
+  overrides?: readonly string[];
 }): Promise<Stack> {
   const project = opts?.project ?? `${TEST_PROJECT_PREFIX}${randomBytes(4).toString("hex")}`;
   const directory = stackDirectory(project);
   mkdirSync(directory, { recursive: true });
+  if (opts?.overrides !== undefined && opts.overrides.length > 0) {
+    writeFileSync(overridesFile(project), JSON.stringify(opts.overrides));
+  }
 
   const passwordFile = join(directory, "pg-superuser-password");
   if (!existsSync(passwordFile)) {
@@ -449,6 +475,17 @@ export async function killService(stack: Stack, service: "postgres" | "openbao")
   await compose(stack.project, ["kill", service]);
 }
 
+/** Run 6.1: runs a command inside a running service's container; answers its stdout. */
+export function execInService(
+  stack: Stack,
+  service: "postgres" | "openbao",
+  argv: readonly string[],
+  opts: { user?: string } = {},
+): Promise<string> {
+  const user = opts.user === undefined ? [] : ["-u", opts.user];
+  return compose(stack.project, ["exec", "-T", ...user, service, ...argv]);
+}
+
 /** Whether the service's container is running (not stopped, killed or paused). */
 export async function serviceRunning(
   stack: Stack,
@@ -584,6 +621,20 @@ export async function pgDump(stack: Stack, database: string): Promise<string> {
 }
 
 /** The PostgreSQL container's log since `since` (RFC 3339). Returned, never printed. */
+/** Run 6.1: a service container's log (stdout and stderr) since `since`. */
+export function serviceLog(
+  stack: Stack,
+  service: "postgres" | "openbao",
+  since: string,
+): Promise<string> {
+  return compose(
+    stack.project,
+    ["logs", "--no-color", "--since", since, service],
+    undefined,
+    64 * 1024 * 1024,
+  );
+}
+
 export async function postgresLog(stack: Stack, since: string): Promise<string> {
   return compose(
     stack.project,
@@ -679,10 +730,12 @@ export async function pgRestoreFromFile(
   stack: Stack,
   localPath: string,
   database: string,
+  /** Run 6.7: "postgres-scratch" (scratch-pg.override.yml) restores into the second cluster. */
+  service: "postgres" | "postgres-scratch" = "postgres",
 ): Promise<void> {
   if (!/^[a-z0-9_]+$/.test(database)) throw new Error("invalid database name");
   const inside = `/tmp/restore-${database}.dump`;
-  await compose(stack.project, ["cp", localPath, `postgres:${inside}`]);
+  await compose(stack.project, ["cp", localPath, `${service}:${inside}`]);
   try {
     await compose(
       stack.project,
@@ -691,7 +744,7 @@ export async function pgRestoreFromFile(
         "-T",
         "-e",
         "PGPASSWORD",
-        "postgres",
+        service,
         "pg_restore",
         "-U",
         stack.pg.superuser.user,
@@ -703,6 +756,97 @@ export async function pgRestoreFromFile(
       { PGPASSWORD: stack.pg.superuser.password },
     );
   } finally {
-    await compose(stack.project, ["exec", "-T", "-u", "0", "postgres", "rm", "-f", inside]);
+    await compose(stack.project, ["exec", "-T", "-u", "0", service, "rm", "-f", inside]);
   }
+}
+
+/**
+ * Run 6.7 Task C: the second cluster of a stack started with
+ * scratch-pg.override.yml, as its superuser (the stack's superuser password:
+ * the same secret file). Waits until it accepts a connection.
+ */
+export async function scratchPg(stack: Stack): Promise<DbTarget> {
+  const target: DbTarget = {
+    host: HOST,
+    port: await publishedPort(stack.project, "postgres-scratch", 5432),
+    database: "postgres",
+    user: stack.pg.superuser.user,
+    password: stack.pg.superuser.password,
+    caCertPath: stack.pg.caCertPath,
+  };
+  await waitFor("the scratch PostgreSQL", async () => {
+    const client = new pg.Client({
+      host: target.host,
+      port: target.port,
+      database: target.database,
+      user: target.user,
+      password: target.password,
+      ssl: { ca: readFileSync(target.caCertPath, "utf8"), rejectUnauthorized: true },
+    });
+    try {
+      await client.connect();
+      await client.query("SELECT 1");
+      return true;
+    } catch {
+      return false;
+    } finally {
+      await client.end().catch(() => undefined);
+    }
+  });
+  return target;
+}
+
+/**
+ * Run 6.5: the scratch OpenBao of a stack started with
+ * `scratch-bao.override.yml` (the same pki volume: the same static seal key
+ * and certificate). Initialised on first use. `restore` replaces its whole
+ * state with a Raft snapshot of the stack's own OpenBao and waits until it is
+ * active again; from then on the stack's root token is its root token.
+ */
+export interface ScratchBao {
+  /** The scratch as a Stack whose `bao` is the scratch (for baoFetch and friends). */
+  stack: Stack;
+  restore(snapshot: Uint8Array): Promise<void>;
+}
+
+export async function scratchBao(stack: Stack): Promise<ScratchBao> {
+  const state = {
+    ...stack,
+    bao: {
+      ...stack.bao,
+      url: `https://${HOST}:${await publishedPort(stack.project, "openbao-scratch", 8200)}`,
+      rootToken: "",
+    },
+  } as unknown as StackState;
+  await waitForOpenBaoListener(state);
+  await initialiseOpenBao(state);
+  await waitForOpenBaoActive(state);
+  return {
+    stack: state as unknown as Stack,
+    async restore(snapshot) {
+      const response = await baoRequest(state, "/v1/sys/storage/raft/snapshot-force", {
+        method: "POST",
+        body: snapshot,
+      });
+      if (response.status !== 204 && response.status !== 200) {
+        throw new Error(`snapshot-force returned HTTP ${String(response.status)}`);
+      }
+      state.bao.rootToken = stack.bao.rootToken;
+      // The node reloads the restored state (its audit device included: the
+      // override gives it a writable directory) and stays unsealed.
+      await waitForOpenBaoActive(state);
+    },
+  };
+}
+
+/**
+ * Run 6.7 Task C (P-124 step 4): a new scratch OpenBao — its container and
+ * volume removed, started again and initialised anew on the same static seal.
+ * A restore's snapshot then goes into an instance no earlier restore touched.
+ */
+export async function freshScratchBao(stack: Stack): Promise<ScratchBao> {
+  await compose(stack.project, ["rm", "--stop", "--force", "openbao-scratch"]);
+  await run("docker", ["volume", "rm", "--force", `${stack.project}_baoscratch`]);
+  await compose(stack.project, ["up", "--detach", "openbao-scratch"]);
+  return scratchBao(stack);
 }

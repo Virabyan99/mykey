@@ -27,7 +27,10 @@ import {
   listSessions,
   nativeSessionResponse,
   resolveSession,
+  revokeAllSessions,
   revokeSession,
+  signOutSession,
+  tokenOfRequest,
   type SessionDeps,
 } from "./sessions.ts";
 import { signInWithPassword } from "./sign-in.ts";
@@ -393,6 +396,19 @@ export function mountAuthRoutes(app: AnyHono, auth: Auth, env: AuthRouteEnv): vo
 
   app.post(`${base}/sign-out`, async (c) => {
     if ((await strictBody(c, emptyBody, env)) === undefined) return refuse(c, "malformed_request");
+    // Run 6.1 (P-105): the session is deleted with its audit row; the native
+    // call that follows finds nothing to delete and only clears the cookie.
+    const token = await tokenOfRequest(auth, c.req.raw.headers);
+    if (token !== null) {
+      try {
+        await signOutSession({ pool: env.pool, keys: env.keys }, token, env.requestId(c));
+      } catch (error) {
+        return refuse(
+          c,
+          error instanceof AuditUnavailable ? "audit_unavailable" : "dependency_unavailable",
+        );
+      }
+    }
     return relayNative(
       await auth.api.signOut({ headers: c.req.raw.headers, asResponse: true }),
       env,
@@ -466,21 +482,36 @@ export function mountAuthRoutes(app: AnyHono, auth: Auth, env: AuthRouteEnv): vo
     if (!verdict.ok) return refuse(c, "unauthenticated");
     if (verdict.session.phase !== "mfa_complete") return refuse(c, "mfa_incomplete");
     // Another user's session is the same 404 as an absent one.
-    if (!(await revokeSession(env.pool, verdict.session.userId, body.sessionId))) {
-      return refuse(c, "not_found");
+    let ended: boolean;
+    try {
+      ended = await revokeSession(
+        env.pool,
+        verdict.session.userId,
+        body.sessionId,
+        env.requestId(c),
+      );
+    } catch (error) {
+      if (error instanceof AuditUnavailable) return refuse(c, "audit_unavailable");
+      throw error;
     }
+    if (!ended) return refuse(c, "not_found");
     return json({});
   });
 
+  // Run 6.1 (P-105): product-owned since the audit row must share the deletion's
+  // transaction; the answer is Better Auth's own (`{ status: true }`).
   app.post(`${base}/revoke-sessions`, async (c) => {
     if ((await strictBody(c, emptyBody, env)) === undefined) return refuse(c, "malformed_request");
-    const denied = await requireMfaComplete(sessions, c.req.raw.headers);
-    if (denied !== null) return refuse(c, denied);
-    return relayNative(
-      await auth.api.revokeSessions({ headers: c.req.raw.headers, asResponse: true }),
-      env,
-      env.requestId(c),
-    );
+    const verdict = await resolveSession(sessions, c.req.raw.headers);
+    if (!verdict.ok) return refuse(c, "unauthenticated");
+    if (verdict.session.phase !== "mfa_complete") return refuse(c, "mfa_incomplete");
+    try {
+      await revokeAllSessions(env.pool, verdict.session.userId, env.requestId(c));
+    } catch (error) {
+      if (error instanceof AuditUnavailable) return refuse(c, "audit_unavailable");
+      throw error;
+    }
+    return json({ status: true });
   });
 
   mountFactorRoutes(app, { pool: env.pool, keys: env.keys, auth }, env, refuse);

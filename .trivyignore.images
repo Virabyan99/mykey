@@ -107,3 +107,11 @@ CVE-2026-109383 exp:2026-12-14 # HIGH
 CVE-2026-109869 exp:2026-12-14 # HIGH
 CVE-2026-19534 exp:2026-12-14 # HIGH
 CVE-2026-87018 exp:2026-12-14 # HIGH
+
+# Reviewed 2026-11-19 at the Session 6 gate: published after the green scan of e93e9cf.
+# Go stdlib (MaxBytesReader on HTTP/1 servers), fixed in Go 1.26.11 and 1.27.4, found in
+# four pinned upstream images: postgres (gosu: opens no socket), restic (a client; `restic
+# serve` is not used), openbao (bao, v1.27.3) and traefik (v1.27.3). OpenBao and Traefik do
+# serve HTTP/1, Traefik in public: carried to Session 8's security review. Move those pins as
+# soon as upstream publishes images built with the fixed Go.
+CVE-2026-97054 exp:2026-12-14 # HIGH

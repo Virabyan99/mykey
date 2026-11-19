@@ -120,6 +120,16 @@ async function discard(request: Request, bytes: number): Promise<void> {
 }
 
 /**
+ * Run 6.3 (P-114): a large route refused before its body was read drains it
+ * like an oversized declared body: read and dropped (never kept, never
+ * counted) up to DISCARD_MAX_BYTES, so the peer gets the answer, not a reset.
+ */
+export async function drainBody(request: Request): Promise<void> {
+  if (request.bodyUsed) return;
+  await discard(request, DISCARD_MAX_BYTES).catch(() => undefined);
+}
+
+/**
  * Reads at most `limit` bytes of the body; one byte more is a refusal. Reports
  * every byte it read through `counted`, so the request log can show it.
  */
@@ -132,14 +142,30 @@ async function readLimited(
   if (reader === undefined) return new Uint8Array();
   const chunks: Uint8Array[] = [];
   let total = 0;
+  let over = false;
   try {
     for (;;) {
       const { done, value } = await reader.read();
       if (done) break;
       total += value.byteLength;
       counted(value.byteLength);
-      if (total > limit) throw malformed();
+      if (total > limit) {
+        over = true;
+        break;
+      }
       chunks.push(value);
+    }
+    if (over) {
+      // As for a declared length (above): the rest is read and dropped, never
+      // kept, up to DISCARD_MAX_BYTES, so a peer still uploading gets the 400
+      // and not a reset (Run 6.3: the source step's await made that race show).
+      let dropped = total;
+      while (dropped < DISCARD_MAX_BYTES) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        dropped += value.byteLength;
+      }
+      throw malformed();
     }
   } finally {
     // Stop reading: what is left of an oversized body is never consumed.

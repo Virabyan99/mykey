@@ -5,7 +5,13 @@
 // of that transaction.
 import { randomUUID } from "node:crypto";
 import type { Queryable } from "@mykey/db";
-import { AUDIT_DETAILS, auditEnvelopeSchema, type AuditEvent } from "./events.ts";
+import {
+  ACCOUNT_WITHOUT_ORGANIZATION,
+  AUDIT_DETAILS,
+  AUDIT_SCOPE,
+  auditEnvelopeSchema,
+  type AuditEvent,
+} from "./events.ts";
 
 /** The audit row could not be written. Carries no detail of the event. */
 export class AuditUnavailable extends Error {
@@ -29,6 +35,14 @@ function validate(event: AuditEvent): void {
     throw new AuditEventInvalid("action");
   }
   if (!auditEnvelopeSchema.safeParse(event).success) throw new AuditEventInvalid("event");
+  // P-106: the organization fits the action's scope.
+  const scope = AUDIT_SCOPE[event.action];
+  const withOrganization = event.organizationId !== null;
+  const fits =
+    scope === "tenant"
+      ? withOrganization || ACCOUNT_WITHOUT_ORGANIZATION.has(event.action)
+      : !withOrganization;
+  if (!fits) throw new AuditEventInvalid("event");
   if (!AUDIT_DETAILS[event.action].safeParse(event.details).success) {
     throw new AuditEventInvalid("details");
   }

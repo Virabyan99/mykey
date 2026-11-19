@@ -2,6 +2,7 @@
 // required by Doc 06 §2 (the proxy verifies this certificate).
 import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
 import https from "node:https";
 import type { AddressInfo } from "node:net";
 import { serve } from "@hono/node-server";
@@ -11,15 +12,17 @@ import { createPool, type DbTarget } from "@mykey/db";
 import { drizzle } from "drizzle-orm/node-postgres";
 import type { Hono } from "hono";
 import { createApp } from "./app.ts";
-import { createHealthCheck, type OpenBaoHealthTarget } from "./health.ts";
+import { createServiceGate } from "./pipeline/gate.ts";
+import { auditedBaoCall, createHealthCheck, type OpenBaoHealthTarget } from "./health.ts";
 import { issuerBaoFromDirectory, runtimeBaoFromDirectory } from "./runtime-bao.ts";
 import { issuerSelfCheck, runtimeSelfCheck } from "./selfcheck.ts";
 import { createLogger, type LogEntry } from "./log.ts";
-import { continueArchives } from "@mykey/operations";
+import { continueArchives, readCapacity } from "@mykey/operations";
 import { startOperationSweep } from "./operation-sweep.ts";
 import { startOutboxDispatcher } from "./outbox-dispatcher.ts";
 import { startSessionCleanup, startThrottleSweep } from "./throttle-sweep.ts";
-import type { ApiConfig, ApiEnv } from "./pipeline/context.ts";
+import type { ApiConfig, ApiEnv, AppDeps } from "./pipeline/context.ts";
+import { createRateLimiter } from "./pipeline/rate.ts";
 
 export interface ListenOptions {
   hostname: string;
@@ -30,6 +33,8 @@ export interface ListenOptions {
 
 export interface ApiServer {
   port: number;
+  /** Run 6.7 (P-123): the verification listener's port, when it listens. */
+  verifyPort?: number;
   close(): Promise<void>;
 }
 
@@ -38,6 +43,14 @@ export interface ApiServer {
  * (LIMITS.body.headersMaxBytes), so the pipeline is the one that refuses
  * oversized headers, with the error envelope.
  */
+/** P-115: the capacity record lives beside the gate record, in the same read-only mount. */
+export function capacityPathOf(gatePath: string): string {
+  return join(dirname(gatePath), "capacity.json");
+}
+
+/** P-114: the time a peer has to send its headers. */
+export const HEADERS_TIMEOUT_MS = 10_000;
+
 export function listen(app: Hono<ApiEnv>, options: ListenOptions): Promise<ApiServer> {
   return new Promise((resolve, reject) => {
     const server = serve(
@@ -51,6 +64,12 @@ export function listen(app: Hono<ApiEnv>, options: ListenOptions): Promise<ApiSe
           key: readFileSync(options.tls.keyPath),
           minVersion: "TLSv1.2",
           maxHeaderSize: 64 * 1024,
+          // Run 6.3 (P-114): a request must have arrived whole within 30 s, its
+          // headers within 10 s; checked every second, so a silent peer frees
+          // its in-flight and large slots on time.
+          requestTimeout: LIMITS.deadlines.requestMs,
+          headersTimeout: HEADERS_TIMEOUT_MS,
+          connectionsCheckingInterval: 1000,
         },
       },
       (info: AddressInfo) => {
@@ -77,6 +96,12 @@ export interface ServerConfig extends ListenOptions {
   /** On a host with OpenBao (Run 2.7): /health also requires it unsealed. */
   openbao?: OpenBaoHealthTarget;
   api: ApiConfig;
+  /**
+   * Run 6.7 (P-123): a second listener (MYKEY_VERIFY_LISTEN, an address of the
+   * mk-api bridge the proxy does not route). It serves while the gate record
+   * says closed + verifying; `host.ts <host> tunnel verify` reaches it.
+   */
+  verifyListen?: { hostname: string; port: number };
   /** The key files of the auth module (read-only mount on a host). */
   keysDirectory: string;
   /** The credential files (organization-id, runtime-role-id, runtime-secret-id, issuer-role-id, issuer-secret-id). */
@@ -87,15 +112,32 @@ export interface ServerConfig extends ListenOptions {
 /** P-66: of the process's connections, this many are dedicated lock connections. */
 export const LOCK_POOL_SIZE = 8;
 
+/**
+ * Run 6.3 (P-114): every connection one API process can open — its pool, its
+ * lock pool and the health check's one — adds up to LIMITS.db.apiPool.
+ */
+export const API_CONNECTIONS = {
+  pool: LIMITS.db.apiPool - LOCK_POOL_SIZE - 1,
+  lockPool: LOCK_POOL_SIZE,
+  health: 1,
+} as const;
+
 export async function startServer(config: ServerConfig): Promise<ApiServer> {
-  const health = createHealthCheck(config.database, config.openbao);
+  const runtimeBao =
+    config.openbao === undefined
+      ? undefined
+      : runtimeBaoFromDirectory(config.openbao, config.secretsDirectory ?? "/run/mykey/secrets");
+  // P-116: on a host with OpenBao, an audited call as the runtime identity too.
+  const health = createHealthCheck(config.database, config.openbao, {
+    ...(runtimeBao === undefined ? {} : { auditedCall: auditedBaoCall(runtimeBao) }),
+  });
   const pool = createPool(config.database, {
-    max: LIMITS.db.apiPool - LOCK_POOL_SIZE,
+    max: API_CONNECTIONS.pool,
     queryTimeoutMs: LIMITS.deadlines.requestMs,
   });
   // One connection per secret action or value read, holding the environment's lock (P-66).
   const lockPool = createPool(config.database, {
-    max: LOCK_POOL_SIZE,
+    max: API_CONNECTIONS.lockPool,
     queryTimeoutMs: LIMITS.deadlines.largeRequestMs,
   });
   const keys = loadAuthKeys(config.keysDirectory);
@@ -105,25 +147,30 @@ export async function startServer(config: ServerConfig): Promise<ApiServer> {
       ? undefined
       : issuerBaoFromDirectory(config.openbao, config.secretsDirectory ?? "/run/mykey/secrets");
   const bootId = randomUUID();
-  const app = createApp({
+  // Run 6.7 (P-122): one gate for both listeners, with the database's incarnation.
+  const gate = createServiceGate(config.api, pool);
+  const appDeps: AppDeps = {
     pool,
     lockPool,
-    ...(config.openbao === undefined || issuer === undefined
-      ? {}
-      : {
-          bao: runtimeBaoFromDirectory(
-            config.openbao,
-            config.secretsDirectory ?? "/run/mykey/secrets",
-          ),
-          issuer,
-        }),
+    ...(runtimeBao === undefined || issuer === undefined ? {} : { bao: runtimeBao, issuer }),
     bootId,
     config: config.api,
     health: () => health.check(),
     log: config.log,
+    limiter: createRateLimiter({ pool, ring: keys.rateLimit }),
+    // P-115: the host writes capacity.json beside the gate record (status.sh, every minute).
+    capacity: { read: (nowMs) => readCapacity(capacityPathOf(config.api.gatePath), nowMs) },
     auth: { auth, keys, throttle: createThrottle({ pool, ring: keys.rateLimit }) },
-  });
-  const server = await listen(app, config);
+    gate,
+  };
+  const server = await listen(createApp({ ...appDeps, listener: "public" }), config);
+  const verifyServer =
+    config.verifyListen === undefined
+      ? undefined
+      : await listen(createApp({ ...appDeps, listener: "verify" }), {
+          ...config.verifyListen,
+          tls: config.tls,
+        });
   const dispatcher = startOutboxDispatcher(pool, config.log);
   const sweep = startThrottleSweep(pool, config.log);
   const sessionCleanup = startSessionCleanup(pool, config.log);
@@ -135,12 +182,14 @@ export async function startServer(config: ServerConfig): Promise<ApiServer> {
   });
   return {
     port: server.port,
+    ...(verifyServer === undefined ? {} : { verifyPort: verifyServer.port }),
     async close() {
       operationSweep.stop();
       sweep.stop();
       sessionCleanup.stop();
       await dispatcher.stop();
       await server.close();
+      await verifyServer?.close();
       await health.close();
       await pool.end();
       await lockPool.end();
@@ -181,6 +230,16 @@ export function configFromEnvironment(env: NodeJS.ProcessEnv): Omit<ServerConfig
   const build = required(env, "MYKEY_BUILD");
   if (!/^[0-9a-f]{7,40}$/.test(build)) throw new MissingSetting("MYKEY_BUILD", "is not a commit");
   const baseUrl = required(env, "MYKEY_BASE_URL");
+  // Run 6.7 (P-123): "<address>:<port>" of the verification listener, when set.
+  const verifyListen = env.MYKEY_VERIFY_LISTEN ?? "";
+  const verifyMatch = /^([0-9.]+):(\d{1,5})$/.exec(verifyListen);
+  if (verifyListen !== "" && (verifyMatch === null || Number(verifyMatch[2]) > 65_535)) {
+    throw new MissingSetting("MYKEY_VERIFY_LISTEN", "is not an address and port");
+  }
+  const incarnation = required(env, "MYKEY_BACKEND_INCARNATION");
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(incarnation)) {
+    throw new MissingSetting("MYKEY_BACKEND_INCARNATION", "is not a uuid");
+  }
   if (new URL(baseUrl).origin !== baseUrl) {
     throw new MissingSetting("MYKEY_BASE_URL", "is not an origin");
   }
@@ -203,6 +262,9 @@ export function configFromEnvironment(env: NodeJS.ProcessEnv): Omit<ServerConfig
     ...(env.MYKEY_BAO_URL === undefined || env.MYKEY_BAO_URL === ""
       ? {}
       : { openbao: { url: env.MYKEY_BAO_URL, caCertPath: required(env, "MYKEY_BAO_CA_FILE") } }),
+    ...(verifyMatch === null
+      ? {}
+      : { verifyListen: { hostname: verifyMatch[1] ?? "", port: Number(verifyMatch[2]) } }),
     keysDirectory: env.MYKEY_AUTH_RINGS_DIR ?? "/run/mykey/keys",
     secretsDirectory: env.MYKEY_API_SECRETS_DIR ?? "/run/mykey/secrets",
     api: {
@@ -210,6 +272,7 @@ export function configFromEnvironment(env: NodeJS.ProcessEnv): Omit<ServerConfig
       build,
       gatePath: required(env, "MYKEY_GATE_PATH"),
       hostInstanceId: required(env, "MYKEY_HOST_INSTANCE_ID"),
+      backendIncarnation: incarnation,
       trustedProxy:
         env.MYKEY_TRUSTED_PROXY === undefined || env.MYKEY_TRUSTED_PROXY === ""
           ? null

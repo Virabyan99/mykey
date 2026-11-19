@@ -1,0 +1,18 @@
+{
+  "readerRequests": 4,
+  "readerStatuses": [
+    200
+  ],
+  "readerMsMax": 6967,
+  "writes": 4,
+  "writesWithinThree": 4,
+  "worst": {
+    "attempts": 3,
+    "ms": 6400,
+    "codes": [
+      "busy",
+      "busy",
+      "ok"
+    ]
+  }
+}

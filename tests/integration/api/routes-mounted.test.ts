@@ -47,6 +47,8 @@ const HANDLED = new Set([
   "auth.reset.complete",
   "openapi.get",
   "reference.get",
+  "audit.list",
+  "activity.list",
 ]);
 
 /** A valid body for every contract route that takes one. */

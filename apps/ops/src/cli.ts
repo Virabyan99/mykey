@@ -6,13 +6,19 @@
 // is refused for every command); a secret it needs is read from stdin; a
 // secret it produces goes to a file under ~/.mykey/out/ and only the path is
 // printed. Exit codes: 0 done, 1 failed, 2 refused, 3 needs review, 64 usage.
+import type { KeyObject } from "node:crypto";
 import type { Readable, Writable } from "node:stream";
+import type { ObjectStore } from "@mykey/backup";
 import type { DbTarget } from "@mykey/db";
 import type { AppRoleName, OpenBaoTarget } from "@mykey/openbao";
+import { auditArchiveCommand } from "./commands/audit-archive.ts";
 import { authCleanupCommand } from "./commands/auth-cleanup.ts";
+import { captureCommand } from "./commands/capture.ts";
 import { bootstrapOwnerCommand } from "./commands/bootstrap-owner.ts";
 import { operationsCommand } from "./commands/operations.ts";
+import { pairCommand } from "./commands/pair.ts";
 import { operationsExpireCommand } from "./commands/operations-expire.ts";
+import { sweepCommand } from "./commands/sweep.ts";
 import { provisionOrganizationCommand } from "./commands/provision-organization.ts";
 import { reconcileCredentialsCommand } from "./commands/reconcile-credentials.ts";
 import { reconcileEnvironmentCommand } from "./commands/reconcile-environment.ts";
@@ -35,6 +41,13 @@ export interface OpsEnv {
   deliver?: (name: AppRoleName, credential: { roleId: string; secretId: string }) => Promise<void>;
   /** The addresses each AppRole is bound to on this host (P-56); none when absent. */
   boundCidrs?: Record<AppRoleName, readonly string[]>;
+  /** Run 6.2 (P-112): the audit archive's bucket, this host's name and the rotated OpenBao files. */
+  archive?: { store: ObjectStore; host: string; rotatedDir: string | null };
+  /** Run 6.5 (P-120): where a capture keeps its artifacts (on a host /run/mykey-pair). */
+  pairScratch?: string;
+  /** Run 6.5 (P-119): the pairs' bucket, this host's name and its signing key (ops pair). */
+  /** `signing` is absent for the retention job (Run 6.6), which signs nothing. */
+  pairs?: { store: ObjectStore; host: string; signing?: { key: KeyObject; keyId: string } };
 }
 
 export interface OpsIo {
@@ -59,10 +72,14 @@ export const COMMANDS: Readonly<Record<string, OpsCommand>> = {
   "provision-organization": provisionOrganizationCommand,
   "verify-organization": verifyOrganizationCommand,
   "operations-expire": operationsExpireCommand,
+  sweep: sweepCommand,
   operations: operationsCommand,
   "reconcile-operation": reconcileOperationCommand,
   "reconcile-environment": reconcileEnvironmentCommand,
   "reconcile-credentials": reconcileCredentialsCommand,
+  "audit-archive": auditArchiveCommand,
+  capture: captureCommand,
+  pair: pairCommand,
 };
 
 export const OPS_COMMANDS = Object.freeze(Object.keys(COMMANDS));

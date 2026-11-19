@@ -138,6 +138,28 @@ describe("repository skeleton", () => {
     expect(forbidden).toEqual([]);
   });
 
+  // Run 6.9 (P-127): the host and release tooling uses @mykey/ops/remote, never the test harness.
+  // The dev-stack scripts (stack.ts, db-migrate.ts, test-cli.ts) drive the harness on purpose.
+  it("host and release tooling reaches nothing under tests/ (Run 6.9)", () => {
+    const entries = [
+      "scripts/host.ts",
+      "scripts/host-restore.ts",
+      "scripts/probe.ts",
+      "scripts/ci-scan.ts",
+      "infra/release/build.ts",
+    ];
+    const host = [...importGraph("scripts/host.ts")].map(relative);
+    // Control: SSH and redaction come from the operator package.
+    expect(host).toContain("apps/ops/src/remote/ssh.ts");
+    expect(host).toContain("apps/ops/src/remote/redact.ts");
+    expect(host).toContain("scripts/host-restore.ts");
+    for (const entry of entries) {
+      expect(existsSync(join(root, entry)), entry).toBe(true);
+      const reached = [...importGraph(entry)].map(relative).filter((f) => f.startsWith("tests/"));
+      expect(reached, entry).toEqual([]);
+    }
+  });
+
   it("spec documents are untouched", () => {
     const docs = readdirSync(join(root, "docs")).filter((f) => /^doc_\d\d_.*\.md$/.test(f));
     const numbers = docs.map((f) => f.slice(4, 6)).sort();

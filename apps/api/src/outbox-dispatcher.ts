@@ -1,6 +1,7 @@
 // The outbox dispatcher of the API process (Run 3.1): one pass at start and one
 // every second. A pass that fails (the database is restarting) is logged by
 // error class and the next tick tries again; the process never stops for it.
+import { captureMode } from "@mykey/db";
 import { createSender, dispatchOutbox, type JobSender } from "@mykey/operations";
 import type pg from "pg";
 import { now, type LogEntry } from "./log.ts";
@@ -22,6 +23,8 @@ export function startOutboxDispatcher(
 
   const pass = async (): Promise<void> => {
     try {
+      // P-118: nothing is dispatched while a pair is captured.
+      if ((await captureMode(pool)).mode !== "idle") return;
       sender ??= await createSender(pool);
       await dispatchOutbox(pool, sender);
     } catch (error) {

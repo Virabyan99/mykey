@@ -1,17 +1,20 @@
 // The off-host probe (Run 2.6, D-22): a Cloudflare Worker that takes the
 // hosts' heartbeats, probes their public /health every minute and sends
 // alerts. Routes:
-//   POST /v1/heartbeat/<host>  Bearer <the host's heartbeat token>  → 204
-//   GET  /v1/state/<host>      Bearer <read token>                  → 200 JSON
+//   POST /v1/heartbeat/<host>   Bearer <the host's heartbeat token>  → 204
+//   GET  /v1/state/<host>       Bearer <read token>                  → 200 JSON, with evaluatedAt
+//   POST /v1/test-alert/<host>  Bearer <read token>                  → 204 sent, 502 not sent (Run 6.4)
 // Everything else, an unknown host and a wrong token are 404.
 import {
   evaluate,
   markDelivered,
+  readHeartbeat,
   recordHeartbeat,
   type Heartbeat,
+  type HeartbeatV2,
   type ProbeLimits,
 } from "./evaluate.ts";
-import { deliver, formatAlert, type SinkConfig } from "./sinks.ts";
+import { deliver, formatAlert, formatTestAlert, type SinkConfig } from "./sinks.ts";
 import { D1Store, type D1Database, type Store } from "./store.ts";
 
 export interface ProbeEnv {
@@ -28,6 +31,9 @@ export interface ProbeEnv {
   HEALTH_GRACE_SECONDS: string;
   REPORTED_GRACE_SECONDS: string;
   REMINDER_SECONDS: string;
+  /** LIMITS.backup.freezeAlertSeconds and maxAgeAlertSeconds (Run 6.4). */
+  CAPTURE_FREEZE_SECONDS: string;
+  BACKUP_MAX_AGE_SECONDS: string;
   /** HEARTBEAT_TOKEN_<HOST> for every host. */
   [secret: `HEARTBEAT_TOKEN_${string}`]: string | undefined;
 }
@@ -61,46 +67,15 @@ async function sameSecret(given: string, expected: string | undefined): Promise<
 const bearer = (request: Request): string =>
   /^Bearer (.+)$/.exec(request.headers.get("authorization") ?? "")?.[1] ?? "";
 
-function readHeartbeat(value: unknown): Heartbeat | null {
-  if (typeof value !== "object" || value === null || Array.isArray(value)) return null;
-  const record = value as Record<string, unknown>;
-  // Run 3.8 adds reviewOpen and Run 4.5 operationsUnresolved; a host that has
-  // not been updated yet still sends the older fields.
-  const keys = Object.keys(record).sort().join(",");
-  if (
-    keys !== "bootId,kmsReachable,sealed" &&
-    keys !== "bootId,kmsReachable,reviewOpen,sealed" &&
-    keys !== "bootId,kmsReachable,operationsUnresolved,reviewOpen,sealed"
-  ) {
-    return null;
-  }
-  const flag = (v: unknown): v is boolean | null => v === null || typeof v === "boolean";
-  if (typeof record.bootId !== "string" || record.bootId.length > 64) return null;
-  if (!flag(record.sealed) || !flag(record.kmsReachable)) return null;
-  const count = (v: unknown): v is number | null | undefined =>
-    v === undefined ||
-    v === null ||
-    (typeof v === "number" && Number.isInteger(v) && v >= 0 && v < 1_000_000);
-  const review = record.reviewOpen;
-  const unresolved = record.operationsUnresolved;
-  if (!count(review) || !count(unresolved)) return null;
-  return {
-    bootId: record.bootId,
-    sealed: record.sealed,
-    kmsReachable: record.kmsReachable,
-    ...(review === undefined ? {} : { reviewOpen: review }),
-    ...(unresolved === undefined ? {} : { operationsUnresolved: unresolved }),
-  };
-}
-
 export async function handleRequest(
   request: Request,
   env: ProbeEnv,
   store: Store,
   nowMs: number,
+  fetcher: typeof fetch = fetch,
 ): Promise<Response> {
   const url = new URL(request.url);
-  const match = /^\/v1\/(heartbeat|state)\/([a-z0-9-]{1,32})$/.exec(url.pathname);
+  const match = /^\/v1\/(heartbeat|state|test-alert)\/([a-z0-9-]{1,32})$/.exec(url.pathname);
   if (match === null) return notFound();
   const [, route, host] = match as unknown as [string, string, string];
   if (!hostsOf(env).some((entry) => entry.name === host)) return notFound();
@@ -108,7 +83,7 @@ export async function handleRequest(
   if (route === "heartbeat" && request.method === "POST") {
     const token = env[`HEARTBEAT_TOKEN_${host.toUpperCase()}`];
     if (!(await sameSecret(bearer(request), token))) return notFound();
-    let beat: Heartbeat | null;
+    let beat: Heartbeat | HeartbeatV2 | null;
     try {
       beat = readHeartbeat(JSON.parse(await request.text()));
     } catch {
@@ -124,7 +99,19 @@ export async function handleRequest(
     if (!(await sameSecret(bearer(request), env.READ_TOKEN))) return notFound();
     const state = await store.load(host, nowMs);
     const alerts = await store.recentAlerts(host, 20);
-    return Response.json({ now: nowMs, state, alerts });
+    const evaluatedAt = await store.evaluatedAt(host);
+    return Response.json({ now: nowMs, evaluatedAt, state, alerts });
+  }
+
+  if (route === "test-alert" && request.method === "POST") {
+    if (!(await sameSecret(bearer(request), env.READ_TOKEN))) return notFound();
+    const delivered = await deliver(sinkOf(env), formatTestAlert(host), fetcher);
+    await store.logAlert(
+      { host, condition: "test_alert", kind: "test", sinceMs: nowMs },
+      nowMs,
+      delivered,
+    );
+    return new Response(null, { status: delivered ? 204 : 502 });
   }
   return notFound();
 }
@@ -135,6 +122,8 @@ function limitsOf(env: ProbeEnv): ProbeLimits {
     healthGraceSeconds: Number(env.HEALTH_GRACE_SECONDS),
     reportedGraceSeconds: Number(env.REPORTED_GRACE_SECONDS),
     reminderSeconds: Number(env.REMINDER_SECONDS),
+    captureFreezeSeconds: Number(env.CAPTURE_FREEZE_SECONDS),
+    backupMaxAgeSeconds: Number(env.BACKUP_MAX_AGE_SECONDS),
   };
 }
 

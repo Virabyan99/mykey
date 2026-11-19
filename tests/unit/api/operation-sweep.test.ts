@@ -26,6 +26,7 @@ describe("startOperationSweep", () => {
       });
     });
     const timer = startOperationSweep({} as pg.Pool, (entry) => logs.push(entry), {
+      idle: () => Promise.resolve(true),
       sweep,
       random: () => 0.5,
     });
@@ -54,6 +55,7 @@ describe("startOperationSweep", () => {
     const logs: LogEntry[] = [];
     const id = "6f1c2f0e-0000-4000-8000-000000000001" as OperationId;
     const timer = startOperationSweep({} as pg.Pool, (entry) => logs.push(entry), {
+      idle: () => Promise.resolve(true),
       sweep: () =>
         Promise.resolve({ uncertain: [id], rejected: [], awaitingInput: [], previewsRemoved: 0 }),
       random: () => 0,
@@ -72,6 +74,7 @@ describe("startOperationSweep", () => {
     const id = "6f1c2f0e-0000-4000-8000-000000000002";
     let drives = 0;
     const timer = startOperationSweep({} as pg.Pool, (entry) => logs.push(entry), {
+      idle: () => Promise.resolve(true),
       sweep: () =>
         Promise.resolve({ uncertain: [], rejected: [], awaitingInput: [], previewsRemoved: 0 }),
       archives: () => {
@@ -98,5 +101,32 @@ describe("startOperationSweep", () => {
     await vi.advanceTimersByTimeAsync(30_000);
     expect(drives).toBe(3);
     timer.stop();
+  });
+
+  it("does nothing while a pair is captured (P-118): no sweep, no archive drive, no log", async () => {
+    vi.useFakeTimers();
+    const logs: LogEntry[] = [];
+    let swept = 0;
+    let driven = 0;
+    const timer = startOperationSweep({} as pg.Pool, (entry) => logs.push(entry), {
+      idle: () => Promise.resolve(false),
+      sweep: () => {
+        swept += 1;
+        return Promise.resolve({
+          uncertain: [],
+          rejected: [],
+          awaitingInput: [],
+          previewsRemoved: 0,
+        });
+      },
+      archives: () => {
+        driven += 1;
+        return Promise.resolve({ archived: [], waiting: [] });
+      },
+      random: () => 0,
+    });
+    await vi.advanceTimersByTimeAsync(95_000);
+    timer.stop();
+    expect([swept, driven, logs]).toEqual([0, 0, []]);
   });
 });

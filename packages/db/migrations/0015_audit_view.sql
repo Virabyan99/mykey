@@ -1,0 +1,2 @@
+ALTER TABLE "audit"."event" ADD COLUMN "subject_user_id" text GENERATED ALWAYS AS (CASE WHEN actor_kind = 'user' THEN actor_id WHEN target_kind = 'user' THEN target_id END) STORED;--> statement-breakpoint
+CREATE INDEX "event_subject_occurred_idx" ON "audit"."event" USING btree ("subject_user_id","occurred_at","id") WHERE organization_id IS NULL;

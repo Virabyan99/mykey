@@ -14,7 +14,6 @@ import {
 import {
   issueCredential,
   operationResponse,
-  readGate,
   replayAnswer,
   revokeCredential,
   type CredentialDeps,
@@ -38,7 +37,7 @@ export function credentialDeps(deps: AppDeps): CredentialDeps {
     issuer: deps.issuer,
     bootId: deps.bootId,
     ring,
-    gateOpen: () => readGate(deps.config.gatePath, deps.config.hostInstanceId).open,
+    gateOpen: () => deps.gate?.open() === true,
     ...(faults === undefined
       ? {}
       : { faults: (point, operationId) => faults(point, operationId ?? "") }),

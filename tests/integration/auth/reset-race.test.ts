@@ -23,11 +23,13 @@ import { ensureQueues } from "@mykey/operations";
 import { drizzle } from "drizzle-orm/node-postgres";
 import * as OTPAuth from "otpauth";
 import { TEST_ORIGIN, requestTo, sessionCookieOf } from "../../harness/api.ts";
-import { startApiProcess, type ApiProcess } from "../../harness/api-worker.ts";
+import { keepCapacityOk, startApiProcess, type ApiProcess } from "../../harness/api-worker.ts";
 import { prepareDatabase, type TestDatabase } from "../database/setup.ts";
+import { TEST_BUILD, gateText, setIncarnation } from "../../harness/gate.ts";
 
 const ROUNDS = 20;
 
+let capacity: { stop(): void } | undefined;
 let db: TestDatabase;
 let directory: string;
 let keys: AuthKeys;
@@ -91,26 +93,26 @@ beforeAll(async () => {
   generateKeyFiles(keysDirectory);
   keys = loadAuthKeys(keysDirectory);
   const hostInstanceId = randomUUID();
+  // Run 6.7 (P-122): the record, the processes and the database name one incarnation.
+  const backendIncarnation = randomUUID();
+  await setIncarnation(db.pool("superuser"), backendIncarnation);
   const gatePath = join(directory, "gate.json");
   writeFileSync(
     gatePath,
-    JSON.stringify({
-      version: 1,
-      state: "open",
-      gateEpoch: 1,
-      hostInstanceId,
-      writtenAt: new Date().toISOString(),
-    }),
+    gateText({ hostInstanceId, backendIncarnation, releaseBuild: TEST_BUILD }, "open", 1),
   );
   const api: ApiConfig = {
     baseUrl: TEST_ORIGIN,
-    build: "0000000",
+    build: TEST_BUILD,
     gatePath,
     hostInstanceId,
+    backendIncarnation,
     trustedProxy: "127.0.0.1",
   };
   const tls = { certPath: db.stack.api.certPath, keyPath: db.stack.api.keyPath };
   ca = readFileSync(db.stack.api.certAuthorityPath);
+  // Run 6.3 (P-115): an ok capacity record beside the gate file.
+  capacity = keepCapacityOk(gatePath);
   processes = [
     await startApiProcess(db.targets.api_runtime, { keysDirectory, api, tls }),
     await startApiProcess(db.targets.api_runtime, { keysDirectory, api, tls }),
@@ -165,6 +167,7 @@ beforeAll(async () => {
 }, 300_000);
 
 afterAll(async () => {
+  capacity?.stop();
   for (const process of processes) await process.kill();
   await db.drop();
   rmSync(directory, { recursive: true, force: true });

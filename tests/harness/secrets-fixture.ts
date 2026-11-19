@@ -142,6 +142,8 @@ export interface SecretsFixture {
   ): Promise<{ currentVersion: number; versions: BackendVersion[] } | null>;
   /** Where the API's credential files are (runtime and issuer). */
   secretsDirectory: string;
+  /** The auth key rings' directory (Run 6.7: a restored product uses the lost host's keys). */
+  keysDirectory: string;
   /** The operator client of A's namespace (root token): for writing past the product. */
   operatorBao(): OpenBaoClient;
   /** Requests the audit device recorded that change KV and carry this operation id. */
@@ -208,6 +210,10 @@ export async function createSecretsFixture(
     runtime?: "ok" | "broken";
     /** More test-only routes (Run 5.1). */
     routes?: readonly { def: RouteDef; handler: Handler }[];
+    /** Run 6.1: override files of the private stack (with `private`). */
+    stackOverrides?: readonly string[];
+    /** Run 6.3: the product's rate limits in both processes (default: never refusing). */
+    rateLimits?: "product";
   } = {},
 ): Promise<SecretsFixture> {
   const directory = mkdtempSync(join(tmpdir(), "mykey-secrets-"));
@@ -222,6 +228,7 @@ export async function createSecretsFixture(
   let importBudget: number | null = null;
   const fx = await createProvisioningFixture({
     shared: opts.private !== true,
+    ...(opts.stackOverrides === undefined ? {} : { stackOverrides: opts.stackOverrides }),
     api: (stack) => {
       current = stack.bao;
       return {
@@ -232,6 +239,7 @@ export async function createSecretsFixture(
           await beforeHandler?.(routeId, info);
         },
         importBudgetMs: () => importBudget ?? undefined,
+        ...(opts.rateLimits === undefined ? {} : { rateLimits: opts.rateLimits }),
         routes: [{ def: TEST_READ_ROUTE, handler: testReadHandler() }, ...(opts.routes ?? [])],
       };
     },
@@ -284,15 +292,17 @@ export async function createSecretsFixture(
       keysDirectory,
       api: {
         baseUrl: TEST_ORIGIN,
-        build: "0000000",
+        build: api.gate.releaseBuild,
         gatePath: api.gate.gatePath,
         hostInstanceId: api.gate.hostInstanceId,
+        backendIncarnation: api.gate.backendIncarnation,
         trustedProxy: null,
       },
       tls,
       openBao: relayTarget,
       secretsDirectory,
       ...(fault === undefined ? {} : { faults: fault }),
+      ...(opts.rateLimits === undefined ? {} : { rateLimits: opts.rateLimits }),
       ...extra,
     });
   let second: ApiProcess | null = opts.processes === 2 ? await startSecond() : null;
@@ -320,6 +330,7 @@ export async function createSecretsFixture(
     },
     env: ids,
     secretsDirectory,
+    keysDirectory,
     setBeforeHandler(hook) {
       beforeHandler = hook;
     },
@@ -636,8 +647,24 @@ export async function expectIndexMatchesBackend(
   expect(await idleAdvisoryLocks(fixture), "advisory locks of idle connections").toBe(0);
 }
 
-/** Advisory locks held by a connection that is idle (a lock that outlived its request). */
+/**
+ * Advisory locks held by a connection that is idle (a lock that outlived its
+ * request). Run 6.3 (D-49): a complete read leaves its environment's read
+ * cool-down behind for 1.5 s on purpose; those must be gone within 3 s, and
+ * only then is everything counted.
+ */
 export async function idleAdvisoryLocks(fixture: SecretsFixture): Promise<number> {
+  const deadline = Date.now() + 3000;
+  for (;;) {
+    const cooling = await fixture.api.superuser.query<{ count: number }>(
+      `SELECT count(*)::int AS count FROM pg_locks
+        WHERE locktype = 'advisory' AND objsubid = 2
+          AND classid = (hashtext('mykey.read-cooldown')::bigint & 4294967295)::oid`,
+    );
+    if ((cooling.rows[0]?.count ?? 0) === 0) break;
+    if (Date.now() > deadline) break; // counted below: a cool-down that outlived 3 s is a leak
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
   const result = await fixture.api.superuser.query<{ count: number }>(
     `SELECT count(*)::int AS count FROM pg_locks l JOIN pg_stat_activity a USING (pid)
       WHERE l.locktype = 'advisory' AND a.state = 'idle' AND a.datname = current_database()`,

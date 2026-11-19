@@ -41,6 +41,11 @@ const VALUES = {
     authFailuresPerAccount: 5,
     authFailureWindowSeconds: 900,
     authDelaySeconds: 900,
+    // Not in Doc 06 §11; Session 6 plan (P-113, D-49): machine requests whose
+    // token nobody can attribute, per source, before OpenBao is asked again;
+    // and credential issuance per person.
+    machineMissesPerSourcePerMinute: 30,
+    credentialIssuePerMinute: 5,
   },
   concurrency: { httpPerProcess: 64, largePerProcess: 2, apiProcesses: 2, provisionerJobs: 2 },
   db: { apiPool: 20, provisionerPool: 6, opsPool: 4, maxConnections: 100 },

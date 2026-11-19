@@ -90,8 +90,9 @@ interface DeliveredLine {
 }
 
 describe("organization provisioning stopped at every point", () => {
-  it("has 39 points", () => {
-    expect(ORGANIZATION_POINTS).toHaveLength(39);
+  // 14 steps × 3 points; Run 6.7 added the step `incarnation`.
+  it("has 42 points", () => {
+    expect(ORGANIZATION_POINTS).toHaveLength(42);
   });
 
   for (const point of ORGANIZATION_POINTS) {

@@ -261,7 +261,8 @@ describe("client input", () => {
  */
 const TOKEN_CALLS: string[] = [
   "session.create where[] data[token]",
-  "session.delete where[token] data[]",
+  // Run 6.1 (P-105): sign-out deletes the session with its audit row first; the
+  // native sign-out that follows finds no session and deletes nothing by token.
   "session.findMany where[token] data[]",
   "session.findOne where[token] data[]",
 ];

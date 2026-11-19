@@ -1,0 +1,10 @@
+[Unit]
+Description=MyKey pair retention daily at 05:00 UTC, after the 03:00 pair (Run 6.6)
+
+[Timer]
+OnCalendar=*-*-* 05:00:00 UTC
+Persistent=true
+RandomizedDelaySec=0
+
+[Install]
+WantedBy=timers.target

@@ -3,6 +3,7 @@ import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   FOUND_EXIT_CODE,
+  parseScanArgs,
   dependencyScanArgs,
   dependencyScanCoverageProblem,
   imageScanArgs,
@@ -59,7 +60,19 @@ describe("scanner commands", () => {
     expect(args).toContain("--skip-dirs /usr/local/lib/node_modules");
     expect(args).toContain("--ignorefile /repo/.trivyignore");
     expect(args).not.toContain(".trivyignore.images");
-    expect(OWN_SCANNED_IMAGES).toEqual(["api", "provisioner"]);
+    expect(OWN_SCANNED_IMAGES).toEqual(["api", "provisioner", "ops"]);
+  });
+
+  // Run 6.9 (P-127): a release scans the archives it lists, not a fresh build.
+  it("images --archives <dir> scans the given archives; plain images builds its own", () => {
+    expect(parseScanArgs(["images"])).toEqual({ mode: "images", archives: null });
+    expect(parseScanArgs(["images", "--archives", "/tmp/release"])).toEqual({
+      mode: "images",
+      archives: "/tmp/release",
+    });
+    expect(() => parseScanArgs(["images", "--archives"])).toThrow(/--archives/);
+    expect(() => parseScanArgs(["secrets", "--archives", "/tmp/x"])).toThrow(/--archives/);
+    expect(parseScanArgs(["secrets"])).toEqual({ mode: "secrets", archives: null });
   });
 
   it("self-test commands point at the seeded fixtures and do not skip them", () => {

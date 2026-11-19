@@ -1,0 +1,121 @@
+{
+  "jobs": {
+    "status-check": {
+      "command": "operations",
+      "role": "maintenance",
+      "secrets": {
+        "/run/mykey/secrets/db-password": "/etc/mykey/secrets/ops/maintenance"
+      },
+      "writable": {},
+      "env": {},
+      "unit": null,
+      "schedule": null
+    },
+    "audit-archive": {
+      "command": "audit-archive",
+      "role": "maintenance",
+      "secrets": {
+        "/run/mykey/secrets/db-password": "/etc/mykey/secrets/ops/maintenance",
+        "/run/mykey/secrets/r2/account-id": "/etc/mykey/secrets/r2-audit-archive/account-id",
+        "/run/mykey/secrets/r2/access-key-id": "/etc/mykey/secrets/r2-audit-archive/access-key-id",
+        "/run/mykey/secrets/r2/secret-access-key": "/etc/mykey/secrets/r2-audit-archive/secret-access-key"
+      },
+      "writable": {
+        "/run/mykey/bao-audit": "/var/lib/mykey/bao-audit/rotated"
+      },
+      "env": {
+        "MYKEY_AUDIT_BUCKET": "mykey-audit-archive",
+        "MYKEY_R2_DIR": "/run/mykey/secrets/r2",
+        "MYKEY_BAO_ROTATED_DIR": "/run/mykey/bao-audit"
+      },
+      "unit": "mykey-audit-archive",
+      "schedule": "*-*-* 01:30:00 UTC"
+    },
+    "capture": {
+      "command": "capture",
+      "role": "maintenance",
+      "secrets": {
+        "/run/mykey/secrets/db-password": "/etc/mykey/secrets/ops/maintenance"
+      },
+      "writable": {
+        "/run/mykey/pairs": "/var/lib/mykey/pairs"
+      },
+      "env": {
+        "MYKEY_PAIR_SCRATCH": "/run/mykey/pairs"
+      },
+      "unit": null,
+      "schedule": null
+    },
+    "pair": {
+      "command": "pair",
+      "role": "maintenance",
+      "secrets": {
+        "/run/mykey/secrets/db-password": "/etc/mykey/secrets/ops/maintenance",
+        "/run/mykey/secrets/r2/account-id": "/etc/mykey/secrets/r2-pairs/account-id",
+        "/run/mykey/secrets/r2/access-key-id": "/etc/mykey/secrets/r2-pairs/access-key-id",
+        "/run/mykey/secrets/r2/secret-access-key": "/etc/mykey/secrets/r2-pairs/secret-access-key",
+        "/run/mykey/secrets/backup/signing-key": "/etc/mykey/secrets/backup/signing-key"
+      },
+      "writable": {
+        "/run/mykey/pairs": "/var/lib/mykey/pairs"
+      },
+      "env": {
+        "MYKEY_PAIR_SCRATCH": "/run/mykey/pairs",
+        "MYKEY_R2_DIR": "/run/mykey/secrets/r2",
+        "MYKEY_PAIR_SIGNER": "k1"
+      },
+      "unit": null,
+      "schedule": null
+    },
+    "pair-retention": {
+      "command": "pair",
+      "role": "maintenance",
+      "secrets": {
+        "/run/mykey/secrets/db-password": "/etc/mykey/secrets/ops/maintenance",
+        "/run/mykey/secrets/r2/account-id": "/etc/mykey/secrets/r2-pairs-cleanup/account-id",
+        "/run/mykey/secrets/r2/access-key-id": "/etc/mykey/secrets/r2-pairs-cleanup/access-key-id",
+        "/run/mykey/secrets/r2/secret-access-key": "/etc/mykey/secrets/r2-pairs-cleanup/secret-access-key"
+      },
+      "writable": {},
+      "env": {
+        "MYKEY_R2_DIR": "/run/mykey/secrets/r2",
+        "MYKEY_PAIR_RETENTION": "yes"
+      },
+      "unit": "mykey-pair-retention",
+      "schedule": "*-*-* 05:00:00 UTC"
+    },
+    "operations-expire": {
+      "command": "operations-expire",
+      "role": "maintenance",
+      "secrets": {
+        "/run/mykey/secrets/db-password": "/etc/mykey/secrets/ops/maintenance"
+      },
+      "writable": {},
+      "env": {},
+      "unit": "mykey-operations-expire",
+      "schedule": "*-*-* 02:00:00 UTC"
+    },
+    "auth-cleanup": {
+      "command": "auth-cleanup",
+      "role": "maintenance",
+      "secrets": {
+        "/run/mykey/secrets/db-password": "/etc/mykey/secrets/ops/maintenance"
+      },
+      "writable": {},
+      "env": {},
+      "unit": "mykey-auth-cleanup",
+      "schedule": "*-*-* *:15:00 UTC"
+    },
+    "sweep": {
+      "command": "sweep",
+      "role": "maintenance",
+      "secrets": {
+        "/run/mykey/secrets/db-password": "/etc/mykey/secrets/ops/maintenance"
+      },
+      "writable": {},
+      "env": {},
+      "unit": "mykey-sweep",
+      "schedule": "*-*-* *:0/5:00 UTC"
+    }
+  }
+}

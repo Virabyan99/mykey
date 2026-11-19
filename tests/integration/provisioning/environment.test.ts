@@ -7,6 +7,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { machineName, renderMachinePolicy } from "@mykey/openbao";
 import { ENVIRONMENT_POINTS, readableRole } from "@mykey/operations/provisioner";
 import type { EnvironmentId, ProjectId } from "@mykey/contracts";
+import { randomUUID } from "node:crypto";
 import { setTimeout as sleep } from "node:timers/promises";
 import { startService, stopService } from "../../harness/stack.ts";
 import { createProvisioningFixture, type ProvisioningFixture } from "./fixture.ts";
@@ -157,6 +158,29 @@ describe("environment provisioning", () => {
       await fx.waitFor(environmentId, "active", 120_000);
     } finally {
       fx.setGate("open");
+      await provisioner.stop();
+    }
+  }, 180_000);
+
+  // Run 6.7 (P-122): OpenBao's incarnation (the namespace's copy) must be the process's own.
+  it("OpenBao names another incarnation → no job is executed; restored → it runs", async () => {
+    const own = fx.api.gate.backendIncarnation;
+    expect(await fx.admin.readIncarnation(fx.namespace)).toBe(own);
+    await fx.admin.writeIncarnation(fx.namespace, randomUUID());
+    const provisioner = await fx.start();
+    try {
+      const { environmentId } = await fx.newEnvironment();
+      await sleep(4000);
+      expect((await fx.environment(environmentId)).state).toBe("pending");
+      expect(
+        provisioner.logs.some(
+          (entry) => entry.event === "job_deferred" && entry.cause === "incarnation",
+        ),
+      ).toBe(true);
+      await fx.admin.writeIncarnation(fx.namespace, own);
+      await fx.waitFor(environmentId, "active", 120_000);
+    } finally {
+      await fx.admin.writeIncarnation(fx.namespace, own);
       await provisioner.stop();
     }
   }, 180_000);

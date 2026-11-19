@@ -20,6 +20,13 @@ SSH host keys (ED25519), pinned in `~/.mykey/ssh/known_hosts`; every connection 
 
 A changed host key is never accepted by hand. It means the server was reinstalled or something is in the path: stop and find out which.
 
+**After a reinstall the owner has just confirmed** (Run 6.8), the new key is taken once and at no other moment:
+
+1. Remove the old entry: `ssh-keygen -R <public IP> -f ~/.mykey/ssh/known_hosts`.
+2. Fetch the new key with `ssh-keyscan -t ed25519 <public IP>`, append it, and record its fingerprint in the run note.
+3. OVHcloud leaves the `ubuntu` password expired, and a key login is refused ("Password change required but no TTY available"). The owner changes it once in their own terminal:
+   `ssh -t -i ~/.mykey/ssh/mykey_ops_ed25519 -o UserKnownHostsFile=~/.mykey/ssh/known_hosts -o StrictHostKeyChecking=yes ubuntu@<public IP>`, giving the temporary password from OVHcloud's e-mail and a new one. The agent never sees either.
+
 ## How the operator gets in
 
 SSH listens on the VPN address only. Port 22 on the public address does not answer.
@@ -99,6 +106,8 @@ node scripts/host.ts staging maint 10 -- docker compose --env-file /etc/mykey/ho
 To cut one purpose off for a drill, on the server: `sudo /opt/mykey/hosts/firewall/mykey-egress.sh block <acme|kms|r2|probe|apt|registry> <seconds>`. The kernel ends the block by itself (the addresses carry a timeout); a timer refills the set two seconds later. To end a block early, run `sudo /opt/mykey/hosts/firewall/mykey-egress.sh apply` (reloads the table, which drops every block). `mykey-egress.sh counts` prints the number of addresses per set.
 
 ## Deploying the services
+
+Since Run 6.9 a host gets a release built once and promoted with `host.ts <host> deploy --release <dir>` (`deploy.md`, D-57). The commands below are the parts it uses, kept for a first bootstrap and for repairs:
 
 ```sh
 docker build --platform linux/amd64 -f apps/api/Dockerfile --build-arg MYKEY_BUILD=$(git rev-parse --short=12 HEAD) -t mykey-api .   # without MYKEY_BUILD the API refuses to start

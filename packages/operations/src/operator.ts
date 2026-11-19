@@ -30,3 +30,22 @@ export {
   type CredentialReconcileDeps,
   type CredentialReconciliation,
 } from "./reconcile/credentials.ts";
+// Run 6.5 (P-118, P-120): the capture coordinator (maintenance; `ops capture`).
+export {
+  CANDIDATE_DEADLINE_SECONDS,
+  DRAIN_DEADLINE_MS,
+  FROZEN_DEADLINE_MS,
+  abortCapture,
+  beginCapture,
+  recordCapture,
+  settlePair,
+  type BeginResult,
+  type Boundary,
+  type CaptureRecord,
+  type Publication,
+  type Settled,
+} from "./capture/coordinator.ts";
+// Run 6.6 (P-121): retention applies planRetention's plan (`ops pair --step retention`).
+export { applyRetention, type CleanupResult } from "./capture/retention.ts";
+// Run 6.7 (P-122, D-54): writing the gate record v2 (`host.ts <host> gate`).
+export { closeGate, openGate, type GateWriteResult, type GateWriter } from "./gate-write.ts";

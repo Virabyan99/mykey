@@ -1,0 +1,13 @@
+# Run 6.1 Task C (P-110, FR-1.57): OpenBao's file audit device on a small
+# tmpfs, so that a test can fill it and watch every audited request fail.
+# Used only by tests/fault/audit/device.test.ts, on a stack of its own.
+# 64 MiB, not the plan's 1 MiB: the fixture's own provisioning writes more
+# than 1 MiB of audit before the test starts.
+services:
+  openbao:
+    volumes:
+      - type: tmpfs
+        target: /openbao/audit
+        tmpfs:
+          size: 67108864
+          mode: 01777

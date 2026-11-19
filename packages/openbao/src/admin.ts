@@ -35,6 +35,9 @@ function requireName(name: string): void {
   if (!OBJECT_NAME.test(name)) throw new Error("invalid object name");
 }
 
+/** Run 6.7 (P-122): the KV v2 mount that holds the backend incarnation. */
+export const META_MOUNT = "mykey-meta";
+
 export class OpenBaoAdmin {
   readonly #target: ResolvedTarget;
   readonly #token: string;
@@ -139,9 +142,12 @@ export class OpenBaoAdmin {
    */
   async putAppRole(
     namespace: string,
-    name: AppRoleName,
+    /** Run 6.5 (P-119): `backup`, in the root namespace only, for the pair's snapshot. */
+    name: AppRoleName | "backup",
     ttlSeconds: number,
     boundCidrs: readonly string[] = [],
+    /** Run 6.5: an explicit secret id lifetime (0: none); left unchanged when absent. */
+    secretIdTtlSeconds?: number,
   ): Promise<{ roleId: string }> {
     requireNamespace(namespace, true);
     requireName(name);
@@ -154,12 +160,13 @@ export class OpenBaoAdmin {
       secret_id_num_uses: 0,
       secret_id_bound_cidrs: [...boundCidrs],
       token_bound_cidrs: [...boundCidrs],
+      ...(secretIdTtlSeconds === undefined ? {} : { secret_id_ttl: secretIdTtlSeconds }),
     });
     return this.readRoleId(namespace, name);
   }
 
   /** The role id of an existing AppRole (not a secret by itself). */
-  async readRoleId(namespace: string, name: AppRoleName): Promise<{ roleId: string }> {
+  async readRoleId(namespace: string, name: AppRoleName | "backup"): Promise<{ roleId: string }> {
     requireNamespace(namespace, true);
     requireName(name);
     const answer = await this.#request(
@@ -174,7 +181,10 @@ export class OpenBaoAdmin {
   }
 
   /** The AppRole's stored fields as OpenBao reports them, or null when it does not exist. */
-  async readAppRole(namespace: string, name: AppRoleName): Promise<Record<string, unknown> | null> {
+  async readAppRole(
+    namespace: string,
+    name: AppRoleName | "backup",
+  ): Promise<Record<string, unknown> | null> {
     requireNamespace(namespace, true);
     requireName(name);
     const answer = await this.#request("GET", namespace, `auth/approle/role/${name}`, [200, 404]);
@@ -182,7 +192,7 @@ export class OpenBaoAdmin {
   }
 
   /** Accessors of every live secret id of the AppRole (never the secret ids). */
-  async listSecretIdAccessors(namespace: string, name: AppRoleName): Promise<string[]> {
+  async listSecretIdAccessors(namespace: string, name: AppRoleName | "backup"): Promise<string[]> {
     requireNamespace(namespace, true);
     requireName(name);
     const answer = await this.#request(
@@ -201,7 +211,7 @@ export class OpenBaoAdmin {
 
   async destroySecretIdAccessor(
     namespace: string,
-    name: AppRoleName,
+    name: AppRoleName | "backup",
     accessor: string,
   ): Promise<void> {
     requireNamespace(namespace, true);
@@ -316,6 +326,174 @@ export class OpenBaoAdmin {
       token_type: data.token_type,
       token_period: data.token_period,
     } as ReadableTokenRole;
+  }
+
+  // ---------------------------------------------------- Run 6.7: the restore (P-124, D-55)
+
+  /** `LIST sys/namespaces` of the root namespace, names without the trailing slash. */
+  async listNamespaces(): Promise<string[]> {
+    const answer = await this.#request("GET", "", "sys/namespaces?list=true", [200, 404]);
+    if (answer.status === 404) return [];
+    const keys = record(record(answer.body).data).keys;
+    if (!Array.isArray(keys) || !keys.every((k) => typeof k === "string")) {
+      throw new Error("OpenBao namespace list: malformed answer");
+    }
+    return keys.map((k) => k.replace(/\/$/, ""));
+  }
+
+  /** The token's own accessor and policies. */
+  async lookupSelf(): Promise<{ accessor: string; policies: string[] }> {
+    const answer = await this.#request("GET", "", "auth/token/lookup-self", [200]);
+    const data = record(record(answer.body).data);
+    if (typeof data.accessor !== "string" || !Array.isArray(data.policies)) {
+      throw new Error("OpenBao lookup-self: malformed answer");
+    }
+    return { accessor: data.accessor, policies: data.policies.map(String) };
+  }
+
+  /**
+   * An orphan root token minted with this (root) token, for two hours. D-55:
+   * the restore's own token; the generate-root ceremony needs the recovery
+   * quorum, which a restore command must not hold.
+   */
+  async createRootToken(): Promise<{ token: string; accessor: string }> {
+    const answer = await this.#request("POST", "", "auth/token/create-orphan", [200], {
+      policies: ["root"],
+      ttl: "2h",
+      renewable: false,
+      display_name: "restore",
+    });
+    const auth = record(record(answer.body).auth);
+    if (typeof auth.client_token !== "string" || typeof auth.accessor !== "string") {
+      throw new Error("OpenBao create-orphan: malformed answer");
+    }
+    return { token: auth.client_token, accessor: auth.accessor };
+  }
+
+  async revokeSelf(): Promise<void> {
+    await this.#request("POST", "", "auth/token/revoke-self", [204]);
+  }
+
+  /** A token's policies by its accessor; null when OpenBao knows no such accessor. */
+  async lookupAccessor(
+    namespace: string,
+    accessor: string,
+  ): Promise<{ policies: string[] } | null> {
+    requireNamespace(namespace, true);
+    const answer = await this.#request(
+      "POST",
+      namespace,
+      "auth/token/lookup-accessor",
+      [200, 400],
+      {
+        accessor,
+      },
+    );
+    if (answer.status === 400) return null;
+    const policies = record(record(answer.body).data).policies;
+    return { policies: Array.isArray(policies) ? policies.map(String) : [] };
+  }
+
+  /** Revokes a token by its accessor (its children too); an unknown accessor is already gone. */
+  async revokeAccessor(namespace: string, accessor: string): Promise<void> {
+    requireNamespace(namespace, true);
+    await this.#request("POST", namespace, "auth/token/revoke-accessor", [204, 400], { accessor });
+  }
+
+  /** A new secret id for the AppRole, every other one destroyed; answers the new credential. */
+  async rotateSecretId(
+    namespace: string,
+    name: AppRoleName | "backup",
+  ): Promise<{ roleId: string; secretId: string }> {
+    const { secretId, accessor: kept } = await this.newSecretId(namespace, name);
+    const { roleId } = await this.readRoleId(namespace, name);
+    for (const accessor of await this.listSecretIdAccessors(namespace, name)) {
+      if (accessor !== kept) await this.destroySecretIdAccessor(namespace, name, accessor);
+    }
+    return { roleId, secretId };
+  }
+
+  /** The names KV v2 holds metadata for under `prefix` (an environment's), sorted. */
+  async listKvNames(namespace: string, prefix: string): Promise<string[]> {
+    requireNamespace(namespace, false);
+    const answer = await this.#request(
+      "GET",
+      namespace,
+      `kv/metadata/${prefix}?list=true`,
+      [200, 404],
+    );
+    if (answer.status === 404) return [];
+    const keys = record(record(answer.body).data).keys;
+    if (!Array.isArray(keys) || !keys.every((k) => typeof k === "string")) {
+      throw new Error("OpenBao KV list: malformed answer");
+    }
+    return [...keys].sort();
+  }
+
+  /** When a secret id was created, by its accessor; null when it does not exist. */
+  async secretIdCreatedAt(
+    namespace: string,
+    name: AppRoleName | "backup",
+    accessor: string,
+  ): Promise<Date | null> {
+    requireNamespace(namespace, true);
+    requireName(name);
+    const answer = await this.#request(
+      "POST",
+      namespace,
+      `auth/approle/role/${name}/secret-id-accessor/lookup`,
+      [200, 404],
+      { secret_id_accessor: accessor },
+    );
+    if (answer.status === 404) return null;
+    const created = record(record(answer.body).data).creation_time;
+    return typeof created === "string" ? new Date(created) : null;
+  }
+
+  /**
+   * Run 6.7 (P-122, D-54): the backend incarnation, in the KV v2 mount
+   * `mykey-meta` of a namespace ("" is the root; each organization namespace
+   * holds a copy its provisioner can read). The mount is made on first write.
+   */
+  async writeIncarnation(namespace: string, incarnation: string): Promise<void> {
+    requireNamespace(namespace, true);
+    const mounted = await this.#request("POST", namespace, `sys/mounts/${META_MOUNT}`, [204, 400], {
+      type: "kv",
+      options: { version: "2" },
+    });
+    if (mounted.status === 400 && !JSON.stringify(mounted.body).includes("already in use")) {
+      throw new Error("OpenBao sys/mounts/mykey-meta: HTTP 400");
+    }
+    const deadline = Date.now() + KV_UPGRADE_TIMEOUT_MS;
+    for (;;) {
+      const written = await this.#request(
+        "POST",
+        namespace,
+        `${META_MOUNT}/data/incarnation`,
+        [200, 400],
+        {
+          data: { incarnation },
+        },
+      );
+      if (written.status === 200) return;
+      // A new KV v2 mount answers 400 "Upgrading…" for a moment.
+      if (Date.now() > deadline) throw new Error("OpenBao mykey-meta: mount upgrade timed out");
+      await sleep(200);
+    }
+  }
+
+  /** The incarnation of a namespace, or null when none was written. */
+  async readIncarnation(namespace: string): Promise<string | null> {
+    requireNamespace(namespace, true);
+    const answer = await this.#request(
+      "GET",
+      namespace,
+      `${META_MOUNT}/data/incarnation`,
+      [200, 404],
+    );
+    if (answer.status === 404) return null;
+    const value = record(record(record(answer.body).data).data).incarnation;
+    return typeof value === "string" ? value : null;
   }
 
   /** `LIST auth/token/accessors` (needs sudo). "" is the root namespace. */

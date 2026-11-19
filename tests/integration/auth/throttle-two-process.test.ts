@@ -14,6 +14,7 @@ import { TEST_ORIGIN, requestTo } from "../../harness/api.ts";
 import { startApiProcess, type ApiProcess } from "../../harness/api-worker.ts";
 import { awaitFreshWindow } from "../../harness/windows.ts";
 import { prepareDatabase, type TestDatabase } from "../database/setup.ts";
+import { TEST_BUILD, gateText, setIncarnation } from "../../harness/gate.ts";
 
 let db: TestDatabase;
 let directory: string;
@@ -31,24 +32,22 @@ beforeAll(async () => {
   const keysDir = mkdtempSync(join(directory, "keys-"));
   generateKeyFiles(keysDir);
   const hostInstanceId = randomUUID();
+  // Run 6.7 (P-122): the record, the processes and the database name one incarnation.
+  const backendIncarnation = randomUUID();
+  await setIncarnation(db.pool("superuser"), backendIncarnation);
   const gatePath = join(directory, "gate.json");
   writeFileSync(
     gatePath,
-    JSON.stringify({
-      version: 1,
-      state: "open",
-      gateEpoch: 1,
-      hostInstanceId,
-      writtenAt: new Date().toISOString(),
-    }),
+    gateText({ hostInstanceId, backendIncarnation, releaseBuild: TEST_BUILD }, "open", 1),
   );
   // Both processes trust the harness's own address as the edge, so the test
   // chooses the source of each attempt through X-Forwarded-For.
   const api: ApiConfig = {
     baseUrl: TEST_ORIGIN,
-    build: "0000000",
+    build: TEST_BUILD,
     gatePath,
     hostInstanceId,
+    backendIncarnation,
     trustedProxy: "127.0.0.1",
   };
   const tls = { certPath: db.stack.api.certPath, keyPath: db.stack.api.keyPath };

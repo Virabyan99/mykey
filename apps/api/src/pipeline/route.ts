@@ -11,17 +11,18 @@
 // (app.ts).
 import { createHash } from "node:crypto";
 import { AuditUnavailable } from "@mykey/audit";
-import { LIMITS, ROUTES, type RouteDef } from "@mykey/contracts";
+import { closedByCapture, EXPANDING_ROUTES, LIMITS, ROUTES, type RouteDef } from "@mykey/contracts";
 import type { Context, Hono } from "hono";
 import { now } from "../log.ts";
 import { authenticateHuman } from "./authn.ts";
-import { findOperationByKey, hasTombstone } from "@mykey/db";
-import { replayAnswer, sameIntent, type Intent } from "@mykey/operations";
+import { captureMode, findOperationByKey, hasTombstone } from "@mykey/db";
+import { isCaptureRefusal, replayAnswer, sameIntent, type Intent } from "@mykey/operations";
 import type { UserPrincipal as Principal } from "./authn.ts";
 import { admitStates, authorize, deny } from "./authz.ts";
 import { checkOrigin, hasMixedCredentials, needsOriginCheck } from "./origin.ts";
-import { headerBytes, readBody } from "./body.ts";
-import { authenticateMachine, hasSelector } from "./machine.ts";
+import { drainBody, headerBytes, readBody } from "./body.ts";
+import { MISSED_LOOKUP, authenticateMachine, hasSelector } from "./machine.ts";
+import { ROUTE_CLASS_LIMIT, SESSION_EXEMPT, windowSecondsLeft, type RateScope } from "./rate.ts";
 import { requestSource } from "./source.ts";
 import {
   ApiError,
@@ -33,6 +34,7 @@ import {
 import { checkDetails, errorResponse, jsonResponse } from "./respond.ts";
 import { notReplayable } from "../routes/credentials.ts";
 import { validateBody, validateQuery } from "./validate.ts";
+import { createLargeGate, type LargeGate } from "../large.ts";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
@@ -76,6 +78,80 @@ function hasBodyBytes(headers: Headers): boolean {
   return headers.get("transfer-encoding") !== null || (length !== null && length !== "0");
 }
 
+/** One rate step (P-113): a refusal is logged with its scope, never its subject. */
+export async function rateStep(
+  deps: AppDeps,
+  requestId: string,
+  scope: RateScope,
+  subject: string,
+): Promise<void> {
+  try {
+    await deps.limiter.hit(scope, subject);
+  } catch (error) {
+    if (error instanceof ApiError && error.code === "rate_limited") {
+      deps.log({ event: "rate_limited", time: now(), requestId, scope });
+    }
+    throw error;
+  }
+}
+
+/**
+ * Machine authentication under the miss limit (P-113): a source at the limit
+ * of unattributable tokens is refused before OpenBao is asked; a refusal that
+ * cost a lookup is counted after it.
+ */
+async function machineStep(
+  deps: AppDeps,
+  c: Context<ApiEnv>,
+  params: Record<string, string>,
+  route: RouteDef,
+  requestId: string,
+  source: string,
+): ReturnType<typeof authenticateMachine> {
+  const misses = await deps.limiter.count("rl:machine-miss", source);
+  if (misses >= deps.limiter.limit("rl:machine-miss")) {
+    deps.log({ event: "rate_limited", time: now(), requestId, scope: "rl:machine-miss" });
+    throw new ApiError("rate_limited", "rl:machine-miss", {
+      "retry-after": String(windowSecondsLeft(Date.now())),
+    });
+  }
+  try {
+    return await authenticateMachine(deps, c.env.incoming.rawHeaders, params, route, requestId);
+  } catch (error) {
+    if (error instanceof ApiError && error.reason === MISSED_LOOKUP) {
+      // Counted; this request still answers 401 (the next one meets the check above).
+      await deps.limiter.hit("rl:machine-miss", source).catch((counted: unknown) => {
+        if (!(counted instanceof ApiError && counted.code === "rate_limited")) throw counted;
+      });
+    }
+    throw error;
+  }
+}
+
+/**
+ * P-115: an expanding mutation under disk pressure. `low` → 507
+ * capacity_exceeded { limit: "disk" }; no usable record → 503.
+ */
+export async function capacityStep(deps: AppDeps): Promise<void> {
+  const reading = await deps.capacity.read(Date.now());
+  if (reading.kind === "ok") return;
+  if (reading.kind === "low") {
+    throw new ApiError("capacity_exceeded", "disk", undefined, { details: { limit: "disk" } });
+  }
+  throw new ApiError("dependency_unavailable", `capacity_${reading.cause}`);
+}
+
+/**
+ * P-118: while a pair is captured (draining or capturing), a request that
+ * would write is refused before it is validated or reaches a store. The
+ * routes that only read, and those that reduce access, continue.
+ */
+export async function captureStep(deps: AppDeps, id: string, method: string): Promise<void> {
+  if (!closedByCapture(id, method)) return;
+  const { mode } = await captureMode(deps.pool);
+  if (mode !== "idle") throw new ApiError("busy", "capture");
+}
+
 /** What a route with no handler does after every check has passed. */
 const terminal: Handler = () => Promise.reject(new NoHandler());
 
@@ -93,12 +169,15 @@ export function failureResponse(
   deps: AppDeps,
 ): Response {
   if (error instanceof NoHandler) return errorResponse("not_found", requestId);
+  // P-118: a statement the capture barrier refused (a race with the change of mode).
   const code =
     error instanceof ApiError
       ? error.code
       : error instanceof AuditUnavailable
         ? "audit_unavailable"
-        : null;
+        : isCaptureRefusal(error)
+          ? "busy"
+          : null;
   if (code === null) {
     deps.log({
       event: "unhandled",
@@ -182,14 +261,29 @@ function outputResponse(
   return jsonResponse(result.status, parsed.data, result.headers);
 }
 
+/**
+ * Run 6.3 (P-114, M-5): the routes that read or write up to a whole
+ * environment. For them authentication, the session or credential limit and
+ * the large slot come before the body is read.
+ */
+export const LARGE_ROUTES: ReadonlySet<string> = new Set([
+  "import.preview",
+  "import.apply",
+  "import.resume",
+  "export.create",
+  "machine.resolve",
+]);
+
 async function run(
   c: Context<ApiEnv>,
   route: RouteDef,
   handler: Handler,
   deps: AppDeps,
+  large: LargeGate,
 ): Promise<Response> {
   const requestId = c.get("requestId");
   c.set("routePattern", route.path);
+  let slot = false;
   try {
     if (headerBytes(c.env.incoming.rawHeaders) > LIMITS.body.headersMaxBytes) {
       throw new ApiError("malformed_request");
@@ -199,13 +293,16 @@ async function run(
     };
     const machineRoute = route.auth === "machine";
     // A machine route takes no body; any JSON it is sent is read only to be refused as a selector.
-    const raw = await readBody(
-      c.req.raw,
-      machineRoute && route.method !== "GET" && hasBodyBytes(c.req.raw.headers)
-        ? { ...route, request: { ...route.request, body: "pending" } }
-        : route,
-      counted,
-    );
+    const readRaw = () =>
+      readBody(
+        c.req.raw,
+        machineRoute && route.method !== "GET" && hasBodyBytes(c.req.raw.headers)
+          ? { ...route, request: { ...route.request, body: "pending" } }
+          : route,
+        counted,
+      );
+    const early = LARGE_ROUTES.has(route.id);
+    let raw = early ? undefined : await readRaw();
     const headers = c.req.raw.headers;
     const human = route.auth === "human" || route.auth === "human_fresh_totp";
     // One kind of credential per request, refused before any database read.
@@ -216,15 +313,33 @@ async function run(
     if (needsOriginCheck(route) && !checkOrigin(headers, deps.config.baseUrl)) {
       throw new ApiError("origin_rejected");
     }
+    const source = requestSource(
+      c.env.incoming.socket.remoteAddress,
+      c.req.header("x-forwarded-for"),
+      deps.config.trustedProxy,
+    );
     // Authentication before strict validation: an anonymous caller learns nothing from a 422.
     const principal = human ? await authenticateHuman(deps, headers) : null;
+    // P-113: the session limit, but for the routes that reduce exposure.
+    if (principal !== null && !SESSION_EXEMPT.has(route.id)) {
+      await rateStep(deps, requestId, "rl:session", principal.sessionId);
+    }
     // A machine request (P-93): the token, its catalog row, its own path; then
     // no selector. No Origin, no authorize (the binding is the authorization),
     // no replay, no freshness, no validation.
     const params = c.req.param();
     const machine = machineRoute
-      ? await authenticateMachine(deps, c.env.incoming.rawHeaders, params, route, requestId)
+      ? await machineStep(deps, c, params, route, requestId, source)
       : null;
+    if (machine !== null) await rateStep(deps, requestId, "rl:credential", machine.credentialId);
+    // P-118: after the gate and the limits, before validation.
+    await captureStep(deps, route.id, route.method);
+    if (early) {
+      // P-114: a slot, or busy at once; only then the body.
+      if (!large.enter()) throw new ApiError("busy");
+      slot = true;
+      raw = await readRaw();
+    }
     if (machine !== null && hasSelector(c.req.url, raw)) throw new ApiError("forbidden_selector");
     const clock = deps.test?.clock?.(headers);
     const query = machineRoute ? undefined : validateQuery(route, new URL(c.req.url).searchParams);
@@ -233,6 +348,11 @@ async function run(
       principal === null
         ? { scope: null, authority: null, resolved: null }
         : await authorize(deps, route, params, principal, requestId);
+    // P-113: the route's own class, per person, after authorization.
+    const routeClass = ROUTE_CLASS_LIMIT[route.id];
+    if (routeClass !== undefined && principal !== null) {
+      await rateStep(deps, requestId, routeClass.scope, principal.userId);
+    }
     // A mutation (P-58): its key first; a request already made answers its
     // stored outcome before the state and freshness checks (Doc 06 §6.2 step 1).
     let idempotencyKey: string | null = null;
@@ -272,6 +392,8 @@ async function run(
         return outputResponse(answer, route, requestId, deps);
       }
     }
+    // P-115: after a replay (which adds nothing), before any state is read or written.
+    if (EXPANDING_ROUTES.has(route.id)) await capacityStep(deps);
     if (principal !== null) await admitStates(deps, route, params, principal, requestId, access);
     // Freshness (FR-1.77): last before the handler, after visibility, action and state.
     if (route.auth === "human_fresh_totp" && principal !== null && !principal.fresh) {
@@ -302,11 +424,7 @@ async function run(
     const result = await handler(
       {
         requestId,
-        source: requestSource(
-          c.env.incoming.socket.remoteAddress,
-          c.req.header("x-forwarded-for"),
-          deps.config.trustedProxy,
-        ),
+        source,
         route,
         body,
         query,
@@ -323,7 +441,13 @@ async function run(
     );
     return outputResponse(result, route, requestId, deps);
   } catch (error) {
+    // P-114: a large route refused before its body was read drains it first.
+    if (LARGE_ROUTES.has(route.id) && hasBodyBytes(c.req.raw.headers)) {
+      await drainBody(c.req.raw);
+    }
     return failureResponse(error, route, requestId, deps);
+  } finally {
+    if (slot) large.leave();
   }
 }
 
@@ -333,8 +457,9 @@ export function mountRouteDef(
   deps: AppDeps,
   route: RouteDef,
   handler: Handler | null,
+  large: LargeGate = createLargeGate(LIMITS.concurrency.largePerProcess),
 ): void {
-  app.on(route.method, route.path, (c) => run(c, route, handler ?? terminal, deps));
+  app.on(route.method, route.path, (c) => run(c, route, handler ?? terminal, deps, large));
 }
 
 /** Mounts the contract route `routeId`; a null handler gives the terminal 404. */
@@ -343,6 +468,7 @@ export function mountRoute(
   deps: AppDeps,
   routeId: string,
   handler: Handler | null,
+  large?: LargeGate,
 ): void {
-  mountRouteDef(app, deps, routeById(routeId), handler);
+  mountRouteDef(app, deps, routeById(routeId), handler, large);
 }

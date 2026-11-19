@@ -28,7 +28,7 @@ import {
   type ProjectId,
   type RouteDef,
 } from "@mykey/contracts";
-import type { EnvironmentScope } from "@mykey/db";
+import { isCaptureRefusal, type EnvironmentScope } from "@mykey/db";
 import type { OpenBaoClient } from "@mykey/openbao";
 import { now } from "../log.ts";
 import { ApiError, type AppDeps } from "./context.ts";
@@ -73,9 +73,13 @@ interface CatalogRow {
   organization_state: string;
 }
 
+/** The reason of a refusal after OpenBao was asked about a token nobody can attribute (P-113). */
+export const MISSED_LOOKUP = "missed_lookup";
+
 function unattributable(deps: AppDeps, requestId: string, cause: "header" | "token" | "catalog") {
   deps.log({ event: "machine_unauthenticated", time: now(), requestId, cause });
-  return new ApiError("unauthenticated");
+  // Only a refusal that cost a lookup counts against the source (rl:machine-miss).
+  return new ApiError("unauthenticated", cause === "header" ? undefined : MISSED_LOOKUP);
 }
 
 /** A parent's state as the machine routes answer it (P-93). */
@@ -119,6 +123,8 @@ async function touch(deps: AppDeps, credentialId: CredentialId): Promise<void> {
       [credentialId],
     );
   } catch (error) {
+    // P-118: skipped while a pair is captured.
+    if (isCaptureRefusal(error)) return;
     deps.log({
       event: "machine_last_used",
       time: now(),
@@ -146,7 +152,11 @@ export async function authenticateMachine(
 
   const self = await reader.tokenLookupSelf();
   if (!self.ok) {
-    if (self.kind === "denied" || (self.kind === "invalid" && self.status >= 400)) {
+    // A 5xx (OpenBao's audit device cannot write, Run 6.1) says nothing about the token.
+    if (
+      self.kind === "denied" ||
+      (self.kind === "invalid" && self.status >= 400 && self.status < 500)
+    ) {
       throw unattributable(deps, requestId, "token");
     }
     if (self.kind === "sealed") throw new ApiError("backend_sealed");

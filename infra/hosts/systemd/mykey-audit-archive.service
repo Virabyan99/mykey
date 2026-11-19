@@ -1,0 +1,9 @@
+[Unit]
+Description=MyKey audit archive: closed days and rotated OpenBao files to R2, then retention (Run 6.2)
+After=network-online.target docker.service mykey-bao-audit-rotate.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/opt/mykey/hosts/ops-run.sh audit-archive -- audit-archive
+TimeoutStartSec=2h

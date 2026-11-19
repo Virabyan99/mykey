@@ -12,9 +12,11 @@
 // A row found past a limit is deleted in the same call. No other file calls
 // Better Auth's getSession (a unit test searches for it).
 import { timingSafeEqual } from "node:crypto";
+import { appendAudit } from "@mykey/audit";
 import { LIMITS, type UserId } from "@mykey/contracts";
-import type { Queryable } from "@mykey/db";
+import { invalidateCapture, isCaptureRefusal, withTransaction, type Queryable } from "@mykey/db";
 import { makeSignature } from "better-auth/crypto";
+import type pg from "pg";
 import type { Auth } from "./auth.ts";
 import type { AuthKeys } from "./keys.ts";
 import { sessionVerifierCandidates } from "./session-verifier.ts";
@@ -130,7 +132,12 @@ export async function resolveSession(deps: SessionDeps, headers: Headers): Promi
         ? "challenge"
         : null;
   if (expired !== null) {
-    await deps.pool.query("DELETE FROM auth.session WHERE id = $1", [row.id]);
+    // P-118: while a pair is captured the tidy-up is refused; the session is denied all the same.
+    await deps.pool
+      .query("DELETE FROM auth.session WHERE id = $1", [row.id])
+      .catch((error: unknown) => {
+        if (!isCaptureRefusal(error)) throw error;
+      });
     return { ok: false, reason: expired };
   }
   // A reset challenge lives while its account waits for the new factor (P-51).
@@ -223,17 +230,84 @@ export async function listSessions(
   }));
 }
 
+/**
+ * The user's own ending of sessions (Run 6.1, P-105): the audit row is in the
+ * transaction that deletes them, so a row that cannot be written leaves every
+ * session in place and the caller answers `audit_unavailable`.
+ */
+async function auditEnded(
+  tx: Queryable,
+  userId: UserId,
+  requestId: string,
+  ended: { kind: "sign_out" } | { kind: "revoke"; count: number },
+): Promise<void> {
+  await appendAudit(tx, {
+    action: ended.kind === "sign_out" ? "auth.sign_out" : "auth.session_revoke",
+    actor: { kind: "user", id: userId },
+    source: "api",
+    organizationId: null,
+    target: { kind: "user", id: userId },
+    outcome: "success",
+    requestId,
+    operationId: null,
+    details: ended.kind === "sign_out" ? {} : { revokedSessions: ended.count },
+  });
+}
+
 /** Ends one session of this user; false when the id is not one of theirs (or none at all). */
 export async function revokeSession(
-  db: Queryable,
+  pool: pg.Pool,
   userId: UserId,
   sessionId: string,
+  requestId: string,
 ): Promise<boolean> {
-  const result = await db.query("DELETE FROM auth.session WHERE id = $1 AND user_id = $2", [
-    sessionId,
-    userId,
-  ]);
-  return result.rowCount === 1;
+  return withTransaction(pool, async (tx) => {
+    await invalidateCapture(tx, "session_revoke");
+    const result = await tx.query("DELETE FROM auth.session WHERE id = $1 AND user_id = $2", [
+      sessionId,
+      userId,
+    ]);
+    if (result.rowCount !== 1) return false;
+    await auditEnded(tx, userId, requestId, { kind: "revoke", count: 1 });
+    return true;
+  });
+}
+
+/** Ends every session of this user, the caller's included; answers how many. */
+export async function revokeAllSessions(
+  pool: pg.Pool,
+  userId: UserId,
+  requestId: string,
+): Promise<number> {
+  return withTransaction(pool, async (tx) => {
+    await invalidateCapture(tx, "session_revoke");
+    const result = await tx.query("DELETE FROM auth.session WHERE user_id = $1", [userId]);
+    const count = result.rowCount ?? 0;
+    await auditEnded(tx, userId, requestId, { kind: "revoke", count });
+    return count;
+  });
+}
+
+/**
+ * Ends the session whose raw token the request's cookie carries, whatever its
+ * state; false when no row has that token (nothing to end, nothing recorded).
+ */
+export async function signOutSession(
+  deps: { pool: pg.Pool; keys: AuthKeys },
+  token: string,
+  requestId: string,
+): Promise<boolean> {
+  return withTransaction(deps.pool, async (tx) => {
+    await invalidateCapture(tx, "sign_out");
+    const result = await tx.query<{ user_id: UserId }>(
+      "DELETE FROM auth.session WHERE token = ANY ($1::text[]) RETURNING user_id",
+      [sessionVerifierCandidates(deps.keys.sessionLookup, token)],
+    );
+    const userId = result.rows[0]?.user_id;
+    if (userId === undefined) return false;
+    await auditEnded(tx, userId, requestId, { kind: "sign_out" });
+    return true;
+  });
 }
 
 /**

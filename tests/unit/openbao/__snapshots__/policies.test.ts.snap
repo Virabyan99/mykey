@@ -37,6 +37,8 @@ path "sys/policies/acl/provisioner"    { capabilities = ["read"] }
 path "sys/mounts/kv"                   { capabilities = ["read"] }
 path "kv/config"                       { capabilities = ["read"] }
 path "auth/token/revoke-self"          { capabilities = ["update"] }
+# Run 6.7 (P-122): the backend incarnation it compares before every job.
+path "mykey-meta/data/incarnation"    { capabilities = ["read"] }
 "
 `;
 

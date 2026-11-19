@@ -9,7 +9,6 @@ import {
   driveArchive,
   operationResponse,
   reactivate,
-  readGate,
   replayAnswer,
   type LifecycleDeps,
 } from "@mykey/operations";
@@ -31,7 +30,7 @@ export function lifecycleDeps(deps: AppDeps): LifecycleDeps {
     issuer: deps.issuer,
     bootId: deps.bootId,
     ring,
-    gateOpen: () => readGate(deps.config.gatePath, deps.config.hostInstanceId).open,
+    gateOpen: () => deps.gate?.open() === true,
     ...(deps.bao === undefined ? {} : { bao: deps.bao }),
     ...(faults === undefined ? {} : { faults: (point, operationId) => faults(point, operationId) }),
   };

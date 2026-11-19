@@ -11,3 +11,6 @@ docs/evidence/registry.json
 
 # Written by tests/integration/authz/matrix.test.ts (Run 3.7).
 docs/evidence/session-3/authorization-matrix.md
+
+# Written by tests/integration/limits/starvation.test.ts (Run 6.3).
+docs/evidence/session-6/run-6.3-starvation.json

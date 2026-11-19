@@ -106,6 +106,34 @@
       "when": 1794734782224,
       "tag": "0014_resource_lifecycle",
       "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "7",
+      "when": 1794842452060,
+      "tag": "0015_audit_view",
+      "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1794847069969,
+      "tag": "0016_audit_archive",
+      "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1794910174661,
+      "tag": "0017_capture_barrier",
+      "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1794938377687,
+      "tag": "0018_incarnation",
+      "breakpoints": true
     }
   ]
 }

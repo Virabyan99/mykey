@@ -5,7 +5,7 @@
 import { randomUUID } from "node:crypto";
 import { appendAudit } from "@mykey/audit";
 import type { OperationId, OrganizationId } from "@mykey/contracts";
-import { insertOperation, withTransaction } from "@mykey/db";
+import { insertOperation, readIncarnation, withTransaction } from "@mykey/db";
 import type { AppRoleName } from "@mykey/openbao";
 import type { OpenBaoAdmin } from "@mykey/openbao/admin";
 import type pg from "pg";
@@ -25,6 +25,8 @@ export const ORGANIZATION_STEPS = [
   "namespace",
   "kv-mount",
   "approle-auth",
+  // Run 6.7 (P-122): the database's incarnation, copied where the provisioner reads it.
+  "incarnation",
   "policy:runtime",
   "policy:issuer",
   "policy:provisioner",
@@ -214,6 +216,14 @@ function stepEffects(
         "approle-auth",
         (await admin.readAuthMount(namespace, "approle")) === "approle",
       );
+    },
+    incarnation: async () => {
+      const incarnation = await readIncarnation(deps.pool);
+      // A database no host has bound yet: db-init (or a restore) writes it later.
+      if (incarnation === null) return "verified";
+      if ((await admin.readIncarnation(namespace)) === incarnation) return "verified";
+      await admin.writeIncarnation(namespace, incarnation);
+      return confirm("incarnation", (await admin.readIncarnation(namespace)) === incarnation);
     },
     "policy:runtime": policy("runtime"),
     "policy:issuer": policy("issuer"),

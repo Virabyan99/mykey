@@ -1,0 +1,9 @@
+[Unit]
+Description=MyKey auth clean-up: spent TOTP steps and recovery codes (Run 6.9)
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/opt/mykey/hosts/ops-run.sh auth-cleanup -- auth-cleanup
+TimeoutStartSec=10min

@@ -3,7 +3,8 @@
 // two API containers (LIMITS.concurrency.apiProcesses). Run 4.2 adds the
 // runtime identity and one fault at one point of the secret protocol.
 import { spawn } from "node:child_process";
-import { resolve } from "node:path";
+import { renameSync, writeFileSync } from "node:fs";
+import { dirname, join, resolve } from "node:path";
 import type { ApiConfig } from "@mykey/api";
 import type { DbTarget } from "@mykey/db";
 import type { OpenBaoTarget } from "@mykey/openbao";
@@ -14,12 +15,43 @@ const ENTRY = resolve(import.meta.dirname, "api-process.ts");
 export interface ApiProcess {
   baseUrl: string;
   port: number;
+  /** Run 6.7: the verification listener's port, when started with `verifyListener`. */
+  verifyPort?: number;
   pid: number;
   kill(signal?: NodeJS.Signals): Promise<void>;
   /** The exit code (null after a signal), once the process has exited. */
   exited: Promise<number | null>;
   /** Everything the process wrote to stderr so far (its log lines among it). */
   output(): string;
+}
+
+/**
+ * Run 6.3 (P-115): an `ok` capacity record beside `gatePath`, renewed every
+ * 30 s as the host's heartbeat renews it, for suites that write their own gate
+ * file. `stop()` ends the renewal.
+ */
+export function keepCapacityOk(gatePath: string): { stop(): void } {
+  const path = join(dirname(gatePath), "capacity.json");
+  const write = (): void => {
+    writeFileSync(
+      `${path}.tmp`,
+      JSON.stringify({
+        version: 1,
+        observedAt: new Date().toISOString(),
+        state: "ok",
+        volumes: { test: { freeBytes: 2 ** 40, sizeBytes: 2 ** 41, freeInodesPercent: 50 } },
+      }),
+    );
+    renameSync(`${path}.tmp`, path);
+  };
+  write();
+  const timer = setInterval(write, 30_000);
+  timer.unref();
+  return {
+    stop: () => {
+      clearInterval(timer);
+    },
+  };
 }
 
 /**
@@ -39,10 +71,19 @@ export function startApiProcess(
     faults?: { point: string; action: FaultAction };
     /** Run 5.3: the tick's archive driver every `intervalMs`. */
     archiveTick?: { intervalMs: number; staleSeconds: number };
+    /** Run 6.3: the product's rate limits (default: limits that never refuse). */
+    rateLimits?: "product" | "wide";
+    /** Run 6.7 (P-123): also the verification listener. */
+    verifyListener?: boolean;
+    /** Run 6.9 (P-131): another checkout's api-process.ts, started in that checkout. */
+    entry?: { path: string; cwd: string };
   },
 ): Promise<ApiProcess> {
   return new Promise((resolveStart, reject) => {
-    const child = spawn(process.execPath, [ENTRY], { stdio: ["pipe", "pipe", "pipe"] });
+    const child = spawn(process.execPath, [opts.entry?.path ?? ENTRY], {
+      stdio: ["pipe", "pipe", "pipe"],
+      ...(opts.entry === undefined ? {} : { cwd: opts.entry.cwd }),
+    });
     let output = "";
     let errors = "";
     const exited = new Promise<number | null>((resolveExit) =>
@@ -65,9 +106,10 @@ export function startApiProcess(
       output += chunk.toString("utf8");
       const line = output.split("\n")[0];
       if (line === undefined || !output.includes("\n")) return;
-      const { port } = JSON.parse(line) as { port: number };
+      const { port, verifyPort } = JSON.parse(line) as { port: number; verifyPort?: number };
       resolveStart({
         port,
+        ...(verifyPort === undefined ? {} : { verifyPort }),
         baseUrl: `https://127.0.0.1:${String(port)}`,
         pid: child.pid ?? -1,
         exited,
@@ -90,6 +132,8 @@ export function startApiProcess(
         : { runtime: { openBao: opts.openBao, secretsDirectory: opts.secretsDirectory } }),
       ...(opts.faults === undefined ? {} : { fault: opts.faults }),
       ...(opts.archiveTick === undefined ? {} : { archiveTick: opts.archiveTick }),
+      ...(opts.rateLimits === undefined ? {} : { rateLimits: opts.rateLimits }),
+      ...(opts.verifyListener === true ? { verifyListener: true } : {}),
     };
     child.stdin.write(`${JSON.stringify(settings)}\n`);
   });
@@ -123,6 +167,9 @@ export function startProvisionerProcess(
     secretsDirectory: string;
     gatePath: string;
     hostInstanceId: string;
+    /** Run 6.7 (P-122): what the gate record and OpenBao must name. */
+    backendIncarnation: string;
+    releaseBuild: string;
     stateFile: string;
     sweepSeconds?: number;
     crashAt?: string;
@@ -196,6 +243,8 @@ export function startProvisionerProcess(
           secretsDirectory: opts.secretsDirectory,
           gatePath: opts.gatePath,
           hostInstanceId: opts.hostInstanceId,
+          backendIncarnation: opts.backendIncarnation,
+          releaseBuild: opts.releaseBuild,
           sweepSeconds: opts.sweepSeconds ?? 3600,
           stateFile: opts.stateFile,
         },

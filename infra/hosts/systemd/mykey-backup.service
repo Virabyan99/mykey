@@ -1,0 +1,12 @@
+[Unit]
+Description=MyKey daily pair: capture, pack, upload, verify, sign (Run 6.5)
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/opt/mykey/hosts/backup/backup.sh
+# A capture that is killed or times out never leaves writing closed or a pair
+# tmpfs behind.
+ExecStopPost=/opt/mykey/hosts/backup/backup.sh recover
+TimeoutStartSec=7200

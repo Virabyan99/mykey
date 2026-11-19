@@ -3,7 +3,7 @@
 // One line per unresolved operation of the organization — uncertain and not
 // closed, or accepted/executing with a stale heartbeat: id, action,
 // environment, name, state, age. `none` when there is none. Reads only.
-import { organizationIdSchema } from "@mykey/contracts";
+import { LIMITS, organizationIdSchema } from "@mykey/contracts";
 import { createPool, listUnresolved } from "@mykey/db";
 import { EXIT, type OpsCommand } from "../cli.ts";
 
@@ -20,7 +20,7 @@ export const operationsCommand: OpsCommand = {
       io.stderr.write("operations: run through host.ts <host> ops (no database)\n");
       return EXIT.failed;
     }
-    const pool = createPool(io.env.database, { max: 1 });
+    const pool = createPool(io.env.database, { max: LIMITS.db.opsPool });
     try {
       const rows = await listUnresolved(pool, parsed.data);
       if (rows.length === 0) io.stdout.write("none\n");

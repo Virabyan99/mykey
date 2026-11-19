@@ -4,11 +4,11 @@
 import { randomUUID } from "node:crypto";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
-import type { OrganizationId } from "@mykey/contracts";
-import { createPool } from "@mykey/db";
+import { LIMITS, type OperationId, type OrganizationId } from "@mykey/contracts";
+import { captureMode, createPool } from "@mykey/db";
 import { namespaceFor } from "@mykey/openbao";
 import { ProvisionerClient } from "@mykey/openbao/provisioner";
-import { createSender, createWorker, readGate } from "@mykey/operations";
+import { createSender, createWorker, isCaptureRefusal, readGate } from "@mykey/operations";
 import {
   provisionEnvironment,
   sweepAll,
@@ -27,6 +27,9 @@ export type ProvisionerLog =
 /** How long a job waits before it looks at a closed gate again. */
 const GATE_RETRY_SECONDS = 30;
 
+/** Run 6.3 (P-114): the provisioner's one pool, from LIMITS.db. */
+export const PROVISIONER_CONNECTIONS = LIMITS.db.provisionerPool;
+
 export interface StartOptions {
   log: (entry: ProvisionerLog) => void;
   /** Test-only: stops the process at a point of the environment job. */
@@ -39,7 +42,7 @@ export async function startProvisioner(
   opts: StartOptions,
 ): Promise<{ stop(): Promise<void>; sweepNow(): Promise<void> }> {
   const bootId = opts.bootId ?? randomUUID();
-  const pool = createPool(config.database, { max: 4 });
+  const pool = createPool(config.database, { max: PROVISIONER_CONNECTIONS });
   const clientFor: EnvironmentDeps["clientFor"] = (organizationId: OrganizationId) => {
     const credential = readCredential(config.secretsDirectory);
     if (credential?.organizationId !== organizationId) {
@@ -52,18 +55,81 @@ export async function startProvisioner(
       }),
     );
   };
-  const gateOpen = () => readGate(config.gatePath, config.hostInstanceId).open;
+  // Run 6.7 (P-122): the record must admit all, and OpenBao (the organization
+  // namespace's copy) must name this incarnation; read again after 5 s.
+  // A refused login (Session 6 gate): the provisioner's own secret id is bad or
+  // destroyed. It can change nothing, so the job runs and fails into review
+  // (provisioning_failed) instead of waiting for ever on a read it cannot make.
+  // An unreachable OpenBao (Session 6 gate) proves nothing about which OpenBao
+  // it is: the gate stays shut, as `unreachable` rather than `incarnation`, and
+  // the failed read is not kept, so the first sweep after it returns reads again.
+  interface BaoReading {
+    value: string | null;
+    loginRefused: boolean;
+    unanswered: boolean;
+  }
+  let baoIncarnation: BaoReading & { at: number } = {
+    value: null,
+    loginRefused: false,
+    unanswered: false,
+    at: -Infinity,
+  };
+  const readBaoIncarnation = async (): Promise<BaoReading> => {
+    if (Date.now() - baoIncarnation.at < 5_000) return baoIncarnation;
+    let value: string | null = null;
+    let loginRefused = false;
+    let unanswered = false;
+    const organizationId = readCredential(config.secretsDirectory)?.organizationId;
+    const client =
+      organizationId === undefined ? null : await clientFor(organizationId as OrganizationId);
+    if (client !== null) {
+      try {
+        const answer = await client.readIncarnation();
+        value = answer.ok ? answer.value : null;
+        if (!answer.ok && answer.cause === "denied") loginRefused = await client.loginRefused();
+        unanswered = !answer.ok && answer.cause !== "denied";
+      } finally {
+        await client.close();
+      }
+    }
+    const reading = { value, loginRefused, unanswered };
+    if (!unanswered) baoIncarnation = { ...reading, at: Date.now() };
+    return reading;
+  };
+  const expect = {
+    hostInstanceId: config.hostInstanceId,
+    backendIncarnation: config.backendIncarnation,
+    releaseBuild: config.releaseBuild,
+  };
+  const gateCause = async (): Promise<string | null> => {
+    const reading = readGate(config.gatePath, expect);
+    if (reading.admits !== "all") return "gate_closed";
+    const found = await readBaoIncarnation().catch(() => null);
+    if (found === null || found.unanswered) return "unreachable";
+    if (found.value === config.backendIncarnation) return null;
+    return found.loginRefused ? null : "incarnation";
+  };
   const sender = await createSender(pool);
+  // P-118: no job and no sweep while a pair is captured.
+  const captured = async (): Promise<boolean> => (await captureMode(pool)).mode !== "idle";
+  const later = async (operationId: OperationId, cause: string): Promise<void> => {
+    opts.log({ event: "job_deferred", operationId, cause });
+    await sender.send("environment.provision", operationId, {
+      startAfterSeconds: GATE_RETRY_SECONDS,
+    });
+  };
 
   const worker = await createWorker(pool, {
     "environment.provision": async (operationId, meta) => {
-      if (!gateOpen()) {
-        opts.log({ event: "job_deferred", operationId, cause: "gate_closed" });
+      const closed = await gateCause();
+      if (closed !== null) {
         // Nothing was done. The job comes back in 30 s without using a retry, so
         // a long closure (a deploy, a quarantine) never ends the job (gate review).
-        await sender.send("environment.provision", operationId, {
-          startAfterSeconds: GATE_RETRY_SECONDS,
-        });
+        await later(operationId, closed);
+        return;
+      }
+      if (await captured()) {
+        await later(operationId, "capture");
         return;
       }
       try {
@@ -79,6 +145,11 @@ export async function startProvisioner(
         );
         opts.log({ event: "job", operationId, outcome });
       } catch (error) {
+        // A capture began after the check: the barrier refused a write, so later.
+        if (isCaptureRefusal(error)) {
+          await later(operationId, "capture");
+          return;
+        }
         opts.log({
           event: "job_deferred",
           operationId,
@@ -90,8 +161,11 @@ export async function startProvisioner(
   });
 
   const sweep = async (): Promise<void> => {
-    if (!gateOpen()) {
-      opts.log({ event: "sweep_skipped", cause: "gate_closed" });
+    const closed = await gateCause();
+    if (closed !== null) {
+      opts.log({ event: "sweep_skipped", cause: closed });
+    } else if (await captured().catch(() => true)) {
+      opts.log({ event: "sweep_skipped", cause: "capture" });
     } else {
       try {
         const result = await sweepAll({ pool, clientFor });

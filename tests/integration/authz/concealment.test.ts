@@ -54,7 +54,7 @@ const route = (id: string): RouteDef => {
 };
 
 describe("mixed credentials", () => {
-  it("cookie + Authorization: Bearer x is 400 mixed_authentication on a human and a machine route, with no query", async () => {
+  it("cookie + Authorization: Bearer x is 400 mixed_authentication on a human and a machine route, with one query: the source counter", async () => {
     const ids = {
       org: tenants.a.organizationId,
       project: tenants.a.project1,
@@ -73,7 +73,9 @@ describe("mixed credentials", () => {
       });
       expect(response?.status, id).toBe(400);
       expect((await errorOf(response!)).code, id).toBe("mixed_authentication");
-      expect(queries, id).toBe(0);
+      // Run 6.3 (P-113): the source limit is counted before anything of the request is read
+      // (one statement: `pool.query` and the checkout it makes).
+      expect(queries, id).toBe(2);
     }
   });
 

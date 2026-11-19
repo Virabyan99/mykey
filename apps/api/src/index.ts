@@ -2,12 +2,14 @@ export { createApp, handledRouteIds } from "./app.ts";
 export {
   HEALTH_DEADLINE_MS,
   classifyFailure,
+  DEEP_REUSE_MS,
+  auditedBaoCall,
   createHealthCheck,
   type HealthCause,
   type HealthCheck,
   type HealthReading,
 } from "./health.ts";
-export { createLogger, redactEntry, type LogEntry } from "./log.ts";
+export { API_SETTINGS, conformEntry, createLogger, redactEntry, type LogEntry } from "./log.ts";
 export {
   DISPATCH_INTERVAL_MS,
   startOutboxDispatcher,
@@ -17,6 +19,17 @@ export { authenticateHuman, type Principal, type UserPrincipal } from "./pipelin
 export { authenticateMachine, type MachinePrincipal } from "./pipeline/machine.ts";
 export { parseStrictJson, readAuthBody, readBody } from "./pipeline/body.ts";
 export { createLargeGate, type LargeGate } from "./large.ts";
+export { createInflightGate, type InflightGate } from "./pipeline/inflight.ts";
+export {
+  RATE_SCOPES,
+  ROUTE_CLASS_LIMIT,
+  SESSION_EXEMPT,
+  createRateLimiter,
+  scopeLimit,
+  windowSecondsLeft,
+  type RateLimiter,
+  type RateScope,
+} from "./pipeline/rate.ts";
 export { readDeps, recheckOf, refusedOf } from "./routes/secrets.ts";
 export {
   credentialDeps,
@@ -29,11 +42,18 @@ export { checkOrigin, hasMixedCredentials, needsOriginCheck } from "./pipeline/o
 export { checkStates } from "./pipeline/states.ts";
 export {
   GATE_MAX_BYTES,
+  INCARNATION_REUSE_MS,
+  createServiceGate,
   readGate,
+  verificationServes,
+  type GateAdmits,
   type GateCause,
+  type GateExpect,
   type GateIo,
   type GateReading,
   type GateRecord,
+  type Listener,
+  type ServiceGate,
 } from "./pipeline/gate.ts";
 export {
   ApiError,
@@ -53,12 +73,15 @@ export {
 } from "./pipeline/respond.ts";
 export { requestSource } from "./pipeline/source.ts";
 export { startThrottleSweep } from "./throttle-sweep.ts";
-export { startOperationSweep } from "./operation-sweep.ts";
+export { operationSweepPass, startOperationSweep, type SweepPass } from "./operation-sweep.ts";
 export { intentOf, mountRoute, mountRouteDef } from "./pipeline/route.ts";
 export {
   MissingSetting,
   configFromEnvironment,
   listen,
+  API_CONNECTIONS,
+  capacityPathOf,
+  HEADERS_TIMEOUT_MS,
   startServer,
   type ApiServer,
   type ListenOptions,

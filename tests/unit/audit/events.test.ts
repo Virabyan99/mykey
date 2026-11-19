@@ -156,6 +156,8 @@ describe("secret actions", () => {
     for (const outcome of ["intent", "unknown"] as const) {
       await appendAudit(recorder, {
         ...event("secret.create", { name: "DB_HOST" }),
+        // Run 6.1 (P-106): a tenant action carries its organization.
+        organizationId: "6f1c2a1e-1d7b-4f43-9a51-0b3a3c1e9f01",
         outcome,
       });
     }

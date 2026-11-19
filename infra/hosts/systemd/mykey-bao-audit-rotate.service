@@ -1,0 +1,8 @@
+[Unit]
+Description=MyKey rotation of OpenBao's audit file (Run 6.2)
+After=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/opt/mykey/hosts/checks/bao-audit-rotate.sh
+TimeoutStartSec=30min

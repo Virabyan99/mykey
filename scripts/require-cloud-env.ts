@@ -7,6 +7,8 @@ export const REQUIRED_CLOUD_TOKENS = [
   "mykey-fixture-upload",
   "mykey-fixture-cleanup",
   "mykey-r2-admin",
+  // Run 6.2: the audit archive's segment test.
+  "mykey-audit-archive-upload",
 ];
 
 /** The required tokens whose credentials cannot be loaded. */

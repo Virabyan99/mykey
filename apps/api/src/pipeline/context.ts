@@ -3,13 +3,15 @@ import type { HttpBindings } from "@hono/node-server";
 import type { Auth, AuthKeys, Throttle } from "@mykey/auth";
 import type { Authority, ErrorCode, RouteDef } from "@mykey/contracts";
 import type { OperationRow } from "@mykey/db";
-import type { IssuerBao, RuntimeBao } from "@mykey/operations";
+import type { CapacityReading, IssuerBao, RuntimeBao } from "@mykey/operations";
 import type pg from "pg";
 import type { HealthReading } from "../health.ts";
 import type { LogEntry } from "../log.ts";
 import type { UserPrincipal } from "./authn.ts";
 import type { MachinePrincipal } from "./machine.ts";
 import type { Scope } from "./authz.ts";
+import type { Listener, ServiceGate } from "./gate.ts";
+import type { RateLimiter } from "./rate.ts";
 
 export interface ApiConfig {
   /** The public origin, e.g. https://mykey-staging.nomikey.com. */
@@ -20,6 +22,11 @@ export interface ApiConfig {
   gatePath: string;
   /** The host the gate record must name. */
   hostInstanceId: string;
+  /**
+   * Run 6.7 (P-122): the backend incarnation the gate record and the
+   * database's control row must name (MYKEY_BACKEND_INCARNATION in host.env).
+   */
+  backendIncarnation: string;
   /** The edge proxy's address; only its X-Forwarded-For is believed (P-47, Run 3.3). */
   trustedProxy: string | null;
   /** Where scalar.js and scalar.json are (Run 5.9); default apps/api/assets. */
@@ -46,8 +53,19 @@ export interface AppDeps {
   /** A UUID per process start: the executor id of the operations it runs. */
   bootId: string;
   config: ApiConfig;
+  /**
+   * Run 6.7 (P-122): the gate with the database's incarnation. createApp makes
+   * one when absent; startServer shares one between its two listeners.
+   */
+  gate?: ServiceGate;
+  /** Run 6.7 (P-123): the listener this app serves; default public. */
+  listener?: Listener;
   health: () => Promise<HealthReading>;
   log: (entry: LogEntry) => void;
+  /** Run 6.3 (P-113): the rate limits; required, every request passes through it. */
+  limiter: RateLimiter;
+  /** Run 6.3 (P-115): the host's capacity record, read afresh for every expanding mutation. */
+  capacity: { read(nowMs: number): Promise<CapacityReading> };
   /** The auth module (Run 3.2): Better Auth, the key rings and throttling. */
   auth?: {
     auth: Auth;

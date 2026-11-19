@@ -106,11 +106,17 @@ describe("import.resume", () => {
       });
       expect(sha256(shown.body.value as string)).toBe(sha256(value));
     }
-    const audit = await f.api.superuser.query<{ outcome: string }>(
-      "SELECT outcome FROM audit.event WHERE action = 'import.apply' AND operation_id = $1 ORDER BY occurred_at",
+    // Run 6.1 (P-105): the resume writes its own rows; the apply's intent is not repeated.
+    const audit = await f.api.superuser.query<{ action: string; outcome: string }>(
+      `SELECT action, outcome FROM audit.event
+        WHERE action LIKE 'import.%' AND operation_id = $1 ORDER BY occurred_at, id`,
       [parentId],
     );
-    expect(audit.rows.map((row) => row.outcome)).toEqual(["intent", "success"]);
+    expect(audit.rows.map((row) => `${row.action} ${row.outcome}`)).toEqual([
+      "import.apply intent",
+      "import.resume intent",
+      "import.resume success",
+    ]);
   });
 
   it("other bytes → 422", async () => {
@@ -179,6 +185,57 @@ describe("import.resume", () => {
     expect(done.body.state).toBe("succeeded");
     for (const child of await childrenOf(parentId))
       expect(await f.auditedChanges(child.id)).toBe(1);
+  });
+
+  // Run 6.7 (M-1, P-122): a gate closing mid-way leaves the rest for a resume.
+  it("an import running when the gate closes ends with its remaining entries not_attempted and resumes to completion after the gate opens", async () => {
+    const entries: [string, string][] = [
+      [unique(), valueOf("1")],
+      [unique(), valueOf("2")],
+      [unique(), valueOf("3")],
+    ];
+    const text = fileOf(...entries);
+    const previewed = await f.send("POST", `${f.env("env1a").path}/import/preview`, {
+      text,
+      key: null,
+    });
+    expect(previewed.status).toBe(200);
+    let closed = false;
+    f.setFaults((point) => {
+      if (point === "between_entries" && !closed) {
+        closed = true;
+        f.api.setGate("closed");
+      }
+      return Promise.resolve();
+    });
+    let parked: Answer;
+    try {
+      parked = await f.send(
+        "POST",
+        `${f.env("env1a").path}/import/${previewed.body.previewId as string}/apply`,
+        { text },
+      );
+    } finally {
+      f.setFaults(null);
+      f.api.setGate("open");
+    }
+    expect(parked.status).toBe(202);
+    expect(parked.body.state).toBe("awaiting_input");
+    const parentId = parked.body.operationId as string;
+    // Only the first entry was attempted; nothing was rejected.
+    expect((await childrenOf(parentId)).map((child) => child.secret_name)).toEqual([
+      entries[0]?.[0],
+    ]);
+    const rows = await f.api.superuser.query<{ outcome: string | null }>(
+      "SELECT outcome FROM app.import_entry WHERE parent_operation_id = $1 ORDER BY ordinal",
+      [parentId],
+    );
+    expect(rows.rows.map((row) => row.outcome)).toEqual(["created", null, null]);
+
+    const answer = await resume("env1a", parentId, text);
+    expect(answer.status).toBe(200);
+    expect(answer.body.state).toBe("succeeded");
+    expect(outcomes(answer)).toEqual(["created", "created", "created"]);
   });
 
   it("a key changed while the import waited → conflict", async () => {

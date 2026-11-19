@@ -17,6 +17,8 @@ describe("wrangler.jsonc", () => {
     expect(config.vars.HEALTH_GRACE_SECONDS).toBe(grace);
     expect(config.vars.REPORTED_GRACE_SECONDS).toBe(grace);
     expect(config.vars.REMINDER_SECONDS).toBe(String(LIMITS.monitoring.alertReminderSeconds));
+    expect(config.vars.CAPTURE_FREEZE_SECONDS).toBe(String(LIMITS.backup.freezeAlertSeconds));
+    expect(config.vars.BACKUP_MAX_AGE_SECONDS).toBe(String(LIMITS.backup.maxAgeAlertSeconds));
     expect(LIMITS.monitoring.probeIntervalSeconds).toBe(60);
     expect(config.triggers.crons).toEqual(["* * * * *"]);
   });

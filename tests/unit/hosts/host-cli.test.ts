@@ -1,12 +1,18 @@
 // The pure parts of scripts/host.ts: argument parsing, remote command
 // construction and the rule that a pending revert is cancelled only from a
 // connection opened after the apply. No network: ssh is an injected runner.
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import {
   CONFIRM_PROBE,
+  REMOTE_API_VERIFY,
+  apiBuildCommand,
   applyCommand,
   bootstrapCommands,
   confirmPlan,
+  gateOriginOf,
   gateRecordText,
   gateWriteCommand,
   hostEnvSetCommand,
@@ -17,10 +23,16 @@ import {
   maintCommands,
   parseConfirmProbe,
   parseHostArgs,
+  usableHost,
+  planIncarnation,
   quiesceCommands,
   resumeCommand,
   runConfirm,
   runMaint,
+  opsRootToken,
+  restoreOrganization,
+  restorePasswordPlaces,
+  restoreStartCommand,
 } from "../../../scripts/host.ts";
 import {
   setSshRunner,
@@ -91,7 +103,11 @@ describe("parseHostArgs", () => {
     ],
     [["staging", "up"], { host: "staging", command: "up", via: "vpn" }],
     [["staging", "db-init"], { host: "staging", command: "db-init", via: "vpn" }],
-    [["prod", "status"], { host: "prod", command: "status", via: "vpn" }],
+    [["prod", "status"], { host: "prod", command: "status", via: "vpn", json: false }],
+    [
+      ["staging", "status", "--json"],
+      { host: "staging", command: "status", via: "vpn", json: true },
+    ],
   ])("parses %j", (argv, expected) => {
     expect(parseHostArgs(argv)).toEqual(expected);
   });
@@ -193,6 +209,87 @@ describe("remote command construction", () => {
   });
 });
 
+// Run 6.8: after a restore's snapshot, the host's custody root token is gone
+// with the token store it lived in; until restore-verify --open revokes it,
+// the restore's own root token is the operator's one valid token.
+// Run 6.8: `compose start` reuses containers made before the restore wrote
+// the new incarnation and host instance id into host.env; they refused to start.
+describe("the restore's start of the executors", () => {
+  it("recreates api and provisioner from host.env, never starts the old containers", () => {
+    const command = restoreStartCommand();
+    expect(command).toContain("--env-file /etc/mykey/host.env");
+    expect(command).toMatch(/ up -d --force-recreate --no-deps api provisioner$/);
+    expect(command).not.toContain(" start ");
+  });
+});
+
+// Run 6.8: a restore gives every role a new password; the host jobs read
+// maintenance and backup_reader from /etc/mykey/secrets/ops, which kept the old ones.
+describe("where a restore keeps each role's new password", () => {
+  it("a host service's on the host; the workstation's in custody, and the ops copy on the host too", () => {
+    expect(restorePasswordPlaces("api_runtime")).toEqual({
+      workstation: false,
+      host: ["/etc/mykey/secrets/api/db-password"],
+    });
+    expect(restorePasswordPlaces("maintenance")).toEqual({
+      workstation: true,
+      host: ["/etc/mykey/secrets/ops/maintenance"],
+    });
+    expect(restorePasswordPlaces("backup_reader")).toEqual({
+      workstation: true,
+      host: ["/etc/mykey/secrets/ops/backup_reader"],
+    });
+    expect(restorePasswordPlaces("migration_owner")).toEqual({ workstation: true, host: [] });
+  });
+});
+
+describe("the operator's OpenBao token for ops on a host", () => {
+  it("is the restore's root token while a restore waits for its report, else the custody copy", () => {
+    const home = mkdtempSync(join(tmpdir(), "mykey-ops-token-"));
+    try {
+      expect(opsRootToken("drill", home)).toBeNull();
+      mkdirSync(join(home, ".mykey", "custody", "drill"), { recursive: true });
+      writeFileSync(
+        join(home, ".mykey", "custody", "drill", "openbao-init.json"),
+        JSON.stringify({ root_token: "custody-token" }),
+      );
+      expect(opsRootToken("drill", home)).toEqual({ token: "custody-token", from: "custody" });
+      mkdirSync(join(home, ".mykey", "secrets", "hosts", "drill"), { recursive: true });
+      writeFileSync(
+        join(home, ".mykey", "secrets", "hosts", "drill", "restore-root-token"),
+        "restore-token\n",
+      );
+      expect(opsRootToken("drill", home)).toEqual({ token: "restore-token", from: "restore" });
+      expect(opsRootToken("staging", home)).toBeNull();
+    } finally {
+      rmSync(home, { recursive: true, force: true });
+    }
+  });
+});
+
+// Run 6.8 (P-125): from "declared lost" until the drill host opens, staging is
+// unreachable on purpose: MYKEY_FENCED_HOSTS reaches host.ts's child processes too.
+describe("a fenced host", () => {
+  it("refuses every connection, command or tunnel, to a host MYKEY_FENCED_HOSTS names", () => {
+    const before = process.env.MYKEY_FENCED_HOSTS;
+    process.env.MYKEY_FENCED_HOSTS = "staging";
+    try {
+      expect(() => sshArgs(hosts.staging, "true", { address: "vpn" })).toThrow(/fenced/);
+      expect(() =>
+        sshArgs(hosts.staging, undefined, {
+          address: "vpn",
+          forward: "127.0.0.1:1:10.78.2.2:5432",
+        }),
+      ).toThrow(/fenced/);
+      expect(sshArgs(hosts.prod, "true", { address: "vpn" })).toContain("ControlMaster=no");
+    } finally {
+      if (before === undefined) delete process.env.MYKEY_FENCED_HOSTS;
+      else process.env.MYKEY_FENCED_HOSTS = before;
+    }
+    expect(sshArgs(hosts.staging, "true", { address: "vpn" })).toContain("ControlMaster=no");
+  });
+});
+
 describe("confirm", () => {
   it("never reuses a connection: every ssh call disables multiplexing", () => {
     const args = sshArgs(hosts.staging, "true", { address: "vpn" });
@@ -261,6 +358,30 @@ describe("confirm", () => {
   });
 });
 
+// Run 6.8 (P-125, D-56): the drill host, and production lent to it.
+describe("the drill host and a lent host", () => {
+  it("accepts drill as a host, KMS and OpenBao commands included; production's rule stays production's", () => {
+    expect(parseHostArgs(["drill", "status"])).toMatchObject({ host: "drill", command: "status" });
+    expect(parseHostArgs(["drill", "quiesce"])).toMatchObject({ host: "drill" });
+    expect(parseHostArgs(["drill", "kms-use", "drill-1"])).toMatchObject({ host: "drill" });
+    expect(() => parseHostArgs(["prod", "quiesce"])).toThrow(/production/);
+    expect(() => parseHostArgs(["other", "status"])).toThrow(/unknown host/);
+  });
+
+  it("a host marked lent in hosts.json refuses every command", () => {
+    const entry = {
+      name: "prod",
+      publicIp: "192.0.2.48",
+      vpnIp: "10.77.1.1",
+      hostname: "prod.example.test",
+      sshUser: "ubuntu",
+    } as const;
+    expect(() => usableHost({ ...entry, lent: true })).toThrow(/lent/);
+    expect(usableHost(entry)).toEqual(entry);
+    expect(() => usableHost(undefined, "drill")).toThrow(/no drill entry/);
+  });
+});
+
 describe("quiesce and resume (Run 4.5, P-75)", () => {
   it("parse without arguments; staging only (production holds no OpenBao)", () => {
     expect(parseHostArgs(["staging", "quiesce"])).toMatchObject({ command: "quiesce" });
@@ -296,6 +417,201 @@ describe("gate (Run 3.1, P-43)", () => {
     });
     expect(() => parseHostArgs(["staging", "gate"])).toThrow(/gate/);
     expect(() => parseHostArgs(["staging", "gate", "ajar"])).toThrow(/gate/);
+  });
+
+  // Run 6.7 (P-122): v2 needs a verification report to open; close may say verifying.
+  it("parses gate open --report <file>, gate close --verifying, and refuses other words", () => {
+    expect(parseHostArgs(["staging", "gate", "open", "--report", "r.json"])).toEqual({
+      host: "staging",
+      via: "vpn",
+      command: "gate",
+      action: "open",
+      report: "r.json",
+    });
+    expect(parseHostArgs(["staging", "gate", "close", "--verifying"])).toEqual({
+      host: "staging",
+      via: "vpn",
+      command: "gate",
+      action: "close",
+      verifying: true,
+    });
+    expect(() => parseHostArgs(["staging", "gate", "open", "--report"])).toThrow(/report/);
+    expect(() => parseHostArgs(["staging", "gate", "close", "--report", "r.json"])).toThrow(/gate/);
+    expect(() => parseHostArgs(["staging", "gate", "status", "--verifying"])).toThrow(/gate/);
+    expect(() => parseHostArgs(["staging", "gate", "open", "--wide"])).toThrow(/gate/);
+  });
+
+  // Run 6.7 (P-124): steps 1–7 by `restore`, the report and step 9 by `restore-verify`.
+  it("parses restore --source <host> --pair <id> | --newest, and refuses anything else", () => {
+    const pair = "0b0e7a52-6b51-4d43-9a1e-61f4a0e3c0d2";
+    expect(parseHostArgs(["staging", "restore", "--source", "staging", "--newest"])).toEqual({
+      host: "staging",
+      via: "vpn",
+      command: "restore",
+      source: "staging",
+      pair: "newest",
+    });
+    expect(parseHostArgs(["prod", "restore", "--source", "staging", "--pair", pair])).toEqual({
+      host: "prod",
+      via: "vpn",
+      command: "restore",
+      source: "staging",
+      pair,
+    });
+    expect(() => parseHostArgs(["staging", "restore", "--newest"])).toThrow(/--source/);
+    expect(() => parseHostArgs(["staging", "restore", "--source", "staging"])).toThrow(/--pair/);
+    expect(() =>
+      parseHostArgs(["staging", "restore", "--source", "staging", "--newest", "--pair", pair]),
+    ).toThrow(/--pair/);
+    expect(() =>
+      parseHostArgs(["staging", "restore", "--source", "staging", "--pair", "latest"]),
+    ).toThrow(/pair id/);
+    expect(() =>
+      parseHostArgs(["staging", "restore", "--source", "elsewhere", "--newest"]),
+    ).toThrow(/--source/);
+  });
+
+  // Run 6.8: a clean host has no organization file; the API serves the source's.
+  it("parses restore --organization <id>, and refuses one that is not an id", () => {
+    const org = "e2350312-420b-4fde-84c5-d582a008080b";
+    expect(
+      parseHostArgs(["drill", "restore", "--source", "staging", "--newest", "--organization", org]),
+    ).toEqual({
+      host: "drill",
+      via: "vpn",
+      command: "restore",
+      source: "staging",
+      pair: "newest",
+      organization: org,
+    });
+    expect(() =>
+      parseHostArgs(["drill", "restore", "--source", "staging", "--newest", "--organization", "x"]),
+    ).toThrow(/--organization/);
+  });
+
+  it("the organization the restored API serves: the host's file, or --organization on a clean host; never two", () => {
+    const a = "e2350312-420b-4fde-84c5-d582a008080b";
+    const b = "d0a3e52c-7e04-4b5e-94b3-c5693f5bc4eb";
+    expect(restoreOrganization(a, null)).toBe(a);
+    expect(restoreOrganization(a, a)).toBe(a);
+    expect(restoreOrganization(null, b)).toBe(b);
+    expect(() => restoreOrganization(a, b)).toThrow(/serves/);
+    expect(() => restoreOrganization(null, null)).toThrow(/--organization/);
+  });
+
+  it("parses restore-verify --confirm-members <n> with --journey or --owner-confirmed, and --open", () => {
+    expect(
+      parseHostArgs(["staging", "restore-verify", "--confirm-members", "2", "--journey", "--open"]),
+    ).toEqual({
+      host: "staging",
+      via: "vpn",
+      command: "restore-verify",
+      confirmMembers: 2,
+      journey: "run",
+      open: true,
+    });
+    expect(
+      parseHostArgs(["prod", "restore-verify", "--confirm-members", "1", "--owner-confirmed"]),
+    ).toEqual({
+      host: "prod",
+      via: "vpn",
+      command: "restore-verify",
+      confirmMembers: 1,
+      journey: "owner-confirmed",
+      open: false,
+    });
+    expect(() => parseHostArgs(["staging", "restore-verify", "--journey"])).toThrow(
+      /--confirm-members/,
+    );
+    expect(() =>
+      parseHostArgs(["staging", "restore-verify", "--confirm-members", "two", "--journey"]),
+    ).toThrow(/--confirm-members/);
+    expect(() => parseHostArgs(["staging", "restore-verify", "--confirm-members", "2"])).toThrow(
+      /--journey or --owner-confirmed/,
+    );
+    expect(() =>
+      parseHostArgs([
+        "staging",
+        "restore-verify",
+        "--confirm-members",
+        "2",
+        "--journey",
+        "--owner-confirmed",
+      ]),
+    ).toThrow(/--journey or --owner-confirmed/);
+  });
+
+  // Run 6.9 (P-128): a release through the closed gate.
+  it("parses deploy --release <dir> with --resume, --install-only, --stay-closed and --image", () => {
+    const image = `sha256:${"a".repeat(64)}`;
+    expect(parseHostArgs(["staging", "deploy", "--release", "r/0.6.0"])).toEqual({
+      host: "staging",
+      via: "vpn",
+      command: "deploy",
+      release: "r/0.6.0",
+      images: [],
+      resume: false,
+      installOnly: false,
+      stayClosed: false,
+    });
+    expect(
+      parseHostArgs(["prod", "deploy", "--release", "r", "--stay-closed", "--image", image]),
+    ).toMatchObject({ stayClosed: true, images: [image] });
+    expect(parseHostArgs(["staging", "deploy", "--release", "r", "--resume"])).toMatchObject({
+      resume: true,
+    });
+    expect(() => parseHostArgs(["staging", "deploy"])).toThrow(/--release/);
+    expect(() =>
+      parseHostArgs(["staging", "deploy", "--release", "r", "--install-only", "--stay-closed"]),
+    ).toThrow(/exclude/);
+    expect(() =>
+      parseHostArgs(["staging", "deploy", "--release", "r", "--image", "api:1"]),
+    ).toThrow(/unexpected/);
+  });
+
+  it("a close keeps the origin of a v2 record, and names a fresh install otherwise", () => {
+    const origin = { kind: "restore", pairId: "0b0e7a52-6b51-4d43-9a1e-61f4a0e3c0d2" };
+    expect(gateOriginOf(JSON.stringify({ version: 2, origin }), hostId)).toEqual(origin);
+    expect(gateOriginOf(JSON.stringify({ version: 1, state: "open" }), hostId)).toEqual({
+      kind: "fresh_install",
+      id: hostId,
+    });
+    expect(gateOriginOf(null, hostId)).toEqual({ kind: "fresh_install", id: hostId });
+    expect(gateOriginOf("garbage", hostId)).toEqual({ kind: "fresh_install", id: hostId });
+  });
+
+  it("db-init's incarnation: new when nowhere, copied to where it is missing, refused when they differ", () => {
+    const a = "1d3c6f4e-9a1b-4c2d-8e3f-5a6b7c8d9e0f";
+    const b = "2e4d7a5f-0b2c-4d3e-9f4a-6b7c8d9e0f1a";
+    expect(planIncarnation(null, undefined, () => a)).toEqual({
+      incarnation: a,
+      writeDatabase: true,
+      writeHostEnv: true,
+    });
+    expect(planIncarnation(null, b, () => a)).toEqual({
+      incarnation: b,
+      writeDatabase: true,
+      writeHostEnv: false,
+    });
+    expect(planIncarnation(b, undefined, () => a)).toEqual({
+      incarnation: b,
+      writeDatabase: false,
+      writeHostEnv: true,
+    });
+    expect(planIncarnation(b, b, () => a)).toEqual({
+      incarnation: b,
+      writeDatabase: false,
+      writeHostEnv: false,
+    });
+    expect(() => planIncarnation(a, b, () => a)).toThrow(/different incarnations/);
+    expect(() => planIncarnation(null, "not-a-uuid", () => a)).toThrow(/uuid/);
+  });
+
+  it("reads the running API's build from its container, printing nothing else", () => {
+    expect(apiBuildCommand()).toBe(
+      "docker inspect --format '{{range .Config.Env}}{{println .}}{{end}}' mykey-api-1 | sed -n 's/^MYKEY_BUILD=//p'",
+    );
+    expect(REMOTE_API_VERIFY).toEqual({ address: "10.78.2.3", port: 8444 });
   });
 
   it("writes a v1 record whose epoch follows the previous one", () => {

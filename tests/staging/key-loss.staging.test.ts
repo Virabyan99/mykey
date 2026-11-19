@@ -172,7 +172,7 @@ describe("certificate expiry (dated checkpoint)", () => {
             notBefore,
             file: "tests/staging/kms-expiry.staging.test.ts",
             command:
-              "MYKEY_CHECKPOINT=kms-cert-expiry pnpm run test:staging -- tests/staging/kms-expiry.staging.test.ts",
+              "MYKEY_CHECKPOINT=kms-cert-expiry pnpm run test:staging tests/staging/kms-expiry.staging.test.ts",
             expects:
               "start with the expired certificate stays sealed; start with a valid losstest certificate unseals and the secret reads back",
             needs:

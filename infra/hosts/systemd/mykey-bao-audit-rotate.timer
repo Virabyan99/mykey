@@ -1,0 +1,10 @@
+[Unit]
+Description=MyKey rotation of OpenBao's audit file daily at 01:15 UTC (Run 6.2)
+
+[Timer]
+OnCalendar=*-*-* 01:15:00 UTC
+Persistent=true
+RandomizedDelaySec=0
+
+[Install]
+WantedBy=timers.target

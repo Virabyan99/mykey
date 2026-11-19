@@ -178,6 +178,28 @@ export class ProvisionerClient {
     return this.#write("POST", `auth/token/roles/${name}`, role);
   }
 
+  /**
+   * Run 6.7 (P-122): the incarnation copy in this organization's namespace
+   * (`mykey-meta/data/incarnation`); null when none was written.
+   */
+  async readIncarnation(): Promise<Answer<string | null>> {
+    const answer = await this.#read("mykey-meta/data/incarnation");
+    if (!answer.ok || answer.value === null) return answer as Answer<null>;
+    const value = record(answer.value.data).incarnation;
+    return { ok: true, value: typeof value === "string" ? value : null };
+  }
+
+  /**
+   * True only when OpenBao refused this client's AppRole login (a bad or
+   * destroyed secret id). Such a client can change nothing, so a job may run
+   * and fail into review (Session 6 gate) instead of waiting on a gate check
+   * that can never read the incarnation.
+   */
+  async loginRefused(): Promise<boolean> {
+    const login = await this.#login();
+    return !login.ok && login.cause === "denied";
+  }
+
   /** Revokes the client's own token, if it logged in. */
   async close(): Promise<void> {
     if (this.#token === null) return;

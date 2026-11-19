@@ -45,12 +45,20 @@ export async function createCredentialsFixture(
     runtime?: "ok" | "broken";
     /** More test-only routes. */
     routes?: readonly { def: RouteDef; handler: Handler }[];
+    /** Run 6.1: a private stack with these override files (infra/compose/dev). */
+    stackOverrides?: readonly string[];
+    /** Run 6.3: the product's rate limits. */
+    rateLimits?: "product";
   } = {},
 ): Promise<CredentialsFixture> {
   const base = await createSecretsFixture({
+    ...(opts.stackOverrides === undefined
+      ? {}
+      : { private: true, stackOverrides: opts.stackOverrides }),
     ...(opts.routes === undefined ? {} : { routes: opts.routes }),
     ...(opts.processes === undefined ? {} : { processes: opts.processes }),
     ...(opts.runtime === undefined ? {} : { runtime: opts.runtime }),
+    ...(opts.rateLimits === undefined ? {} : { rateLimits: opts.rateLimits }),
   });
   const admin = new OpenBaoAdmin(base.stack.bao, base.stack.bao.rootToken);
   const freshen = async (): Promise<void> => {

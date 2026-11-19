@@ -1,0 +1,32 @@
+# Run 6.5 Task B (P-118, Review focus 1): a second OpenBao on the same pki
+# volume, so it holds the same static seal key and certificate. A pair's
+# Raft snapshot is restored into it with snapshot-force and unseals there,
+# while the stack's own OpenBao keeps serving. A restored snapshot carries the
+# stack's audit device, and OpenBao seals when it cannot write it: the audit
+# directory is a writable tmpfs. Used by tests/fault/capture/* and
+# tests/integration/capture/scratch.test.ts.
+services:
+  openbao-scratch:
+    image: openbao/openbao@sha256:5046911075e137e154ce49ab051502f4ec7cf367d484ae4a4dce665d9b90561f
+    depends_on:
+      pki-init:
+        condition: service_completed_successfully
+    command: ["bao", "server", "-config=/openbao/config/openbao.hcl"]
+    environment:
+      SKIP_CHOWN: "true"
+      BAO_ADDR: https://127.0.0.1:8200
+      BAO_CACERT: /pki/ca.crt
+    volumes:
+      - baoscratch:/openbao/file
+      - type: tmpfs
+        target: /openbao/audit
+        tmpfs:
+          size: 268435456
+          mode: 01777
+      - pki:/pki:ro
+      - ./dev/openbao-scratch.hcl:/openbao/config/openbao.hcl:ro
+    ports:
+      - "127.0.0.1:0:8200"
+
+volumes:
+  baoscratch:

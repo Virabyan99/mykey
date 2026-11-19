@@ -10,7 +10,7 @@
 // with the next step; 2 for an unknown environment. Prints ids and counts,
 // never an accessor or a token.
 import { randomUUID } from "node:crypto";
-import { environmentIdSchema, type OrganizationId, type ProjectId } from "@mykey/contracts";
+import { LIMITS, environmentIdSchema, type OrganizationId, type ProjectId } from "@mykey/contracts";
 import { createPool } from "@mykey/db";
 import { OpenBaoClient, namespaceFor } from "@mykey/openbao";
 import { OpenBaoAdmin } from "@mykey/openbao/admin";
@@ -43,7 +43,7 @@ export const reconcileCredentialsCommand: OpsCommand = {
       );
       return EXIT.failed;
     }
-    const pool = createPool(database, { max: 3 });
+    const pool = createPool(database, { max: LIMITS.db.opsPool });
     try {
       const found = await pool.query<{ organization_id: OrganizationId; project_id: ProjectId }>(
         "SELECT organization_id, project_id FROM app.environment WHERE id = $1",

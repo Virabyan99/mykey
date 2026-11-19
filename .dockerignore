@@ -19,8 +19,14 @@
 !packages/openbao/src
 !packages/auth/package.json
 !packages/auth/src
+# The object store of the audit archive and the backup pairs (Run 6.2).
+!packages/backup/package.json
+!packages/backup/src
 !apps/provisioner/package.json
 !apps/provisioner/src
+# The operator image (Run 6.2, P-111).
+!apps/ops/package.json
+!apps/ops/src
 # The policy templates the provisioner renders (Run 3.8); text, no secret.
 !infra/openbao/policies
 # The API reference asset script (Run 5.9); the asset stage of apps/api/Dockerfile runs it.
