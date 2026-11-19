@@ -389,6 +389,42 @@ const environmentsBody = z.strictObject({
   nextCursor: z.string().nullable(),
 });
 
+/**
+ * overview.get (Run 7.3, P-139, FR-1.90): the organization's projects with
+ * their environments, read at one database time. Counts come from the secret
+ * index, never from OpenBao; `keys` is null where no count was made (an
+ * environment that is pending or under review), which is not zero.
+ */
+const keyCount = z.int().nonnegative();
+const overviewBody = z.strictObject({
+  observedAt: z.iso.datetime(),
+  source: z.literal("index"),
+  projects: z.array(
+    z.strictObject({
+      id: z.uuid(),
+      name: z.string(),
+      state: resourceState,
+      reviewReason: z.string().nullable(),
+      environments: z.array(
+        z.strictObject({
+          id: z.uuid(),
+          name: z.string(),
+          state: resourceState,
+          reviewReason: z.string().nullable(),
+          kvReady: z.boolean(),
+          /** The newest change the index knows of, or null (none, or not counted). */
+          changedAt: z.iso.datetime().nullable(),
+          keys: z
+            .strictObject({ live: keyCount, deleted: keyCount, needsReview: keyCount })
+            .nullable(),
+        }),
+      ),
+    }),
+  ),
+  /** True when the organization has more projects than the answer holds. */
+  truncated: z.boolean(),
+});
+
 /** operations.list (Run 4.1, P-63): newest first; children of an import are not listed. */
 const operationsListQuery = z.strictObject({
   limit: z.int().min(1).max(LIMITS.listing.maxLimit).default(LIMITS.listing.defaultLimit),
@@ -795,7 +831,10 @@ export const ROUTES: readonly RouteDef[] = Object.freeze([
     query: activityListQuery,
     responses: { 200: activityListBody },
   }),
-  define("overview.get", "GET", `${O}/overview`, "human", false, "7.3", { action: "audit.view" }),
+  define("overview.get", "GET", `${O}/overview`, "human", false, "7.3", {
+    action: "audit.view",
+    responses: { 200: overviewBody },
+  }),
   define("credentials.summary", "GET", `${O}/credentials/summary`, "human", false, "7.7", {
     action: "credentials.manage",
   }),
@@ -851,6 +890,7 @@ export type CredentialsListBody = z.infer<typeof credentialsListBody>;
 export type AuditListBody = z.infer<typeof auditListBody>;
 export type ActivityListBody = z.infer<typeof activityListBody>;
 export type SessionActivityBody = z.infer<typeof activityBody>;
+export type OverviewBody = z.infer<typeof overviewBody>;
 
 /** The two machine bodies, for the CLI's validator (Run 5.5, P-96). */
 export { keysBody as machineKeysBody, resolveBody as machineResolveBody };
