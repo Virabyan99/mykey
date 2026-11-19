@@ -10,7 +10,9 @@ import { ErrorPanel } from "./errors/ErrorPanel.tsx";
 import { navigate, usePath } from "./router.tsx";
 import { Account } from "./screens/account.tsx";
 import { Enroll } from "./screens/enroll.tsx";
+import { Help } from "./screens/help.tsx";
 import { Home } from "./screens/home.tsx";
+import { ImportExport } from "./screens/import.tsx";
 import { Overview } from "./screens/overview.tsx";
 import { Project } from "./screens/project.tsx";
 import { Reset } from "./screens/reset.tsx";
@@ -26,10 +28,8 @@ import { Loading } from "./ui/StateBadge.tsx";
 
 /** The screens later runs of Session 7 build; until then, the name of the place. */
 const TITLES: Readonly<Record<string, string>> = {
-  help: "Help",
   activity: "Activity",
   audit: "Audit",
-  import: "Import",
   credentials: "Machine credentials",
   operations: "Operations",
 };
@@ -51,6 +51,8 @@ function screenOf(route: { id: string; params: Record<string, string> }): ReactN
   if (route.id === "account") return <Account />;
   if (route.id === "overview") return <Overview />;
   if (route.id === "project") return <Project />;
+  if (route.id === "help") return <Help />;
+  if (route.id === "import") return <ImportExport />;
   if (route.id === "secrets") return <Secrets />;
   if (route.id === "secret") return <Secret name={route.params.name ?? ""} />;
   return <Place id={route.id} />;

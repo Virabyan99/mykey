@@ -149,7 +149,7 @@ function Sections(props: { scope: Scope; current: string }) {
     const at = { org, project, env };
     items.push(
       { id: "secrets", text: "Secrets", to: webPath("secrets", at) },
-      { id: "import", text: "Import", to: webPath("import", at) },
+      { id: "import", text: "Import and export", to: webPath("import", at) },
       { id: "credentials", text: "Machine credentials", to: webPath("credentials", at) },
       { id: "operations", text: "Operations", to: webPath("operations", at) },
     );

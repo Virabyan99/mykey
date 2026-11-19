@@ -11,6 +11,7 @@ import {
   type ActivityListBody,
   type AuditListBody,
   type EnvironmentsBody,
+  type ImportPreviewBody,
   type CredentialsListBody,
   type OperationResponse,
   type OperationsListBody,
@@ -61,6 +62,9 @@ export interface SecretBodies {
   "secrets.reveal": SecretsRevealBody;
   "secrets.create": OperationResponse;
   "secrets.update": OperationResponse;
+  "import.preview": ImportPreviewBody;
+  "import.apply": OperationResponse;
+  "import.resume": OperationResponse;
 }
 export type SecretRouteId = Extract<keyof SecretBodies, SecretBearing>;
 
@@ -70,6 +74,7 @@ export interface CallInput {
   /** The `:name` parts of the route's path. */
   params?: Readonly<Record<string, string>>;
   query?: Readonly<Record<string, string | number | undefined>>;
+  /** A JSON value; for a route that takes a dotenv file, the file's bytes. */
   body?: unknown;
   /** One key per decision of the owner: the same click sent twice is the same request. */
   idempotencyKey?: string;
@@ -107,6 +112,8 @@ export async function send(request: {
   method: string;
   path: string;
   body?: unknown;
+  /** A dotenv file, sent as it is. */
+  text?: Uint8Array<ArrayBuffer>;
   headers?: Readonly<Record<string, string>>;
   signal?: AbortSignal;
 }): Promise<Answer | null> {
@@ -119,7 +126,10 @@ export async function send(request: {
     redirect: "error",
     referrerPolicy: "no-referrer",
   };
-  if (request.body !== undefined) {
+  if (request.text !== undefined) {
+    headers["content-type"] = "text/plain; charset=utf-8";
+    init.body = request.text;
+  } else if (request.body !== undefined) {
     headers["content-type"] = "application/json";
     init.body = JSON.stringify(request.body);
   }
@@ -177,6 +187,11 @@ function pathOf(route: RouteDef, input: CallInput): string {
   return text === "" ? path : `${path}?${text}`;
 }
 
+function bytesOf(id: string, body: unknown): Uint8Array<ArrayBuffer> {
+  if (!(body instanceof Uint8Array)) throw new Error(`${id}: the body is a file's bytes`);
+  return body as Uint8Array<ArrayBuffer>;
+}
+
 async function request<T>(id: string, input: CallInput): Promise<CallResult<T>> {
   const route = BY_ID.get(id);
   if (route === undefined) throw new Error(`not a route of the contract: ${id}`);
@@ -189,7 +204,11 @@ async function request<T>(id: string, input: CallInput): Promise<CallResult<T>> 
     method: route.method,
     path: pathOf(route, input),
     // A route that declares no body refuses one (malformed_request), so none is sent.
-    ...(route.request.body === undefined ? {} : { body: input.body ?? {} }),
+    ...(route.request.body === undefined
+      ? {}
+      : route.request.body === "raw-dotenv"
+        ? { text: bytesOf(id, input.body) }
+        : { body: input.body ?? {} }),
     headers,
     ...(input.signal === undefined ? {} : { signal: input.signal }),
   });

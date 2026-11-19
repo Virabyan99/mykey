@@ -141,6 +141,8 @@ describe("the secret-bearing routes", () => {
   it("no route of SECRET_BEARING is called through useQuery or useMutation", () => {
     const forbidden = [
       "callSecret",
+      // The export's answer is a file, read by its own function (api/export.ts).
+      "exportEnvironment",
       ...secretAuthFunctions(),
       ...SECRET_BEARING.filter((entry) => !entry.startsWith("/")).map((id) => `"${id}"`),
     ];
