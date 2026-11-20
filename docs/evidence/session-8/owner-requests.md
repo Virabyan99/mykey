@@ -12,6 +12,20 @@ With "yes", production gets its corrected host files, its own KMS domain, user, 
 
 A domain, a user, a policy, and a certificate from a request the agent prints; later, two rights (`create`, `activate`) removed from the policy. The agent sends the exact steps of `kms-and-unseal.md` when the operator tool can do production's part (Run 8.0 Task B). Afterwards: production's custody files (`~/.mykey/custody/prod/`) copied into the password manager, as OWN-4 was for staging.
 
+### Sitting 1, asked on 20 Nov 2026 (after Run 8.0 Task B)
+
+The agent pushed production's host files, installed the pinned `okms` and made the seal certificate's key on the host (`kms-csr prod-seal-1`); the request is `C:\Users\gmpar\.mykey\kms\prod-seal-1.csr` (public, no key). In the OVHcloud US Control Panel, region `us-east-vin`:
+
+1. Key Management Service → order one OKMS domain `mykey-prod-kms`.
+2. IAM → a local user `mykey-prod-seal` (no console password).
+3. IAM → a policy `mykey-prod-kms-seal`: identity `mykey-prod-seal`, the domain `mykey-prod-kms`, actions `okms:kmip:encrypt`, `decrypt`, `locate`, `get`, `getAttributes`, `create`, `activate`.
+4. `mykey-prod-kms` → Access certificates → Generate → provide the CSR `prod-seal-1.csr`, identity `mykey-prod-seal` only (never root); download and save as `C:\Users\gmpar\.mykey\kms\prod-seal-1.crt`.
+5. Reply "prod KMS done" with the domain id.
+
+Sitting 2 (later the same day): remove `create` and `activate` from `mykey-prod-kms-seal`, after the agent says the seal key exists.
+
+**Answered:** —
+
 ## 3. After the freeze: one hour (OWN-6)
 
 The first-run walk of Run 8.8 on staging, with an authenticator application and WSL at hand. The agent says when staging is ready and runs nothing on staging during that hour.
