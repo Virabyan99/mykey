@@ -12,6 +12,7 @@ import {
   clearCredentials,
   createCredentialsFixture,
   expectCatalogMatchesBackend,
+  issueFor,
   machineAccessors,
   type CredentialsFixture,
 } from "../../harness/credentials-fixture.ts";
@@ -144,6 +145,36 @@ describe("the record", () => {
       expect(issuing).toHaveLength(0);
     }
     await expectCatalogMatchesBackend(f, envId("env1a"));
+  });
+
+  // Run 8.3 Step 1 (AC-1.40, "replacement races leave no escaped active
+  // token"): replace-by-revoke with both requests at once, on two processes.
+  it("a replacement issued while the old credential is revoked (20 rounds): the new one active, the old one revoked, no other token in the backend", async () => {
+    let old = await issueFor(f, "env1a");
+    for (let round = 0; round < 20; round += 1) {
+      await f.freshen();
+      const [issued, revoked] = await Promise.all([
+        f.issue("env1a", {}, { fresh: false, to: round % 2 === 0 ? "first" : "second" }),
+        f.revoke("env1a", old.credentialId, { to: round % 2 === 0 ? "second" : "first" }),
+      ]);
+      expect(issued.status, `round ${String(round)}: issue ${issued.code ?? ""}`).toBe(201);
+      expect(revoked.status, `round ${String(round)}: revoke ${revoked.code ?? ""}`).toBe(200);
+      const rows = (
+        await f.api.superuser.query<{ id: string; state: string }>(
+          "SELECT id, state FROM app.machine_credential WHERE environment_id = $1",
+          [envId("env1a")],
+        )
+      ).rows;
+      const fresh = (issued.body.credential as { credentialId: string }).credentialId;
+      expect(rows.filter((row) => row.state === "active").map((row) => row.id)).toEqual([fresh]);
+      expect(rows.find((row) => row.id === old.credentialId)?.state).toBe("revoked");
+      await expectCatalogMatchesBackend(f, envId("env1a"));
+      old = {
+        credentialId: fresh,
+        token: issued.body.token as string,
+        operationId: issued.body.operationId as string,
+      };
+    }
   });
 
   it("as api_runtime: a second issuing row for one environment is refused by the database", async () => {
