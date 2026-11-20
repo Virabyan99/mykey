@@ -3,7 +3,9 @@
 // and keeps the seed and the recovery codes in workstation custody under
 // ~/.mykey/secrets/hosts/staging/ (0600, never printed); every later call
 // completes sign-in with a code of the stored seed. Synthetic owner only.
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+import { randomBytes } from "node:crypto";
+import { existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
@@ -138,4 +140,51 @@ export async function stagingOwnerSession(): Promise<{ cookie: string }> {
   for (const code of recoveryCodes) registerSecret(code);
   writeCustody("owner-recovery-codes", recoveryCodes.join("\n"));
   return { cookie: sessionPair(activated) };
+}
+
+/** Runs `host.ts staging ops <argv>` (the operator's own path, over the tunnel). */
+export function stagingOps(argv: string[]): { code: number | null; stdout: string } {
+  const result = spawnSync(process.execPath, ["scripts/host.ts", "staging", "ops", ...argv], {
+    encoding: "utf8",
+    timeout: 120_000,
+    env: { ...process.env, MSYS_NO_PATHCONV: "1" },
+  });
+  return { code: result.status, stdout: result.stdout };
+}
+
+/**
+ * Run 3.10, moved here in Run 8.4: `ops reset-account` for the staging owner.
+ * Answers the link and its token (both registered as secrets); the link file
+ * is shredded.
+ */
+export function initiateOwnerReset(kind: "password" | "mfa"): { link: string; token: string } {
+  const run = stagingOps(["reset-account", "--email", STAGING_OWNER_EMAIL, "--kind", kind]);
+  if (run.code !== 0) throw new Error(`reset-account exited ${String(run.code)}`);
+  const path = /link in (\S+);/.exec(run.stdout)?.[1];
+  if (path === undefined) throw new Error("reset-account printed no link file");
+  const link = readFileSync(path, "utf8").trim();
+  rmSync(path, { force: true });
+  const token = /#t=([A-Za-z0-9_-]{43})&k=/.exec(link)?.[1];
+  if (token === undefined) throw new Error("the link file holds no token");
+  registerSecret(link);
+  registerSecret(token);
+  return { link, token };
+}
+
+/**
+ * Completes a password reset with a new password and a code of the stored
+ * seed; the new password goes to custody. Answers it (registered as a secret).
+ */
+export async function completeOwnerPasswordReset(token: string): Promise<string> {
+  const stored = readCustody("owner-totp-seed");
+  if (stored === null) throw new Error("no owner-totp-seed in workstation custody");
+  const seed = OTPAuth.Secret.fromBase32(stored).bytes;
+  const newPassword = `staging-${randomBytes(18).toString("base64url")}`;
+  registerSecret(newPassword);
+  const done = await publicRequest("POST", "/v1/auth/reset/complete", {
+    body: { token, newPassword, code: await freshCode(seed) },
+  });
+  if (done.status !== 200) throw new Error(`reset/complete answered ${String(done.status)}`);
+  writeCustody("owner-password", newPassword);
+  return newPassword;
 }

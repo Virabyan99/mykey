@@ -55,7 +55,7 @@ describe("the token sweep on staging", () => {
     }
 
     // The canary is assembled at run time (CLAUDE.md: never a literal in a file).
-    const canary = ["MYKEY", "CANARY", randomBytes(16).toString("hex")].join("_");
+    const canary = ["MYKEY", "CANARY", randomBytes(16).toString("hex").toUpperCase()].join("_");
     registerSecret(canary);
     const secretName = "S5_SWEEP_CANARY";
     const made = await send("POST", `${environmentPath}/secrets`, {

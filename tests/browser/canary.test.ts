@@ -20,6 +20,7 @@ import {
   signInByForm,
   signOutByButton,
 } from "../harness/journey.ts";
+import { pgDump, readAuditLog } from "../harness/stack.ts";
 import { startWebWithStores, type StoresWeb, type WebSession } from "../harness/web.ts";
 
 let web: StoresWeb;
@@ -263,6 +264,18 @@ describe("the canary scan", () => {
       expect(new Set(needles.map((needle) => needle.value)).size).toBeGreaterThanOrEqual(23);
       for (const needle of needles) expect(needle.value.length, needle.what).toBeGreaterThan(5);
 
+      // Run 8.4: the session cookie the browser holds now; a needle for the server's side
+      // only (the browser keeps it by design until the sign-out).
+      const held = (await session.context.cookies()).find((cookie) =>
+        cookie.name.endsWith("better-auth.session_token"),
+      );
+      if (held === undefined) throw new Error("no session cookie in the browser");
+      const cookieValue = decodeURIComponent(held.value);
+      const sessionNeedles: Needle[] = [
+        { what: "the session cookie", value: cookieValue },
+        { what: "the session token", value: cookieValue.slice(0, cookieValue.lastIndexOf(".")) },
+      ];
+
       // --- still signed in --------------------------------------------------
       const open = await search(watch, needles);
       expect(open.hits).toEqual([]);
@@ -273,6 +286,30 @@ describe("the canary scan", () => {
       const closed = await search(watch, needles);
       expect(closed.hits).toEqual([]);
       expect(closed.entries).toBeGreaterThan(8);
+
+      // --- Run 8.4: the same needles on the server's side, each place with a control
+      const secretName = values.secrets[0].name;
+      const server: Places = {
+        "the database dump": await pgDump(web.f.stack, web.api.database.database),
+        "the API's log lines": web.api.logs.map((entry) => JSON.stringify(entry)).join("\n"),
+        "the provisioner's log lines": (provisioner?.logs ?? [])
+          .map((entry) => JSON.stringify(entry))
+          .join("\n"),
+        "OpenBao's audit device": (await readAuditLog(web.f.stack))
+          .map((entry) => JSON.stringify(entry))
+          .join("\n"),
+      };
+      const controls: Record<string, string> = {
+        "the database dump": secretName,
+        "the API's log lines": '"event":"request"',
+        "the provisioner's log lines": '"event":"job"',
+        "OpenBao's audit device": secretName,
+      };
+      expect(secretName.length).toBeGreaterThan(5);
+      for (const [place, control] of Object.entries(controls)) {
+        expect(server[place]?.includes(control), `the control in ${place}`).toBe(true);
+      }
+      expect(found(server, [...needles, ...sessionNeedles])).toEqual([]);
 
       // --- control: the same search finds a canary put into each place ------
       const control = canary();

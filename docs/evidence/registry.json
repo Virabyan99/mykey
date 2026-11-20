@@ -1612,9 +1612,11 @@
       "ownerRun": "8.4",
       "contributingRuns": [],
       "oldSession": "D08-S44",
-      "status": "OPEN",
-      "evidence": [],
-      "note": ""
+      "status": "SPIKE_PASS",
+      "evidence": [
+        "docs/evidence/session-8/run-8.4.md"
+      ],
+      "note": "After a create, update, import, reveal, historical reveal, export, issuance, resolve, revocation, operator reset, recovery-code regeneration and sign-out on staging, no needle of ten kinds is on any of the host's surfaces, in the audit archive, in a pair captured afterwards, in the operator's views or in the shell histories; every surface has a control. The browser's local half also searches the dump, the logs and OpenBao's audit device. PASS comes from the manifest (the sweep on the candidate)."
     },
     {
       "id": "AC-1.14",
@@ -2141,9 +2143,11 @@
       "ownerRun": "8.4",
       "contributingRuns": [],
       "oldSession": "D08-S44",
-      "status": "OPEN",
-      "evidence": [],
-      "note": ""
+      "status": "SPIKE_PASS",
+      "evidence": [
+        "docs/evidence/session-8/run-8.4.md"
+      ],
+      "note": "Synthetic secrets and identifiers are seeded labelled: canary-shaped, upper case, assembled at run time (tests/harness/sweep.ts), with a canary-shaped control that travels as the needles do; the secret scan's rule matches them, and scripts/sweep-ci.ts counts them in CI logs. PASS comes from the manifest."
     },
     {
       "id": "AC-1.51",
