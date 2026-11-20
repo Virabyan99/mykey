@@ -10,8 +10,13 @@ Doc 10 §8.2 item 1. The workspace's summary is three tables, each with its sour
 
 ## 2. OWN-4: an offline copy of the backup custody files
 
-**Still open.** The two files of `~/.mykey/custody/staging/backup/` exist since 17 Nov 2026 16:45 UTC. Waiting for the owner's "copied".
+**Answered: copied** (the owner, 20 Nov 2026). The two files of `~/.mykey/custody/staging/backup/` exist since 17 Nov 2026 16:45 UTC, and the owner keeps a second copy in a password manager. That copy survives the loss of the workstation; it is not a copy on paper or on a disconnected device.
 
 ## What comes at the end
 
 The owner is asked to read `docs/evidence/session-7/report.md` and to say "merge". Nothing else is needed during the session: no purchase, no console step, and production is not touched.
+
+## After the gate (20 Nov 2026)
+
+- **"merge"**: said; PR #19 is merged.
+- **`host.ts prod push`**: the owner gave the word. Production's host files now hold the fixed `bao-audit-rotate.sh` (read back on the host: the new signal line is there, and no `docker kill` is left). Nothing was deployed and no container was restarted: the gate is closed as before, and production still has no OpenBao.
