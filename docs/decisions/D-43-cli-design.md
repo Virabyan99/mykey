@@ -44,7 +44,7 @@ Evidence:
   - `NODE_OPTIONS` (even empty) and `NODE_USE_ENV_PROXY`;
   - an `execArgv` carrying `--require`/`-r`, `--import`, `--loader`, `--experimental-loader`, `--inspect*` or `--insecure-http-parser`.
 
-  `NODE_EXTRA_CA_CERTS` is allowed: it adds trust and removes none.
+  `NODE_EXTRA_CA_CERTS` is allowed: it adds trust and removes none. _(Reversed by D-68, Run 8.6: it is refused with the other trust settings, and the CLI's own authority is `SECRETS_CA_FILE`.)_
 
 - **The boundary.** These checks stop settings a user or a script left on by mistake. A launcher that is already hostile (one that controls the Node binary, the file system or the process before the CLI starts) cannot be made safe by JavaScript. The installer and the consumer runbooks say so (Runs 5.7, 5.8).
 

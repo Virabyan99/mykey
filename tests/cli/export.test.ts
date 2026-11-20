@@ -65,7 +65,7 @@ async function serve(script: ServerScript = {}): Promise<CliServer> {
 
 const envOf = (server: CliServer, extra: Record<string, string> = {}): Record<string, string> => ({
   SECRETS_API_URL: server.url,
-  NODE_EXTRA_CA_CERTS: server.caPath,
+  SECRETS_CA_FILE: server.caPath,
   SECRETS_MACHINE_TOKEN: token(),
   HOME: home,
   TMPDIR: tmp,

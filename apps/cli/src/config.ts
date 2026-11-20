@@ -34,6 +34,30 @@ function checkUrl(raw: string, from: string): URL {
   return url;
 }
 
+/**
+ * R5-2 (Run 8.6, D-68): a certificate authority this CLI alone trusts, beside
+ * the public roots, from the PEM file SECRETS_CA_FILE names. Node's own
+ * variables for that are refused (guard.ts): a machine-wide setting is never
+ * meant for this CLI. Children never see it (no SECRETS_* reaches them).
+ */
+export function extraCaOf(
+  env: NodeJS.ProcessEnv,
+  read: (path: string) => string,
+): string | undefined {
+  const path = env.SECRETS_CA_FILE;
+  if (path === undefined || path === "") return undefined;
+  let text: string;
+  try {
+    text = read(path);
+  } catch {
+    throw unsupported("SECRETS_CA_FILE cannot be read");
+  }
+  if (!text.includes("-----BEGIN CERTIFICATE-----")) {
+    throw unsupported("SECRETS_CA_FILE holds no certificate");
+  }
+  return text;
+}
+
 export function resolveApiUrl(env: NodeJS.ProcessEnv, read: Read, uid: number): URL {
   const fromEnv = env.SECRETS_API_URL;
   if (fromEnv !== undefined && fromEnv !== "") return checkUrl(fromEnv, "SECRETS_API_URL");

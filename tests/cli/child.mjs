@@ -25,7 +25,7 @@ const state = {
         .digest("hex"),
     ]),
   ),
-  signals: { SIGINT: 0, SIGTERM: 0, SIGHUP: 0, SIGQUIT: 0 },
+  signals: { SIGINT: 0, SIGTERM: 0, SIGHUP: 0, SIGQUIT: 0, SIGUSR1: 0, SIGUSR2: 0 },
 };
 const save = () => {
   writeFileSync(`${marker}.tmp`, JSON.stringify(state));
@@ -37,7 +37,9 @@ const count = (signal) => () => {
   save();
   if (mode === "term5" && signal === "SIGTERM") process.exit(5);
 };
-for (const signal of ["SIGINT", "SIGHUP", "SIGQUIT"]) process.on(signal, count(signal));
+for (const signal of ["SIGINT", "SIGHUP", "SIGQUIT", "SIGUSR2"]) process.on(signal, count(signal));
+// R5-3: the child is started with --disable-sigusr1 (run.test.ts), so SIGUSR1 is its own.
+process.on("SIGUSR1", count("SIGUSR1"));
 if (mode !== "termdie") process.on("SIGTERM", count("SIGTERM"));
 save();
 

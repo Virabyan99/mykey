@@ -1,16 +1,22 @@
 // `secrets export --output <new-file>` (FR-1.50, D-43). In order: resolve and
 // validate the complete set → the dotenv text built in memory by the codec →
-// check the target → create it exclusively, without following a link, mode
-// 0600 → check what was created → write all of it → fsync → close → fsync the
-// directory → one line on stderr that the file holds plaintext secrets. Any
-// failure after the creation removes the file only when the path still names
-// the file this invocation created; otherwise it says "cleanup required" and
-// deletes nothing. No chmod, ever.
+// check the target → create a new file of its own in the same directory
+// (`.<name>.<random>.part`) exclusively, without following a link, mode 0600
+// → check what was created → write all of it → fsync → close → link it to the
+// target, which fails if anything is there → remove the temporary name →
+// fsync the directory → one line on stderr that the file holds plaintext
+// secrets. R5-1 (Run 8.6, rule 4): the target appears only complete, so a kill
+// or a crash at any moment leaves no partial file there (at most a `.part`
+// file of mode 0600 beside it). Any failure removes the temporary file only
+// when its path still names the file this invocation created; otherwise it
+// says "cleanup required" and deletes nothing. No chmod, ever.
+import { randomBytes } from "node:crypto";
 import {
   closeSync,
   constants,
   fstatSync,
   fsyncSync,
+  linkSync,
   lstatSync,
   openSync,
   unlinkSync,
@@ -42,6 +48,8 @@ export interface ExportFs {
   fsync(fd: number): void;
   close(fd: number): void;
   unlink(path: string): void;
+  /** A new name for an existing file; fails when anything is at `to`. */
+  link(from: string, to: string): void;
   syncDirectory(path: string): void;
 }
 
@@ -58,6 +66,9 @@ export const nodeFs: ExportFs = {
   },
   unlink: (path) => {
     unlinkSync(path);
+  },
+  link: (from, to) => {
+    linkSync(from, to);
   },
   syncDirectory: (path) => {
     const fd = openSync(path, constants.O_RDONLY);
@@ -125,11 +136,15 @@ export async function exportCommand(p: {
     throw new CliError("malformed", "the answer holds an entry a dotenv file cannot carry");
   }
   const { directory, name: path } = checkTarget(p.out, p.uid, fs);
+  const part = posix.join(
+    directory,
+    `.${posix.basename(path)}.${randomBytes(6).toString("hex")}.part`,
+  );
 
   let fd: number;
   try {
     fd = fs.open(
-      path,
+      part,
       constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW,
       0o600,
     );
@@ -149,6 +164,12 @@ export async function exportCommand(p: {
     fs.fsync(fd);
     open = false;
     fs.close(fd);
+    try {
+      fs.link(part, path);
+    } catch {
+      throw target("the output already exists; export only creates a new file");
+    }
+    fs.unlink(part);
     fs.syncDirectory(directory);
   } catch (error) {
     if (open) {
@@ -160,18 +181,18 @@ export async function exportCommand(p: {
     }
     let now: StatLike | null;
     try {
-      now = fs.lstat(path);
+      now = fs.lstat(part);
     } catch {
       now = null;
     }
     if (identity !== null && now !== null && now.dev === identity.dev && now.ino === identity.ino) {
       try {
-        fs.unlink(path);
+        fs.unlink(part);
       } catch {
-        throw target(`cleanup required: ${path}`);
+        throw target(`cleanup required: ${part}`);
       }
     } else if (now !== null) {
-      throw target(`cleanup required: ${path}`);
+      throw target(`cleanup required: ${part}`);
     }
     if (error instanceof CliError && error.category === "export_target") throw error;
     throw target("the output could not be written completely");

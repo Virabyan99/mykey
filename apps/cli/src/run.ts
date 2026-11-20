@@ -41,9 +41,15 @@ export function buildChildEnv(
 /** Linux's MAX_ARG_STRLEN: one argument or NAME=value string, its NUL included. */
 const LINUX_STRING_MAX = 128 * 1024;
 
+/**
+ * R5-4 (Run 8.6): getconf by its absolute path and with an empty environment,
+ * so nothing found through PATH runs and nothing it runs sees the token.
+ */
 function argMaxOf(): number {
   try {
-    const value = Number(execFileSync("getconf", ["ARG_MAX"], { encoding: "utf8" }).trim());
+    const value = Number(
+      execFileSync("/usr/bin/getconf", ["ARG_MAX"], { encoding: "utf8", env: {} }).trim(),
+    );
     return Number.isFinite(value) && value > 0 ? value : 256 * 1024;
   } catch {
     return 256 * 1024;
@@ -77,8 +83,16 @@ export function checkSize(
   }
 }
 
-const FORWARDED = ["SIGTERM", "SIGINT", "SIGQUIT", "SIGHUP"] as const;
+// R5-3 (Run 8.6): SIGUSR2 (a supervisor's reload or log reopening) is the
+// child's too. SIGUSR1 must never open the inspector of a process that holds
+// the token: the launcher starts Node with --disable-sigusr1, and Node then
+// keeps SIGUSR1 blocked, so under the launcher it is neither handled here nor
+// passed on (a stated limit). Started without that flag, this handler takes
+// SIGUSR1 once it is registered and passes it on.
+const FORWARDED = ["SIGTERM", "SIGINT", "SIGQUIT", "SIGHUP", "SIGUSR1", "SIGUSR2"] as const;
 type Forwarded = (typeof FORWARDED)[number];
+/** Signals no terminal sends: always the CLI's to pass on. */
+const NEVER_FROM_A_TERMINAL: readonly Forwarded[] = ["SIGTERM", "SIGUSR1", "SIGUSR2"];
 const numberOf = (signal: NodeJS.Signals): number =>
   (constants.signals as Record<string, number>)[signal] ?? 0;
 
@@ -102,8 +116,8 @@ export async function runCommand(p: {
     const handler = (): void => {
       if (child === null) exit(128 + numberOf(signal));
       // With a terminal, the terminal already signalled the whole foreground
-      // group, the child among them; only SIGTERM is the CLI's to pass on.
-      else if (signal === "SIGTERM" || !p.tty) child.kill(signal);
+      // group, the child among them; only what no terminal sends is passed on.
+      else if (NEVER_FROM_A_TERMINAL.includes(signal) || !p.tty) child.kill(signal);
     };
     handlers.set(signal, handler);
     process.on(signal, handler);

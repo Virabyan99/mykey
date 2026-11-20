@@ -70,7 +70,7 @@ export function createClient(
   apiUrl: URL,
   opts: {
     timeoutMs?: number;
-    /** Adds trust, never replaces it; no flag or variable of the CLI reaches it. */
+    /** Adds trust, never replaces it: SECRETS_CA_FILE only (D-68). */
     extraCa?: string;
   } = {},
 ): ApiClient {
