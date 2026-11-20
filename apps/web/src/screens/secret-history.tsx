@@ -231,7 +231,7 @@ export function ChangeDialog(props: {
       title={title}
       name={name}
       confirm={confirm}
-      busy={action.busy || settling}
+      busy={action.busy || action.held || settling}
       onConfirm={() => void send()}
       onCancel={props.onCancel}
     >

@@ -4,7 +4,7 @@
 // classification and never a value; a result is never called done when an
 // entry was not written. An export is offered for saving only after the whole
 // answer was read and its digest checked. Values are run-time canaries.
-import { createHash, randomBytes } from "node:crypto";
+import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { codeAt, stepAt } from "@mykey/auth";
@@ -197,6 +197,57 @@ describe("import", () => {
       expect(await page.getByText("succeeded").count()).toBe(0);
       expect((await stored(moved))?.digest).toBe(digest(other));
       expect((await stored(fresh))?.version).toBe(1);
+    } finally {
+      await session.close();
+    }
+  }, 240_000);
+
+  // Run 8.0 Task C (Session 7's Minor 5): the sentence above the rows.
+  it('an import with an uncertain entry: the summary sentence counts it as uncertain, not as "not written"', async () => {
+    const [written, unknown, refused] = [newName(), newName(), newName()];
+    const session = await web.signedIn("ownerA");
+    const { page } = session;
+    const operationId = randomUUID();
+    try {
+      await openImport(page);
+      await preview(
+        page,
+        fileOf([written, valueOf("1")], [unknown, valueOf("2")], [refused, valueOf("3")]),
+      );
+      await page.getByText("3 new").waitFor();
+      // The contract's answer for an import that ended with one entry not known.
+      await page.route(/\/import\/[^/]+\/apply$/, async (route) => {
+        await route.fulfill({
+          status: 200,
+          contentType: "application/json; charset=utf-8",
+          headers: { "x-request-id": randomUUID() },
+          body: JSON.stringify({
+            operationId,
+            state: "uncertain",
+            statusUrl: `/v1/organizations/${web.tenants.a.organizationId}/operations/${operationId}`,
+            replayExpiresAt: null,
+            result: {
+              entries: [
+                { ordinal: 1, name: written, outcome: "created" },
+                { ordinal: 2, name: unknown, outcome: "uncertain" },
+                { ordinal: 3, name: refused, outcome: "rejected" },
+              ],
+            },
+          }),
+        });
+      });
+      await page.getByRole("button", { name: "Apply import" }).click();
+      await page.getByText("State of the import: uncertain").waitFor();
+      const summary = page.getByText(/^1 of 3 entries was written\./);
+      await summary.waitFor();
+      expect(await summary.textContent()).toBe(
+        "1 of 3 entries was written. For 1 it is not known whether it was written. 1 was not.",
+      );
+      expect(await resultOf(page)).toEqual({
+        [written]: "created",
+        [unknown]: "uncertain: whether it was written is not known",
+        [refused]: "rejected: not written",
+      });
     } finally {
       await session.close();
     }

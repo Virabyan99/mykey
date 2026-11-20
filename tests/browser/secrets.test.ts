@@ -392,6 +392,51 @@ describe("secrets in the workspace", () => {
     }
   });
 
+  // Run 8.0 Task C (Session 7's Minor 6): the server would answer a repeated
+  // request and not do it twice, but the page itself does not offer it.
+  it("after \"the outcome is not known\" the form's button is disabled until the operation's state is read", async () => {
+    const { name } = await seeded();
+    const session = await web.signedIn("ownerA");
+    const { page } = session;
+    const operationId = randomUUID();
+    try {
+      await openSecret(page, name);
+      await page.getByRole("button", { name: "Edit value" }).click();
+      await page.getByLabel("New value").fill(canary());
+      await page.route(new RegExp(`/secrets/${name}$`), async (route) => {
+        if (route.request().method() !== "PATCH") return route.fallback();
+        await route.fulfill({
+          status: 503,
+          contentType: "application/json; charset=utf-8",
+          headers: { "x-request-id": randomUUID() },
+          body: JSON.stringify({
+            error: {
+              code: "outcome_unknown",
+              message: "outcome unknown",
+              requestId: randomUUID(),
+              operationId,
+            },
+          }),
+        });
+      });
+      const save = page.getByRole("button", { name: "Save", exact: true });
+      await save.click();
+      const alert = page
+        .getByRole("alert")
+        .filter({ has: page.getByRole("heading", { name: "The outcome is not known" }) });
+      await alert.waitFor();
+      expect(await save.isDisabled()).toBe(true);
+      // The way to the operation's state is offered, and the form can still be closed.
+      expect(await alert.locator("dd code").allTextContents()).toContain(operationId);
+      expect(await page.getByRole("button", { name: "Cancel" }).isDisabled()).toBe(false);
+      await page.getByLabel("New value").fill(canary());
+      expect(await save.isDisabled()).toBe(true);
+      expect((await backendDigest(name)).version).toBe(1);
+    } finally {
+      await session.close();
+    }
+  });
+
   it("507 capacity_exceeded and 503 busy on a write show their texts and leave the form's value in place for the owner", async () => {
     const session = await web.signedIn("ownerA");
     const { page } = session;

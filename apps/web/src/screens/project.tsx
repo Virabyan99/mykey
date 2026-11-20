@@ -172,7 +172,7 @@ export function Project() {
           rule={PROJECT_NAME_RULE}
           problem={projectNameProblem}
           within="this organization"
-          busy={action.busy}
+          busy={action.busy || action.held}
           failure={action.failure}
           action="rename the project"
           onSubmit={(name) => void renameProject(name)}
@@ -188,7 +188,7 @@ export function Project() {
           rule={ENVIRONMENT_NAME_RULE}
           problem={environmentNameProblem}
           within="this project"
-          busy={action.busy}
+          busy={action.busy || action.held}
           failure={action.failure}
           action="create the environment"
           onSubmit={(name) => void createEnvironment(name)}
@@ -206,7 +206,7 @@ export function Project() {
           rule={ENVIRONMENT_NAME_RULE}
           problem={environmentNameProblem}
           within="this project"
-          busy={action.busy}
+          busy={action.busy || action.held}
           failure={action.failure}
           action="rename the environment"
           onSubmit={(name) => void renameEnvironment(open.id, name)}

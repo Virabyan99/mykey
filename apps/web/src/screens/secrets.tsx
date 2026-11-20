@@ -96,7 +96,7 @@ function NewSecret(props: { at: At; onCreated: (text: string) => void; onCancel:
         <ErrorPanel failure={action.failure} action="create the secret" />
       )}
       <div className="actions">
-        <button type="submit" disabled={action.busy}>
+        <button type="submit" disabled={action.busy || action.held}>
           Create secret
         </button>
         <button type="button" onClick={props.onCancel} disabled={action.busy}>

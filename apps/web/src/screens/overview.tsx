@@ -405,7 +405,7 @@ function NewProject(props: { org: string; userId: string }) {
           rule={PROJECT_NAME_RULE}
           problem={projectNameProblem}
           within="this organization"
-          busy={action.busy}
+          busy={action.busy || action.held}
           failure={action.failure}
           action="create the project"
           onSubmit={(name) => void create(name)}

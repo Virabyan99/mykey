@@ -20,10 +20,14 @@ export interface WebShell {
   build: string;
 }
 
-/** P-141. Scripts and styles of this origin only; no frame, no object, no referrer. */
+/**
+ * P-141. Scripts and styles of this origin only; no frame, no object, no
+ * referrer. The only image is the index's empty icon (a data: address); the
+ * stylesheet loads no font (Run 8.0).
+ */
 export const SHELL_HEADERS: Readonly<Record<string, string>> = Object.freeze({
   "content-security-policy":
-    "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'; object-src 'none'",
+    "default-src 'none'; script-src 'self'; style-src 'self'; img-src data:; connect-src 'self'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'; object-src 'none'",
   "x-content-type-options": "nosniff",
   "referrer-policy": "no-referrer",
   "x-frame-options": "DENY",
@@ -92,6 +96,15 @@ export type ShellAnswer =
   | { kind: "unavailable" }
   /** Not the shell's to answer: the caller's 404 stands. */
   | null;
+
+/**
+ * The path the shell matches: the request's path as it came, never decoded,
+ * as the page's router reads `location.pathname` (Run 8.0). A percent-encoded
+ * form of a page path is therefore not a page, for the API and for the page.
+ */
+export function shellPathOf(url: string): string {
+  return new URL(url).pathname;
+}
 
 /** What the shell answers to `method path`. Only GET; only the path table and the manifest. */
 export function shellAnswer(method: string, path: string, shell: WebShell | null): ShellAnswer {
