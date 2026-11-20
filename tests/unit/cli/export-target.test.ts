@@ -223,4 +223,21 @@ describe("export never shows a partial file at the target", () => {
     expect(unlinked).toHaveLength(1);
     expect(unlinked[0] === "/home/u/out.env").toBe(false);
   });
+
+  // Fixes review F-4: a file system without hard links is not "already exists".
+  it("a link the file system refuses (EPERM) → 73 naming no existing output, the temporary file removed", async () => {
+    const { fs, files, unlinked } = fakeFs({});
+    const noLinks: ExportFs = {
+      ...fs,
+      link: () => {
+        throw Object.assign(new Error("not permitted"), { code: "EPERM" });
+      },
+    };
+    const { error } = await exportWith(noLinks);
+    expect(error?.category).toBe("export_target");
+    expect(error?.message).not.toMatch(/already exists/);
+    expect(error?.message).toMatch(/hard link/);
+    expect(unlinked).toHaveLength(1);
+    expect([...files.keys()]).toEqual([]);
+  });
 });

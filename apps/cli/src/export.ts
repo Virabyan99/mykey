@@ -166,8 +166,12 @@ export async function exportCommand(p: {
     fs.close(fd);
     try {
       fs.link(part, path);
-    } catch {
-      throw target("the output already exists; export only creates a new file");
+    } catch (error) {
+      throw target(
+        (error as NodeJS.ErrnoException).code === "EEXIST"
+          ? "the output already exists; export only creates a new file"
+          : "the output could not be created: its directory must allow a hard link",
+      );
     }
     fs.unlink(part);
     fs.syncDirectory(directory);
