@@ -2,7 +2,7 @@
 import { LIMITS } from "@mykey/contracts";
 import { describe, expect, it } from "vitest";
 import {
-  evaluate,
+  evaluate as evaluateAll,
   initialState,
   markDelivered,
   recordHeartbeat,
@@ -21,6 +21,22 @@ const LIMITS_HERE: ProbeLimits = {
 };
 const T = 1_800_000_000_000;
 const beat = { bootId: "b", sealed: null, kmsReachable: null };
+
+/**
+ * These Run 2.6 tests use the old heartbeat shape. Since R6-6 (Run 8.6) that
+ * shape also opens checks_unknown, which it cannot measure; that condition is
+ * proven in evaluate-v2.test.ts. Here only the others are looked at.
+ */
+function evaluate(...args: Parameters<typeof evaluateAll>): ReturnType<typeof evaluateAll> {
+  const result = evaluateAll(...args);
+  const open = Object.fromEntries(
+    Object.entries(result.next.open).filter(([condition]) => condition !== "checks_unknown"),
+  );
+  return {
+    next: { ...result.next, open },
+    alerts: result.alerts.filter((alert) => alert.condition !== "checks_unknown"),
+  };
+}
 
 /** Runs evaluate and delivers every alert at once, as a working sink would. */
 function step(state: HostState, now: number, probeOk: boolean) {

@@ -433,7 +433,12 @@ export function evaluate(
       else next.unknownSince = without(next.unknownSince, name);
     }
   } else if (fresh) {
-    next.unknownSince = {};
+    // R6-6 (Run 8.6): an old heartbeat shape measures only the fields it
+    // carries; every other check is unknown (rule 11), never "resolved".
+    for (const name of CHECK_NAMES) {
+      if (name in beat) next.unknownSince = without(next.unknownSince, name);
+      else next.unknownSince[name] = next.unknownSince[name] ?? beatAt;
+    }
   }
 
   const verdict = (condition: Condition): Verdict => {
