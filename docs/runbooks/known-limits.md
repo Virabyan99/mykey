@@ -22,6 +22,8 @@ FR-1.75 (P-130). This is an honest list: each line names what the service does n
 
 - **Anyone who knows an address can keep its owner from signing in.** Five wrong passwords every 15 minutes, from any sources, keep the account locked; an operator reset clears the lock only until the next five (Run 8.5, R1-5).
 - **Sign-in time is not made equal.** A wrong password for a known address does 1–3 ms more work than for an unknown one. The answers are identical; the timing was not measured (Run 8.5, R1-4).
+- **A success near a window's edge can shorten a counted failure's life.** A successful attempt gives its count back to the newest window, which may not be the one it was counted in; a failure then expires up to 15 minutes early (fixes review F-2, Run 8.6).
+- **After a restore, a password reset is refused only while the restore's audit row is kept.** The refusal compares the authenticator's age with the restore's `operator.restore_begin` row, which the audit purge removes after 365 days, and the two times come from two hosts' clocks (fixes review F-7, Run 8.6).
 - **"Revoke all" can miss a second factor completed at that moment.** Someone who holds the password and a current code, and completes the second factor while the owner revokes, keeps the session that step made. A password change ends it (Run 8.5, R1-3).
 
 ## The workspace
@@ -57,7 +59,11 @@ FR-1.75 (P-130). This is an honest list: each line names what the service does n
 - **Older versions stay readable in OpenBao.** A machine token used against OpenBao directly can read its environment's older versions, also of a secret the product shows as deleted: a delete marks only the current version (FR-1.45; Run 8.5, R3-5).
 - **The application can read the token from the CLI.** `secrets run` keeps the token out of the child's environment, but the CLI's own environment holds it while the child runs, and any process of the same user, the application included, can read it there (Run 8.5, R5-6).
 - **`secrets run` does not pass SIGUSR1 on.** The launcher turns off Node's SIGUSR1 debugger, and Node then keeps that signal blocked: signal the application itself. SIGUSR2 is passed on (Run 8.6, R5-3).
-- **A signal can reach the child twice, or not at all.** Without a terminal, a signal to the whole process group (systemd's stop, `timeout`) reaches the child from the sender and again from the CLI. With a terminal on stdin, `kill -INT` of the CLI alone is not passed on (Run 8.5, R5-5).
+- **Only the launcher turns the debugger off.** Starting `secrets.mjs` with Node directly, not through `~/.local/bin/secrets`, leaves SIGUSR1 able to open Node's inspector while the CLI holds the token (fixes review F-9, Run 8.6).
+- **A signal can reach the child twice, or not at all.** A signal to the whole process group (systemd's stop, `timeout`) reaches the child from the sender and again from the CLI: always for SIGTERM and SIGUSR2, and without a terminal for the others. With a terminal on stdin, `kill -INT` of the CLI alone is not passed on (Run 8.5, R5-5; fixes review F-11).
+- **`secrets run` cannot give an application `NODE_EXTRA_CA_CERTS` or `OPENSSL_CONF`.** The CLI refuses them in its own environment, which is the child's: set them inside the command, `secrets run -- env NODE_EXTRA_CA_CERTS=… app` (D-68).
+- **An export killed midway can leave a hidden file with every value.** The export writes `.<name>.<random>.part` beside the target and links it into place; a kill before the link, or between the link and the removal, leaves that file (mode 0600). If the removal fails after the link, the command exits 73 although the target is whole. A target name longer than about 236 bytes is refused (fixes review F-4, F-5, Run 8.6).
+- **The size check needs `/usr/bin/getconf`.** Where it is missing (NixOS, Guix), the CLI assumes a 256 KiB limit and refuses a larger environment as `capacity` (fixes review F-6, Run 8.6).
 - **The installer checks the download against sums from the same release.** The sums are also written in the repository's reports, which the runbooks name; the launch wrapper is fetched by its tag and has no sum (Run 8.5, R5-7).
 - **An export trusts the directories above its own.** One that another user can write, without the sticky bit, can be swapped while the export runs (Run 8.5, R5-8).
 - **`secrets run` checks values less than `export` does.** A value that `export` refuses as ill-formed text can still start a child (Run 8.5, R5-9).
@@ -125,7 +131,7 @@ FR-1.75 (P-130). This is an honest list: each line names what the service does n
 
 ## The hosts and the network
 
-- **Ops jobs run on the host's network.** Each job's container reaches what the host reaches: the metadata service, the resolver, OpenBao, the API's verification port and the R2, probe and KMS addresses. The `pair` job holds the backup signing key and the R2 credentials (Run 8.5, R6-1; Gate R).
+- **Ops jobs and `okms.sh` run on the host's network.** Each such container reaches what the host reaches: the metadata service, the resolver (so any name, an outbound channel), NTP, every address set (R2, probe, KMS, apt, the registry during a window), every `mk-*` bridge on every port (OpenBao, the API's verification port among them) and the host's loopback. Every job holds the `maintenance` password, and the `pair` job also the backup signing key and the R2 credentials (Run 8.5, R6-1; fixes review F-10; Gate R).
 - **Egress is allowed by address, not by name.** The R2, probe, ACME and KMS sets are lists of addresses; anything served from those addresses is reachable (D-21).
 - **The edge and OpenBao may ask the provider's resolver for any name.** That is an outbound channel through DNS (Run 8.5, R6-3).
 - **The edge's access log holds page paths, so secret names.** It is kept by journald, outside the audit's retention and archive (Run 8.5, reviewer 6).

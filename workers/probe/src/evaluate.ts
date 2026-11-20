@@ -9,9 +9,9 @@
 //   and never resolves one; an open condition stays open and keeps reminding.
 //   A bad reading opens after the condition's grace (the reported grace for
 //   states that flap, none for those whose threshold is already a time).
-// - checks_unknown: a check of a version 2 heartbeat has been unknown for
-//   longer than the reported grace. The old shapes cannot report the new
-//   checks, so they never open it.
+// - checks_unknown: a check has been unknown for longer than the reported
+//   grace. A version 1 heartbeat cannot report the checks it lacks, so they
+//   read unknown and it opens (R6-6); it is never resolved by one.
 // - A heartbeat older than the heartbeat grace freezes every reported
 //   condition: heartbeat_missing says what is known.
 // A condition resolves at the first good reading. An `opened`, `reminder` or
@@ -126,7 +126,7 @@ export interface HostState {
   failingSince: number | null;
   /** Since when each reported condition has read bad without a good reading between. */
   badSince: Partial<Record<Reported, number>>;
-  /** Since when each check of a version 2 heartbeat has been unknown. */
+  /** Since when each check has been unknown (a version 1 heartbeat's missing ones included). */
   unknownSince: Partial<Record<CheckName, number>>;
   open: Partial<Record<Condition, OpenCondition>>;
   /** Resolved conditions whose message has not been delivered yet: the start of their bad period. */

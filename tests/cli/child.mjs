@@ -38,7 +38,7 @@ const count = (signal) => () => {
   if (mode === "term5" && signal === "SIGTERM") process.exit(5);
 };
 for (const signal of ["SIGINT", "SIGHUP", "SIGQUIT", "SIGUSR2"]) process.on(signal, count(signal));
-// R5-3: the child is started with --disable-sigusr1 (run.test.ts), so SIGUSR1 is its own.
+// R5-3: counted, so a test can show the CLI does not pass SIGUSR1 on.
 process.on("SIGUSR1", count("SIGUSR1"));
 if (mode !== "termdie") process.on("SIGTERM", count("SIGTERM"));
 save();
