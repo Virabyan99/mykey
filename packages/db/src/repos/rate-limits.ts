@@ -29,6 +29,11 @@ export async function bumpCounter(
  * Takes one back from the newest window of the last `windows` that still
  * counts more than zero (R1-1: an admitted attempt that did not fail). Does
  * nothing when there is none.
+ *
+ * The row is matched by its key, never by `ctid`: a take-back that waited on
+ * another's row lock gets the newer version's ctid from its subquery, which
+ * the outer scan's snapshot cannot see, and would update nothing (fixes
+ * review F-1). By key, PostgreSQL re-checks the newest version and updates it.
  */
 export async function dropCounter(
   db: Queryable,
@@ -39,8 +44,8 @@ export async function dropCounter(
 ): Promise<void> {
   await db.query(
     `UPDATE app.rate_limit SET count = count - 1
-      WHERE ctid = (
-        SELECT ctid FROM app.rate_limit
+      WHERE scope = $1 AND key_digest = $2 AND count > 0 AND window_start = (
+        SELECT window_start FROM app.rate_limit
          WHERE scope = $1 AND key_digest = $2 AND count > 0
            AND window_start >= date_bin(make_interval(secs => $3), now(), timestamptz 'epoch')
                                - make_interval(secs => $3 * ($4 - 1))
