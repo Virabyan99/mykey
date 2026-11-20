@@ -11,10 +11,10 @@ D-43 refused the runtime settings that switch off verification or load code, and
 ## Decision
 
 1. **Refused (exit 78, before anything else):**
-   - the variables `NODE_EXTRA_CA_CERTS`, `OPENSSL_CONF`, `NODE_USE_SYSTEM_CA`, `SSL_CERT_FILE` and `SSL_CERT_DIR`;
+   - the variables `NODE_EXTRA_CA_CERTS`, `OPENSSL_CONF` and `NODE_USE_SYSTEM_CA`;
    - the Node flags `--use-openssl-ca`, `--use-system-ca`, `--openssl-config` and `--openssl-shared-config`.
 
-   A machine-wide setting is never meant for this CLI.
+   A machine-wide setting is never meant for this CLI. `SSL_CERT_FILE` and `SSL_CERT_DIR` are not refused: Node reads them only for the system store or under `--use-openssl-ca`, both refused, and an application started by `run` may need them (fixes review F-3).
 
 2. **A certificate authority for this CLI alone** is named by `SECRETS_CA_FILE`, a PEM file that is added to Node's public roots and never replaces them. Nothing else of the system reaches the CLI's trust. Like every `SECRETS_*` variable, it never reaches a child.
 3. **Where it applies.** The hosts serve publicly trusted certificates, so a consumer never needs `SECRETS_CA_FILE`. The CLI's own tests use it for their local server.
@@ -22,5 +22,6 @@ D-43 refused the runtime settings that switch off verification or load code, and
 ## Consequences
 
 - A consumer who must go through an inspecting proxy has to name that proxy's authority in `SECRETS_CA_FILE` on purpose. That is a visible, product-specific choice, not a side effect of the machine's settings.
+- `secrets run` cannot pass `NODE_EXTRA_CA_CERTS` or `OPENSSL_CONF` to an application, because its environment is the CLI's: set them inside the command, `secrets run -- env NODE_EXTRA_CA_CERTS=… app`.
 - D-43's boundary stands: a launcher that is already hostile cannot be made safe by JavaScript.
 - The CLI's version is `0.1.2`. Its proofs are `cli-matrix`, `cli.staging` and `test:consumers` (P-145), and the consumer runbooks name it from the freeze on.

@@ -25,13 +25,10 @@ const CODE_FLAGS = [
   "--openssl-shared-config",
 ];
 
-const TRUST_VARIABLES = [
-  "NODE_EXTRA_CA_CERTS",
-  "OPENSSL_CONF",
-  "NODE_USE_SYSTEM_CA",
-  "SSL_CERT_FILE",
-  "SSL_CERT_DIR",
-];
+// SSL_CERT_FILE and SSL_CERT_DIR are not here: Node reads them only for the
+// system store or under --use-openssl-ca, both refused, and an application
+// started by `run` may need them (fixes review F-3).
+const TRUST_VARIABLES = ["NODE_EXTRA_CA_CERTS", "OPENSSL_CONF", "NODE_USE_SYSTEM_CA"];
 
 export function refuseUnsafeRuntime(p: {
   env: NodeJS.ProcessEnv;

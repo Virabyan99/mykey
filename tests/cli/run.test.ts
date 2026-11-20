@@ -244,7 +244,12 @@ describe("secrets run", () => {
       ["no trust for the certificate", { SECRETS_CA_FILE: "" }, server, 69],
       ["NODE_EXTRA_CA_CERTS", { NODE_EXTRA_CA_CERTS: server.caPath }, server, 78],
       ["OPENSSL_CONF", { OPENSSL_CONF: "/dev/null" }, server, 78],
-      ["SSL_CERT_FILE", { SSL_CERT_FILE: server.caPath }, server, 78],
+      [
+        "SSL_CERT_FILE and SSL_CERT_DIR add no trust",
+        { SECRETS_CA_FILE: "", SSL_CERT_FILE: server.caPath, SSL_CERT_DIR: base },
+        server,
+        69,
+      ],
       ["NODE_TLS_REJECT_UNAUTHORIZED=0", { NODE_TLS_REJECT_UNAUTHORIZED: "0" }, server, 78],
       ["another API major", {}, newer, 76],
     ];
@@ -377,6 +382,19 @@ describe("secrets run", () => {
       });
       expect(seen.starts).toBe(1);
     }
+  });
+
+  // Fixes review F-3 (Run 8.6): SSL_CERT_FILE is the application's setting
+  // (curl, Python); the CLI ignores it and passes it on.
+  it("SSL_CERT_FILE set machine-wide reaches the child, and the run starts", async () => {
+    const server = await serve();
+    rmSync(marker, { force: true });
+    const result = await runCli(runArgs(), {
+      env: envOf(server, { SSL_CERT_FILE: "/etc/ssl/certs/ca-certificates.crt" }),
+      cwd: dirs.cwd,
+    });
+    expect(result.code, result.stderr).toBe(0);
+    expect(readMarker().env.SSL_CERT_FILE).toBe(sha("/etc/ssl/certs/ca-certificates.crt"));
   });
 
   // R5-3 (Run 8.6): the CLI holds the token while the child runs, so SIGUSR1

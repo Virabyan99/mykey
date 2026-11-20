@@ -47,14 +47,16 @@ describe("refuseUnsafeRuntime", () => {
   // load OpenSSL modules, are refused like the others. A machine-wide
   // NODE_EXTRA_CA_CERTS for an inspecting proxy would let it read the token.
   it("refuses every setting that changes what is trusted", () => {
-    for (const name of [
-      "NODE_EXTRA_CA_CERTS",
-      "OPENSSL_CONF",
-      "NODE_USE_SYSTEM_CA",
-      "SSL_CERT_FILE",
-      "SSL_CERT_DIR",
-    ]) {
+    for (const name of ["NODE_EXTRA_CA_CERTS", "OPENSSL_CONF", "NODE_USE_SYSTEM_CA"]) {
       refused({ env: { ...SAFE.env, [name]: "/somewhere" } });
+    }
+    // Fixes review F-3: Node reads SSL_CERT_FILE and SSL_CERT_DIR only under
+    // the system store or --use-openssl-ca, both refused; an application
+    // started by `run` may need them, so they pass.
+    for (const name of ["SSL_CERT_FILE", "SSL_CERT_DIR"]) {
+      expect(() => {
+        refuseUnsafeRuntime({ ...SAFE, env: { ...SAFE.env, [name]: "/somewhere" } });
+      }, name).not.toThrow();
     }
     for (const flag of [
       "--use-openssl-ca",
