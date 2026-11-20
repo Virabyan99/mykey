@@ -63,7 +63,6 @@ FR-1.75 (P-130). This is an honest list: each line names what the service does n
 - **A restore takes about 42 minutes of work on staging's data**, of which `reconcile-credentials` is 27 minutes. It runs once per environment, about 19 s each (84 environments). An `--all` form is for Session 8 (Run 6.8, `drill.json`).
 - **The restored data is P's, faults included.** Staging's pairs hold 16 member-less spike organizations of Session 2 with no OpenBao namespace. A restore's catalog check refuses them until they are marked for review (Run 6.8).
 - **A rollback is a redeploy on the same schema, or a restore.** It is never a downgrade of the schema (D-57).
-- **The OpenBao user lockout.** About 15 minutes of failed AppRole logins lock the role id out, even for the right secret id. A credential mistake therefore becomes a 15-minute outage of every secret read (Run 6.9). Tuning `user_lockout` is a question for Session 8.
 
 ## Operations
 
