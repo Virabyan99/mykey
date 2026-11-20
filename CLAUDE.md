@@ -20,7 +20,7 @@ The project is in **Stage 1**, a 14-day plan of nine sessions.
 
 ## Where we stand
 
-_Last updated: 20 Nov 2026, at the Session 7 gate (PR #19, waiting for the owner's merge)._
+_Last updated: 20 Nov 2026, after the Session 7 merge (PR #19)._
 
 | Session | Topic                                       | State                               |
 | ------- | ------------------------------------------- | ----------------------------------- |
@@ -30,7 +30,7 @@ _Last updated: 20 Nov 2026, at the Session 7 gate (PR #19, waiting for the owner
 | 4       | Operations engine and secret lifecycle      | **Done** (PASS WITH ISSUES), merged |
 | 5       | Machine access, CLI and API reference       | **Done** (PASS WITH ISSUES), merged |
 | 6       | Audit, limits, backup, recovery, deployment | **Done** (PASS WITH ISSUES), merged |
-| 7       | Web workspace                               | **Done** (PASS WITH ISSUES), PR #19 |
+| 7       | Web workspace                               | **Done** (PASS WITH ISSUES), merged |
 | 8       | Security review and controlled-use release  | Not started (needs its plan)        |
 | 9       | Real use, agent experiment, stage exit      | Not started                         |
 
