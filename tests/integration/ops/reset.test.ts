@@ -200,8 +200,13 @@ describe("operator-initiated reset", () => {
 
   it("initiation clears the throttle locks of the account", async () => {
     const throttle = createThrottle({ pool: api.pool, ring: api.keys.rateLimit });
+    // As the routes do since R1-1 (Run 8.6): the attempt is counted when it is
+    // admitted, and the failure decides the lock.
     for (let i = 0; i < 5; i += 1) {
+      const source = `198.51.100.${String(i + 1)}`;
+      await throttle.admit("password", { source, account: owner.email });
       await throttle.recordFailure("password", owner.email);
+      await throttle.admit("factor", { source, account: owner.userId });
       await throttle.recordFailure("factor", owner.userId);
     }
     const locks = () =>
