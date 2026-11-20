@@ -302,7 +302,7 @@ async function run(
         counted,
       );
     const early = LARGE_ROUTES.has(route.id);
-    let raw = early ? undefined : await readRaw();
+    let raw = early || route.id === "health.get" ? undefined : await readRaw();
     const headers = c.req.raw.headers;
     const human = route.auth === "human" || route.auth === "human_fresh_totp";
     // One kind of credential per request, refused before any database read.
@@ -342,8 +342,11 @@ async function run(
     }
     if (machine !== null && hasSelector(c.req.url, raw)) throw new ApiError("forbidden_selector");
     const clock = deps.test?.clock?.(headers);
-    const query = machineRoute ? undefined : validateQuery(route, new URL(c.req.url).searchParams);
-    const body = machineRoute ? undefined : validateBody(route, raw);
+    // Run 8.2: health lists no error code (it answers its body); it reads no query and no body
+    // (`raw` above is not read for it either).
+    const unread = machineRoute || route.id === "health.get";
+    const query = unread ? undefined : validateQuery(route, new URL(c.req.url).searchParams);
+    const body = unread ? undefined : validateBody(route, raw);
     const access =
       principal === null
         ? { scope: null, authority: null, resolved: null }

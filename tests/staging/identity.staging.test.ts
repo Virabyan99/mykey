@@ -10,7 +10,14 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { codeAt, createAuth, ephemeralKeys, stepAt } from "@mykey/auth";
+import {
+  NATIVE_DENIED,
+  PRODUCT_OWNED,
+  codeAt,
+  createAuth,
+  ephemeralKeys,
+  stepAt,
+} from "@mykey/auth";
 import { createPool } from "@mykey/db";
 import { drizzle } from "drizzle-orm/node-postgres";
 import * as OTPAuth from "otpauth";
@@ -192,6 +199,26 @@ describe("1–2. known state and sign-in", () => {
     expect(answer.status).toBe(401);
     expect(codeOf(answer)).toBe("mfa_incomplete");
     await ageThrottle();
+  });
+
+  // Run 8.2 (P-151): the whole list, through the public name.
+  it("every refused native route answers 404 on staging", async () => {
+    const owned = new Set(PRODUCT_OWNED.map((route) => `${route.method} ${route.path}`));
+    const refused = NATIVE_DENIED.filter((r) => !owned.has(`${r.method} ${r.path}`));
+    expect(refused.length).toBeGreaterThanOrEqual(10);
+    const wrong: string[] = [];
+    for (const route of refused) {
+      const path = `/v1/auth${route.path.replaceAll(/:[a-z]+/g, "x")}`;
+      const answer = await publicRequest(
+        route.method,
+        path,
+        route.method === "POST" ? { body: {} } : {},
+      );
+      if (answer.status !== 404 || codeOf(answer) !== "not_found") {
+        wrong.push(`${route.method} ${path}: ${String(answer.status)} ${codeOf(answer) ?? ""}`);
+      }
+    }
+    expect(wrong).toEqual([]);
   });
 });
 
