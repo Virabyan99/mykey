@@ -75,7 +75,7 @@ MSYS_NO_PATHCONV=1 node scripts/host.ts <host> restore-verify --confirm-members 
 - `--journey` (staging and the drill; never production): the operator runs the journey itself through the verification listener, with the newest reset link `ops reset-account` wrote since the restore began. The new password and authenticator seed go to `~/.mykey/secrets/hosts/<host>/` (`owner-password`, `owner-totp-seed`). A second `--journey` (for `--open`, after a report went stale) needs a new reset link first.
 - `--open`: `gate open` with the report, after re-checking sessions, accessors, the control row and the incarnation. Then the restore's root token is revoked and its copy and the state files are removed. A report older than 30 minutes is refused: run `restore-verify` again.
 
-After opening: every person signs in after a reset, every machine needs a new token, and every `uncertain` operation needs review (`reconciliation.md`).
+After opening: every person signs in after an `mfa` reset (`reset-account --kind mfa`), every machine needs a new token, and every `uncertain` operation needs review (`reconciliation.md`). The authenticators and recovery codes in the pair are never trusted (rule 9): a `password` reset is refused (`restored_factor`) while a person's active authenticator is older than the restore, and becomes possible again once they have enrolled anew.
 
 ## Production
 

@@ -213,6 +213,24 @@ describe("the whole restore, locally (P-124)", () => {
     }
   });
 
+  // R1-2 / R4-1 (Run 8.6, rule 9): a `password` reset accepts a code of the
+  // active factor, which here is the pair's. It is refused; `mfa` (below) is not.
+  it("a password reset, which would trust the restored authenticator and recovery codes, is refused", async () => {
+    const { f } = world;
+    const keys = loadAuthKeys(f.keysDirectory);
+    for (const user of ["ownerA", "adminA"] as const) {
+      const answer = await initiateReset(
+        {
+          pool: restored.pool,
+          keys,
+          throttle: createThrottle({ pool: restored.pool, ring: keys.rateLimit }),
+        },
+        { email: f.tenants.credentials(user).email, kind: "password" },
+      );
+      expect(answer, user).toEqual({ outcome: "refused", reason: "restored_factor" });
+    }
+  });
+
   it("the operator's reset link works, the owner enrols through the listener; the report needs the members confirmed", async () => {
     const { f } = world;
     const keys = loadAuthKeys(f.keysDirectory);
