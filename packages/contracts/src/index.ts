@@ -10,3 +10,4 @@ export * from "./operation.ts";
 export * from "./routes.ts";
 export * from "./gate-record.ts";
 export * from "./release.ts";
+export * from "./web-routes.ts";

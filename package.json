@@ -19,6 +19,7 @@
     "test:browser": "vitest run --project browser",
     "test:consumers": "node scripts/require-staging-env.ts && vitest run --project consumers",
     "cli:build": "node apps/cli/build.ts",
+    "web:build": "node apps/web/build.ts",
     "cli:release": "node infra/release/cli/build-release.ts",
     "host:release": "node infra/release/build.ts",
     "pins:verify": "node scripts/pins-verify.ts",

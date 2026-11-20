@@ -1,4 +1,12 @@
 {
   "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["es2024", "DOM", "DOM.Iterable"],
+    "types": [],
+    "jsx": "react-jsx",
+    "emitDeclarationOnly": true,
+    "outDir": "../../dist/web-src",
+    "tsBuildInfoFile": "../../dist/web-src/tsconfig.tsbuildinfo"
+  },
   "include": ["src"]
 }

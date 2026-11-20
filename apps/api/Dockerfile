@@ -61,6 +61,23 @@ RUN pnpm install --frozen-lockfile --ignore-scripts --filter "@mykey/api"
 COPY scripts/reference-asset.ts scripts/
 RUN node scripts/reference-asset.ts
 
+# The owner workspace (Run 7.1, P-134, D-59): bundled here by the pinned esbuild.
+# Only apps/web/dist (an index, one script, one stylesheet, a manifest) leaves
+# this stage; React and the build tool never reach the image.
+FROM node@sha256:a34ab6d7f6f4813f4d0c5469d74685604b962fbdbf5793a7bc7b4998ecb867c8 AS web
+ARG MYKEY_BUILD
+ENV MYKEY_BUILD=${MYKEY_BUILD}
+WORKDIR /app
+RUN corepack enable
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY packages/contracts/package.json packages/contracts/
+COPY apps/web/package.json apps/web/
+RUN pnpm install --frozen-lockfile --ignore-scripts --filter "@mykey/web..."
+COPY packages/contracts/src packages/contracts/src
+COPY apps/web/src apps/web/src
+COPY apps/web/build.ts apps/web/
+RUN node apps/web/build.ts
+
 FROM node@sha256:a34ab6d7f6f4813f4d0c5469d74685604b962fbdbf5793a7bc7b4998ecb867c8
 ARG MYKEY_BUILD
 ENV NODE_ENV=production
@@ -68,6 +85,7 @@ ENV MYKEY_BUILD=${MYKEY_BUILD}
 WORKDIR /app
 COPY --from=build /app /app
 COPY --from=reference /app/apps/api/assets /app/apps/api/assets
+COPY --from=web /app/apps/web/dist /app/apps/web/dist
 # Run 6.9 (P-127): no package manager in a runtime image.
 RUN rm -rf /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/corepack /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/corepack
 # The `node` user of the image. The compose file repeats it.

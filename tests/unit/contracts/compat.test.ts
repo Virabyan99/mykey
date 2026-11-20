@@ -124,6 +124,34 @@ describe("breakingChanges", () => {
     expect(kinds(nested)).toEqual(["response_field_removed"]);
   });
 
+  // Session 7 (carried from Session 5's review): the workspace consumes the contract.
+  it("a response status the baseline answered is gone → response_status_removed", () => {
+    const found = breakingChanges(
+      baseline(),
+      changed((doc) => delete at(doc, "paths", "/a", "post", "responses")["201"]),
+    );
+    expect(found).toEqual([{ kind: "response_status_removed", where: "POST /a 201" }]);
+    // A new status is not a break.
+    expect(
+      kinds(
+        changed(
+          (doc) =>
+            (at(doc, "paths", "/a", "post", "responses")["202"] = { description: "Accepted" }),
+        ),
+      ),
+    ).toEqual([]);
+  });
+
+  it("a response field that was required and is optional now → response_field_optional", () => {
+    const found = breakingChanges(
+      baseline(),
+      changed((doc) => (thing(doc).required = ["id"])),
+    );
+    expect(found).toEqual([{ kind: "response_field_optional", where: "GET /a 200.state" }]);
+    // The request side: a field that stops being required is not a break.
+    expect(kinds(changed((doc) => (postBody(doc).required = [])))).toEqual([]);
+  });
+
   it("a removed enum value, in a response or a request → enum_value_removed", () => {
     expect(kinds(changed((doc) => (thing(doc, "properties", "state").enum = ["active"])))).toEqual([
       "enum_value_removed",

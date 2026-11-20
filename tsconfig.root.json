@@ -12,6 +12,7 @@
     "infra/**/*.ts",
     "vitest.config.ts",
     "apps/cli/build.ts",
+    "apps/web/build.ts",
     "packages/db/drizzle.config.ts"
   ],
   "exclude": ["**/dist", "**/node_modules", "tests/fixtures/ci"]

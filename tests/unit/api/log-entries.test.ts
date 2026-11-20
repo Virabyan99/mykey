@@ -53,6 +53,7 @@ const FIXTURES: { [K in LogEntry["event"]]: Extract<LogEntry, { event: K }>[] } 
   ],
   outbox: [{ event: "outbox", time: TIME, outcome: "failed", errorClass: "DatabaseError" }],
   reference_asset_missing: [{ event: "reference_asset_missing", time: TIME }],
+  web_shell_missing: [{ event: "web_shell_missing", time: TIME }],
   throttle_sweep: [{ event: "throttle_sweep", time: TIME, outcome: "failed", errorClass: "Error" }],
   session_cleanup: [
     { event: "session_cleanup", time: TIME, outcome: "failed", errorClass: "Error" },

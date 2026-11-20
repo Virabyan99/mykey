@@ -119,12 +119,14 @@ const resetCompleteBody = z.strictObject({
 });
 
 /** organizations.list (Run 3.7): the caller's active memberships; no namespace, no digest. */
+/** The states of an organization. */
+export const ORGANIZATION_STATES = ["provisioning", "active", "failed", "needs_review"] as const;
 const organizationsBody = z.strictObject({
   organizations: z.array(
     z.strictObject({
       id: z.uuid(),
       role: z.enum(["owner", "admin", "member"]),
-      state: z.enum(["provisioning", "active", "failed", "needs_review"]),
+      state: z.enum(ORGANIZATION_STATES),
       /** Why the organization is `needs_review`; null in every other state. */
       reviewReason: z.string().nullable(),
     }),
@@ -174,7 +176,9 @@ const secretsListQuery = z.strictObject({
 });
 
 /** Run 4.3 (P-73): the index's view of a name. Never a value. */
-const indexState = z.enum(["live", "deleted", "needs_review"]);
+/** The states of a secret's index row. */
+export const INDEX_STATES = ["live", "deleted", "needs_review"] as const;
+const indexState = z.enum(INDEX_STATES);
 const secretsListBody = z.strictObject({
   secrets: z.array(
     z.strictObject({
@@ -345,12 +349,58 @@ export const activityListBody = z.strictObject({
   anchor: z.iso.datetime(),
 });
 
+/**
+ * metrics.get (Run 7.8, P-139, FR-1.94): what happened in the organization,
+ * by UTC day, counted from the audit rows its listings serve. `days` is how
+ * many UTC days end with today; today is counted up to `observedAt`.
+ * `success`, `failure` and `unknown` are the outcomes of the product's
+ * actions (the rows of `activity.list`); `denied` is the action
+ * `access.denied` (rows of `audit.list`). A day before `measuredFrom`, the
+ * organization's oldest row, has `counts: null`: it was not measured, which
+ * is not zero. `operations` are top-level operations now: `unresolved` have
+ * no end yet (accepted, executing, awaiting input, or uncertain and not
+ * settled by an operator); `uncertain` is every operation in that state.
+ */
+export const METRICS_MAX_DAYS = 30;
+const metricsQuery = z.strictObject({
+  days: z.int().min(1).max(METRICS_MAX_DAYS).default(7),
+});
+const metricCount = z.int().nonnegative();
+const metricsBody = z.strictObject({
+  observedAt: z.iso.datetime(),
+  source: z.literal("audit.event"),
+  window: z.strictObject({ from: z.iso.datetime(), to: z.iso.datetime() }),
+  measuredFrom: z.iso.datetime().nullable(),
+  days: z.array(
+    z.strictObject({
+      day: z.iso.date(),
+      counts: z
+        .strictObject({
+          success: metricCount,
+          failure: metricCount,
+          unknown: metricCount,
+          denied: metricCount,
+        })
+        .nullable(),
+    }),
+  ),
+  operations: z.strictObject({ unresolved: metricCount, uncertain: metricCount }),
+});
+
 /** projects.list and environments.list (Run 3.9, P-59): keyset pages in id order. */
 const pageQuery = z.strictObject({
   limit: z.int().min(1).max(LIMITS.listing.maxLimit).default(LIMITS.listing.defaultLimit),
   cursor: z.string().min(1).optional(),
 });
-const resourceState = z.enum(["pending", "active", "revoking", "archived", "needs_review"]);
+/** The states of a project or an environment (exported for the workspace, Session 7). */
+export const RESOURCE_STATES = [
+  "pending",
+  "active",
+  "revoking",
+  "archived",
+  "needs_review",
+] as const;
+const resourceState = z.enum(RESOURCE_STATES);
 const projectsBody = z.strictObject({
   projects: z.array(
     z.strictObject({
@@ -375,6 +425,42 @@ const environmentsBody = z.strictObject({
     }),
   ),
   nextCursor: z.string().nullable(),
+});
+
+/**
+ * overview.get (Run 7.3, P-139, FR-1.90): the organization's projects with
+ * their environments, read at one database time. Counts come from the secret
+ * index, never from OpenBao; `keys` is null where no count was made (an
+ * environment that is pending or under review), which is not zero.
+ */
+const keyCount = z.int().nonnegative();
+const overviewBody = z.strictObject({
+  observedAt: z.iso.datetime(),
+  source: z.literal("index"),
+  projects: z.array(
+    z.strictObject({
+      id: z.uuid(),
+      name: z.string(),
+      state: resourceState,
+      reviewReason: z.string().nullable(),
+      environments: z.array(
+        z.strictObject({
+          id: z.uuid(),
+          name: z.string(),
+          state: resourceState,
+          reviewReason: z.string().nullable(),
+          kvReady: z.boolean(),
+          /** The newest change the index knows of, or null (none, or not counted). */
+          changedAt: z.iso.datetime().nullable(),
+          keys: z
+            .strictObject({ live: keyCount, deleted: keyCount, needsReview: keyCount })
+            .nullable(),
+        }),
+      ),
+    }),
+  ),
+  /** True when the organization has more projects than the answer holds. */
+  truncated: z.boolean(),
 });
 
 /** operations.list (Run 4.1, P-63): newest first; children of an import are not listed. */
@@ -451,6 +537,35 @@ const reactivatedBody = operationResponseSchema.extend({
 const credentialsListBody = z.strictObject({
   credentials: z.array(credentialView),
   nextCursor: z.string().nullable(),
+});
+/**
+ * credentials.summary (Run 7.7, P-139, FR-1.91): the organization's machine
+ * credentials counted by state at one database time, and the active ones
+ * within the expiry warning, soonest first. States are derived as
+ * `credentials.list` derives them. Never a token, never an accessor.
+ */
+const credentialCount = z.int().nonnegative();
+const credentialsSummaryBody = z.strictObject({
+  observedAt: z.iso.datetime(),
+  byState: z.strictObject({
+    issuing: credentialCount,
+    active: credentialCount,
+    revoking: credentialCount,
+    revoked: credentialCount,
+    expired: credentialCount,
+    needs_review: credentialCount,
+  }),
+  expiring: z.array(
+    z.strictObject({
+      credentialId: z.uuid(),
+      name: z.string(),
+      projectId: z.uuid(),
+      environmentId: z.uuid(),
+      expiresAt: z.iso.datetime(),
+    }),
+  ),
+  /** True when more credentials are expiring than the answer holds. */
+  expiringTruncated: z.boolean(),
 });
 
 // ----------------------------------------------------------------- error lists
@@ -783,11 +898,19 @@ export const ROUTES: readonly RouteDef[] = Object.freeze([
     query: activityListQuery,
     responses: { 200: activityListBody },
   }),
-  define("overview.get", "GET", `${O}/overview`, "human", false, "7.3", { action: "audit.view" }),
+  define("overview.get", "GET", `${O}/overview`, "human", false, "7.3", {
+    action: "audit.view",
+    responses: { 200: overviewBody },
+  }),
   define("credentials.summary", "GET", `${O}/credentials/summary`, "human", false, "7.7", {
     action: "credentials.manage",
+    responses: { 200: credentialsSummaryBody },
   }),
-  define("metrics.get", "GET", `${O}/metrics`, "human", false, "7.8", { action: "audit.view" }),
+  define("metrics.get", "GET", `${O}/metrics`, "human", false, "7.8", {
+    action: "audit.view",
+    query: metricsQuery,
+    responses: { 200: metricsBody },
+  }),
 
   define("session.activity", "POST", "/v1/session/activity", "human", false, "3.5", {
     action: null,
@@ -822,6 +945,26 @@ export const ROUTES: readonly RouteDef[] = Object.freeze([
     errors: ["environment_changed", "capacity_exceeded", ...VALUE_READ],
   }),
 ]);
+
+// The types of the bodies above, for the owner workspace (Session 7, P-136).
+// An export is not a contract change.
+export type OrganizationsBody = z.infer<typeof organizationsBody>;
+export type ProjectsBody = z.infer<typeof projectsBody>;
+export type EnvironmentsBody = z.infer<typeof environmentsBody>;
+export type SecretsListBody = z.infer<typeof secretsListBody>;
+export type SecretsHistoryBody = z.infer<typeof secretsHistoryBody>;
+export type SecretsRevealBody = z.infer<typeof secretsRevealBody>;
+export type ImportPreviewBody = z.infer<typeof importPreviewBody>;
+export type OperationsListBody = z.infer<typeof operationsListBody>;
+export type CredentialView = z.infer<typeof credentialView>;
+export type CredentialIssuedBody = z.infer<typeof credentialIssuedBody>;
+export type CredentialsListBody = z.infer<typeof credentialsListBody>;
+export type AuditListBody = z.infer<typeof auditListBody>;
+export type ActivityListBody = z.infer<typeof activityListBody>;
+export type SessionActivityBody = z.infer<typeof activityBody>;
+export type OverviewBody = z.infer<typeof overviewBody>;
+export type CredentialsSummaryBody = z.infer<typeof credentialsSummaryBody>;
+export type MetricsBody = z.infer<typeof metricsBody>;
 
 /** The two machine bodies, for the CLI's validator (Run 5.5, P-96). */
 export { keysBody as machineKeysBody, resolveBody as machineResolveBody };

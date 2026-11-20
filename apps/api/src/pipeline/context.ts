@@ -31,6 +31,12 @@ export interface ApiConfig {
   trustedProxy: string | null;
   /** Where scalar.js and scalar.json are (Run 5.9); default apps/api/assets. */
   referenceAssetDirectory?: string;
+  /**
+   * Where the built workspace is (Session 7, P-134); default apps/web/dist.
+   * `null`: no workspace at all (the test harness, for suites that are not
+   * about it): its paths keep the terminal 404 and nothing is logged.
+   */
+  webDirectory?: string | null;
 }
 
 export interface TestRouteEntry {

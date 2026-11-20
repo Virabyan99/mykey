@@ -949,6 +949,114 @@
       "status": "SPIKE_PASS",
       "evidence": ["docs/evidence/session-6/run-6.10.md", "docs/evidence/session-6/alerts.md"],
       "note": "Every probe condition seen to fire and resolve on staging with a dated delivery line, and a runbook section (Means, Check, Fix, Confirm, a command) kept equal to CONDITIONS by tests/unit/runbooks/alerts.test.ts; links and commands of every runbook checked (P-130)."
+    },
+    {
+      "id": "FR-1.90",
+      "status": "SPIKE_PASS",
+      "evidence": ["docs/evidence/session-7/run-7.3.md"],
+      "note": "The overview route and screen: names, immutable ids, state, review reason, last change and the index's key counts with source and time; a count that was not made is null and reads \"not available\". Local browser and integration proof; the staging demonstration is the gate's."
+    },
+    {
+      "id": "AC-1.46",
+      "status": "SPIKE_PASS",
+      "evidence": ["docs/evidence/session-7/run-7.3.md"],
+      "note": "Active, pending, archived, revoking and review resources shown with counts, times and the actions their state allows; a member is denied and organization B gets the hidden 404. FR-1.94's part is Run 7.8's."
+    },
+    {
+      "id": "FR-1.22",
+      "status": "SPIKE_PASS",
+      "evidence": ["docs/evidence/session-7/run-7.4.md"],
+      "note": "Masked until an explicit Reveal; the value is held only by the displaying component and is gone after 30 s, on hide, on a change of address and at sign-out; no secret-bearing route goes through the query cache (D-60). Local browser proof over real OpenBao; a historical version's reveal is Run 7.5's and the storage scan Run 7.10's."
+    },
+    {
+      "id": "FR-1.23",
+      "status": "SPIKE_PASS",
+      "evidence": ["docs/evidence/session-7/run-7.4.md"],
+      "note": "Copy is an explicit button; the page then says the clipboard is outside MyKey and the copy cannot be taken back; no value in a notice or an error text."
+    },
+    {
+      "id": "FR-1.91",
+      "status": "SPIKE_PASS",
+      "evidence": ["docs/evidence/session-7/run-7.7.md"],
+      "note": "The credentials screen and credentials.summary: name, scope, effective expiry, issuer, state, last use only when known, the seven-day warning as text, the token once through the forgetting holder, the lost-delivery explanation, revocation by typed name and fixed replacement guidance. Local browser proof over real OpenBao; the staging demonstration is the gate's."
+    },
+    {
+      "id": "AC-1.47",
+      "status": "SPIKE_PASS",
+      "evidence": ["docs/evidence/session-7/run-7.7.md"],
+      "note": "Every credential state issued through the product and shown; a revocation in the page is followed by machine.keys refusing the token; no token is shown twice. Local proof."
+    },
+    {
+      "id": "FR-1.92",
+      "status": "SPIKE_PASS",
+      "evidence": ["docs/evidence/session-7/run-7.8.md"],
+      "note": "The operations screen and the activity timeline: paged, scoped, the server's seven states by their own word, an uncertain operation never called failed, the operator sentence with the runbook's name, and nothing on the screens that reconciles. Local browser proof over real OpenBao."
+    },
+    {
+      "id": "FR-1.94",
+      "status": "SPIKE_PASS",
+      "evidence": ["docs/evidence/session-7/run-7.8.md"],
+      "note": "metrics.get and the overview's summary: outcomes by day, credentials by state and operations without an end, each with source, window and observation time; a day not measured is a null and reads \"not measured\", never zero; members are refused by the server. Local proof."
+    },
+    {
+      "id": "AC-1.48",
+      "status": "SPIKE_PASS",
+      "evidence": ["docs/evidence/session-7/run-7.8.md"],
+      "note": "A delayed write, an unknown issuance and an interrupted import forced through the fixtures' fault hooks and shown as executing then succeeded, needs review with uncertain, and awaiting input with the way to resume; ids and operator escalation shown, no retry. Local proof; the staging demonstration is the gate's."
+    },
+    {
+      "id": "AC-1.55",
+      "status": "SPIKE_PASS",
+      "evidence": ["docs/evidence/session-7/run-7.8.md"],
+      "note": "The summary from real audit rows: not measured, a counted zero, counted days and unresolved operations equal to a direct count; organization B counted nowhere and a member refused. Local proof."
+    },
+    {
+      "id": "FR-1.76",
+      "status": "SPIKE_PASS",
+      "evidence": ["docs/evidence/session-7/run-7.9.md"],
+      "note": "Every cookie-authenticated change needs this origin on every route and auth path that is not a GET; no GET changes a row; the page and every asset carry the content policy; injected inline and third-party scripts and framing are refused by Chromium. Local proof."
+    },
+    {
+      "id": "FR-1.89",
+      "status": "SPIKE_PASS",
+      "evidence": ["docs/evidence/session-7/run-7.9.md"],
+      "note": "Every owner screen is reached from the navigation after a complete sign-in and shows the server's states in the server's words; no placeholder screen is left. Local browser proof."
+    },
+    {
+      "id": "FR-1.93",
+      "status": "SPIKE_PASS",
+      "evidence": ["docs/evidence/session-7/run-7.9.md"],
+      "note": "One table maps every code to what happened, the safe next step and the ids; the nine failure classes each show their own words in a real screen, never the code or the server's text; an unknown outcome never invites a second send. Five classes by the server's own answer, four answered by the harness with the contract's envelope."
+    },
+    {
+      "id": "FR-1.96",
+      "status": "SPIKE_PASS",
+      "evidence": ["docs/evidence/session-7/run-7.9.md"],
+      "note": "Labels on every control, errors tied to fields, Tab in reading order with a visible focus ring, dialogs that hold and return the focus, typed-name confirmation, words beside every colour, and no sideways movement at 360 pixels. Chromium only; no conformance to a standard is claimed."
+    },
+    {
+      "id": "AC-1.29",
+      "status": "SPIKE_PASS",
+      "evidence": ["docs/evidence/session-7/run-7.9.md"],
+      "note": "The page's part: errors read by the envelope's schema; a cut connection or a proxy's page is 'No usable answer came back' and never a claim about the change; hidden and absent read the same. The CLI's and API's parts are Sessions 3 and 5's."
+    },
+    {
+      "id": "AC-1.34",
+      "status": "SPIKE_PASS",
+      "evidence": ["docs/evidence/session-7/run-7.9.md"],
+      "note": "Cross-site changes refused on product and auth routes; an inline script, a third-party script and an inline style refused by the browser; framing refused; referrer policy no-referrer. Local proof."
+    },
+    {
+      "id": "AC-1.51",
+      "status": "SPIKE_PASS",
+      "evidence": ["docs/evidence/session-7/run-7.9.md"],
+      "note": "The main flow done with the keyboard only; narrow layout, labels, focus placement and return and textual equivalents inspected in Chromium; three defects found and repaired. Contrast not measured."
+    },
+    {
+      "id": "PO-12",
+      "status": "SPIKE_PASS",
+      "evidence": ["docs/evidence/session-7/run-7.9.md"],
+      "note": "The browser's content policy on the workspace: headers on the page and every asset, enforced by Chromium (framing and injected scripts refused, no violation from any screen). Local proof; the staging check is the gate's."
     }
   ]
 }

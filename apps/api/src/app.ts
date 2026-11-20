@@ -27,6 +27,7 @@ import {
   credentialsIssueHandler,
   credentialsListHandler,
   credentialsRevokeHandler,
+  credentialsSummaryHandler,
 } from "./routes/credentials.ts";
 import { exportCreateHandler } from "./routes/export.ts";
 import { archiveHandler, reactivateHandler } from "./routes/lifecycle.ts";
@@ -34,6 +35,8 @@ import { machineKeysHandler, machineResolveHandler } from "./routes/machine.ts";
 import { healthHandler } from "./routes/health.ts";
 import { importApplyHandler, importPreviewHandler, importResumeHandler } from "./routes/imports.ts";
 import { activityListHandler } from "./routes/activity.ts";
+import { metricsGetHandler } from "./routes/metrics.ts";
+import { overviewGetHandler } from "./routes/overview.ts";
 import { auditListHandler } from "./routes/audit.ts";
 import { operationsGetHandler, operationsListHandler } from "./routes/operations.ts";
 import { organizationsListHandler } from "./routes/organizations.ts";
@@ -54,6 +57,7 @@ import {
   type ReferencePage,
 } from "./reference/page.ts";
 import { resetCompleteHandler } from "./routes/reset.ts";
+import { DEFAULT_WEB_DIRECTORY, loadWebShell, shellAnswer } from "./web/shell.ts";
 import {
   secretsCreateHandler,
   secretsDeleteHandler,
@@ -127,6 +131,8 @@ function handlers(
     "operations.list": operationsListHandler,
     "audit.list": auditListHandler,
     "activity.list": activityListHandler,
+    "overview.get": overviewGetHandler,
+    "metrics.get": metricsGetHandler,
     "secrets.list": secretsListHandler,
     "secrets.history": secretsHistoryHandler,
     "secrets.reveal": secretsRevealHandler,
@@ -142,6 +148,7 @@ function handlers(
     "credentials.list": credentialsListHandler,
     "credentials.issue": credentialsIssueHandler,
     "credentials.revoke": credentialsRevokeHandler,
+    "credentials.summary": credentialsSummaryHandler,
     "projects.archive": archiveHandler,
     "environments.archive": archiveHandler,
     "projects.reactivate": reactivateHandler,
@@ -302,7 +309,25 @@ export function createApp(given: AppDeps): Hono<ApiEnv> {
   // After the contract routes: the auth module closes the rest of /v1/auth with a 404.
   if (deps.auth !== undefined) mountAuth(app, deps, deps.auth);
 
-  app.notFound((c) => errorResponse("not_found", c.get("requestId")));
+  // Run 7.1 (P-134): the workspace's shell answers where the terminal 404
+  // would be, on the paths of WEB_ROUTES and for the files of its manifest,
+  // after the gate and the source limit like every request. No route is
+  // registered for it.
+  const webDirectory =
+    deps.config.webDirectory === undefined ? DEFAULT_WEB_DIRECTORY : deps.config.webDirectory;
+  const shell = webDirectory === null ? null : loadWebShell(webDirectory);
+  if (webDirectory !== null && shell === null) {
+    deps.log({ event: "web_shell_missing", time: now() });
+  }
+  app.notFound((c) => {
+    if (webDirectory === null) return errorResponse("not_found", c.get("requestId"));
+    const answer = shellAnswer(c.req.method, c.req.path, shell);
+    if (answer === null) return errorResponse("not_found", c.get("requestId"));
+    if (answer.kind === "unavailable") {
+      return errorResponse("dependency_unavailable", c.get("requestId"));
+    }
+    return answer.response;
+  });
   app.onError((error, c) => {
     deps.log({
       event: "unhandled",

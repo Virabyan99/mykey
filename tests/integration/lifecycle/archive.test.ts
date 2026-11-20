@@ -347,6 +347,29 @@ describe("environment archive", () => {
     expect(await successRows(f, answer.body.operationId as string)).toBe(1);
   }, 120_000);
 
+  it("a driveArchive throw answers 503 with the operation id; the same key replays to the finished archive", async () => {
+    const { place } = await placeWithCredentials(1);
+    const key = randomUUID();
+    f.setFaults((point) => {
+      if (point === "archive_before_finish_commit") throw new Error("seeded: the drive throws");
+    });
+    const answer = await archive(f, place.path, { key });
+    f.setFaults(null);
+    expect(answer.status).toBe(503);
+    expect(answer.code).toBe("dependency_unavailable");
+    // The admission is committed: the answer names the operation the owner can look up.
+    const marked = await resourceState(f, "environment", place.environmentId);
+    expect(marked.state).toBe("revoking");
+    expect(answer.operationId).toBe(marked.archive_operation_id);
+    expect((await operation(answer.operationId!))?.state).toBe("executing");
+    const driven = await driver.run(0);
+    expect(driven.archived).toContain(answer.operationId);
+    const replay = await archive(f, place.path, { key });
+    expect(replay.status).toBe(200);
+    expect(replay.body.operationId).toBe(answer.operationId);
+    expect(await successRows(f, answer.operationId!)).toBe(1);
+  }, 120_000);
+
   it("a credential in needs_review blocks the end, not the closing; after reconcile-credentials with exclusion the next tick says archived", async () => {
     const { place } = await placeWithCredentials(1);
     f.setFaults((point) => {

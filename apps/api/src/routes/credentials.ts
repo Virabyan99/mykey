@@ -5,8 +5,10 @@
 // accessor or a token.
 import { LIMITS, credentialIdSchema, type OperationId } from "@mykey/contracts";
 import {
+  AuditReadTimeout,
   findCredentialByOperation,
   listCredentials,
+  readCredentialsSummary,
   type CredentialRow,
   type EnvironmentScope,
   type Queryable,
@@ -213,4 +215,39 @@ export const credentialsListHandler: Handler = async (ctx, deps) => {
         })
       : null;
   return { status: 200, body: { credentials: page.map(credentialView), nextCursor } };
+};
+
+/**
+ * credentials.summary (Run 7.7, P-139, FR-1.91). The route's action (owner and
+ * admin) is decided by the pipeline before this runs, so everything counted
+ * here is something the caller may list.
+ */
+export const credentialsSummaryHandler: Handler = async (ctx, deps) => {
+  if (ctx.scope === null) throw new ApiError("dependency_unavailable");
+  let summary;
+  try {
+    summary = await readCredentialsSummary(
+      deps.pool,
+      ctx.scope.organizationId,
+      LIMITS.listing.defaultLimit,
+    );
+  } catch (error) {
+    if (error instanceof AuditReadTimeout) throw new ApiError("busy", "summary_read_timeout");
+    throw error;
+  }
+  return {
+    status: 200,
+    body: {
+      observedAt: summary.observedAt.toISOString(),
+      byState: summary.byState,
+      expiring: summary.expiring.map((row) => ({
+        credentialId: row.id,
+        name: row.name,
+        projectId: row.projectId,
+        environmentId: row.environmentId,
+        expiresAt: row.expiresAt.toISOString(),
+      })),
+      expiringTruncated: summary.expiringTruncated,
+    },
+  };
 };

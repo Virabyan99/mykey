@@ -517,7 +517,7 @@ describe("5. shut out", () => {
     const admin = await publicRequest("GET", `/v1/organizations/${ORGANIZATION}/audit`, {
       cookie: as("admin"),
     });
-    expect(admin.status).toBe(404); // allowed; no handler before Run 6.1
+    expect(admin.status).toBe(200); // allowed; the route has its handler since Run 6.1
   });
 
   it("B sees nothing of A and A nothing of B", async () => {

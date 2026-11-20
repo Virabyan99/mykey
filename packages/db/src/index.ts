@@ -140,6 +140,18 @@ export {
   type AuditRow,
 } from "./repos/audit-read.ts";
 export {
+  readCredentialsSummary,
+  type CredentialsSummary,
+  type ExpiringCredential,
+} from "./repos/credentials-summary.ts";
+export { readMetrics, type DayCounts, type Metrics } from "./repos/metrics.ts";
+export {
+  readOverview,
+  type Overview,
+  type OverviewEnvironment,
+  type OverviewProject,
+} from "./repos/overview.ts";
+export {
   ARCHIVE_LOCK_SQL,
   chainProblems,
   databaseNow,

@@ -6,13 +6,14 @@ Everything in this stack is synthetic and development-only. The seal is a static
 
 ## Commands
 
-| Command                            | What it does                                                                                                                                 |
-| ---------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
-| `pnpm run stack:up`                | Starts project `mykey-dev` on fixed ports: PostgreSQL `127.0.0.1:54320`, OpenBao `https://127.0.0.1:8200`. Safe to run again while it is up. |
-| `pnpm run stack:status`            | Prints each service's state and health; exits 0 only when both are running and healthy.                                                      |
-| `pnpm run stack:down`              | Stops `mykey-dev` and deletes its volumes and its state directory. All data is gone.                                                         |
-| `node scripts/stack.ts down --all` | Removes `mykey-dev` and every test stack `mykey-t-*`, including leftovers of a crashed test run.                                             |
-| `pnpm run test:integration`        | Starts its own stack on free ports, runs the integration tests, removes the stack. It does not touch `mykey-dev`.                            |
+| Command                            | What it does                                                                                                                                                                                                                         |
+| ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `pnpm run stack:up`                | Starts project `mykey-dev` on fixed ports: PostgreSQL `127.0.0.1:54320`, OpenBao `https://127.0.0.1:8200`. Safe to run again while it is up.                                                                                         |
+| `pnpm run stack:status`            | Prints each service's state and health; exits 0 only when both are running and healthy.                                                                                                                                              |
+| `pnpm run stack:down`              | Stops `mykey-dev` and deletes its volumes and its state directory. All data is gone.                                                                                                                                                 |
+| `node scripts/stack.ts down --all` | Removes `mykey-dev` and every test stack `mykey-t-*`, including leftovers of a crashed test run.                                                                                                                                     |
+| `pnpm run test:integration`        | Starts its own stack on free ports, runs the integration tests, removes the stack. It does not touch `mykey-dev`.                                                                                                                    |
+| `pnpm run web:build`               | Bundles the owner workspace (`apps/web/build.ts`, Run 7.1) into its `dist` directory, which Git ignores. An API started from the sources serves it from there; without it the workspace's paths answer 503 `dependency_unavailable`. |
 
 ## What runs
 

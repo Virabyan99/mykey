@@ -13,6 +13,7 @@ import {
   type LifecycleDeps,
 } from "@mykey/operations";
 import type pg from "pg";
+import { now } from "../log.ts";
 import { ApiError, type ApiContext, type AppDeps, type Handler } from "../pipeline/context.ts";
 import { intentOf } from "../pipeline/route.ts";
 import { checkStates } from "../pipeline/states.ts";
@@ -106,8 +107,24 @@ export const archiveHandler: Handler = async (ctx, deps) => {
     throw refusal(answer.error, answer.operationId);
   }
   const operationId = start.operation.id;
-  await lifecycle.faults?.("archive_after_marker", operationId);
-  const driven = await driveArchive(lifecycle, operationId);
+  // The admission is committed. Whatever stops the drive from here on, the
+  // answer names the operation: the tick continues it, and the owner can look
+  // it up or send the same request again (Session 5's carried finding).
+  let driven: "archived" | "waiting";
+  try {
+    await lifecycle.faults?.("archive_after_marker", operationId);
+    driven = await driveArchive(lifecycle, operationId);
+  } catch (error) {
+    if (error instanceof ApiError) throw error;
+    deps.log({
+      event: "unhandled",
+      time: now(),
+      requestId: ctx.requestId,
+      routeId: ctx.route.id,
+      errorClass: error instanceof Error ? error.constructor.name : "unknown",
+    });
+    throw refusal("dependency_unavailable", operationId);
+  }
   const current = await findOperation(deps.pool, operationId);
   if (current === null) throw new ApiError("dependency_unavailable");
   return { status: driven === "archived" ? 200 : 202, body: operationResponse(current) };

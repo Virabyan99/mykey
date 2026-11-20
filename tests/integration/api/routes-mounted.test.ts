@@ -49,6 +49,11 @@ const HANDLED = new Set([
   "reference.get",
   "audit.list",
   "activity.list",
+  // Session 7 filled the last three: every contract route has a handler now,
+  // and the 404 case below has no route left to run on.
+  "overview.get",
+  "credentials.summary",
+  "metrics.get",
 ]);
 
 /** A valid body for every contract route that takes one. */

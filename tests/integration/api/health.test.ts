@@ -204,7 +204,8 @@ describe("API health stub", () => {
 
   it("answers 404 with the not_found envelope and a request id for everything else", async () => {
     const cases = [
-      { path: "/", method: "GET" },
+      // Not "/": since Session 7 that is a path of the workspace (tests/integration/web/shell.test.ts).
+      { path: "/nothing-here", method: "GET" },
       { path: "/health", method: "POST" },
       { path: "/v1/anything", method: "GET" },
     ];

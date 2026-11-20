@@ -3,6 +3,8 @@
 // still hold in the generated document while API_MAJOR is 1.
 //   path_removed, method_removed      an operation of the baseline is gone
 //   response_field_removed            a property a response had is gone
+//   response_status_removed           a status an operation answered is gone
+//   response_field_optional           a property a response always had may be absent now
 //   enum_value_removed                a value an enum had is gone (request or response)
 //   request_field_required            a request property or parameter became required
 //   type_narrowed                     a request schema accepts a type less; a
@@ -28,6 +30,8 @@ export interface Break {
     | "path_removed"
     | "method_removed"
     | "response_field_removed"
+    | "response_status_removed"
+    | "response_field_optional"
     | "enum_value_removed"
     | "request_field_required"
     | "type_narrowed";
@@ -131,6 +135,12 @@ function compareSchemas(
     for (const name of cRequired) {
       if (!bRequired.has(name))
         found.push({ kind: "request_field_required", where: `${where}.${name}` });
+    }
+  } else {
+    // A client may read a field the baseline always sent without checking for it.
+    for (const name of bRequired) {
+      if (name in cProps && !cRequired.has(name))
+        found.push({ kind: "response_field_optional", where: `${where}.${name}` });
     }
   }
   if (b.items !== undefined && c.items !== undefined) {
@@ -244,7 +254,10 @@ export function breakingChanges(baseline: OpenApiDocument, current: OpenApiDocum
       const currentResponses = isObject(currentOp.responses) ? currentOp.responses : {};
       for (const [status, response] of Object.entries(baseResponses)) {
         const now = currentResponses[status];
-        if (now === undefined) continue;
+        if (now === undefined) {
+          found.push({ kind: "response_status_removed", where: `${op} ${status}` });
+          continue;
+        }
         const nowContent = contentSchemas(deref(current, now, new Set()));
         for (const [type, schema] of contentSchemas(deref(baseline, response, new Set()))) {
           if (nowContent.has(type)) {

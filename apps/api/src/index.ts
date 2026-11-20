@@ -1,5 +1,13 @@
 export { createApp, handledRouteIds } from "./app.ts";
 export {
+  DEFAULT_WEB_DIRECTORY,
+  SHELL_HEADERS,
+  loadWebShell,
+  shellAnswer,
+  type ShellAnswer,
+  type WebShell,
+} from "./web/shell.ts";
+export {
   HEALTH_DEADLINE_MS,
   classifyFailure,
   DEEP_REUSE_MS,
