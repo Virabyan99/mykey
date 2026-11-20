@@ -376,3 +376,33 @@ describe("the matrix on real handlers", () => {
     await expectIndexMatchesBackend(f, "env1b");
   }, 1_200_000);
 });
+
+// AC-1.08 "grants combine correctly", on the real handlers: a reader of the
+// project who is also editor of one environment writes there and only reads
+// elsewhere; when the second grant is removed, the next request is denied.
+describe("two grants of one member", () => {
+  it("a project reader with an editor grant on env1b writes in env1b, only reads in env1a, and loses the write when the grant goes", async () => {
+    const db = f.api.superuser;
+    const inserted = await db.query<{ id: string }>(
+      `INSERT INTO app.access_grant (id, organization_id, user_id, project_id, environment_id, role)
+       VALUES (gen_random_uuid(), $1, $2, NULL, $3, 'editor') RETURNING id`,
+      [f.tenants.a.organizationId, f.tenants.userId("readerA"), f.env("env1b").environmentId],
+    );
+    const grantId = inserted.rows[0]?.id;
+    try {
+      const written = await f.create("env1b", unique(), synthetic(), { user: "readerA" });
+      expect(written.status).toBe(201);
+      const refused = await f.create("env1a", unique(), synthetic(), { user: "readerA" });
+      expect(refused.status).toBe(403);
+      expect(refused.code).toBe("action_denied");
+      const listed = await f.send("GET", `${f.env("env1a").path}/secrets`, { user: "readerA" });
+      expect(listed.status).toBe(200);
+    } finally {
+      await db.query("DELETE FROM app.access_grant WHERE id = $1", [grantId]);
+    }
+    const after = await f.create("env1b", unique(), synthetic(), { user: "readerA" });
+    expect(after.status).toBe(403);
+    expect(after.code).toBe("action_denied");
+    await expectIndexMatchesBackend(f, "env1b");
+  });
+});

@@ -280,6 +280,47 @@ describe("import.apply", () => {
     expect(await revealDigest("env1b", same)).toBe(sha256(otherValue));
   });
 
+  // AC-1.17 "changed-then-restored keys": the value is back to what the preview
+  // saw, but the version moved, so the entry still conflicts.
+  it("a key changed and then put back to its previewed value before apply → conflict, and its version is not moved again", async () => {
+    const [moved, fresh] = [unique(), unique()];
+    const start = valueOf("start");
+    const current = await created("env1b", moved, start);
+    const text = fileOf([moved, valueOf("import")], [fresh, valueOf("fresh")]);
+    const previewId = await previewed("env1b", text);
+    const changed = await f.update("env1b", moved, valueOf("between"), current);
+    expect(changed.status).toBe(200);
+    const restored = await f.update(
+      "env1b",
+      moved,
+      start,
+      changed.body.result as { version: number; stateTag: string },
+    );
+    expect(restored.status).toBe(200);
+    const restoredVersion = (restored.body.result as { version: number }).version;
+    const answer = await apply("env1b", previewId, text);
+    expect(answer.status).toBe(200);
+    expect(answer.body.state).toBe("partial");
+    expect(resultOf(answer).entries.map((entry) => entry.outcome)).toEqual(["conflict", "created"]);
+    expect(await revealDigest("env1b", moved)).toBe(sha256(start));
+    expect((await f.backend("env1b", moved))?.versions).toHaveLength(restoredVersion);
+  });
+
+  it("a key deleted between preview and apply → conflict, and it stays deleted", async () => {
+    const [gone, fresh] = [unique(), unique()];
+    const current = await created("env1b", gone, valueOf("start"));
+    const text = fileOf([gone, valueOf("import")], [fresh, valueOf("fresh")]);
+    const previewId = await previewed("env1b", text);
+    expect((await f.act("env1b", gone, "delete", current)).status).toBe(200);
+    const answer = await apply("env1b", previewId, text);
+    expect(answer.status).toBe(200);
+    expect(answer.body.state).toBe("partial");
+    expect(resultOf(answer).entries.map((entry) => entry.outcome)).toEqual(["conflict", "created"]);
+    const backend = await f.backend("env1b", gone);
+    expect(backend?.versions).toHaveLength(1);
+    expect(backend?.versions[0]?.deleted).toBe(true);
+  });
+
   it("a name created between preview and apply → conflict", async () => {
     const name = unique();
     const text = fileOf([name, valueOf("import")]);

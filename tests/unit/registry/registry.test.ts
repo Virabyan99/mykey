@@ -1,4 +1,13 @@
-import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import {
+  copyFileSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -210,6 +219,52 @@ describe("evidence:verify", () => {
     expect(claim("FR-1.33", "CUT", ["docs/evidence/session-1/run-1.8.md"])).toMatch(
       /FR-1\.33: CUT needs a decision record under docs\/decisions\//,
     );
+  });
+
+  // Run 8.7 (P-154): PASS comes from this session's release manifest, and never to Gate F.
+  describe("PASS and the release manifest", () => {
+    const MANIFEST = "docs/evidence/session-8/manifest.md";
+    /** A root holding only a manifest that states the given lines. */
+    const withManifest = (lines: string[]): string => {
+      const dir = mkdtempSync(join(tmpdir(), "mykey-manifest-"));
+      mkdirSync(join(dir, "docs/evidence/session-8"), { recursive: true });
+      writeFileSync(join(dir, MANIFEST), `${lines.join("\n")}\n`);
+      // The stage documents, which the verification reads for the runs.
+      for (const name of readdirSync(join(root, "docs")).filter((n) => n.startsWith("doc_"))) {
+        copyFileSync(join(root, "docs", name), join(dir, "docs", name));
+      }
+      return dir;
+    };
+    const passOf = (id: string, evidence: string[], at: string) => {
+      const copy = structuredClone(registry);
+      const item = copy.items.find((candidate) => candidate.id === id)!;
+      item.status = "PASS";
+      item.evidence = evidence;
+      return registryProblems(copy, at).filter((problem) => problem.startsWith(`${id}:`));
+    };
+
+    it("PASS is allowed with docs/evidence/session-8/manifest.md among the evidence, and refused without it", () => {
+      const dir = withManifest(["- AC-1.01 PASS — ci: tests/integration/auth/routes.test.ts"]);
+      try {
+        expect(passOf("AC-1.01", [MANIFEST], dir)).toEqual([]);
+        expect(passOf("AC-1.01", ["docs/evidence/session-8/other.md"], dir).join("\n")).toMatch(
+          /AC-1\.01: PASS needs docs\/evidence\/session-8\/manifest\.md among its evidence/,
+        );
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    });
+
+    it("a Gate F scenario is never PASS in this session", () => {
+      const dir = withManifest(["- AC-1.53 PASS — typed by hand"]);
+      try {
+        expect(passOf("AC-1.53", [MANIFEST], dir).join("\n")).toMatch(
+          /AC-1\.53: a Gate F item is never PASS in Stage 1's release/,
+        );
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    });
   });
 
   // Run 6.10: Run 6.9's and 6.8's claims sat in `owners`, where the build

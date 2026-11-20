@@ -74,6 +74,32 @@ describe("secrets.undelete", () => {
     await expectIndexMatchesBackend(f, "env1a");
   });
 
+  // AC-1.15, PO-7: the ABA case. The version comes back as the same number,
+  // so only the tag tells the two live states apart.
+  it("a tag captured before a delete and undelete is refused at the same version, and nothing is written", async () => {
+    const name = unique();
+    const created = await f.create("env1a", name, synthetic());
+    expect(created.status).toBe(201);
+    const captured = currentOf(created);
+    const deleted = await f.act("env1a", name, "delete", captured);
+    expect(deleted.status).toBe(200);
+    const undeleted = await f.act("env1a", name, "undelete", currentOf(deleted));
+    expect(undeleted.status).toBe(200);
+    expect(currentOf(undeleted).version).toBe(captured.version);
+
+    const update = await f.update("env1a", name, synthetic(), captured);
+    expect(update.status).toBe(409);
+    expect(update.code).toBe("version_conflict");
+    const deleteAgain = await f.act("env1a", name, "delete", captured);
+    expect(deleteAgain.status).toBe(409);
+    expect(deleteAgain.code).toBe("version_conflict");
+
+    const backend = await f.backend("env1a", name);
+    expect(backend?.versions).toHaveLength(1);
+    expect(backend?.versions[0]?.deleted).toBe(false);
+    await expectIndexMatchesBackend(f, "env1a");
+  });
+
   it("undelete of a live key is 409 state_conflict", async () => {
     const name = unique();
     const created = await f.create("env1a", name, synthetic());
