@@ -76,6 +76,7 @@ describe("auth routes on the pipeline (Run 3.2)", () => {
     const throttle: Throttle = {
       admit: () => Promise.resolve({ allowed: true }),
       recordFailure: () => Promise.resolve(),
+      settle: () => Promise.resolve(),
       clearAccount: () => Promise.resolve(),
     };
     expect(() => {

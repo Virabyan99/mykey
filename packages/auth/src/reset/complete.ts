@@ -137,6 +137,16 @@ export async function completeReset(
   const ring = deps.keys.resetVerifier;
   const candidates = Object.keys(ring.keys).map((keyId) => resetVerifier(ring, input.token, keyId));
   const context = await deps.auth.$context;
+  // R1-1: the account whose factor attempt was admitted, until it settles.
+  let factorAccount: string | null = null;
+  const settleFactor = async () => {
+    if (factorAccount === null) return;
+    try {
+      await deps.throttle.settle("factor", factorAccount);
+    } catch {
+      // Counted as a failure until its window passes: the safe side.
+    }
+  };
 
   try {
     if (!checkPassword(input.newPassword).ok) throw new Failed("password", null);
@@ -174,6 +184,7 @@ export async function completeReset(
         if (!factor.allowed) {
           return { ok: false, reason: "throttled", retryAfterSeconds: factor.retryAfterSeconds };
         }
+        factorAccount = userId;
         if (!(await useFactor(deps, tx, userId, input.code, now))) {
           throw new Failed("factor", userId);
         }
@@ -239,11 +250,14 @@ export async function completeReset(
         setCookie: await sessionCookie(deps.auth, token, row.expires_at),
       };
     });
+    await settleFactor();
     return result;
   } catch (error) {
     if (!(error instanceof Failed)) throw error;
     if (error.reason === "factor" && error.userId !== null && input.code !== undefined) {
       await deps.throttle.recordFailure("factor", error.userId);
+    } else {
+      await settleFactor();
     }
     await audit(deps.pool, "failure", error.userId, { reason: error.reason });
     return { ok: false, reason: error.reason };

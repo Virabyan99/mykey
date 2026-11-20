@@ -25,6 +25,32 @@ export async function bumpCounter(
   return { count: row.count, secondsLeft: Math.max(1, row.seconds_left) };
 }
 
+/**
+ * Takes one back from the newest window of the last `windows` that still
+ * counts more than zero (R1-1: an admitted attempt that did not fail). Does
+ * nothing when there is none.
+ */
+export async function dropCounter(
+  db: Queryable,
+  scope: string,
+  keyDigest: Buffer,
+  windowSeconds: number,
+  windows: number,
+): Promise<void> {
+  await db.query(
+    `UPDATE app.rate_limit SET count = count - 1
+      WHERE ctid = (
+        SELECT ctid FROM app.rate_limit
+         WHERE scope = $1 AND key_digest = $2 AND count > 0
+           AND window_start >= date_bin(make_interval(secs => $3), now(), timestamptz 'epoch')
+                               - make_interval(secs => $3 * ($4 - 1))
+         ORDER BY window_start DESC
+         LIMIT 1
+         FOR UPDATE)`,
+    [scope, keyDigest, windowSeconds, windows],
+  );
+}
+
 /** The sum of the current window and the `windows - 1` before it. */
 export async function sumCounters(
   db: Queryable,
