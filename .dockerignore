@@ -35,3 +35,5 @@
 !apps/web/package.json
 !apps/web/src
 !apps/web/build.ts
+# Help bundles the known limits (Run 8.0); a runbook, no secret.
+!docs/runbooks/known-limits.md
