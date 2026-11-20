@@ -254,7 +254,7 @@ describe("kms-csr", () => {
 
 // Run 2.7 Step 2: certificates, the okms tool and the KMS settings, staging only.
 describe("kms", () => {
-  it("parses kms-install, kms-cert, kms-use, kms and env, and refuses them for production", () => {
+  it("parses kms-install, kms-cert, kms-use, kms and env", () => {
     const base = { host: "staging", via: "vpn" };
     expect(parseHostArgs(["staging", "kms-install", "C:/t/okms.tar.gz"])).toEqual({
       ...base,
@@ -288,15 +288,27 @@ describe("kms", () => {
     });
     expect(() => parseHostArgs(["staging", "env", "API_IMAGE", "x"])).toThrow(/env/);
     expect(() => parseHostArgs(["staging", "kms", "staging-seal-1"])).toThrow(/--/);
+  });
+
+  // Run 8.0 Task B (P-146, P-147): production gets its own OpenBao and KMS
+  // material. Only kms-import (a KMS certificate made elsewhere, the key-loss
+  // drill's) stays refused: production's keys are made on the host.
+  it("prod accepts every OpenBao and KMS command but kms-import", () => {
     for (const argv of [
-      ["prod", "kms-cert", "a", "b"],
-      ["prod", "kms-use", "a"],
-      ["prod", "kms", "a", "--", "kmip", "locate"],
       ["prod", "kms-install", "t"],
+      ["prod", "kms-csr", "prod-seal-1"],
+      ["prod", "kms-cert", "prod-seal-1", "b"],
+      ["prod", "kms-use", "prod-seal-1"],
+      ["prod", "kms-remove", "prod-ops-1"],
+      ["prod", "kms", "prod-seal-1", "--", "kmip", "locate"],
       ["prod", "env", "MYKEY_OPENBAO", "1"],
+      ["prod", "bao-init"],
+      ["prod", "quiesce"],
+      ["prod", "resume"],
     ]) {
-      expect(() => parseHostArgs(argv), argv.join(" ")).toThrow(/production/);
+      expect(parseHostArgs(argv), argv.join(" ")).toMatchObject({ host: "prod", command: argv[1] });
     }
+    expect(() => parseHostArgs(["prod", "kms-import", "a", "b", "c"])).toThrow(/production/);
   });
 
   it("installs okms only from an archive with the pinned checksum", () => {
@@ -399,13 +411,13 @@ describe("up", () => {
 
 // Run 2.7 Step 4: initialisation on the host; its answer never crosses the terminal.
 describe("bao-init", () => {
-  it("parses for staging only", () => {
+  it("parses without arguments (production too since Run 8.0)", () => {
     expect(parseHostArgs(["staging", "bao-init"])).toEqual({
       host: "staging",
       via: "vpn",
       command: "bao-init",
     });
-    expect(() => parseHostArgs(["prod", "bao-init"])).toThrow(/production/);
+    expect(() => parseHostArgs(["staging", "bao-init", "now"])).toThrow();
   });
 
   it("initialises once, with one recovery share, into root's custody file, and prints only a count", () => {

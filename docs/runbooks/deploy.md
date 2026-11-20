@@ -28,14 +28,16 @@ MSYS_NO_PATHCONV=1 node scripts/host.ts staging deploy --release ~/mykey-release
 
 It prints the plan, then each step with its time (`D-57`). The gate is closed from `gate_close` to `gate_open`: the public name answers `quarantined` and `/health` is down, and the probe may alert during the window. Write the window in `docs/evidence/session-6/staging-windows.md` first.
 
-**What the journey checks.** Through the verification listener (`tunnel verify`), with the owner's workstation credentials (`~/.mykey/secrets/hosts/<host>/owner-*`):
+**What the journey checks.** Through the verification listener (`tunnel verify`), with the owner's workstation credentials (`~/.mykey/secrets/hosts/<host>/owner-*`; staging's synthetic owner only):
 
 - the owner signs in with password and TOTP;
-- one secret is revealed and its digest compared with the last deploy's (`deploy-journey.json`; the first deploy records it);
+- one secret is revealed and its digest compared with the last deploy's (`deploy-journey.json`; the first deploy records it). A host whose secret index holds no row has nothing to reveal: the report's reveal check is `ok` with `no secret in the index`, counted in the database;
 - a write must answer `quarantined`;
 - the owner signs out.
 
 The report (`deploy-report.json` beside it) must have every check `ok`, or the deploy stops before `gate_open`.
+
+**A host with a real owner** (production; D-64) never runs the scripted journey: `deploy --stay-closed`, then the owner's own journey through `tunnel verify`, then `deploy --owner-confirmed` on the same release, which records the three journey checks as `owner confirmed (--owner-confirmed)` and refuses a release that is not the running build (`production.md`).
 
 **When it stops.** The gate stays closed. Read the step it printed last, fix the cause, then:
 
@@ -75,4 +77,4 @@ On a host with OpenBao, re-run `host.ts <host> ops provision-organization --orga
 
 ## Production
 
-Production has no OpenBao and no owner yet: `deploy --release <dir> --stay-closed` loads, migrates and starts, and leaves the gate closed. Every production deploy needs the owner's yes, asked before the command runs.
+Until its first opening production has no owner: `deploy --release <dir> --stay-closed` loads, migrates and starts, and leaves the gate closed. A production deploy without `--stay-closed`, `--install-only` or `--owner-confirmed` is refused. Every production deploy needs the owner's yes, asked before the command runs. The whole path, from a reinstalled server to the first opening, is `production.md`.

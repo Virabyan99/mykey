@@ -150,8 +150,12 @@ export interface DeployJourneyDeps {
   owner: { email: string; password: string };
   /** A current TOTP code of the owner's factor, at a step not used before. */
   totp: () => Promise<{ code: string; headers?: Record<string, string> }>;
-  /** A secret and the SHA-256 of its value as the last deploy revealed it; null the first time. */
-  reveal: { path: string; sha256: string | null };
+  /**
+   * A secret and the SHA-256 of its value as the last deploy revealed it (sha256
+   * null the first time). Null when the owner can list no secret: no reveal is
+   * made, and the report's own count of the index decides that check (P-147 c).
+   */
+  reveal: { path: string; sha256: string | null } | null;
   mutation: JourneyDeps["mutation"];
 }
 
@@ -187,8 +191,13 @@ export async function deployJourney(
   if (cookie === null) return { checks, revealedSha256: null };
 
   let revealedSha256: string | null = null;
-  const revealed = await deps.request("POST", deps.reveal.path, { body: {}, cookie });
-  if (revealed.status === 200) {
+  const revealed =
+    deps.reveal === null
+      ? null
+      : await deps.request("POST", deps.reveal.path, { body: {}, cookie });
+  if (deps.reveal === null || revealed === null) {
+    // Nothing to reveal: deployVerify counts the index.
+  } else if (revealed.status === 200) {
     const { value } = (await revealed.json()) as { value?: string };
     revealedSha256 = createHash("sha256")
       .update(value ?? "", "utf8")

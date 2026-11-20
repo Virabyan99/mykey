@@ -37,7 +37,7 @@ export function deployPlan(
     /** Image ids named on the command line, if any. */
     imageIds?: readonly string[];
   },
-  mode: { installOnly?: boolean; stayClosed?: boolean } = {},
+  mode: { installOnly?: boolean; stayClosed?: boolean; ownerConfirmed?: boolean } = {},
 ): DeployPlan | { refused: string } {
   if (release.migrations.last < current.lastMigration) {
     return {
@@ -55,6 +55,12 @@ export function deployPlan(
   }
   if (mode.installOnly === true) return { steps: ["verify_release", "load_images"] };
   const redeploy = current.build === build;
+  // P-147: the owner's journey (tunnel verify) was of the build that runs now.
+  if (mode.ownerConfirmed === true && !redeploy) {
+    return {
+      refused: `--owner-confirmed confirms the running build ${current.build || "(none)"}, not ${build}: deploy --stay-closed first, then the owner's journey, then --owner-confirmed`,
+    };
+  }
   const steps = DEPLOY_STEPS.filter((step) => !(redeploy && step === "migrate"));
   if (mode.stayClosed === true) return { steps: steps.slice(0, steps.indexOf("start") + 1) };
   return { steps };

@@ -70,5 +70,5 @@ A new key id in the same domain: create and activate it (`kms … kmip create sy
 
 ## Owed later
 
-- Production: the same layout with its own KMS domain, user, policy and certificate at its first OpenBao start.
+- Production: the same layout with its own KMS domain, user, policy and certificate (`production.md`, Session 8). The operator tool accepts every KMS command for production but `kms-import`.
 - Checkpoint `kms-cert-expiry` (`docs/evidence/session-2/kms-checkpoints.json`): from 12 Dec 2026, 09:57 UTC, prove that an expired certificate cannot unseal.
