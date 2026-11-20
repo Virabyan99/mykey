@@ -20,7 +20,7 @@ The project is in **Stage 1**, a 14-day plan of nine sessions.
 
 ## Where we stand
 
-_Last updated: 20 Nov 2026, after the Session 7 merge (PR #19)._
+_Last updated: 20 Nov 2026, after the Session 7 merge (PR #19) and its two owner answers._
 
 | Session | Topic                                       | State                               |
 | ------- | ------------------------------------------- | ----------------------------------- |
@@ -79,7 +79,7 @@ Each session's detail is in `docs/evidence/session-N/report.md`. Session 7's rep
   - no OpenBao and no owner;
   - migrations up to `0018`;
   - in the probe as `inService: false`, with `checks_unknown` open (no OpenBao to read).
-  - its host files are older than the Session 7 gate's fix of `bao-audit-rotate.sh`: run `host.ts prod push` before OpenBao is ever started there.
+  - its host files are those of the Session 7 gate (`host.ts prod push`, 20 Nov 2026, with the owner's word).
 
   Production deploys need the owner's permission.
 
@@ -100,7 +100,7 @@ Each session's detail is in `docs/evidence/session-N/report.md`. Session 7's rep
   - **All KMS certificates expire on 12 Dec 2026** (staging seal at 10:50 UTC). Replace them before then (runbook `kms-and-unseal.md`). The checkpoint `kms-cert-expiry` is due from 12 Dec 09:57 UTC, and `certificate_expiring` opens 10 days before.
   - `.trivyignore.images` expires on 14 Dec 2026.
   - The checkpoint `pair-30-day` is due from 17 Dec 2026 19:00 UTC, before the 05:00 retention of 18 Dec.
-- **Owner:** OWN-4, an offline copy of `~/.mykey/custody/staging/backup/`, is not confirmed.
+- **Owner:** nothing is open. OWN-4 is confirmed (20 Nov 2026): the two files of `~/.mykey/custody/staging/backup/` are also in the owner's password manager.
 
 ## Commands
 
