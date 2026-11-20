@@ -3,7 +3,8 @@
 # (Run 2.7) with one KMS access certificate of /etc/mykey/secrets/kms. It uses
 # the host's network: the KMS bridge exists only while OpenBao runs, and
 # OpenBao cannot start before its seal key exists; the host firewall's output
-# chain allows the set `kms` on 5696 (and nothing new). The binary is
+# chain allows the set `kms` on 5696. On the host's network the container has
+# all of the host's egress, not only that set (R6-1, known-limits.md). The binary is
 # the pinned release installed by `host.ts <host> kms-install`; it runs in the
 # pinned restic image for its CA bundle, as OpenBao's uid, which owns the
 # certificates. Prints what okms prints: identifiers and states, no key material.
