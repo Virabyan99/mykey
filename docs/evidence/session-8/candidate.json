@@ -1,0 +1,53 @@
+{
+  "hostRelease": "host-v0.8.0",
+  "cliRelease": "cli-v0.1.2",
+  "sourceCommit": "b6592006b6ca8cba7b2078a2dda417df17db5471",
+  "builtAt": "2026-11-20T17:42:33.392Z",
+  "releaseJsonSha256": "709b030b55adde1aeeec103015648d224d498a6781a963cb5b240161b8622382",
+  "images": [
+    {
+      "name": "api",
+      "imageId": "sha256:b0ebb2e9683cc32d7ae87c471f2ec3e9b538d33a6a8ae974aff69adc03797a94"
+    },
+    {
+      "name": "provisioner",
+      "imageId": "sha256:2ea5b5dfc760e94245ef9cbde4fe76225d910157f2fed79b703be42fa2c64487"
+    },
+    {
+      "name": "ops",
+      "imageId": "sha256:c0fb784ad9ad028f355340002a88e29fb05e6d2f8c2bc387dacf48154abaeaef"
+    }
+  ],
+  "baseDigests": {
+    "node": "sha256:a34ab6d7f6f4813f4d0c5469d74685604b962fbdbf5793a7bc7b4998ecb867c8"
+  },
+  "lockfiles": {
+    "pnpm-lock.yaml": "c3f7c2840809e90e43d0015950d6bc606a8fee94cfaa8b8790eec9d16a1af551",
+    "infra/dependencies.lock.json": "69fce496a1222cc86bd54c5c6d0c4e4474ae2d79cb07f6da61e18a90f6c85d9d"
+  },
+  "upstreamImages": {
+    "postgres": "postgres:18.6@sha256:e3d24f6906d0760bf4da0dae872415391ededefad23fd471c47dc53b0ddf3c42",
+    "openbao": "openbao/openbao:2.7.2@sha256:5046911075e137e154ce49ab051502f4ec7cf367d484ae4a4dce665d9b90561f",
+    "traefik": "traefik:3.7.17@sha256:f4bb143d1135a579b630ed491e17ec50f6f7c9c6a30585ff3d385471d2a86f5a",
+    "restic": "restic/restic:0.19.1@sha256:136600b6ff6843d61d355f7f71f460a166429f35de6fd11b568fece3c9a4d510",
+    "gitleaks": "zricethezav/gitleaks:v8.30.1@sha256:c00b6bd0aeb3071cbcb79009cb16a60dd9e0a7c60e2be9ab65d25e6bc8abbb7f",
+    "trivy": "aquasec/trivy:0.76.2@sha256:8f6bb947dbc528902e11f2f5be52f7b519f6a39d5d148f41166f2040499768fb",
+    "node": "node:24.22.2-alpine@sha256:a34ab6d7f6f4813f4d0c5469d74685604b962fbdbf5793a7bc7b4998ecb867c8",
+    "node-glibc": "node:24.22.2-bookworm-slim@sha256:01d566e8d94d8c619591d78652babfccd3c6992a3dffa9ed5ab39e11cf6c70e9",
+    "nmap": "instrumentisto/nmap:7.98@sha256:96f6ed194519b62421a1a1c57809e65a7f94d2aa1c8c25676f247e5e148c0827",
+    "python": "python:3.13.18-slim-trixie@sha256:e48f59cdba69a3cbd9ed2cf0f348d90d45a8d350d98134cf1070bc106ee9ed90"
+  },
+  "lastMigration": "0018_incarnation",
+  "hostFilesCommit": "c46bac6285002b0175b69f58acd488efbae7287b",
+  "tooling": [],
+  "deploys": {
+    "staging": {
+      "at": "2026-11-20T17:52:32.034Z",
+      "gateEpoch": 312
+    },
+    "prod": {
+      "at": "2026-11-20T17:57:22.407Z",
+      "gateEpoch": 2
+    }
+  }
+}

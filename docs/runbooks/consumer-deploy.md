@@ -28,9 +28,9 @@ Every shell block marked `<!-- rehearsed … -->` in this file is run, in order,
 
 ```sh
 mkdir -p "$HOME/mykey-release"
-gh release download cli-v0.1.1 --repo Virabyan99/mykey --dir "$HOME/mykey-release"
+gh release download cli-v0.1.2 --repo Virabyan99/mykey --dir "$HOME/mykey-release"
 gh api -H "Accept: application/vnd.github.raw" \
-  "repos/Virabyan99/mykey/contents/tests/fixtures/consumers/secrets-launch.sh?ref=cli-v0.1.1" \
+  "repos/Virabyan99/mykey/contents/tests/fixtures/consumers/secrets-launch.sh?ref=cli-v0.1.2" \
   > "$HOME/mykey-release/secrets-launch.sh"
 ```
 
