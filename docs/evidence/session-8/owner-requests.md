@@ -32,7 +32,7 @@ Sitting 2 (later the same day): remove `create` and `activate` from `mykey-prod-
 2. Copy `~/.mykey/custody/prod/` (the init answer and the backup folder) into the password manager.
 3. Reply "prod sitting 2 done".
 
-**Answered:** —
+**Answered:** "prod sitting 2 done" (the owner, 21 Nov 2026). Checked: `kmip create` is refused ("Operation is not authorized"), and OpenBao unseals itself after a restart with the five rights left.
 
 ## 3. After the freeze: one hour (OWN-6)
 

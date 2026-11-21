@@ -13,7 +13,10 @@ _20 Nov 2026. Plan: `docs/plans/session-8-plan.md`, Run 8.1 (D08-S45, P-145)._
    - `kms-cert`, `kms-use`; `env MYKEY_KMS_HOST`; the restic and OpenBao images by digest in two `maint` windows; `kmip locate`: the domain is empty.
    - `kmip create symmetric` (AES-256, `--extractable=false --sensitive`), then `kmip activate`. The key is `mykey-prod-seal-1`, id `eb5e0572-a9a6-435f-9d84-6c1155596004`. Its attributes: `State Active`, `Extractable false`, `Never Extractable true`, `Sensitive true`, `Always Sensitive true`.
    - `env` for `MYKEY_KMS_SEAL_KEY_ID`, `MYKEY_OPENBAO=1` and `MYKEY_BAO_URL=https://openbao:8200`.
-   - Sitting 2 (removing `create` and `activate`) is asked of the owner; see "Open issues".
+   - **Sitting 2**: the owner removed `create` and `activate`, then confirmed. Read back:
+     - `kmip create` answers `Operation is not authorized`;
+     - `kmip locate` still lists only `mykey-prod-seal-1`, `Active`;
+     - `docker restart mykey-openbao-1` brings `post-unseal setup complete` in 0.25 s, with `status` at `sealed false` and `kmsReachable true`, and the probe has nothing open.
 3. **OpenBao and the rest (Step 3).**
    - `up`: `openbao.hcl` rendered; OpenBao started with the KMIP seal and waited for its init. The API (closed) and the provisioner started; the provisioner is healthy.
    - `bao-init`: initialised; the recovery key was printed as `[redacted]`; the custody copy is in `~/.mykey/custody/prod/openbao-init.json`; audit headers and the root-namespace policy backup written.
@@ -97,7 +100,7 @@ _20 Nov 2026. Plan: `docs/plans/session-8-plan.md`, Run 8.1 (D08-S45, P-145)._
 
 ## Open issues
 
-- Task A, owner: sitting 2 (remove `create` and `activate` from `mykey-prod-kms-seal`), and `~/.mykey/custody/prod/` into the password manager.
+- Task A, owner: done (sitting 2 and `~/.mykey/custody/prod/` into the password manager, confirmed in one line on 21 Nov 2026).
 - Task A: `infra/hosts/backup/trust/prod-k1.pub` reaches staging at its next `push` (the drill and restore checks read the trust directory). Production got it by `push` after the commit.
 - The candidate's CLI proofs (`cli-matrix`, `cli.staging`, `test:consumers`) and the one pass belong to Run 8.7 Task B (P-145).
 - Staging is ready for the owner's hour (Run 8.8).
