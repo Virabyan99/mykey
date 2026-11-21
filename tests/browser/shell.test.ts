@@ -23,20 +23,19 @@ afterAll(async () => {
 });
 
 const overview = (): string => webPath("overview", { org: web.tenants.a.organizationId });
+// Run 9.0 (P-162): the scope bar's three selects became the breadcrumbs (navigation
+// "Scope") and the sidebar (navigation "Sections"); the assertions are the same.
 const scopeOf = (session: WebSession): Locator =>
   session.page.getByRole("navigation", { name: "Scope" });
-const chosen = async (select: Locator): Promise<string> =>
-  ((await select.locator("option:checked").textContent()) ?? "").trim();
+const sectionsOf = (session: WebSession): Locator =>
+  session.page.getByRole("navigation", { name: "Sections" });
 
-/** The scope bar with the organization's projects loaded. */
+/** The sidebar with the organization's projects loaded. */
 async function openOverview(session: WebSession): Promise<Locator> {
   await session.page.goto(`${web.origin}${overview()}`);
-  const scope = scopeOf(session);
-  await scope
-    .getByLabel("Project", { exact: true })
-    .locator("option", { hasText: "Project One" })
-    .waitFor({ state: "attached" });
-  return scope;
+  const sections = sectionsOf(session);
+  await sections.getByRole("link", { name: "Project One", exact: true }).waitFor();
+  return sections;
 }
 
 describe("the workspace's shell", () => {
@@ -66,7 +65,13 @@ describe("the workspace's shell", () => {
   it("without a session every workspace path shows the sign-in screen", async () => {
     const session = await web.anonymous();
     const { a } = web.tenants;
-    const params = { org: a.organizationId, project: a.project1, env: a.env1a, name: "API_KEY" };
+    const params = {
+      org: a.organizationId,
+      project: a.project1,
+      env: a.env1a,
+      name: "API_KEY",
+      article: "project-id",
+    };
     try {
       // The reset screen is for someone who is not signed in: it is not a workspace path.
       for (const route of WEB_ROUTES.filter((candidate) => candidate.id !== "reset")) {
@@ -82,7 +87,7 @@ describe("the workspace's shell", () => {
     }
   });
 
-  it("as ownerA the scope bar names the organization, and after choosing a project and an environment it names all three", async () => {
+  it("as ownerA the breadcrumbs name the organization, and after choosing a project and an environment they name all three", async () => {
     const session = await web.signedIn("ownerA");
     const { a } = web.tenants;
     try {
@@ -90,37 +95,31 @@ describe("the workspace's shell", () => {
       await session.page.goto(`${web.origin}/`);
       await session.page.waitForURL(`${web.origin}${overview()}`);
       const scope = scopeOf(session);
-      const organization = scope.getByLabel("Organization", { exact: true });
-      const project = scope.getByLabel("Project", { exact: true });
-      const environment = scope.getByLabel("Environment", { exact: true });
-      await project.locator("option", { hasText: "Project One" }).waitFor({ state: "attached" });
-      // An organization has no name in Stage 1: the start of its id and the caller's role.
-      expect(await chosen(organization)).toContain(a.organizationId.slice(0, 8));
-      expect(await chosen(organization)).toContain("owner");
-      expect(await environment.isDisabled()).toBe(true);
+      const sections = sectionsOf(session);
+      await sections.getByRole("link", { name: "Project One", exact: true }).waitFor();
+      // An organization has no name in Stage 1: its id (copyable) and the caller's role.
+      expect(await scope.textContent()).toContain(a.organizationId);
+      expect(await session.page.locator(".org-block").first().textContent()).toContain("owner");
+      expect(await scope.getByRole("listitem").count()).toBe(1);
 
-      await project.selectOption({ label: "Project One" });
+      await sections.getByRole("link", { name: "Project One", exact: true }).click();
       await session.page.waitForURL(
         `${web.origin}${webPath("project", { org: a.organizationId, project: a.project1 })}`,
       );
-      await environment.locator("option", { hasText: "prod" }).waitFor({ state: "attached" });
-      await environment.selectOption({ label: "dev" });
+      const environments = sections.getByRole("list", { name: "Environments of Project One" });
+      await environments.getByRole("link", { name: "prod", exact: true }).waitFor();
+      await environments.getByRole("link", { name: "dev", exact: true }).click();
       await session.page.waitForURL(
         `${web.origin}${webPath("secrets", { org: a.organizationId, project: a.project1, env: a.env1a })}`,
       );
 
-      expect(await chosen(organization)).toContain(a.organizationId.slice(0, 8));
-      expect(await chosen(project)).toBe("Project One");
-      expect(await chosen(environment)).toBe("dev");
+      const named = async (): Promise<string[]> => scope.getByRole("link").allTextContents();
+      expect(await named()).toEqual(["Organization", "Project One", "dev"]);
+      expect(await scope.textContent()).toContain(a.organizationId);
       // The address is the scope: loading it again names the same three.
       await session.page.reload();
-      await scopeOf(session)
-        .getByLabel("Environment", { exact: true })
-        .locator("option:checked", { hasText: "dev" })
-        .waitFor({ state: "attached" });
-      expect(await chosen(scopeOf(session).getByLabel("Project", { exact: true }))).toBe(
-        "Project One",
-      );
+      await scope.getByRole("link", { name: "dev", exact: true }).waitFor();
+      expect(await named()).toEqual(["Organization", "Project One", "dev"]);
       expect(await session.violations()).toEqual([]);
     } finally {
       await session.close();
@@ -129,7 +128,7 @@ describe("the workspace's shell", () => {
 
   // Run 8.0 Task C (FR-1.102): the owner reads what the service does not do
   // in the page itself, not only in the repository.
-  it("the Help screen shows the known limits: every heading of known-limits.md is on the page", async () => {
+  it("the help shows the known limits: every heading of known-limits.md is on the page", async () => {
     const text = readFileSync(
       join(import.meta.dirname, "..", "..", "docs", "runbooks", "known-limits.md"),
       "utf8",
@@ -143,7 +142,8 @@ describe("the workspace's shell", () => {
     expect(items.length).toBeGreaterThanOrEqual(30);
     const session = await web.signedIn("ownerA");
     try {
-      await session.page.goto(`${web.origin}/help`);
+      // Run 9.0: the known limits are the help article "What MyKey does not do".
+      await session.page.goto(`${web.origin}/help/known-limits`);
       const limits = session.page.getByRole("region", { name: "Known limits" });
       await limits.waitFor();
       for (const heading of headings) {
@@ -192,14 +192,13 @@ describe("the workspace's shell", () => {
           requestId: response.headers()["x-request-id"] ?? "",
         }));
     try {
-      const scope = await openOverview(session);
-      const project = scope.getByLabel("Project", { exact: true });
-      const environment = scope.getByLabel("Environment", { exact: true });
+      const sections = await openOverview(session);
+      const link = (name: string): Locator => sections.getByRole("link", { name, exact: true });
 
       // 1. A closed gate.
       web.api.setGate("closed");
       let answer = refused();
-      await project.selectOption({ label: "Project One" });
+      await link("Project One").click();
       let seen = await answer;
       expect(seen.status).toBe(503);
       await panel.getByRole("heading", { name: "The service is not open" }).waitFor();
@@ -208,23 +207,20 @@ describe("the workspace's shell", () => {
       expect(await panel.textContent()).toContain(seen.requestId);
       web.api.setGate("open");
       await panel.getByRole("button", { name: "Reload" }).click();
-      await environment.locator("option", { hasText: "prod" }).waitFor({ state: "attached" });
+      await link("prod").waitFor();
       expect(await panel.count()).toBe(0);
 
       // 2. A spent budget: this session's counter of the current minute is put over the limit.
       const left = windowSecondsLeft(Date.now());
       if (left < 15) await sleep(left * 1000 + 500);
       await page.reload();
-      await scopeOf(session)
-        .getByLabel("Environment", { exact: true })
-        .locator("option", { hasText: "prod" })
-        .waitFor({ state: "attached" });
+      await link("prod").waitFor();
       const spent = await web.api.superuser.query(
         "UPDATE app.rate_limit SET count = 100000000 WHERE scope = 'rl:session'",
       );
       expect(spent.rowCount).toBeGreaterThan(0);
       answer = refused();
-      await project.selectOption({ label: "Project Two" });
+      await link("Project Two").click();
       seen = await answer;
       expect(seen.status).toBe(429);
       await panel.getByRole("heading", { name: "Too many requests" }).waitFor();
@@ -232,7 +228,7 @@ describe("the workspace's shell", () => {
       expect(await panel.textContent()).toContain(seen.requestId);
       await web.api.superuser.query("DELETE FROM app.rate_limit");
       await panel.getByRole("button", { name: "Reload" }).click();
-      await environment.locator("option", { hasText: "dev" }).waitFor({ state: "attached" });
+      await link("dev").waitFor();
       expect(await panel.count()).toBe(0);
 
       // 3. A cut connection: no answer, so no request id, and no claim about the outcome.
@@ -243,10 +239,7 @@ describe("the workspace's shell", () => {
       expect(await panel.textContent()).not.toContain("Request id");
       await page.unroute(environments);
       await panel.getByRole("button", { name: "Reload" }).click();
-      await scopeOf(session)
-        .getByLabel("Environment", { exact: true })
-        .locator("option", { hasText: "dev" })
-        .waitFor({ state: "attached" });
+      await link("dev").waitFor();
       expect(await panel.count()).toBe(0);
       expect(await session.violations()).toEqual([]);
     } finally {

@@ -63,11 +63,16 @@ export function IdChip(props: {
 }
 
 /** The whole id, named, with its copy button: for a page's header. */
-export function IdLine(props: { of: string; id: string }) {
+export function IdLine(props: { of: string; id: string; copy?: boolean }) {
   const named = `${(props.of[0] ?? "").toUpperCase()}${props.of.slice(1)} id`;
   return (
     <span className="id-line">
-      <span className="muted">{named}</span> <IdChip of={props.of} id={props.id} full />
+      <span className="muted">{named}</span>{" "}
+      {props.copy === false ? (
+        <code className="id-chip">{props.id}</code>
+      ) : (
+        <IdChip of={props.of} id={props.id} full />
+      )}
     </span>
   );
 }

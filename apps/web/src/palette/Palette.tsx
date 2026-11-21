@@ -170,7 +170,7 @@ export function Palette(props: { scope: Scope | null; onSignOut: () => void }) {
         }}
       >
         <Icon name="search" />
-        <span className="label">Search and go to</span>
+        <span className="label">Go to…</span>
         <kbd>Ctrl K</kbd>
       </button>
       {open ? (

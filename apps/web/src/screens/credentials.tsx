@@ -346,8 +346,25 @@ function Inventory(props: { at: At; userId: string; scope: string; writable: boo
       {list.data === undefined ? null : rows.length === 0 ? (
         <EmptyState
           title="No machine credentials yet"
-          text="A machine credential lets the machine that runs your application read this environment's secrets. Press New credential above to issue the first one."
+          text="A machine credential lets the machine that runs your application read this environment's secrets."
           learn="machine-credentials"
+          {...(writable && blocked === null && !form
+            ? {
+                action: (
+                  <button
+                    type="button"
+                    className="primary"
+                    onClick={() => {
+                      setNotice(null);
+                      hide();
+                      setForm(true);
+                    }}
+                  >
+                    Issue the first credential
+                  </button>
+                ),
+              }
+            : {})}
         />
       ) : (
         <div className="scroll">

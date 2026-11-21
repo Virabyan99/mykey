@@ -86,6 +86,18 @@ export default defineConfig({
         },
       },
       {
+        // Run 9.0 Task H: screenshots for the release review, run by hand only
+        // (pnpm run screens:capture); not a proof of anything.
+        test: {
+          name: "capture",
+          include: ["tests/browser/**/*.capture.ts"],
+          globalSetup: ["tests/harness/global-setup.ts"],
+          testTimeout: 600_000,
+          hookTimeout: 600_000,
+          fileParallelism: false,
+        },
+      },
+      {
         test: {
           name: "cloud",
           include: [cloudTests],

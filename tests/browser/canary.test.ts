@@ -10,6 +10,7 @@
 import { randomBytes } from "node:crypto";
 import { createThrottle } from "@mykey/auth";
 import { initiateReset } from "@mykey/auth/operator";
+import { webPath } from "@mykey/contracts";
 import * as OTPAuth from "otpauth";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
@@ -275,6 +276,42 @@ describe("the canary scan", () => {
         { what: "the session cookie", value: cookieValue },
         { what: "the session token", value: cookieValue.slice(0, cookieValue.lastIndexOf(".")) },
       ];
+
+      // --- Run 9.0 Task H: the new surfaces, used while the values are about --
+      const at = {
+        org: web.tenants.a.organizationId,
+        project: facts.projectId,
+        env: facts.environmentId,
+      };
+      await session.context.grantPermissions(["clipboard-read", "clipboard-write"], {
+        origin: web.origin,
+      });
+      // The palette, opened and searched.
+      await page.goto(`${web.origin}${webPath("secrets", at)}`);
+      await heading(page, "Secrets").waitFor();
+      await page.keyboard.press("Control+k");
+      const palette = page.getByRole("dialog", { name: "Go to" });
+      await palette.waitFor();
+      await page.keyboard.type("cred");
+      await palette.getByRole("option").first().waitFor();
+      await page.keyboard.press("Enter");
+      await heading(page, "Machine credentials").waitFor();
+      // An id copied: the project's, from the breadcrumbs.
+      await page
+        .getByRole("navigation", { name: "Scope" })
+        .getByRole("button", { name: "Copy project id" })
+        .click();
+      expect(await page.evaluate<string>("navigator.clipboard.readText()")).toBe(facts.projectId);
+      // The connect panel, opened on both tabs.
+      await page.goto(`${web.origin}${webPath("connect", at)}`);
+      await heading(page, "Connect an application").waitFor();
+      await page.getByRole("button", { name: "A server (systemd or Docker)" }).click();
+      await page.getByRole("button", { name: "This computer (Linux, macOS, WSL)" }).click();
+      // The help, searched.
+      await page.goto(`${web.origin}${webPath("help")}`);
+      await heading(page, "Help centre").waitFor();
+      await page.getByLabel("Search the help").fill("rotate token");
+      await page.getByRole("list", { name: "Results" }).getByRole("link").first().waitFor();
 
       // --- still signed in --------------------------------------------------
       const open = await search(watch, needles);

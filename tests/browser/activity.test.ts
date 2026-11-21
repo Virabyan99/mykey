@@ -74,7 +74,7 @@ async function open(page: Page, route: "operations" | "activity" | "audit" | "ov
     operations: "Operations",
     activity: "Activity",
     audit: "Audit",
-    overview: "Overview",
+    overview: "Home",
   };
   const path = route === "operations" ? webPath(route, at()) : webPath(route, { org: org() });
   await page.goto(`${web.origin}${path}`);

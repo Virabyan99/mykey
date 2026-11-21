@@ -5,9 +5,14 @@
 // the terminal's echo switched off around it.
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { localSteps, runbookSections, serverSteps } from "@mykey/web";
+import {
+  CONSUMER_DEPLOY,
+  CONSUMER_LOCAL,
+  localSteps,
+  runbookSections,
+  serverSteps,
+} from "@mykey/web";
 import { describe, expect, it } from "vitest";
-import { CONSUMER_DEPLOY, CONSUMER_LOCAL } from "../../../apps/web/src/connect/runbooks.ts";
 
 const RUNBOOKS = resolve(import.meta.dirname, "../../../docs/runbooks");
 const LOCAL = readFileSync(resolve(RUNBOOKS, "consumer-local.md"), "utf8");

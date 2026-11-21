@@ -12,6 +12,9 @@ import { build } from "esbuild";
 
 const here = dirname(fileURLToPath(import.meta.url));
 
+/** The largest script the build accepts (Run 9.0 Task H). */
+export const MAX_SCRIPT_BYTES = 1_200_000;
+
 const CONTENT_TYPES: Readonly<Record<string, string>> = {
   ".html": "text/html; charset=utf-8",
   ".js": "text/javascript; charset=utf-8",
@@ -83,6 +86,13 @@ export async function buildWeb(
   const style = outputs.filter((path) => path.endsWith(".css"));
   if (script.length !== 1 || style.length !== 1 || outputs.length !== 2) {
     throw new Error(`web build: expected one script and one stylesheet, got ${outputs.join(", ")}`);
+  }
+  // Run 9.0 Task H: the script stays under 1.2 MB (875 kB before Session 9's redesign).
+  const scriptBytes = readFileSync(join(directory, ...(script[0] ?? "").split("/"))).length;
+  if (scriptBytes > MAX_SCRIPT_BYTES) {
+    throw new Error(
+      `web build: the script is ${String(scriptBytes)} bytes, above ${String(MAX_SCRIPT_BYTES)}`,
+    );
   }
   writeFileSync(join(directory, "index.html"), indexHtml(script[0] ?? "", style[0] ?? ""));
 

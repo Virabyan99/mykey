@@ -13,6 +13,10 @@ export const CONNECT_STEPS = {
     title: "Name the service and the environment",
     text: "Already filled in for this environment. Replace APP_DIR and APP_START with your application's directory and the command that starts it.",
   },
+  "local-name-bare": {
+    title: "Name the service and the environment",
+    text: "Already filled in for this environment: the service's address, the project's id and the environment's name.",
+  },
   "local-check": {
     title: "Check the endpoint",
     text: "The first line is the CLI's version; the second is the service's own answer, with no credential.",

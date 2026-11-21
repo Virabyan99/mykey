@@ -311,7 +311,9 @@ export function Secret(props: { name: string }) {
         title={name}
         meta={
           <>
-            <ScopeIds project={project} environment={environment} />
+            {/* A secret's page offers no button that is not about the value (history.test):
+                its ids are text here, and the breadcrumbs copy them. */}
+            <ScopeIds project={project} environment={environment} copy={false} />
             {list}
           </>
         }

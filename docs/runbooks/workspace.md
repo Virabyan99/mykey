@@ -7,12 +7,22 @@ The owner workspace is the web page of MyKey (Session 7; D-59, D-60). It is a st
 - **Address:** the product's origin, on the paths of `WEB_ROUTES` (`packages/contracts/src/web-routes.ts`) and under `/assets/`. Every other path keeps the API's JSON answers.
 - **Build:** `pnpm run web:build` writes the bundle. The API image builds it in its own stage, so a release holds it; nothing is built on a host.
 - **Start:** the API reads the bundle once, at start, and serves it from memory. A new bundle needs a new release (runbook `deploy.md`).
-- **Size:** the script is about 875 kB, 216 kB compressed (measured in Run 7.9).
+- **Size:** the script is about 998 kB, 255 kB compressed (measured in Run 9.0; 875 kB in Run 7.9). The build fails above 1.2 MB (`MAX_SCRIPT_BYTES` in `apps/web/build.ts`).
 
 ```sh
 pnpm run web:build
 pnpm run test:browser   # once per workstation before it: pnpm exec playwright install chromium
 ```
+
+## The frame (Session 9)
+
+- **Sidebar:** Home, the projects (the current one opens to its environments), the current environment's sections (Secrets, Import and export, Machine credentials, Operations, Connect an application), the organization's Activity and Audit, then Help centre and Account. Below 64rem it becomes the **Menu** button's drawer.
+- **Breadcrumbs** at the top name the organization, the project, the environment and the secret, each with a link. The organization, the project and the environment each have a **Copy** button for their id. The button copies only the id.
+- **Every page opens the same way:** a title, one sentence about what the page is for, "How this works" (two to five points), and the page's main action. The words come from one catalogue (`apps/web/src/copy/`), which a unit test lints for values, tokens, host names and claims the code does not make.
+- **Home** has the **Getting started** checklist. Each step is marked from the server's facts. The CLI step is "Not checked", because the server cannot see a computer. The list goes once every step it can see is done.
+- **Ctrl K** (or `/` outside a field) opens the palette. It goes to pages, projects, environments, help articles and actions. It never searches secrets, and what it offers comes from what the page has already listed for this session.
+- **The Help centre** (`/help`) has a search, the articles by category, the error messages A to Z, the CLI's exit codes and the glossary. The **?** button on each page opens that page's help in a side panel. Every refusal links to its entry in the error list.
+- **Connect an application** (per environment) shows `consumer-local.md`'s and `consumer-deploy.md`'s own commands, with the page's origin, the project's id and the environment's name filled in. The token is never filled in. The runbooks travel in the bundle as a generated module: after editing either one, run `node scripts/web-runbooks.ts` (`connect-commands.test.ts` fails until then).
 
 ## When the page does not come
 

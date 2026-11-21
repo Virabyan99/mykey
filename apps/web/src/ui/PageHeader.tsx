@@ -102,12 +102,18 @@ export function Kbd(props: { children: string }) {
 }
 
 /** The ids of the project and the environment a screen is in, each copyable. */
-export function ScopeIds(props: { project: { id: string }; environment?: { id: string } | null }) {
+export function ScopeIds(props: {
+  project: { id: string };
+  environment?: { id: string } | null;
+  /** False: the ids as text only (the breadcrumbs above copy them). */
+  copy?: boolean;
+}) {
+  const copy = props.copy !== false;
   return (
     <>
-      <IdLine of="project" id={props.project.id} />
+      <IdLine of="project" id={props.project.id} copy={copy} />
       {props.environment === undefined || props.environment === null ? null : (
-        <IdLine of="environment" id={props.environment.id} />
+        <IdLine of="environment" id={props.environment.id} copy={copy} />
       )}
     </>
   );

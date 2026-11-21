@@ -52,8 +52,12 @@ export function GettingStarted(props: { org: string; userId: string }) {
     queryKey: [userId, org, "credentials-summary"],
     queryFn: () => need(call("credentials.summary", { params: { org } })),
   });
+  // No credential is active: no machine can read, and the audit log is not asked
+  // (D-61's bound of six requests for a Home load holds until there is one).
+  const active = summary.data === undefined ? undefined : summary.data.byState.active > 0;
   const read = useQuery({
     queryKey: [userId, org, "machine-read"],
+    enabled: active === true,
     queryFn: async () =>
       (
         await need(
@@ -81,9 +85,15 @@ export function GettingStarted(props: { org: string; userId: string }) {
       ? undefined
       : projects.some((row) => row.environments.some((env) => (env.keys?.live ?? 0) > 0)),
   );
-  const credential = has(summary.data === undefined ? undefined : summary.data.byState.active > 0);
+  const credential = has(active);
   const started: Mark =
-    read.data === true ? "done" : read.data === false ? "not-seen" : "not-checked";
+    active === false
+      ? "not-seen"
+      : read.data === true
+        ? "done"
+        : read.data === false
+          ? "not-seen"
+          : "not-checked";
 
   const allDone =
     project === "done" && secrets === "done" && credential === "done" && started === "done";
@@ -139,9 +149,11 @@ export function GettingStarted(props: { org: string; userId: string }) {
                 commands with your ids filled in.
               </>
             )}{" "}
-            {started === "not-seen"
-              ? "The audit log shows no successful machine read in the last 30 days."
-              : null}
+            {active === false
+              ? "No credential is active yet, so no machine can read."
+              : started === "not-seen"
+                ? "The audit log shows no successful machine read in the last 30 days."
+                : null}
           </p>
         </Step>
         <Step mark="not-checked" title="See what happened">

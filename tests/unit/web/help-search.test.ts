@@ -1,7 +1,7 @@
 // Run 9.0 Task F (FR-1.97, the owner's request "find answers"): the help
 // centre's search, in memory over the bundled articles only. Titles weigh
 // most, then keywords, summaries and text; English plurals are stemmed.
-import { EXIT } from "../../../apps/cli/src/errors.ts";
+import { EXIT } from "@mykey/cli";
 import { ARTICLES, CLI_EXIT_CODES, searchHelp } from "@mykey/web";
 import { describe, expect, it } from "vitest";
 

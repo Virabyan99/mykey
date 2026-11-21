@@ -17,6 +17,7 @@
     "test:integration": "vitest run --project integration",
     "test:cli": "node scripts/test-cli.ts",
     "test:browser": "vitest run --project browser",
+    "screens:capture": "vitest run --project capture",
     "test:consumers": "node scripts/require-staging-env.ts && vitest run --project consumers",
     "cli:build": "node apps/cli/build.ts",
     "web:build": "node apps/web/build.ts",

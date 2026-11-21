@@ -52,11 +52,17 @@ function CodeBlock(props: { text: string; label: string }) {
   );
 }
 
-function Steps(props: { steps: ConnectStep[]; links: Partial<Record<string, string>> }) {
+function Steps(props: {
+  steps: ConnectStep[];
+  links: Partial<Record<string, string>>;
+  application: boolean;
+}) {
   return (
     <ol className="steps">
       {props.steps.map((step) => {
-        const words = CONNECT_STEPS[step.id as ConnectStepId];
+        // Without an application the variables block has no APP_ line, and its words name none.
+        const key = step.id === "local-name" && !props.application ? "local-name-bare" : step.id;
+        const words = CONNECT_STEPS[key as ConnectStepId];
         const link = props.links[step.id];
         return (
           <li key={step.id}>
@@ -175,7 +181,7 @@ export function Connect() {
           </label>
         </p>
       ) : null}
-      <Steps steps={steps} links={links} />
+      <Steps steps={steps} links={links} application={tab === "server" || application} />
     </>
   );
 }
