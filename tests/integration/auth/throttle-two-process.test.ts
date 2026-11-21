@@ -6,12 +6,13 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { ApiConfig } from "@mykey/api";
-import { createAuth, generateKeyFiles, loadAuthKeys } from "@mykey/auth";
+import { codeAt, createAuth, generateKeyFiles, loadAuthKeys, stepAt } from "@mykey/auth";
 import { bootstrapOwner } from "@mykey/auth/operator";
 import { ensureQueues } from "@mykey/operations";
 import { drizzle } from "drizzle-orm/node-postgres";
-import { TEST_ORIGIN, requestTo } from "../../harness/api.ts";
-import { startApiProcess, type ApiProcess } from "../../harness/api-worker.ts";
+import * as OTPAuth from "otpauth";
+import { TEST_ORIGIN, requestTo, sessionCookieOf } from "../../harness/api.ts";
+import { keepCapacityOk, startApiProcess, type ApiProcess } from "../../harness/api-worker.ts";
 import { awaitFreshWindow } from "../../harness/windows.ts";
 import { prepareDatabase, type TestDatabase } from "../database/setup.ts";
 import { TEST_BUILD, gateText, setIncarnation } from "../../harness/gate.ts";
@@ -20,6 +21,7 @@ let db: TestDatabase;
 let directory: string;
 let processes: [ApiProcess, ApiProcess];
 let ca: Buffer;
+let capacity: { stop(): void };
 const owner = {
   email: `owner-${randomBytes(4).toString("hex")}@mykey.invalid`,
   password: randomBytes(18).toString("base64url"),
@@ -40,6 +42,8 @@ beforeAll(async () => {
     gatePath,
     gateText({ hostInstanceId, backendIncarnation, releaseBuild: TEST_BUILD }, "open", 1),
   );
+  // Enrolment is a change that needs space: the host's capacity record (Run 6.3).
+  capacity = keepCapacityOk(gatePath);
   // Both processes trust the harness's own address as the edge, so the test
   // chooses the source of each attempt through X-Forwarded-For.
   const api: ApiConfig = {
@@ -66,6 +70,7 @@ beforeAll(async () => {
 }, 300_000);
 
 afterAll(async () => {
+  capacity.stop();
   for (const process of processes) await process.kill();
   await db.drop();
   rmSync(directory, { recursive: true, force: true });
@@ -104,6 +109,32 @@ const tally = (statuses: number[]) => ({
 });
 
 describe("throttling across two API processes", () => {
+  // R1-1 (Run 8.6): an attempt counts against the account when it is admitted,
+  // so successes must not use up the account's allowance.
+  it("six right passwords in a row from six sources all sign in", async () => {
+    for (let i = 0; i < 6; i += 1) {
+      expect(await signIn((i % 2) as 0 | 1, owner.email, owner.password, source())).toBe(200);
+    }
+  });
+
+  // R1-1 (Run 8.6): attempts in flight are counted before their credential is
+  // checked, so a burst from many sources cannot pass the account's lock.
+  it("twenty parallel wrong passwords for one account from twenty sources, split across the processes: at most five reach the check", async () => {
+    const email = unused();
+    const statuses = await Promise.all(
+      Array.from({ length: 20 }, (_, i) =>
+        signIn((i % 2) as 0 | 1, email, "wrong-password-3", source()),
+      ),
+    );
+    const counted = tally(statuses);
+    expect(counted.other).toBe(0);
+    expect(counted[401]).toBeLessThanOrEqual(5);
+    expect(counted[401] + counted[429]).toBe(20);
+    // And the account is locked afterwards, on both processes.
+    expect(await signIn(0, email, "wrong-password-3", source())).toBe(429);
+    expect(await signIn(1, email, "wrong-password-3", source())).toBe(429);
+  });
+
   it("ten attempts from one source, alternating between the processes: exactly five reach the check", async () => {
     // Inside one window: the count of a new window starts at zero.
     await awaitFreshWindow(db.pool("superuser"));
@@ -114,6 +145,66 @@ describe("throttling across two API processes", () => {
     }
     expect(tally(statuses)).toEqual({ 401: 5, 429: 5, other: 0 });
     expect(statuses.slice(0, 5)).toEqual([401, 401, 401, 401, 401]);
+  });
+
+  // AC-1.05 and R1-1: the factor phase, with TOTP and recovery codes, across
+  // both processes, on one password-verified session.
+  it("twenty parallel wrong TOTP and recovery codes from twenty sources, split across the processes: at most five reach the check, and the right code is then refused on both", async () => {
+    const post = (which: 0 | 1, path: string, body: unknown, cookie: string | undefined) =>
+      requestTo({ port: processes[which].port, ca }, "POST", path, {
+        body,
+        ...(cookie === undefined ? {} : { cookie }),
+        headers: { "x-forwarded-for": source() },
+      });
+    const passwordSession = async (): Promise<string> => {
+      const response = await post(0, "/v1/auth/sign-in/email", owner, undefined);
+      expect(response.status, await response.clone().text()).toBe(200);
+      return sessionCookieOf(response);
+    };
+    let cookie = await passwordSession();
+    const enrolled = await post(0, "/v1/auth/totp/enroll", {}, cookie);
+    expect(enrolled.status).toBe(200);
+    const { secret } = (await enrolled.json()) as { secret: string };
+    const seed = OTPAuth.Secret.fromBase32(secret).bytes;
+    const activated = await post(
+      0,
+      "/v1/auth/totp/activate",
+      { code: codeAt(seed, stepAt(new Date())) },
+      cookie,
+    );
+    expect(activated.status).toBe(200);
+    await activated.arrayBuffer();
+
+    cookie = await passwordSession();
+    const wrongCode = codeAt(seed, stepAt(new Date()) + 10);
+    const statuses = await Promise.all(
+      Array.from({ length: 20 }, async (_, i) => {
+        const response =
+          i % 4 < 2
+            ? await post((i % 2) as 0 | 1, "/v1/auth/totp/verify", { code: wrongCode }, cookie)
+            : await post(
+                (i % 2) as 0 | 1,
+                "/v1/auth/recovery/verify",
+                { code: "AAAA-AAAA-AAAA" },
+                cookie,
+              );
+        await response.arrayBuffer();
+        return response.status;
+      }),
+    );
+    const counted = tally(statuses);
+    expect(counted.other).toBe(0);
+    expect(counted[401]).toBeLessThanOrEqual(5);
+    expect(counted[401] + counted[429]).toBe(20);
+    for (const which of [0, 1] as const) {
+      const right = await post(
+        which,
+        "/v1/auth/totp/verify",
+        { code: codeAt(seed, stepAt(new Date())) },
+        cookie,
+      );
+      expect(right.status).toBe(429);
+    }
   });
 
   it("five wrong passwords split 3 + 2 across the processes lock the account on both", async () => {

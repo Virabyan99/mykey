@@ -15,10 +15,16 @@ export interface CliResult {
 
 export const CLI_BUNDLE = join(process.cwd(), "apps", "cli", "dist", "secrets.mjs");
 
-/** The command line that starts the CLI: [program, ...arguments before the CLI's own]. */
+/**
+ * The command line that starts the CLI: [program, ...arguments before the
+ * CLI's own]. The bundle is started with the launcher's Node flags (R5-3:
+ * `--disable-sigusr1`; the launcher's text is checked in install.test.ts).
+ */
 export function cliCommand(): [string, string[]] {
   const bin = process.env.MYKEY_CLI_BIN;
-  return bin !== undefined && bin !== "" ? [bin, []] : [process.execPath, [CLI_BUNDLE]];
+  return bin !== undefined && bin !== ""
+    ? [bin, []]
+    : [process.execPath, ["--disable-sigusr1", CLI_BUNDLE]];
 }
 
 export interface StartedCli {
@@ -53,7 +59,11 @@ export function startCli(args: string[], opts: StartOptions = {}): StartedCli {
       : typeof opts.through === "function"
         ? opts.through(cli)
         : [opts.through[0], [...opts.through[1], ...cli]];
-  const env: Record<string, string> = { ...opts.env, PATH: process.env.PATH ?? "" };
+  // The test's own PATH when it gives one (R5-4's getconf), else the runner's.
+  const env: Record<string, string> = {
+    ...opts.env,
+    PATH: opts.env?.PATH ?? process.env.PATH ?? "",
+  };
   // stdin is a token only when the CLI is told to read one there.
   const stdinToken = args.includes("--token-stdin") ? opts.stdin?.trim() : undefined;
   const secrets = [env.SECRETS_MACHINE_TOKEN, stdinToken].filter(

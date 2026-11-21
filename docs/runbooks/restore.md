@@ -52,11 +52,11 @@ It also prints the measurements (`measured (FR-1.69): …`) and checks two old c
 
 New role passwords go where they were: `api_runtime` and `provisioner_runtime` on the host, the others in `~/.mykey/secrets/hosts/<host>/<role>`. The restore's root token waits in `~/.mykey/secrets/hosts/<host>/restore-root-token` (0600) for step 9; the hand-off in `restore.json` beside it.
 
-**When it stops.** Each step writes `/var/lib/mykey/restore-state.json` on the host. Run the same command again: it starts from step 1 and does every step again (nothing is skipped on the word of an earlier run). Until a report opens it, the host stays closed whatever step it stopped at.
+**When it stops.** Each step writes `/var/lib/mykey/restore-state.json` on the host. Run the same command again: it starts from step 1 and does every step again (nothing is skipped on the word of an earlier run). This works only while the run stopped **before its OpenBao step**; after that step the target's root token is gone, and a rerun needs OpenBao wiped and initialised again (`known-limits.md`). Until a report opens it, the host stays closed whatever step it stopped at.
 
 ## Between 7 and 8: the owner comes back
 
-Every account is `recovery_pending` and every machine token is revoked.
+Every account is `recovery_pending` and every machine token is revoked. The owner's part, in plain words, is `start-here.md`, step 6; give them that page, not this section.
 
 1. `host.ts <host> ops verify-organization --organization <id>` and `host.ts <host> ops reconcile-credentials --environment <id>` for every environment. Until step 9, `host.ts <host> ops` uses the restore's root token (`restore-root-token`): the snapshot replaced the token store the host's custody copy belonged to.
 2. `host.ts <host> ops reset-account --email <owner> --kind mfa` (`operator-accounts.md`). Give the link to the owner.
@@ -75,7 +75,7 @@ MSYS_NO_PATHCONV=1 node scripts/host.ts <host> restore-verify --confirm-members 
 - `--journey` (staging and the drill; never production): the operator runs the journey itself through the verification listener, with the newest reset link `ops reset-account` wrote since the restore began. The new password and authenticator seed go to `~/.mykey/secrets/hosts/<host>/` (`owner-password`, `owner-totp-seed`). A second `--journey` (for `--open`, after a report went stale) needs a new reset link first.
 - `--open`: `gate open` with the report, after re-checking sessions, accessors, the control row and the incarnation. Then the restore's root token is revoked and its copy and the state files are removed. A report older than 30 minutes is refused: run `restore-verify` again.
 
-After opening: every person signs in after a reset, every machine needs a new token, and every `uncertain` operation needs review (`reconciliation.md`).
+After opening: every person signs in after an `mfa` reset (`reset-account --kind mfa`), every machine needs a new token, and every `uncertain` operation needs review (`reconciliation.md`). The authenticators and recovery codes in the pair are never trusted (rule 9): a `password` reset is refused (`restored_factor`) while a person's active authenticator is older than the restore, and becomes possible again once they have enrolled anew.
 
 ## Production
 

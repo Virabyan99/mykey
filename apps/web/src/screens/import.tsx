@@ -197,7 +197,9 @@ function Result(props: { operation: OperationResponse }) {
     (entry) => entry.outcome === "created" || entry.outcome === "updated",
   );
   const unchanged = entries.filter((entry) => entry.outcome === "unchanged");
-  const failed = entries.length - written.length - unchanged.length;
+  // Run 8.0: an entry whose outcome is not known is never counted as not written.
+  const uncertain = entries.filter((entry) => entry.outcome === "uncertain");
+  const failed = entries.length - written.length - unchanged.length - uncertain.length;
   const waiting = operation.state === "awaiting_input";
   return (
     <section className="panel" role="status">
@@ -227,6 +229,9 @@ function Result(props: { operation: OperationResponse }) {
             {unchanged.length === 0
               ? ""
               : ` ${String(unchanged.length)} ${was(unchanged.length)} unchanged.`}
+            {uncertain.length === 0
+              ? ""
+              : ` For ${String(uncertain.length)} it is not known whether it was written.`}
             {failed === 0 ? "" : ` ${String(failed)} ${was(failed)} not.`}
           </p>
           <div className="scroll">
@@ -412,7 +417,11 @@ function ImportPanel(props: { at: At; userId: string }) {
           )}
           <div className="actions">
             {preview.applicable && preview.previewId !== null ? (
-              <button type="button" onClick={() => void apply()} disabled={action.busy}>
+              <button
+                type="button"
+                onClick={() => void apply()}
+                disabled={action.busy || action.held}
+              >
                 Apply import
               </button>
             ) : null}

@@ -22,6 +22,11 @@ seal "static" {
   current_key    = "file:///pki/openbao-static-seal.key"
 }
 
+# Run 8.0 (P-149): the same stanza as the host's template.
+user_lockout "approle" {
+  disable_lockout = true
+}
+
 # Audit device (P-21). OpenBao 2.7.2 refuses audit devices created through the
 # API, so it is declared here. The `baoaudit` volume is made writable for the
 # OpenBao uid by pki-init.sh: OpenBao does not answer a request it cannot audit.

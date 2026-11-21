@@ -14,12 +14,12 @@ import {
   openTunnel,
   parseHostEnv,
   registerSecret,
-  shQuote,
   sshExec,
   type HostEntry,
   type HostStatus,
   type Tunnel,
 } from "@mykey/ops/remote";
+import { parseSearchCounts, searchScript } from "./search-script.ts";
 import type { Stack } from "./stack.ts";
 
 export * from "@mykey/ops/remote";
@@ -206,33 +206,29 @@ export async function countOnHost(
   producer: string,
   secrets: string[],
   controls: string[],
+  needleControls: string[] = [],
 ): Promise<{ found: number; controls: number }> {
-  if (controls.length === 0) throw new Error("countOnHost needs at least one control");
-  const quoted = controls.map((control) => `-e ${shQuote(control)}`).join(" ");
-  // Inside a pipeline grep's stdin is the producer's output, so `-f /dev/stdin`
-  // would read the output as its patterns and search nothing (found at the
-  // Session 4 gate). The secrets are moved to fd 3 first; the producer gets no stdin.
-  const script = [
-    "exec 3<&0",
-    `m=$( { ${producer}; } </dev/null 2>&1 | grep -o -F -f /dev/fd/3 ${quoted} | sort -u )`,
-    "exec 3<&-",
-    `all=$(printf '%s\\n' "$m" | grep -c -v '^$' || true)`,
-    `known=$(printf '%s\\n' "$m" | grep -c -x -F ${quoted} || true)`,
-    `echo "$((all - known)) $known"`,
-  ].join("; ");
+  if (controls.length + needleControls.length === 0) {
+    throw new Error("countOnHost needs at least one control");
+  }
+  // Run 8.4: a control that travels as the needles do (on fd 3, never an
+  // argument) proves the needles arrived as patterns, not only that the producer ran.
+  for (const value of [...secrets, ...needleControls]) {
+    if (value.length < 8) throw new Error("countOnHost: every needle is at least 8 bytes");
+  }
   const result = expectSuccess(
-    await sshExec(host, script, {
+    await sshExec(host, searchScript(producer, controls, needleControls.length), {
       sudo: true,
-      stdin: `${secrets.filter((secret) => secret !== "").join("\n")}\n`,
-      timeoutMs: 600_000,
+      stdin: `${[...needleControls, ...secrets].join("\n")}\n`,
+      timeoutMs: 900_000,
     }),
     `searching ${producer}`,
   );
-  const [found, known] = result.stdout.trim().split(/\s+/).map(Number);
-  if (known !== controls.length) {
+  const counts = parseSearchCounts(result.stdout);
+  if (counts.controls !== controls.length || counts.needleControls !== needleControls.length) {
     throw new Error(
-      `searching ${producer}: ${String(known)} of ${String(controls.length)} controls found; the search read nothing`,
+      `searching ${producer}: ${String(counts.controls)} of ${String(controls.length)} controls and ${String(counts.needleControls)} of ${String(needleControls.length)} needle controls found; the search read nothing`,
     );
   }
-  return { found: found ?? Number.NaN, controls: known };
+  return { found: counts.found, controls: counts.controls + counts.needleControls };
 }

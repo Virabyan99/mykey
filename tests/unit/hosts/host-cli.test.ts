@@ -364,7 +364,8 @@ describe("the drill host and a lent host", () => {
     expect(parseHostArgs(["drill", "status"])).toMatchObject({ host: "drill", command: "status" });
     expect(parseHostArgs(["drill", "quiesce"])).toMatchObject({ host: "drill" });
     expect(parseHostArgs(["drill", "kms-use", "drill-1"])).toMatchObject({ host: "drill" });
-    expect(() => parseHostArgs(["prod", "quiesce"])).toThrow(/production/);
+    expect(parseHostArgs(["drill", "kms-import", "d", "a", "b"])).toMatchObject({ host: "drill" });
+    expect(() => parseHostArgs(["prod", "kms-import", "d", "a", "b"])).toThrow(/production/);
     expect(() => parseHostArgs(["other", "status"])).toThrow(/unknown host/);
   });
 
@@ -383,11 +384,10 @@ describe("the drill host and a lent host", () => {
 });
 
 describe("quiesce and resume (Run 4.5, P-75)", () => {
-  it("parse without arguments; staging only (production holds no OpenBao)", () => {
+  it("parse without arguments (production too since Run 8.0)", () => {
     expect(parseHostArgs(["staging", "quiesce"])).toMatchObject({ command: "quiesce" });
     expect(parseHostArgs(["staging", "resume"])).toMatchObject({ command: "resume" });
     expect(() => parseHostArgs(["staging", "quiesce", "now"])).toThrow();
-    expect(() => parseHostArgs(["prod", "quiesce"])).toThrow(/production/);
   });
 
   it("stop both executors, restart OpenBao; resume starts both and leaves the gate alone", () => {
@@ -553,6 +553,7 @@ describe("gate (Run 3.1, P-43)", () => {
       resume: false,
       installOnly: false,
       stayClosed: false,
+      ownerConfirmed: false,
     });
     expect(
       parseHostArgs(["prod", "deploy", "--release", "r", "--stay-closed", "--image", image]),
@@ -567,6 +568,41 @@ describe("gate (Run 3.1, P-43)", () => {
     expect(() =>
       parseHostArgs(["staging", "deploy", "--release", "r", "--image", "api:1"]),
     ).toThrow(/unexpected/);
+  });
+
+  // Run 8.0 Task B (P-147): a host with a real owner is opened by the owner's own journey.
+  it("deploy --owner-confirmed parses, and not together with --install-only or --stay-closed", () => {
+    expect(
+      parseHostArgs(["staging", "deploy", "--release", "r", "--owner-confirmed"]),
+    ).toMatchObject({ command: "deploy", ownerConfirmed: true, stayClosed: false });
+    expect(parseHostArgs(["staging", "deploy", "--release", "r"])).toMatchObject({
+      ownerConfirmed: false,
+    });
+    expect(
+      parseHostArgs(["prod", "deploy", "--release", "r", "--resume", "--owner-confirmed"]),
+    ).toMatchObject({ resume: true, ownerConfirmed: true });
+    for (const other of ["--install-only", "--stay-closed"]) {
+      expect(
+        () => parseHostArgs(["staging", "deploy", "--release", "r", "--owner-confirmed", other]),
+        other,
+      ).toThrow(/exclude/);
+    }
+  });
+
+  it("prod with the scripted journey is refused before anything is touched", () => {
+    for (const argv of [
+      ["prod", "deploy", "--release", "r"],
+      ["prod", "deploy", "--release", "r", "--resume"],
+    ]) {
+      expect(() => parseHostArgs(argv), argv.join(" ")).toThrow(/--owner-confirmed/);
+    }
+    // No journey at all: these touch the host without one.
+    expect(parseHostArgs(["prod", "deploy", "--release", "r", "--stay-closed"])).toMatchObject({
+      stayClosed: true,
+    });
+    expect(parseHostArgs(["prod", "deploy", "--release", "r", "--install-only"])).toMatchObject({
+      installOnly: true,
+    });
   });
 
   it("a close keeps the origin of a v2 record, and names a fresh install otherwise", () => {

@@ -3,6 +3,8 @@
 // page loads under its policy with nothing from elsewhere, shows no workspace
 // without a session, names the scope, sends a real cookie POST, and explains
 // three refusals from the one error table.
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 import { windowSecondsLeft } from "@mykey/api";
 import { WEB_ROUTES, webPath } from "@mykey/contracts";
@@ -119,6 +121,37 @@ describe("the workspace's shell", () => {
       expect(await chosen(scopeOf(session).getByLabel("Project", { exact: true }))).toBe(
         "Project One",
       );
+      expect(await session.violations()).toEqual([]);
+    } finally {
+      await session.close();
+    }
+  });
+
+  // Run 8.0 Task C (FR-1.102): the owner reads what the service does not do
+  // in the page itself, not only in the repository.
+  it("the Help screen shows the known limits: every heading of known-limits.md is on the page", async () => {
+    const text = readFileSync(
+      join(import.meta.dirname, "..", "..", "docs", "runbooks", "known-limits.md"),
+      "utf8",
+    );
+    const headings = [...text.matchAll(/^## (.+)$/gm)].map((match) => (match[1] ?? "").trim());
+    // A code span is shown as code: its text without the backticks.
+    const items = [...text.matchAll(/^- \*\*(.+?)\*\*/gm)].map((match) =>
+      (match[1] ?? "").replaceAll("`", "").trim(),
+    );
+    expect(headings.length).toBeGreaterThanOrEqual(5);
+    expect(items.length).toBeGreaterThanOrEqual(30);
+    const session = await web.signedIn("ownerA");
+    try {
+      await session.page.goto(`${web.origin}/help`);
+      const limits = session.page.getByRole("region", { name: "Known limits" });
+      await limits.waitFor();
+      for (const heading of headings) {
+        await limits.getByRole("heading", { name: heading, exact: true }).waitFor();
+      }
+      const shown = (await limits.textContent()) ?? "";
+      for (const item of items) expect(shown, item).toContain(item);
+      expect(shown).not.toMatch(/\*\*|`/);
       expect(await session.violations()).toEqual([]);
     } finally {
       await session.close();

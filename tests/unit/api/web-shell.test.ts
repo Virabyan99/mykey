@@ -2,7 +2,7 @@
 // The files are read once into memory; an answer comes from that map and from
 // the table of client paths, never from a path of the request on disk.
 import { createHash, randomBytes } from "node:crypto";
-import { rmSync, writeFileSync } from "node:fs";
+import { readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -155,10 +155,33 @@ describe("shellAnswer", () => {
     expect(shellAnswer("POST", "/", null)).toBeNull();
   });
 
+  // Run 8.0 Task C (Session 7's Minor 10): a source is named only where the
+  // build uses it. The stylesheet loads no image and no font; the index's only
+  // image is its empty icon, a data: address.
+  it("the policy names no source the bundle does not use", () => {
+    const policy = SHELL_HEADERS["content-security-policy"] ?? "";
+    const directives = new Map(
+      policy.split(";").map((part) => {
+        const [name = "", ...sources] = part.trim().split(/\s+/);
+        return [name, sources] as const;
+      }),
+    );
+    const web = join(import.meta.dirname, "..", "..", "..", "apps", "web");
+    const styles = readFileSync(join(web, "src", "styles.css"), "utf8");
+    const build = readFileSync(join(web, "build.ts"), "utf8");
+    const usesFonts = styles.includes("@font-face");
+    const usesImageFiles = styles.includes("url(") || /<img\b/.test(build);
+    const usesDataImages = build.includes('rel="icon" href="data:');
+    expect(directives.has("font-src")).toBe(usesFonts);
+    const images = directives.get("img-src") ?? [];
+    expect(images.includes("'self'")).toBe(usesImageFiles);
+    expect(images.includes("data:")).toBe(usesDataImages);
+  });
+
   it("the policy allows this origin's scripts and styles and nothing else", () => {
     const policy = SHELL_HEADERS["content-security-policy"];
     expect(policy).toBe(
-      "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'; object-src 'none'",
+      "default-src 'none'; script-src 'self'; style-src 'self'; img-src data:; connect-src 'self'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'; object-src 'none'",
     );
     expect(policy).not.toMatch(/unsafe|https?:|\*/);
     expect(SHELL_HEADERS["referrer-policy"]).toBe("no-referrer");

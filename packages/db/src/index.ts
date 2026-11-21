@@ -80,6 +80,7 @@ export { claimOutbox, enqueueOutbox, markOutboxDelivered, type OutboxRow } from 
 export {
   bumpCounter,
   deleteCounters,
+  dropCounter,
   insertLock,
   lockSecondsLeft,
   sumCounters,

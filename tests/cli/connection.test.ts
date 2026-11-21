@@ -40,7 +40,7 @@ function keys(server: { url: string; caPath?: string }, env: Record<string, stri
     env: {
       SECRETS_API_URL: server.url,
       SECRETS_MACHINE_TOKEN: token(),
-      ...(server.caPath === undefined ? {} : { NODE_EXTRA_CA_CERTS: server.caPath }),
+      ...(server.caPath === undefined ? {} : { SECRETS_CA_FILE: server.caPath }),
       ...env,
     },
   });
@@ -162,7 +162,7 @@ describe("the connection is verified before a credential is sent", () => {
       env: {
         SECRETS_API_URL: server.url,
         SECRETS_MACHINE_TOKEN: token(),
-        NODE_EXTRA_CA_CERTS: server.caPath,
+        SECRETS_CA_FILE: server.caPath,
       },
       timeoutMs: 60_000,
     });
@@ -209,7 +209,7 @@ describe("the connection is verified before a credential is sent", () => {
     const server = await serve();
     const base = {
       SECRETS_API_URL: server.url,
-      NODE_EXTRA_CA_CERTS: server.caPath,
+      SECRETS_CA_FILE: server.caPath,
     };
     const args = ["keys", "--project", PROJECT, "--env", ENV_NAME];
     expect((await runCli(args, { env: base })).code).toBe(64);

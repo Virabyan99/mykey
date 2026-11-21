@@ -1,4 +1,6 @@
 // Run 2.7: the OpenBao server configuration of a host, rendered from its template.
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { renderOpenBaoConfig } from "../../../scripts/host.ts";
 
@@ -38,6 +40,19 @@ describe("openbao.hcl", () => {
     expect(rendered).toContain('node_id = "staging"');
     expect(blocks("audit")).toEqual(['audit "file"']);
     expect(rendered).toContain('file_path = "/openbao/audit/audit.log"');
+  });
+
+  // Run 8.0 (P-149): the same stanza as infra/compose/dev/openbao.hcl, which
+  // tests/integration/openbao/lockout.test.ts proves on a real OpenBao.
+  it("switches the AppRole user lockout off, exactly as the test stack does", () => {
+    const stanza = /^user_lockout "approle" \{\r?\n {2}disable_lockout = true\r?\n\}$/m;
+    expect(rendered).toMatch(stanza);
+    const dev = readFileSync(
+      join(import.meta.dirname, "..", "..", "..", "infra", "compose", "dev", "openbao.hcl"),
+      "utf8",
+    );
+    expect(dev).toMatch(stanza);
+    expect(rendered.match(/^user_lockout /gm)).toHaveLength(1);
   });
 
   it("leaves no placeholder and refuses a value that could break out of a string", () => {

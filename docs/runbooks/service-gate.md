@@ -47,12 +47,12 @@ Record v1 (until a host's first v2 deploy; `deploy` converts it, `deploy.md`):
 
 ```sh
 MSYS_NO_PATHCONV=1 node scripts/host.ts staging gate status                      # prints the record, or "no gate record (closed)"
-MSYS_NO_PATHCONV=1 node scripts/host.ts staging gate open --report <report.json> # v2: opens with a verification report, epoch + 1
+MSYS_NO_PATHCONV=1 node scripts/host.ts staging gate open --report <report.json> # v2: opens with a deploy report, epoch + 1
 MSYS_NO_PATHCONV=1 node scripts/host.ts staging gate close [--verifying]         # --verifying lets the verification listener serve
 MSYS_NO_PATHCONV=1 node scripts/host.ts staging gate open                        # v1 only: a host.env without MYKEY_BACKEND_INCARNATION
 ```
 
-`gate open --report` refuses a report older than 30 minutes, of another host, incarnation or build, or with a required check missing, `failed` or `unknown`; it then re-checks sessions, accessors, the control row and the incarnation itself. It appends `operator.gate_open` before writing and writes nothing when the audit fails. `gate close` writes first and audits when PostgreSQL answers. After a restore, `host.ts <host> restore-verify … --open` does the opening (`restore.md`).
+`gate open --report` takes a **deploy report only** (`deploy-report.json`); a restore report is refused and opens only through `host.ts <host> restore-verify … --open`. It refuses a report older than 30 minutes, of another host, incarnation or build, or with a required check missing, `failed` or `unknown`; it then runs the four store checks of the report again itself (the schema revision the report saw, OpenBao readable, the incarnation in three places, the control row idle), and a check that is not `ok` now refuses (Run 8.0, P-147). `restore-verify --open` re-checks the restore's own four (sessions, accessors, the control row, the incarnation). It appends `operator.gate_open` before writing and writes nothing when the audit fails. `gate close` writes first and audits when PostgreSQL answers. After a restore, `host.ts <host> restore-verify … --open` does the opening (`restore.md`).
 
 `open` and `close` write `gate.json.tmp` beside the record, fsync it, rename it over the record and fsync the directory: the API reads either the old or the new record, never half of one. The next request after the command sees the change; no restart is involved. `host.ts <host> status` reports `"gate": "open" | "closed" | "absent" | "invalid"`.
 

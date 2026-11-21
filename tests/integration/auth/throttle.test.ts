@@ -5,7 +5,7 @@ import { randomBytes } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { codeAt, createThrottle, stepAt, throttleDigest, ringKey } from "@mykey/auth";
 import { bootstrapOwner } from "@mykey/auth/operator";
-import { bumpCounter, createPool, sumCounters } from "@mykey/db";
+import { bumpCounter, createPool, dropCounter, sumCounters } from "@mykey/db";
 import { pgDump } from "../../harness/stack.ts";
 import { awaitFreshWindow } from "../../harness/windows.ts";
 import {
@@ -92,6 +92,25 @@ describe("counters (Task A)", () => {
       expect(counts.map((entry) => entry.count).sort((a, b) => a - b)).toEqual(
         Array.from({ length: 50 }, (_, i) => i + 1),
       );
+    } finally {
+      await second.end();
+    }
+  });
+
+  // Fixes review F-1 (Run 8.6): a take-back that waited on another one's row
+  // lock must still take one back, so concurrent settles never leave
+  // successful attempts counted as failures.
+  it("50 concurrent take-backs of 50 counted attempts leave zero", async () => {
+    const second = createPool(api.database.targets.api_runtime, { max: 10 });
+    try {
+      const digest = throttleDigest(key, "test:drop", randomBytes(8).toString("hex"));
+      for (let i = 0; i < 50; i += 1) await bumpCounter(api.pool, "test:drop", digest, 900);
+      await Promise.all(
+        Array.from({ length: 50 }, (_, i) =>
+          dropCounter(i % 2 === 0 ? api.pool : second, "test:drop", digest, 900, 2),
+        ),
+      );
+      expect(await sumCounters(api.pool, "test:drop", digest, 900, 2)).toBe(0);
     } finally {
       await second.end();
     }

@@ -97,6 +97,32 @@ describe("deployPlan (P-128)", () => {
       deployPlan(current, release("0.6.0", NEW), { related: true }, { stayClosed: true }),
     ).toEqual({ steps: ["verify_release", "load_images", "gate_close", "migrate", "start"] });
   });
+
+  // Run 8.0 Task B (P-147): the owner's journey is of the build that runs. A
+  // release that is not running yet is brought up closed first (--stay-closed).
+  it("--owner-confirmed deploys only the build that already runs", () => {
+    const refused = deployPlan(
+      current,
+      release("0.6.0", NEW),
+      { related: true },
+      { ownerConfirmed: true },
+    );
+    expect("refused" in refused ? refused.refused : "").toMatch(/--stay-closed first/);
+    const running = { build: NEW.slice(0, 12), lastMigration: "0018_incarnation" };
+    expect(
+      deployPlan(running, release("0.6.0", NEW), { related: true }, { ownerConfirmed: true }),
+    ).toEqual({
+      steps: [
+        "verify_release",
+        "load_images",
+        "gate_close",
+        "start",
+        "journey",
+        "report",
+        "gate_open",
+      ],
+    });
+  });
 });
 
 function fakeIo(failAt: DeployStep | null = null) {

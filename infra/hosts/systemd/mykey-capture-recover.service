@@ -2,10 +2,17 @@
 Description=MyKey: release a capture freeze a crash left, at boot (Run 6.5)
 After=network-online.target docker.service
 Wants=network-online.target
+# Run 8.0 (Session 6 finding H): at boot Docker starts the stack after this
+# unit may already run, and PostgreSQL does not answer yet. The unit tries
+# again every 20 s, at most 15 times in 10 minutes, and then stays failed.
+StartLimitIntervalSec=600s
+StartLimitBurst=15
 
 [Service]
 Type=oneshot
 ExecStart=/opt/mykey/hosts/backup/backup.sh recover
+Restart=on-failure
+RestartSec=20s
 
 [Install]
 WantedBy=multi-user.target

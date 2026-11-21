@@ -222,9 +222,9 @@ fi
 if docker inspect mykey-openbao-1 >/dev/null 2>&1; then
 	audit_parts=$((audit_parts + 1))
 	docker exec mykey-openbao-1 sh -c 'printf x >/openbao/audit/.writable && rm -f /openbao/audit/.writable' >/dev/null 2>&1 || audit_bad=true
-else
-	audit_parts=$((audit_parts + 1))
 fi
+# Run 8.0 (Session 6 finding F): without the container OpenBao's audit
+# directory was not measured, so the audit stays unknown, never healthy.
 for unit in mykey-audit-archive.service mykey-bao-audit-rotate.service; do
 	[ "$(systemctl is-failed "$unit" 2>/dev/null || true)" = failed ] && audit_bad=true
 done

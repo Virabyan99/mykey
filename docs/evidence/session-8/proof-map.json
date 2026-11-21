@@ -1,0 +1,2456 @@
+{
+  "version": 1,
+  "entries": {
+    "AC-1.01": {
+      "files": [
+        {
+          "path": "tests/integration/auth/routes.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/integration/ops/bootstrap.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/unit/auth/routes.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/staging/identity.staging.test.ts",
+          "kind": "staging"
+        },
+        {
+          "path": "tests/staging/api.staging.test.ts",
+          "kind": "staging"
+        }
+      ]
+    },
+    "AC-1.02": {
+      "files": [
+        {
+          "path": "tests/integration/auth/factors-http.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/integration/auth/factors-race.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/integration/auth/factors-restart.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/integration/auth/factors.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/integration/auth/race.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/browser/auth.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/staging/identity.staging.test.ts",
+          "kind": "staging"
+        }
+      ]
+    },
+    "AC-1.03": {
+      "files": [
+        {
+          "path": "tests/integration/ops/reset.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/integration/auth/reset.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/integration/auth/reset-race.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/integration/ops/output.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/integration/auth/routes.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/browser/auth.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/staging/identity.staging.test.ts",
+          "kind": "staging"
+        }
+      ]
+    },
+    "AC-1.04": {
+      "files": [
+        {
+          "path": "tests/integration/auth/sessions.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/integration/auth/password.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/integration/auth/storage.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/integration/authz/revocation.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/browser/auth.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/staging/identity.staging.test.ts",
+          "kind": "staging"
+        }
+      ]
+    },
+    "AC-1.05": {
+      "files": [
+        {
+          "path": "tests/integration/auth/throttle.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/integration/auth/throttle-two-process.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/integration/auth/sign-in.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/integration/isolation/timing.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/staging/identity.staging.test.ts",
+          "kind": "staging"
+        },
+        {
+          "path": "tests/staging/api.staging.test.ts",
+          "kind": "staging"
+        }
+      ]
+    },
+    "AC-1.06": {
+      "files": [
+        {
+          "path": "tests/fault/provisioning/boundaries.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/integration/provisioning/organization.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/integration/provisioning/environment.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/integration/resources/readiness.test.ts",
+          "kind": "ci"
+        }
+      ]
+    },
+    "AC-1.07": {
+      "files": [
+        {
+          "path": "tests/integration/isolation/foreign-ids.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/integration/isolation/selectors.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/integration/isolation/cursors.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/integration/isolation/aggregates.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/integration/isolation/timing.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/integration/isolation/backend.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/integration/auth/routes.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/integration/openbao/authority.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/staging/identity.staging.test.ts",
+          "kind": "staging"
+        },
+        {
+          "path": "tests/staging/privileges.staging.test.ts",
+          "kind": "staging"
+        }
+      ]
+    },
+    "AC-1.08": {
+      "files": [
+        {
+          "path": "tests/integration/authz/matrix.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/integration/authz/matrix-live.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/integration/authz/states.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/integration/authz/revocation.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/unit/authz/decide.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/integration/credentials/revoke.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/integration/machine/authentication.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/staging/identity.staging.test.ts",
+          "kind": "staging"
+        }
+      ]
+    },
+    "AC-1.09": {
+      "files": [
+        {
+          "path": "tests/staging/provisioning.staging.test.ts",
+          "kind": "staging"
+        },
+        {
+          "path": "tests/integration/provisioning/drift.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/unit/probe/evaluate.test.ts",
+          "kind": "ci"
+        }
+      ]
+    },
+    "AC-1.10": {
+      "files": [
+        {
+          "path": "tests/integration/resources/projects.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/integration/resources/environments.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/integration/resources/readiness.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/integration/resources/listing.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/integration/credentials/issue.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/unit/contracts/names.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/staging/identity.staging.test.ts",
+          "kind": "staging"
+        }
+      ]
+    },
+    "AC-1.11": {
+      "files": [
+        {
+          "path": "tests/fault/credentials/archive.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/integration/lifecycle/archive.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/integration/lifecycle/reactivate.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/integration/lifecycle/transitions.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/integration/resources/no-delete.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/staging/archive.staging.test.ts",
+          "kind": "staging"
+        }
+      ]
+    },
+    "AC-1.12": {
+      "files": [
+        {
+          "path": "tests/integration/secrets/create.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/integration/secrets/reveal.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/integration/secrets/list.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/integration/secrets/history.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/integration/openbao/inline.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/unit/contracts/names.test.ts",
+          "kind": "ci"
+        }
+      ]
+    },
+    "AC-1.13": {
+      "files": [
+        {
+          "path": "tests/staging/sweep.staging.test.ts",
+          "kind": "staging"
+        },
+        {
+          "path": "tests/staging/token-sweep.staging.test.ts",
+          "kind": "staging"
+        },
+        {
+          "path": "tests/browser/canary.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/browser/secrets.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/unit/web/ephemeral.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/unit/web/sources.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/integration/auth/storage.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/integration/auth/dump.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/integration/credentials/surfaces.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/integration/export/surfaces.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/integration/audit/diagnostics.test.ts",
+          "kind": "ci"
+        }
+      ]
+    },
+    "AC-1.14": {
+      "files": [
+        {
+          "path": "tests/integration/secrets/update.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/integration/secrets/create.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/staging/secrets.staging.test.ts",
+          "kind": "staging"
+        }
+      ]
+    },
+    "AC-1.15": {
+      "files": [
+        {
+          "path": "tests/integration/secrets/delete.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/integration/secrets/undelete.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/integration/secrets/restore.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/integration/secrets/lifecycle.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/integration/secrets/history.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/unit/contracts/no-destroy.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/integration/openbao/authority.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/staging/secrets.staging.test.ts",
+          "kind": "staging"
+        }
+      ]
+    },
+    "AC-1.16": {
+      "files": [
+        {
+          "path": "tests/integration/secrets/protocol.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/integration/reconcile/operation.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/integration/reconcile/sweep.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/integration/reconcile/ops.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/fault/secrets/delays.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/integration/health/unresolved.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/integration/openbao/client.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/staging/reconcile.staging.test.ts",
+          "kind": "staging"
+        }
+      ]
+    },
+    "AC-1.17": {
+      "files": [
+        {
+          "path": "tests/unit/dotenv/roundtrip.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/unit/dotenv/parse.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/unit/dotenv/serialize.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/unit/dotenv/warnings.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/unit/dotenv/fixtures.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/integration/dotenv-loaders/loaders.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/integration/imports/preview.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/integration/imports/apply.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/integration/imports/resume.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/integration/export/roundtrip.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/browser/import-export.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/staging/export.staging.test.ts",
+          "kind": "staging"
+        }
+      ]
+    },
+    "AC-1.19": {
+      "files": [
+        {
+          "path": "tests/integration/machine/resolve.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/integration/machine/keys.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/integration/machine/authentication.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/integration/machine/native-scope.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/integration/isolation/backend.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/staging/machine.staging.test.ts",
+          "kind": "staging"
+        },
+        {
+          "path": "tests/staging/boundary.staging.test.ts",
+          "kind": "staging"
+        }
+      ]
+    },
+    "AC-1.20": {
+      "files": [
+        {
+          "path": "tests/cli/run.test.ts",
+          "kind": "cli"
+        },
+        {
+          "path": "tests/unit/cli/child-env.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/unit/cli/args.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/consumers/fixtures.test.ts",
+          "kind": "consumers"
+        },
+        {
+          "path": "tests/consumers/runbook.test.ts",
+          "kind": "consumers"
+        },
+        {
+          "path": "tests/staging/cli.staging.test.ts",
+          "kind": "staging"
+        }
+      ]
+    },
+    "AC-1.21": {
+      "files": [
+        {
+          "path": "tests/cli/export.test.ts",
+          "kind": "cli"
+        },
+        {
+          "path": "tests/unit/cli/export-target.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/integration/export/roundtrip.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/staging/cli.staging.test.ts",
+          "kind": "staging"
+        }
+      ]
+    },
+    "AC-1.22": {
+      "files": [
+        {
+          "path": "tests/unit/contracts/openapi.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/unit/contracts/compat.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/unit/contracts/routes.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/integration/reference/document.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/integration/reference/aliases.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/integration/reference/page.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/browser/reference.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/unit/auth/routes.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/integration/auth/routes.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/browser/auth.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/staging/status.staging.test.ts",
+          "kind": "staging"
+        }
+      ]
+    },
+    "AC-1.23": {
+      "files": [
+        {
+          "path": "tests/unit/audit/coverage.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/unit/audit/scope.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/unit/audit/events.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/integration/audit/journey.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/integration/audit/diagnostics.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/integration/audit/view.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/integration/audit/append.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/integration/archive/purge.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/integration/health/readiness.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/fault/audit/device.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/fault/audit/exhaustion.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/staging/audit.staging.test.ts",
+          "kind": "staging"
+        },
+        {
+          "path": "tests/staging/alerts.staging.test.ts",
+          "kind": "staging"
+        }
+      ]
+    },
+    "AC-1.24": {
+      "files": [
+        {
+          "path": "tests/integration/limits/rate.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/integration/limits/machine.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/integration/limits/large.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/integration/limits/capacity.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/integration/limits/starvation.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/integration/read/limits.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/integration/api/pipeline.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/integration/secrets/capacity.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/integration/imports/preview.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/fault/audit/exhaustion.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/unit/contracts/limits.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/staging/limits.staging.test.ts",
+          "kind": "staging"
+        }
+      ]
+    },
+    "AC-1.27": {
+      "files": [
+        {
+          "path": "tests/integration/capture/barrier.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/integration/capture/coordinator.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/integration/capture/pair.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/integration/capture/scratch.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/fault/capture/compete.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/fault/capture/crash.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/restore/retention/fixture.cloud.test.ts",
+          "kind": "cloud"
+        },
+        {
+          "path": "tests/staging/backup.staging.test.ts",
+          "kind": "staging"
+        }
+      ]
+    },
+    "AC-1.28": {
+      "files": [
+        {
+          "path": "tests/integration/restore/full.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/integration/restore/gate.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/integration/restore/listener.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/integration/restore/verify.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/integration/restore/invalidate.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/fault/restore/interrupted.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/unit/gate/v2.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/unit/ops/restore-report.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/unit/ops/restore-measurements.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/integration/openbao/inline.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/integration/openbao/admin-restore.test.ts",
+          "kind": "ci"
+        }
+      ]
+    },
+    "AC-1.29": {
+      "files": [
+        {
+          "path": "tests/unit/contracts/errors.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/unit/api/respond.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/integration/api/pipeline.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/integration/auth/sign-in.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/integration/authz/matrix.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/browser/access.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/browser/shell.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/browser/auth.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/unit/web/explain.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/unit/cli/errors.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/cli/connection.test.ts",
+          "kind": "cli"
+        },
+        {
+          "path": "tests/cli/keys.test.ts",
+          "kind": "cli"
+        }
+      ]
+    },
+    "AC-1.30": {
+      "files": [
+        {
+          "path": "tests/staging/transport.staging.test.ts",
+          "kind": "staging"
+        },
+        {
+          "path": "tests/staging/boundary.staging.test.ts",
+          "kind": "staging"
+        },
+        {
+          "path": "tests/cli/connection.test.ts",
+          "kind": "cli"
+        },
+        {
+          "path": "tests/unit/cli/config.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/integration/api/health.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/integration/hosts/compose.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/integration/openbao/client.test.ts",
+          "kind": "ci"
+        }
+      ]
+    },
+    "AC-1.31": {
+      "files": [
+        {
+          "path": "tests/staging/boundary.staging.test.ts",
+          "kind": "staging"
+        },
+        {
+          "path": "tests/unit/hosts/outside.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/unit/hosts/egress-names.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/integration/hosts/compose.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/integration/auth/factors.test.ts",
+          "kind": "ci"
+        }
+      ]
+    },
+    "AC-1.32": {
+      "files": [
+        {
+          "path": "tests/unit/ci/ci-scan.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/unit/release/host-build.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/unit/release/schema.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/unit/pins/pins.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "docs/evidence/session-8/review-6-edge.md",
+          "kind": "review"
+        }
+      ]
+    },
+    "AC-1.33": {
+      "files": [
+        {
+          "path": "tests/staging/alerts.staging.test.ts",
+          "kind": "staging"
+        },
+        {
+          "path": "tests/unit/runbooks/alerts.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/unit/runbooks/commands.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/unit/runbooks/links.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/integration/database/migrate.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/integration/deploy/failed-migration.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/integration/deploy/previous-release.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/unit/release/deploy-plan.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/staging/deploy.staging.test.ts",
+          "kind": "staging"
+        },
+        {
+          "path": "tests/integration/restore/full.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/fault/restore/interrupted.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "docs/evidence/session-8/claims.md",
+          "kind": "review"
+        }
+      ],
+      "earlier": {
+        "evidence": "docs/evidence/session-6/run-6.8.md",
+        "changedSince": "The recovery runbook (restore.md) was executed end to end only in the clean-host drill of Run 6.8 (cab44aa, 18 Nov 2026, host-v0.6.1). Since then: packages/backup/src/restore.ts and scripts/host-restore.ts unchanged, no migration after 0018; 945322d (audit-archive keys hold the backend incarnation), 2a4d66c (deploy-verify and verify-journey for the first opening of a host with a real owner; host.ts gives production its OpenBao), f100a5c (status.sh, mykey-backup and mykey-capture-recover units, OpenBao AppRole lockout off), 7766848 (OpenBao audit rotation by kill -HUP inside the container), 054a80c and 77d40e5 (the provisioner's incarnation guard on a refused login or read). Session 7's workspace and its three read routes touch no restore step.",
+        "covering": [
+          "tests/integration/restore/full.test.ts",
+          "tests/fault/restore/interrupted.test.ts",
+          "tests/unit/runbooks/commands.test.ts"
+        ]
+      }
+    },
+    "AC-1.34": {
+      "files": [
+        {
+          "path": "tests/integration/authz/origin.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/integration/browser-security/origin.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/integration/web/shell.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/browser/access.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/browser/shell.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/staging/workspace.staging.test.ts",
+          "kind": "staging"
+        },
+        {
+          "path": "tests/staging/identity.staging.test.ts",
+          "kind": "staging"
+        }
+      ]
+    },
+    "AC-1.35": {
+      "files": [
+        {
+          "path": "tests/integration/auth/fresh.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/integration/auth/factors-http.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/integration/auth/password.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/integration/credentials/issue.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/integration/export/export.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/browser/credentials.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/browser/import-export.test.ts",
+          "kind": "ci"
+        }
+      ]
+    },
+    "AC-1.37": {
+      "files": [
+        {
+          "path": "tests/cli/connection.test.ts",
+          "kind": "cli"
+        },
+        {
+          "path": "tests/cli/certs.test.ts",
+          "kind": "cli"
+        },
+        {
+          "path": "tests/cli/run.test.ts",
+          "kind": "cli"
+        },
+        {
+          "path": "tests/unit/cli/guard.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/unit/cli/config.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/staging/cli.staging.test.ts",
+          "kind": "staging"
+        }
+      ]
+    },
+    "AC-1.38": {
+      "files": [
+        {
+          "path": "tests/fault/secrets/boundaries.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/fault/secrets/delays.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/fault/effects/boundaries.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/fault/effects/exclusion.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/fault/effects/late-write.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/fault/effects/maintenance.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/integration/reconcile/sweep.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/integration/reconcile/operation.test.ts",
+          "kind": "ci"
+        }
+      ]
+    },
+    "AC-1.39": {
+      "files": [
+        {
+          "path": "tests/integration/operations/replay.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/integration/operations/records.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/integration/operations/status.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/integration/secrets/create.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/integration/resources/projects.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/integration/imports/apply.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/integration/imports/resume.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/fault/secrets/imports.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/integration/deploy/expire-resume.test.ts",
+          "kind": "ci"
+        }
+      ]
+    },
+    "AC-1.41": {
+      "files": [
+        {
+          "path": "tests/integration/read/race.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/integration/read/complete.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/integration/read/limits.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/integration/machine/resolve.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/integration/export/export.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/cli/run.test.ts",
+          "kind": "cli"
+        },
+        {
+          "path": "tests/cli/export.test.ts",
+          "kind": "cli"
+        },
+        {
+          "path": "tests/cli/keys.test.ts",
+          "kind": "cli"
+        },
+        {
+          "path": "tests/browser/import-export.test.ts",
+          "kind": "ci"
+        }
+      ]
+    },
+    "AC-1.42": {
+      "files": [
+        {
+          "path": "tests/consumers/runbook.test.ts",
+          "kind": "consumers"
+        },
+        {
+          "path": "tests/consumers/fixtures.test.ts",
+          "kind": "consumers"
+        },
+        {
+          "path": "tests/staging/cli.staging.test.ts",
+          "kind": "staging"
+        },
+        {
+          "path": "tests/staging/credentials.staging.test.ts",
+          "kind": "staging"
+        },
+        {
+          "path": "tests/staging/token-sweep.staging.test.ts",
+          "kind": "staging"
+        }
+      ]
+    },
+    "AC-1.43": {
+      "files": [
+        {
+          "path": "tests/integration/restore/full.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/integration/restore/invalidate.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/integration/restore/verify.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/integration/restore/gate.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/fault/restore/interrupted.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/integration/ops/reset.test.ts",
+          "kind": "ci"
+        }
+      ],
+      "earlier": {
+        "evidence": "docs/evidence/session-6/run-6.8.md",
+        "changedSince": "The old credentials refused after the opening, on a clean host, were seen only in the drill of Run 6.8 (cab44aa, 18 Nov 2026, host-v0.6.1); restore/full.test.ts refuses the nine old credentials while the restored product is closed + verifying. Since the drill: packages/backup/src/restore.ts and scripts/host-restore.ts unchanged, no migration after 0018; 945322d (audit-archive keys hold the backend incarnation), 2a4d66c (deploy-verify and verify-journey: the first opening of a host with a real owner), f100a5c (OpenBao AppRole lockout off; status.sh and two units), 7766848 (OpenBao audit rotation), 054a80c and 77d40e5 (the provisioner's incarnation guard).",
+        "covering": [
+          "tests/integration/restore/full.test.ts",
+          "tests/integration/restore/invalidate.test.ts",
+          "tests/fault/restore/interrupted.test.ts"
+        ]
+      }
+    },
+    "AC-1.44": {
+      "files": [
+        {
+          "path": "tests/integration/restore/full.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/fault/restore/interrupted.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/unit/hosts/host-restore.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/unit/backup/restore.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/unit/backup/restore-steps.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/integration/capture/retention.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/restore/retention/fixture.cloud.test.ts",
+          "kind": "cloud"
+        },
+        {
+          "path": "tests/restore/retention/cleanup.cloud.test.ts",
+          "kind": "cloud"
+        }
+      ],
+      "earlier": {
+        "evidence": "docs/evidence/session-6/run-6.8.md",
+        "changedSince": "Recovery from R2 and the custody set alone, with staging fenced, ran once on a reinstalled VPS (Run 6.8, cab44aa, 18 Nov 2026, host-v0.6.1). Since then: packages/backup/src/restore.ts and scripts/host-restore.ts unchanged, no migration after 0018; 945322d (audit-archive keys hold the backend incarnation, so a restored chain archives beside the lost host's segments), 2a4d66c (deploy-verify, verify-journey, host.ts production OpenBao), f100a5c (OpenBao AppRole lockout off, which the restore's reconcile-credentials logins meet), 7766848, 054a80c, 77d40e5. The storage-lock and expiry checks rerun on the candidate in the cloud files; the D-04 ageing itself is AC-1.36's earlier item.",
+        "covering": [
+          "tests/integration/restore/full.test.ts",
+          "tests/fault/restore/interrupted.test.ts",
+          "tests/unit/hosts/host-restore.test.ts",
+          "tests/restore/retention/fixture.cloud.test.ts"
+        ]
+      }
+    },
+    "AC-1.45": {
+      "files": [
+        {
+          "path": "tests/browser/journey.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/browser/auth.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/browser/resources.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/browser/secrets.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/browser/history.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/browser/import-export.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/browser/credentials.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/browser/activity.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/browser/reference.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/browser/access.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/browser/shell.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/staging/workspace.staging.test.ts",
+          "kind": "staging"
+        },
+        {
+          "path": "docs/evidence/session-8/walkthrough.md",
+          "kind": "owner"
+        }
+      ]
+    },
+    "AC-1.46": {
+      "files": [
+        {
+          "path": "tests/integration/overview/overview.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/browser/resources.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/integration/isolation/aggregates.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/integration/isolation/foreign-ids.test.ts",
+          "kind": "ci"
+        }
+      ]
+    },
+    "AC-1.47": {
+      "files": [
+        {
+          "path": "tests/browser/credentials.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/integration/credentials/summary.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/integration/credentials/inventory.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/staging/workspace.staging.test.ts",
+          "kind": "staging"
+        }
+      ]
+    },
+    "AC-1.48": {
+      "files": [
+        {
+          "path": "tests/browser/activity.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/browser/import-export.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/integration/operations/status.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/integration/audit/activity.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/integration/isolation/foreign-ids.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/integration/isolation/aggregates.test.ts",
+          "kind": "ci"
+        }
+      ]
+    },
+    "AC-1.49": {
+      "files": [
+        {
+          "path": "tests/staging/status.staging.test.ts",
+          "kind": "staging"
+        },
+        {
+          "path": "tests/unit/ops/status-view.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/unit/hosts/status.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/unit/hosts/checks.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/unit/probe/heartbeat.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/integration/health/readiness.test.ts",
+          "kind": "ci"
+        }
+      ]
+    },
+    "AC-1.50": {
+      "files": [
+        {
+          "path": "tests/staging/sweep.staging.test.ts",
+          "kind": "staging"
+        },
+        {
+          "path": "tests/staging/token-sweep.staging.test.ts",
+          "kind": "staging"
+        },
+        {
+          "path": "tests/browser/canary.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/unit/registry/sweep-ci.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/unit/hosts/search-script.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/integration/audit/diagnostics.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/unit/hosts/diagnostics-flags.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/unit/api/log-entries.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/unit/web/sources.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/integration/isolation/aggregates.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/consumers/runbook.test.ts",
+          "kind": "consumers"
+        }
+      ]
+    },
+    "AC-1.51": {
+      "files": [
+        {
+          "path": "tests/browser/access.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "docs/evidence/session-8/walkthrough.md",
+          "kind": "owner"
+        }
+      ]
+    },
+    "AC-1.56": {
+      "files": [
+        {
+          "path": "tests/unit/registry/release-manifest.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/unit/registry/registry.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "docs/evidence/session-8/review-1-auth.md",
+          "kind": "review"
+        },
+        {
+          "path": "docs/evidence/session-8/review-2-mutation.md",
+          "kind": "review"
+        },
+        {
+          "path": "docs/evidence/session-8/review-3-tokens.md",
+          "kind": "review"
+        },
+        {
+          "path": "docs/evidence/session-8/review-4-backup.md",
+          "kind": "review"
+        },
+        {
+          "path": "docs/evidence/session-8/review-5-cli.md",
+          "kind": "review"
+        },
+        {
+          "path": "docs/evidence/session-8/review-6-edge.md",
+          "kind": "review"
+        }
+      ]
+    },
+    "PO-1": {
+      "files": [
+        {
+          "path": "tests/staging/unseal.staging.test.ts",
+          "kind": "staging"
+        },
+        {
+          "path": "tests/staging/key-loss.staging.test.ts",
+          "kind": "staging"
+        },
+        {
+          "path": "tests/staging/boundary.staging.test.ts",
+          "kind": "staging"
+        },
+        {
+          "path": "tests/integration/api/health.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/unit/hosts/openbao-config.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/unit/hosts/deploy.test.ts",
+          "kind": "ci"
+        }
+      ]
+    },
+    "PO-2": {
+      "files": [
+        {
+          "path": "tests/integration/openbao/issuance.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/integration/machine/native-scope.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/integration/credentials/issue.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/integration/credentials/revoke.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/integration/isolation/backend.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/staging/machine.staging.test.ts",
+          "kind": "staging"
+        }
+      ]
+    },
+    "PO-3": {
+      "files": [
+        {
+          "path": "tests/integration/openbao/authority.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/integration/openbao/inline.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/integration/isolation/backend.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/staging/secrets.staging.test.ts",
+          "kind": "staging"
+        },
+        {
+          "path": "tests/staging/provisioning.staging.test.ts",
+          "kind": "staging"
+        }
+      ]
+    },
+    "PO-4": {
+      "files": [
+        {
+          "path": "tests/integration/provisioning/organization.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/integration/provisioning/environment.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/fault/provisioning/boundaries.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/integration/openbao/provisioner.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/integration/openbao/authority.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/unit/skeleton/skeleton.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/staging/provisioning.staging.test.ts",
+          "kind": "staging"
+        }
+      ]
+    },
+    "PO-5": {
+      "files": [
+        {
+          "path": "tests/integration/auth/routes.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/unit/auth/routes.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/integration/ops/bootstrap.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/integration/auth/stock-plugin.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/staging/identity.staging.test.ts",
+          "kind": "staging"
+        },
+        {
+          "path": "tests/staging/api.staging.test.ts",
+          "kind": "staging"
+        }
+      ]
+    },
+    "PO-6": {
+      "files": [
+        {
+          "path": "tests/integration/ops/reset.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/integration/auth/reset.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/integration/auth/reset-race.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/integration/auth/sessions.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/integration/auth/factors-race.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/integration/auth/fresh.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/staging/identity.staging.test.ts",
+          "kind": "staging"
+        }
+      ]
+    },
+    "PO-7": {
+      "files": [
+        {
+          "path": "tests/integration/secrets/update.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/integration/secrets/delete.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/integration/secrets/undelete.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/integration/secrets/restore.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/integration/secrets/protocol.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/integration/openbao/client.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/integration/openbao/client-answers.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/integration/openbao/inline.test.ts",
+          "kind": "ci"
+        }
+      ]
+    },
+    "PO-8": {
+      "files": [
+        {
+          "path": "tests/cli/install.test.ts",
+          "kind": "cli"
+        },
+        {
+          "path": "tests/cli/platform.test.ts",
+          "kind": "cli"
+        },
+        {
+          "path": "tests/cli/cli.test.ts",
+          "kind": "cli"
+        },
+        {
+          "path": "tests/cli/run.test.ts",
+          "kind": "cli"
+        },
+        {
+          "path": "tests/cli/connection.test.ts",
+          "kind": "cli"
+        },
+        {
+          "path": "tests/cli/certs.test.ts",
+          "kind": "cli"
+        },
+        {
+          "path": "tests/cli/keys.test.ts",
+          "kind": "cli"
+        },
+        {
+          "path": "tests/cli/export.test.ts",
+          "kind": "cli"
+        },
+        {
+          "path": "tests/unit/release/build.test.ts",
+          "kind": "ci"
+        }
+      ]
+    },
+    "PO-9": {
+      "files": [
+        {
+          "path": "tests/restore/retention/fixture.cloud.test.ts",
+          "kind": "cloud"
+        },
+        {
+          "path": "tests/restore/retention/cleanup.cloud.test.ts",
+          "kind": "cloud"
+        },
+        {
+          "path": "tests/integration/capture/retention.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/unit/backup/retention.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/integration/capture/pair.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/staging/backup.staging.test.ts",
+          "kind": "staging"
+        }
+      ],
+      "earlier": {
+        "evidence": "docs/evidence/session-6/run-6.6.md",
+        "changedSince": "R2 lock ageing under D-04 and the oldest fixture pair restored (Run 6.6, 8f506fd, 17 Nov 2026). Since then the retention code has no commit (packages/operations/src/capture/retention.ts, packages/backup/src/retention.ts, r2.ts, store.ts); apps/ops/src/commands/pair.ts changed in 2 lines (e942abf, gate v2); f100a5c changed the mykey-backup unit. The real 30-day rule on staging is checkpoint pair-30-day (from 17 Dec 2026), not run.",
+        "covering": [
+          "tests/restore/retention/fixture.cloud.test.ts",
+          "tests/restore/retention/cleanup.cloud.test.ts",
+          "tests/integration/capture/retention.test.ts",
+          "tests/unit/backup/retention.test.ts"
+        ]
+      }
+    },
+    "PO-10": {
+      "files": [
+        {
+          "path": "tests/browser/reference.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/unit/reference/permission.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/integration/reference/page.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/integration/reference/document.test.ts",
+          "kind": "ci"
+        }
+      ]
+    },
+    "PO-11": {
+      "files": [
+        {
+          "path": "tests/staging/boundary.staging.test.ts",
+          "kind": "staging"
+        },
+        {
+          "path": "tests/unit/hosts/images.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/unit/reference/permission.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/integration/hosts/compose.test.ts",
+          "kind": "ci"
+        }
+      ]
+    },
+    "PO-12": {
+      "files": [
+        {
+          "path": "tests/integration/web/shell.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/browser/access.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/browser/shell.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/staging/workspace.staging.test.ts",
+          "kind": "staging"
+        }
+      ]
+    },
+    "PO-13": {
+      "files": [
+        {
+          "path": "tests/integration/capture/barrier.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/integration/database/privileges.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/integration/openbao/authority.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/staging/backup.staging.test.ts",
+          "kind": "staging"
+        },
+        {
+          "path": "tests/staging/privileges.staging.test.ts",
+          "kind": "staging"
+        }
+      ]
+    },
+    "PO-14": {
+      "files": [
+        {
+          "path": "tests/staging/probe.staging.test.ts",
+          "kind": "staging"
+        },
+        {
+          "path": "tests/staging/alerts.staging.test.ts",
+          "kind": "staging"
+        },
+        {
+          "path": "tests/unit/probe/evaluate.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/unit/probe/evaluate-v2.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/unit/probe/sinks.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/unit/probe/watch.test.ts",
+          "kind": "ci"
+        }
+      ]
+    },
+    "PO-15": {
+      "files": [
+        {
+          "path": "tests/integration/auth/storage.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/integration/auth/dump.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/integration/auth/factors-http.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/unit/auth/seed.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/unit/auth/verifier.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/unit/auth/recovery.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/staging/identity.staging.test.ts",
+          "kind": "staging"
+        }
+      ]
+    },
+    "PO-16": {
+      "files": [
+        {
+          "path": "tests/fault/effects/boundaries.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/fault/effects/exclusion.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/fault/effects/late-write.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/fault/effects/maintenance.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/fault/secrets/boundaries.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/fault/secrets/delays.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/fault/credentials/issuance.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/fault/credentials/revocation.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/fault/credentials/archive.test.ts",
+          "kind": "ci"
+        }
+      ]
+    },
+    "PO-17": {
+      "files": [
+        {
+          "path": "tests/integration/operations/replay.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/integration/operations/records.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/integration/imports/resume.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/integration/imports/apply.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/fault/secrets/imports.test.ts",
+          "kind": "ci"
+        }
+      ]
+    },
+    "PO-19": {
+      "files": [
+        {
+          "path": "tests/integration/read/race.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/integration/read/complete.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/integration/machine/resolve.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/cli/run.test.ts",
+          "kind": "cli"
+        },
+        {
+          "path": "tests/cli/export.test.ts",
+          "kind": "cli"
+        }
+      ]
+    },
+    "PO-20": {
+      "files": [
+        {
+          "path": "tests/consumers/runbook.test.ts",
+          "kind": "consumers"
+        },
+        {
+          "path": "tests/consumers/fixtures.test.ts",
+          "kind": "consumers"
+        },
+        {
+          "path": "tests/cli/keys.test.ts",
+          "kind": "cli"
+        },
+        {
+          "path": "tests/unit/cli/token.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/staging/cli.staging.test.ts",
+          "kind": "staging"
+        }
+      ]
+    },
+    "PO-21": {
+      "files": [
+        {
+          "path": "tests/fault/capture/compete.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/fault/capture/crash.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/integration/capture/coordinator.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/integration/capture/barrier.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/integration/capture/pair.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/staging/backup.staging.test.ts",
+          "kind": "staging"
+        }
+      ]
+    },
+    "PO-22": {
+      "files": [
+        {
+          "path": "tests/integration/restore/full.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/integration/restore/invalidate.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/integration/restore/verify.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/integration/restore/gate.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/integration/restore/listener.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/fault/restore/interrupted.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/integration/archive/restored-chain.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/integration/deploy/first-opening.test.ts",
+          "kind": "ci"
+        }
+      ],
+      "earlier": {
+        "evidence": "docs/evidence/session-6/run-6.8.md",
+        "changedSince": "The quarantined off-host restore of pair P onto a clean host ran once in the drill of Run 6.8 (cab44aa, 18 Nov 2026, host-v0.6.1). Since then: packages/backup/src/restore.ts and scripts/host-restore.ts unchanged, no migration after 0018; 945322d (a restored chain archives under its own incarnation), 2a4d66c (deploy-verify and verify-journey: the first opening of a host with a real owner, which a standalone open with a restore report refuses), f100a5c (OpenBao AppRole lockout off; status.sh and two units), 7766848 (OpenBao audit rotation), 054a80c and 77d40e5 (the provisioner's incarnation guard).",
+        "covering": [
+          "tests/integration/restore/full.test.ts",
+          "tests/fault/restore/interrupted.test.ts",
+          "tests/integration/archive/restored-chain.test.ts",
+          "tests/integration/deploy/first-opening.test.ts"
+        ]
+      }
+    },
+    "PO-23": {
+      "files": [
+        {
+          "path": "tests/staging/alerts.staging.test.ts",
+          "kind": "staging"
+        },
+        {
+          "path": "tests/staging/status.staging.test.ts",
+          "kind": "staging"
+        },
+        {
+          "path": "tests/staging/limits.staging.test.ts",
+          "kind": "staging"
+        },
+        {
+          "path": "tests/unit/probe/watch.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/integration/health/readiness.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/integration/limits/rate.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/fault/audit/device.test.ts",
+          "kind": "ci"
+        }
+      ]
+    },
+    "PO-24": {
+      "files": [
+        {
+          "path": "tests/unit/pins/pins.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/unit/pins/repro-build.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/unit/release/build.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/unit/release/host-build.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/integration/database/migrate.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/unit/ci/ci-scan.test.ts",
+          "kind": "ci"
+        }
+      ]
+    },
+    "KMS-L1": {
+      "files": [
+        {
+          "path": "tests/staging/key-loss.staging.test.ts",
+          "kind": "staging"
+        },
+        {
+          "path": "tests/staging/backup.staging.test.ts",
+          "kind": "staging"
+        },
+        {
+          "path": "tests/staging/unseal.staging.test.ts",
+          "kind": "staging"
+        },
+        {
+          "path": "tests/fault/restore/interrupted.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/unit/hosts/deploy.test.ts",
+          "kind": "ci"
+        }
+      ],
+      "earlier": {
+        "evidence": "docs/evidence/session-6/run-6.8.md",
+        "changedSince": "The off-host access path to the referenced seal key (the KMS certificate from custody on a reinstalled VPS) was used once, in the drill of Run 6.8 (cab44aa, 18 Nov 2026, host-v0.6.1). Since then: 2a4d66c (host.ts accepts the OpenBao and KMS commands for production; kms-and-unseal.md), f100a5c (OpenBao configuration: AppRole lockout off). The KMS commands of host.ts are unit-tested and the loss of a disposable key reruns on the candidate.",
+        "covering": [
+          "tests/staging/key-loss.staging.test.ts",
+          "tests/unit/hosts/deploy.test.ts",
+          "tests/fault/restore/interrupted.test.ts"
+        ]
+      }
+    },
+    "DB-G1": {
+      "files": [
+        {
+          "path": "tests/integration/restore/full.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/fault/restore/interrupted.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/integration/database/privileges.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/integration/database/access.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/staging/privileges.staging.test.ts",
+          "kind": "staging"
+        },
+        {
+          "path": "tests/staging/transport.staging.test.ts",
+          "kind": "staging"
+        }
+      ],
+      "earlier": {
+        "evidence": "docs/evidence/session-6/run-6.8.md",
+        "changedSince": "Cluster globals, database access and fresh runtime identities rebuilt on a reinstalled VPS ran once in the drill of Run 6.8 (cab44aa, 18 Nov 2026, host-v0.6.1); locally the restore targets a second cluster. Since then: no migration after 0018, packages/backup/src/restore.ts and scripts/host-restore.ts unchanged; packages/db changed only in queries of Session 7's three read routes and the audit-archive ordering (f060d2d).",
+        "covering": [
+          "tests/integration/restore/full.test.ts",
+          "tests/fault/restore/interrupted.test.ts",
+          "tests/integration/database/privileges.test.ts"
+        ]
+      }
+    },
+    "R2-L1": {
+      "files": [
+        {
+          "path": "tests/restore/retention/fixture.cloud.test.ts",
+          "kind": "cloud"
+        },
+        {
+          "path": "tests/restore/retention/cleanup.cloud.test.ts",
+          "kind": "cloud"
+        },
+        {
+          "path": "tests/integration/capture/retention.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/unit/backup/retention.test.ts",
+          "kind": "ci"
+        }
+      ],
+      "earlier": {
+        "evidence": "docs/evidence/session-6/run-6.6.md",
+        "changedSince": "Lock ageing of the D-04 fixture (4-day pairs deleted after their lock, the oldest pair restored) closed in Run 6.6 (8f506fd, 17 Nov 2026). Since then the retention and R2 code has no commit (packages/operations/src/capture/retention.ts, packages/backup/src/retention.ts, r2.ts, store.ts); apps/ops/src/commands/pair.ts changed in 2 lines (e942abf). The 600 s lock refusal, expiry, per-object bulk errors and verified removal rerun on the candidate in the cloud files.",
+        "covering": [
+          "tests/restore/retention/fixture.cloud.test.ts",
+          "tests/restore/retention/cleanup.cloud.test.ts",
+          "tests/integration/capture/retention.test.ts",
+          "tests/unit/backup/retention.test.ts"
+        ]
+      }
+    },
+    "AGENT-B1": {
+      "files": [
+        {
+          "path": "tests/cli/cli.test.ts",
+          "kind": "cli"
+        },
+        {
+          "path": "tests/cli/run.test.ts",
+          "kind": "cli"
+        },
+        {
+          "path": "tests/cli/install.test.ts",
+          "kind": "cli"
+        },
+        {
+          "path": "tests/cli/platform.test.ts",
+          "kind": "cli"
+        },
+        {
+          "path": "tests/cli/connection.test.ts",
+          "kind": "cli"
+        }
+      ]
+    },
+    "COST-B1": {
+      "files": [
+        {
+          "path": "tests/staging/backup.staging.test.ts",
+          "kind": "staging"
+        },
+        {
+          "path": "tests/restore/retention/cleanup.cloud.test.ts",
+          "kind": "cloud"
+        }
+      ],
+      "earlier": {
+        "evidence": "docs/evidence/cost-sheet.md",
+        "changedSince": "The cost sheet was last measured in Run 6.6 (8f506fd, 17 Nov 2026: a used staging pair of 44.3 MB with 6,784 secrets, the audit archive per day, operations per night). Since then the pair format and its operations are unchanged (2 PutObject, 1 GetObject per pair); 945322d changed the audit-archive segment keys (they hold the backend incarnation), not their size; f100a5c changed the mykey-backup unit's exit handling. No invoice figure exists yet.",
+        "covering": [
+          "tests/staging/backup.staging.test.ts",
+          "tests/restore/retention/cleanup.cloud.test.ts"
+        ]
+      }
+    },
+    "AC-1.60": {
+      "files": [
+        {
+          "path": "docs/evidence/session-8/claims.md",
+          "kind": "review"
+        }
+      ]
+    }
+  },
+  "notProven": {
+    "AC-1.18": "The staging drill (until Run 8.7 the second test of credentials.staging.test.ts, now credential-drill.staging.test.ts: 'an issuance left unknown raises operations_unresolved and is settled by quiesce → reconcile-credentials → resume') was red on host-v0.8.1: 20 attempts in two runs (21 Nov 2026, 13:14 and 13:45 UTC) caught no issuance after its marker. Its pause of OpenBao lands over SSH between 2.5 and 3.4 s after it is sent, so the five shots aimed at the last landing either finished first (201), were refused busy, or were caught before the marker (correctly 503 dependency_unavailable); the window after the marker is one OpenBao call. The same fault at the exact point is proven on CI by tests/fault/credentials/issuance.test.ts; the journey that shared its file (issue, inventory, replay, revoke, the search for the token) is credentials.staging.test.ts and is green. Re-aiming the drill is Session 9's (report.md). Its other files were green on the candidate: ci: tests/integration/credentials/issue.test.ts; ci: tests/integration/credentials/protocol.test.ts; ci: tests/integration/credentials/inventory.test.ts; ci: tests/integration/credentials/surfaces.test.ts; ci: tests/integration/credentials/sweep.test.ts; ci: tests/integration/credentials/revoke.test.ts; ci: tests/integration/openbao/issuance.test.ts; ci: tests/integration/machine/native-scope.test.ts; ci: tests/integration/machine/authentication.test.ts; ci: tests/unit/probe/evaluate-v2.test.ts; ci: tests/unit/hosts/checks.test.ts; ci: tests/browser/credentials.test.ts; staging: tests/staging/alerts.staging.test.ts.",
+    "AC-1.25": "The stopped checker (probe-watch) is proven by the verdict's unit test (tests/unit/probe/watch.test.ts) and a hand run with the probe's cron removed in Run 6.4; no file runs the real watcher against a stopped probe.",
+    "AC-1.26": "'A revoked certificate prevents unseal' ran once, in Run 2.7 (12 Nov 2026, the owner deleted staging-seal-1 in the console); on a rerun unseal.staging.test.ts only checks that the old key is gone and the current certificate unseals. 'Certificate reissued without old host' is the drill of Run 6.8 only. The expired-certificate case is checkpoint kms-cert-expiry (due 12 Dec 2026), not run.",
+    "AC-1.36": "'Referenced KMS key destruction refused' has no test: unseal.staging.test.ts ('rights are what was granted') shows only that the seal certificate cannot create a key, and keyReadable reports a destroyed key; no file tries to destroy a referenced key.",
+    "AC-1.40": "The staging drill (until Run 8.7 the second test of credentials.staging.test.ts, now credential-drill.staging.test.ts: 'an issuance left unknown raises operations_unresolved and is settled by quiesce → reconcile-credentials → resume') was red on host-v0.8.1: 20 attempts in two runs (21 Nov 2026, 13:14 and 13:45 UTC) caught no issuance after its marker. Its pause of OpenBao lands over SSH between 2.5 and 3.4 s after it is sent, so the five shots aimed at the last landing either finished first (201), were refused busy, or were caught before the marker (correctly 503 dependency_unavailable); the window after the marker is one OpenBao call. The same fault at the exact point is proven on CI by tests/fault/credentials/issuance.test.ts; the journey that shared its file (issue, inventory, replay, revoke, the search for the token) is credentials.staging.test.ts and is green. Re-aiming the drill is Session 9's (report.md). Its other files were green on the candidate: ci: tests/fault/credentials/issuance.test.ts; ci: tests/fault/credentials/revocation.test.ts; ci: tests/fault/credentials/archive.test.ts; ci: tests/integration/credentials/issue.test.ts; ci: tests/integration/credentials/protocol.test.ts; ci: tests/integration/credentials/sweep.test.ts; ci: tests/integration/credentials/reconcile.test.ts.",
+    "AC-1.52": "The owner's hour starts from an operator reset of the existing staging owner; install/deploy and bootstrap are proven by the agent's automated files (deploy.staging, api.staging, ops/bootstrap), not executed independently by the owner.",
+    "AC-1.55": "'Delayed events' (a row committed late into a day already counted) are not simulated for the summary; metrics.test.ts writes the earlier days' rows directly before reading.",
+    "AC-1.57": "The staging drill (until Run 8.7 the second test of credentials.staging.test.ts, now credential-drill.staging.test.ts: 'an issuance left unknown raises operations_unresolved and is settled by quiesce → reconcile-credentials → resume') was red on host-v0.8.1: 20 attempts in two runs (21 Nov 2026, 13:14 and 13:45 UTC) caught no issuance after its marker. Its pause of OpenBao lands over SSH between 2.5 and 3.4 s after it is sent, so the five shots aimed at the last landing either finished first (201), were refused busy, or were caught before the marker (correctly 503 dependency_unavailable); the window after the marker is one OpenBao call. The same fault at the exact point is proven on CI by tests/fault/credentials/issuance.test.ts; the journey that shared its file (issue, inventory, replay, revoke, the search for the token) is credentials.staging.test.ts and is green. Re-aiming the drill is Session 9's (report.md). Its other files were green on the candidate: staging: tests/staging/workspace.staging.test.ts; staging: tests/staging/identity.staging.test.ts; staging: tests/staging/reconcile.staging.test.ts; staging: tests/staging/alerts.staging.test.ts; staging: tests/staging/status.staging.test.ts; staging: tests/staging/unseal.staging.test.ts; staging: tests/staging/key-loss.staging.test.ts; staging: tests/staging/backup.staging.test.ts; ci: tests/integration/restore/full.test.ts; ci: tests/fault/restore/interrupted.test.ts; cloud: tests/restore/retention/fixture.cloud.test.ts; cloud: tests/restore/retention/cleanup.cloud.test.ts; ci: tests/unit/registry/release-manifest.test.ts. Its earlier item (docs/evidence/session-6/run-6.8.md) stands as recorded.",
+    "PO-18": "The staging drill (until Run 8.7 the second test of credentials.staging.test.ts, now credential-drill.staging.test.ts: 'an issuance left unknown raises operations_unresolved and is settled by quiesce → reconcile-credentials → resume') was red on host-v0.8.1: 20 attempts in two runs (21 Nov 2026, 13:14 and 13:45 UTC) caught no issuance after its marker. Its pause of OpenBao lands over SSH between 2.5 and 3.4 s after it is sent, so the five shots aimed at the last landing either finished first (201), were refused busy, or were caught before the marker (correctly 503 dependency_unavailable); the window after the marker is one OpenBao call. The same fault at the exact point is proven on CI by tests/fault/credentials/issuance.test.ts; the journey that shared its file (issue, inventory, replay, revoke, the search for the token) is credentials.staging.test.ts and is green. Re-aiming the drill is Session 9's (report.md). Its other files were green on the candidate: ci: tests/fault/credentials/issuance.test.ts; ci: tests/fault/credentials/archive.test.ts; ci: tests/integration/credentials/reconcile.test.ts; ci: tests/integration/credentials/sweep.test.ts; ci: tests/integration/lifecycle/archive.test.ts."
+  }
+}

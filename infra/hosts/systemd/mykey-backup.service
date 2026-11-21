@@ -6,6 +6,9 @@ Wants=network-online.target
 [Service]
 Type=oneshot
 ExecStart=/opt/mykey/hosts/backup/backup.sh
+# Exit 75 is a busy drain: the timer tries again, and the unit is not failed
+# (Run 8.0, Session 6 finding G).
+SuccessExitStatus=75
 # A capture that is killed or times out never leaves writing closed or a pair
 # tmpfs behind.
 ExecStopPost=/opt/mykey/hosts/backup/backup.sh recover

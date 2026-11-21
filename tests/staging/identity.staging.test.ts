@@ -5,12 +5,19 @@
 // canary sweep); only counts are written down. Synthetic data only.
 import { spawnSync } from "node:child_process";
 import { randomBytes, randomUUID } from "node:crypto";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { codeAt, createAuth, ephemeralKeys, stepAt } from "@mykey/auth";
+import {
+  NATIVE_DENIED,
+  PRODUCT_OWNED,
+  codeAt,
+  createAuth,
+  ephemeralKeys,
+  stepAt,
+} from "@mykey/auth";
 import { createPool } from "@mykey/db";
 import { drizzle } from "drizzle-orm/node-postgres";
 import * as OTPAuth from "otpauth";
@@ -28,6 +35,7 @@ import {
   STAGING_ORIGIN,
   STAGING_OWNER_EMAIL,
   freshCode,
+  initiateOwnerReset,
   publicRequest,
   readCustody,
   sessionPair,
@@ -131,25 +139,9 @@ const codeOf = (answer: PublicAnswer): string | undefined => {
   }
 };
 
-function ops(argv: string[]): { code: number | null; stdout: string } {
-  const result = spawnSync(process.execPath, ["scripts/host.ts", "staging", "ops", ...argv], {
-    encoding: "utf8",
-    timeout: 120_000,
-    env: { ...process.env, MSYS_NO_PATHCONV: "1" },
-  });
-  return { code: result.status, stdout: result.stdout };
-}
-
-/** Runs `ops reset-account` and answers the token of the link file (the file is shredded). */
+/** Runs `ops reset-account` (the harness's helper since Run 8.4) and answers the link's token. */
 function initiateReset(kind: "password" | "mfa"): string {
-  const run = ops(["reset-account", "--email", STAGING_OWNER_EMAIL, "--kind", kind]);
-  expect(run.code, run.stdout.slice(0, 200)).toBe(0);
-  const path = /link in (\S+);/.exec(run.stdout)?.[1];
-  if (path === undefined) throw new Error("reset-account printed no link file");
-  const link = readFileSync(path, "utf8").trim();
-  rmSync(path, { force: true });
-  const token = /#t=([A-Za-z0-9_-]{43})&k=/.exec(link)?.[1];
-  if (token === undefined) throw new Error("the link file holds no token");
+  const { link, token } = initiateOwnerReset(kind);
   canary(link);
   return canary(token);
 }
@@ -192,6 +184,26 @@ describe("1–2. known state and sign-in", () => {
     expect(answer.status).toBe(401);
     expect(codeOf(answer)).toBe("mfa_incomplete");
     await ageThrottle();
+  });
+
+  // Run 8.2 (P-151): the whole list, through the public name.
+  it("every refused native route answers 404 on staging", async () => {
+    const owned = new Set(PRODUCT_OWNED.map((route) => `${route.method} ${route.path}`));
+    const refused = NATIVE_DENIED.filter((r) => !owned.has(`${r.method} ${r.path}`));
+    expect(refused.length).toBeGreaterThanOrEqual(10);
+    const wrong: string[] = [];
+    for (const route of refused) {
+      const path = `/v1/auth${route.path.replaceAll(/:[a-z]+/g, "x")}`;
+      const answer = await publicRequest(
+        route.method,
+        path,
+        route.method === "POST" ? { body: {} } : {},
+      );
+      if (answer.status !== 404 || codeOf(answer) !== "not_found") {
+        wrong.push(`${route.method} ${path}: ${String(answer.status)} ${codeOf(answer) ?? ""}`);
+      }
+    }
+    expect(wrong).toEqual([]);
   });
 });
 

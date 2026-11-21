@@ -65,7 +65,7 @@ const ORG = journeyTarget.organizationId;
 const O = `/v1/organizations/${ORG}`;
 
 const canary = (): string => {
-  const value = ["MYKEY", "CANARY", randomBytes(16).toString("hex")].join("_");
+  const value = ["MYKEY", "CANARY", randomBytes(16).toString("hex").toUpperCase()].join("_");
   registerSecret(value);
   return value;
 };

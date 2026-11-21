@@ -111,6 +111,33 @@ describe("the units of host jobs (P-112)", () => {
   });
 });
 
+// Run 8.0 (P-149, Session 6 findings G and H): two units that alerted falsely.
+describe("units that must not stay failed", () => {
+  const section = (text: string, name: string) =>
+    new RegExp(`^\\[${name}\\]\\r?\\n([\\s\\S]*?)(?=^\\[|(?![\\s\\S]))`, "m").exec(text)?.[1] ?? "";
+
+  it("mykey-backup: exit 75 (a busy drain) is not a failed unit", () => {
+    const service = section(read("mykey-backup.service"), "Service");
+    expect(field(service, "SuccessExitStatus")?.split(/\s+/)).toContain("75");
+  });
+
+  it("mykey-capture-recover waits for PostgreSQL: it starts after the stack and tries again, a bounded number of times, when the database does not answer yet", () => {
+    const text = read("mykey-capture-recover.service");
+    const unit = section(text, "Unit");
+    const service = section(text, "Service");
+    expect(field(unit, "After")?.split(/\s+/)).toContain("docker.service");
+    expect(field(service, "Restart")).toBe("on-failure");
+    const pause = Number(/^(\d+)s$/.exec(field(service, "RestartSec") ?? "")?.[1]);
+    const burst = Number(field(unit, "StartLimitBurst"));
+    const interval = Number(/^(\d+)s$/.exec(field(unit, "StartLimitIntervalSec") ?? "")?.[1]);
+    expect(pause).toBeGreaterThanOrEqual(10);
+    expect(burst).toBeGreaterThanOrEqual(3);
+    expect(burst).toBeLessThanOrEqual(20);
+    // Every retry falls inside the window, so the limit really bounds them.
+    expect(interval).toBeGreaterThan(pause * burst);
+  });
+});
+
 describe("r2-install and timers (P-112)", () => {
   it("parse", () => {
     expect(parseHostArgs(["staging", "r2-install", "audit-archive"])).toMatchObject({

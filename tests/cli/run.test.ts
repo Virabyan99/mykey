@@ -27,6 +27,7 @@ import {
   PROJECT,
   errorReply,
   goodResolve,
+  goodVersion,
   startCliServer,
   type CliServer,
   type Reply,
@@ -43,7 +44,7 @@ interface Marker {
   pid: number;
   argv: string[];
   env: Record<string, string>;
-  signals: Record<"SIGINT" | "SIGTERM" | "SIGHUP" | "SIGQUIT", number>;
+  signals: Record<"SIGINT" | "SIGTERM" | "SIGHUP" | "SIGQUIT" | "SIGUSR1" | "SIGUSR2", number>;
 }
 
 let base: string;
@@ -90,7 +91,7 @@ async function serve(script: ServerScript = {}): Promise<CliServer> {
 function envOf(server: CliServer, extra: Record<string, string> = {}): Record<string, string> {
   return {
     SECRETS_API_URL: server.url,
-    NODE_EXTRA_CA_CERTS: server.caPath,
+    SECRETS_CA_FILE: server.caPath,
     SECRETS_MACHINE_TOKEN: token(),
     HOME: dirs.home,
     TMPDIR: dirs.tmp,
@@ -231,6 +232,41 @@ describe("secrets run", () => {
     }
   });
 
+  // AC-1.37 (FR-1.49, FR-1.79) and R5-2 (Run 8.6, D-68): each refusal of the
+  // connection or of the runtime starts nothing, and sends no credential.
+  it("an http URL, an untrusted certificate, a setting that changes trust and another API major each start nothing", async () => {
+    const server = await serve();
+    const newer = await serve({
+      version: { status: 200, body: { ...goodVersion(), apiMajor: 2 } },
+    });
+    const cases: [string, Record<string, string>, CliServer, number][] = [
+      ["an http URL", { SECRETS_API_URL: server.url.replace("https:", "http:") }, server, 78],
+      ["no trust for the certificate", { SECRETS_CA_FILE: "" }, server, 69],
+      ["NODE_EXTRA_CA_CERTS", { NODE_EXTRA_CA_CERTS: server.caPath }, server, 78],
+      ["OPENSSL_CONF", { OPENSSL_CONF: "/dev/null" }, server, 78],
+      [
+        "SSL_CERT_FILE and SSL_CERT_DIR add no trust",
+        { SECRETS_CA_FILE: "", SSL_CERT_FILE: server.caPath, SSL_CERT_DIR: base },
+        server,
+        69,
+      ],
+      ["NODE_TLS_REJECT_UNAUTHORIZED=0", { NODE_TLS_REJECT_UNAUTHORIZED: "0" }, server, 78],
+      ["another API major", {}, newer, 76],
+    ];
+    for (const [label, extra, target, exit] of cases) {
+      const before = target.requests.length;
+      const result = await runCli(runArgs(), { env: envOf(target, extra), cwd: dirs.cwd });
+      expect(result.code, `${label}: ${result.stderr}`).toBe(exit);
+      expect(existsSync(marker), label).toBe(false);
+      expect(allEmpty(), label).toBe(true);
+      const sent = target.requests.slice(before);
+      expect(
+        sent.every((request) => request.path === "/v1/version"),
+        label,
+      ).toBe(true);
+    }
+  });
+
   // Gate review, Important 1: resolve shares the API's large-request gate (two
   // per process), so instances started together can meet 503 busy. A read has
   // no effect: the CLI asks again, a few times, before anything is started.
@@ -340,10 +376,82 @@ describe("secrets run", () => {
         SIGTERM: 0,
         SIGHUP: 0,
         SIGQUIT: 0,
+        SIGUSR1: 0,
+        SIGUSR2: 0,
         [signal]: 1,
       });
       expect(seen.starts).toBe(1);
     }
+  });
+
+  // Fixes review F-3 (Run 8.6): SSL_CERT_FILE is the application's setting
+  // (curl, Python); the CLI ignores it and passes it on.
+  it("SSL_CERT_FILE set machine-wide reaches the child, and the run starts", async () => {
+    const server = await serve();
+    rmSync(marker, { force: true });
+    const result = await runCli(runArgs(), {
+      env: envOf(server, { SSL_CERT_FILE: "/etc/ssl/certs/ca-certificates.crt" }),
+      cwd: dirs.cwd,
+    });
+    expect(result.code, result.stderr).toBe(0);
+    expect(readMarker().env.SSL_CERT_FILE).toBe(sha("/etc/ssl/certs/ca-certificates.crt"));
+  });
+
+  // R5-3 (Run 8.6): the CLI holds the token while the child runs, so SIGUSR1
+  // must never open Node's inspector in it (the launcher's --disable-sigusr1).
+  // Node then keeps SIGUSR1 blocked: the CLI neither dies nor passes it on (a
+  // stated limit). SIGUSR2 (a supervisor's reload) is the child's: passed on once.
+  it("SIGUSR1 opens no debugger and ends nothing; SIGUSR2 reaches the child exactly once", async () => {
+    const server = await serve();
+    rmSync(marker, { force: true });
+    rmSync(release, { force: true });
+    let cli = start(server, runArgs(), { CHILD_MODE: "wait" });
+    await until("the child (SIGUSR1)", () => existsSync(marker));
+    cli.kill("SIGUSR1");
+    await sleep(1_000);
+    expect(cli.peek().exited).toBe(false);
+    writeFileSync(release, "");
+    let result = await cli.result;
+    expect(result.code, result.stderr).toBe(0);
+    expect(result.stderr.includes("Debugger")).toBe(false);
+    expect(readMarker().signals.SIGUSR1).toBe(0);
+
+    rmSync(marker, { force: true });
+    rmSync(release, { force: true });
+    cli = start(server, runArgs(), { CHILD_MODE: "wait" });
+    await until("the child (SIGUSR2)", () => existsSync(marker));
+    cli.kill("SIGUSR2");
+    await until("SIGUSR2 at the child", () => readMarker().signals.SIGUSR2 >= 1);
+    await sleep(300);
+    writeFileSync(release, "");
+    result = await cli.result;
+    expect(result.code, result.stderr).toBe(0);
+    expect(readMarker().signals.SIGUSR2).toBe(1);
+    expect(readMarker().starts).toBe(1);
+  });
+
+  // R5-4 (Run 8.6): the size check asks getconf by its absolute path and with
+  // an empty environment, so nothing found through PATH ever sees the token.
+  it("a getconf ahead in PATH is never run", async () => {
+    const server = await serve();
+    const bin = join(base, "bin");
+    mkdirSync(bin);
+    const seen = join(base, "markers", "getconf-ran");
+    writeFileSync(
+      join(bin, "getconf"),
+      ["#!/bin/sh", `env > '${seen}'`, "echo 262144", ""].join("\n"),
+      { mode: 0o755 },
+    );
+    // Control: the fake runs where it is, and leaves its mark.
+    execFileSync(join(bin, "getconf"), ["ARG_MAX"], { env: {} });
+    expect(existsSync(seen)).toBe(true);
+    rmSync(seen);
+    const result = await runCli(runArgs(), {
+      env: envOf(server, { PATH: `${bin}:${process.env.PATH ?? "/usr/bin:/bin"}` }),
+      cwd: dirs.cwd,
+    });
+    expect(result.code, result.stderr).toBe(0);
+    expect(existsSync(seen)).toBe(false);
   });
 
   it("a child that handles SIGTERM and exits 5 → 5; one that dies by it → 143", async () => {
@@ -382,7 +490,14 @@ describe("secrets run", () => {
     writeFileSync(release, "");
     const result = await cli.result;
     expect(result.code).toBe(0);
-    expect(readMarker().signals).toEqual({ SIGINT: 1, SIGTERM: 0, SIGHUP: 0, SIGQUIT: 0 });
+    expect(readMarker().signals).toEqual({
+      SIGINT: 1,
+      SIGTERM: 0,
+      SIGHUP: 0,
+      SIGQUIT: 0,
+      SIGUSR1: 0,
+      SIGUSR2: 0,
+    });
   });
 
   it("a signal before the spawn starts nothing: SIGINT while resolve is pending → 130", async () => {

@@ -65,7 +65,8 @@ File `infra/hosts/firewall/mykey.nft`, table `inet mykey`, three chains with `po
 
 - **In:** WireGuard (UDP 51820), SSH from the VPN interface, the DHCP answer for the public address, the ICMP needed for path MTU and neighbour discovery. Nothing new from a container network to the host. TCP 443 reaches the `edge` container.
 - **Out, from the host:** DNS to the resolver the server was given (`213.186.33.99`), NTP to two fixed addresses (`162.159.200.1`, `162.159.200.123`), the cloud metadata service, and TCP to the address sets below.
-- **Out, from containers:** only `edge` to the ACME set and `openbao` to the KMS set. Containers on internal bridges reach nothing outside their bridge. All container IPv6 is dropped.
+- **Out, from the stack's containers:** only `edge` to the ACME set and `openbao` to the KMS set. Containers on internal bridges reach nothing outside their bridge. All container IPv6 is dropped.
+- **Containers on the host's network are the host.** The ops jobs (`ops-run.sh`) and `okms.sh` run with `--network host`, so the host's output rules above are theirs: the resolver, NTP, the metadata service, every address set, every `mk-*` bridge and the loopback. This is an accepted limit (Run 8.5, R6-1; `known-limits.md`).
 
 Address sets are filled from names in `infra/hosts/firewall/egress-names.conf` every 5 minutes and once at boot before Docker starts; each address stays for one hour.
 

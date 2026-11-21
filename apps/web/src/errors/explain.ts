@@ -175,18 +175,18 @@ const ENTRIES: Readonly<Record<ErrorCode, Entry>> = Object.freeze({
   },
   quarantined: {
     title: "The service is not open",
-    text: "The service is closed by its operator, as it is after a restore or during a deployment. Nothing can be read or changed until it is opened.",
+    text: "The service is closed by its operator, as it is after a restore or during a deployment. Changes are refused until it is opened.",
     next: "An operator opens it from the host (runbook service-gate.md).",
   },
   audit_unavailable: {
     title: "The action could not be recorded",
     text: "The service records every sensitive action before it performs it. The record could not be written, so the action was not performed.",
-    next: "Submit it once more in a minute. If it lasts, the operator's alert has fired already.",
+    next: "Submit it once more in a minute. If the same answer comes back, close the form and start the change again. If it lasts, the operator is alerted.",
   },
   dependency_unavailable: {
     title: "A part of the service is unavailable",
     text: "Something the service needs did not answer, and this request was not completed.",
-    next: "Look at the current state, then submit the same request once more in a minute. The service does not do the same request twice.",
+    next: "Look at the current state, then submit the same request once more in a minute. The service does not do the same request twice. If the same answer comes back, close the form and start the change again.",
   },
   capacity_exceeded: {
     title: "No room for this",
