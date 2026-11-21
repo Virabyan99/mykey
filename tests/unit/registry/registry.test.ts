@@ -141,8 +141,13 @@ describe("evidence registry", () => {
     expect(registry.items.filter((item) => !["F", "R"].includes(item.gate as string))).toEqual([]);
   });
 
-  it("claims no PASS, and backs every other claim with a file that exists", () => {
-    expect(registry.items.filter((item) => item.status === "PASS")).toEqual([]);
+  it("claims PASS only with the release manifest among its evidence, and backs every other claim with a file that exists", () => {
+    // Run 8.7: the manifest of Session 8 set the first PASS statuses.
+    const passed = registry.items.filter((item) => item.status === "PASS");
+    expect(passed.length).toBeGreaterThan(0);
+    for (const item of passed) {
+      expect(item.evidence, item.id).toContain("docs/evidence/session-8/manifest.md");
+    }
     const claimed = registry.items.filter((item) => item.status !== "OPEN");
     expect(claimed.map((item) => item.id)).toContain("PO-24");
     for (const item of claimed) {
@@ -175,7 +180,10 @@ describe("evidence:verify", () => {
     expect(tamper((copy) => copy.items.splice(5, 1)).join("\n")).toMatch(/FR-1\.06/);
     expect(tamper((copy) => copy.items.push(copy.items[0]!)).join("\n")).toMatch(/FR-1\.01/);
     expect(tamper((copy) => (copy.items[0]!.ownerRun = "12.1")).join("\n")).toMatch(/12\.1/);
-    expect(tamper((copy) => (copy.items[0]!.status = "PASS")).join("\n")).toMatch(/PASS/);
+    const spike = registry.items.findIndex((item) => item.status === "SPIKE_PASS");
+    expect(tamper((copy) => (copy.items[spike]!.status = "PASS")).join("\n")).toMatch(
+      /PASS needs docs\/evidence\/session-8\/manifest\.md/,
+    );
     expect(
       tamper((copy) => {
         copy.items[0]!.status = "SPIKE_PASS";

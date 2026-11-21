@@ -260,7 +260,8 @@ export function buildManifest(input: ManifestInput): Manifest {
       statuses.set(item.id, "PASS");
       details.set(item.id, `by ${scenarios.join(", ")}`);
     } else {
-      statuses.set(item.id, item.status);
+      // A PASS that a scenario no longer earns is not kept from an earlier --apply.
+      statuses.set(item.id, item.status === "PASS" ? "OPEN" : item.status);
       details.set(
         item.id,
         scenarios.length === 0

@@ -537,66 +537,6 @@
         }
       ]
     },
-    "AC-1.18": {
-      "files": [
-        {
-          "path": "tests/integration/credentials/issue.test.ts",
-          "kind": "ci"
-        },
-        {
-          "path": "tests/integration/credentials/protocol.test.ts",
-          "kind": "ci"
-        },
-        {
-          "path": "tests/integration/credentials/inventory.test.ts",
-          "kind": "ci"
-        },
-        {
-          "path": "tests/integration/credentials/surfaces.test.ts",
-          "kind": "ci"
-        },
-        {
-          "path": "tests/integration/credentials/sweep.test.ts",
-          "kind": "ci"
-        },
-        {
-          "path": "tests/integration/credentials/revoke.test.ts",
-          "kind": "ci"
-        },
-        {
-          "path": "tests/integration/openbao/issuance.test.ts",
-          "kind": "ci"
-        },
-        {
-          "path": "tests/integration/machine/native-scope.test.ts",
-          "kind": "ci"
-        },
-        {
-          "path": "tests/integration/machine/authentication.test.ts",
-          "kind": "ci"
-        },
-        {
-          "path": "tests/unit/probe/evaluate-v2.test.ts",
-          "kind": "ci"
-        },
-        {
-          "path": "tests/unit/hosts/checks.test.ts",
-          "kind": "ci"
-        },
-        {
-          "path": "tests/browser/credentials.test.ts",
-          "kind": "ci"
-        },
-        {
-          "path": "tests/staging/alerts.staging.test.ts",
-          "kind": "staging"
-        },
-        {
-          "path": "tests/staging/credentials.staging.test.ts",
-          "kind": "staging"
-        }
-      ]
-    },
     "AC-1.19": {
       "files": [
         {
@@ -1278,42 +1218,6 @@
         }
       ]
     },
-    "AC-1.40": {
-      "files": [
-        {
-          "path": "tests/fault/credentials/issuance.test.ts",
-          "kind": "ci"
-        },
-        {
-          "path": "tests/fault/credentials/revocation.test.ts",
-          "kind": "ci"
-        },
-        {
-          "path": "tests/fault/credentials/archive.test.ts",
-          "kind": "ci"
-        },
-        {
-          "path": "tests/integration/credentials/issue.test.ts",
-          "kind": "ci"
-        },
-        {
-          "path": "tests/integration/credentials/protocol.test.ts",
-          "kind": "ci"
-        },
-        {
-          "path": "tests/integration/credentials/sweep.test.ts",
-          "kind": "ci"
-        },
-        {
-          "path": "tests/integration/credentials/reconcile.test.ts",
-          "kind": "ci"
-        },
-        {
-          "path": "tests/staging/credentials.staging.test.ts",
-          "kind": "staging"
-        }
-      ]
-    },
     "AC-1.41": {
       "files": [
         {
@@ -1708,75 +1612,6 @@
           "kind": "review"
         }
       ]
-    },
-    "AC-1.57": {
-      "files": [
-        {
-          "path": "tests/staging/workspace.staging.test.ts",
-          "kind": "staging"
-        },
-        {
-          "path": "tests/staging/identity.staging.test.ts",
-          "kind": "staging"
-        },
-        {
-          "path": "tests/staging/credentials.staging.test.ts",
-          "kind": "staging"
-        },
-        {
-          "path": "tests/staging/reconcile.staging.test.ts",
-          "kind": "staging"
-        },
-        {
-          "path": "tests/staging/alerts.staging.test.ts",
-          "kind": "staging"
-        },
-        {
-          "path": "tests/staging/status.staging.test.ts",
-          "kind": "staging"
-        },
-        {
-          "path": "tests/staging/unseal.staging.test.ts",
-          "kind": "staging"
-        },
-        {
-          "path": "tests/staging/key-loss.staging.test.ts",
-          "kind": "staging"
-        },
-        {
-          "path": "tests/staging/backup.staging.test.ts",
-          "kind": "staging"
-        },
-        {
-          "path": "tests/integration/restore/full.test.ts",
-          "kind": "ci"
-        },
-        {
-          "path": "tests/fault/restore/interrupted.test.ts",
-          "kind": "ci"
-        },
-        {
-          "path": "tests/restore/retention/fixture.cloud.test.ts",
-          "kind": "cloud"
-        },
-        {
-          "path": "tests/restore/retention/cleanup.cloud.test.ts",
-          "kind": "cloud"
-        },
-        {
-          "path": "tests/unit/registry/release-manifest.test.ts",
-          "kind": "ci"
-        }
-      ],
-      "earlier": {
-        "evidence": "docs/evidence/session-6/run-6.8.md",
-        "changedSince": "The clean-host quarantine restore and current-owner recovery ran once in the drill of Run 6.8 (cab44aa, 18 Nov 2026, host-v0.6.1); the aged-lock half is AC-1.36's earlier item (Run 6.6, D-04). Since the drill: packages/backup/src/restore.ts and scripts/host-restore.ts unchanged, no migration after 0018; 945322d, 2a4d66c (first opening of a host with a real owner; production gets its OpenBao and KMS), f100a5c, 7766848, 054a80c, 77d40e5.",
-        "covering": [
-          "tests/integration/restore/full.test.ts",
-          "tests/fault/restore/interrupted.test.ts",
-          "tests/restore/retention/fixture.cloud.test.ts"
-        ]
-      }
     },
     "PO-1": {
       "files": [
@@ -2272,34 +2107,6 @@
         }
       ]
     },
-    "PO-18": {
-      "files": [
-        {
-          "path": "tests/fault/credentials/issuance.test.ts",
-          "kind": "ci"
-        },
-        {
-          "path": "tests/fault/credentials/archive.test.ts",
-          "kind": "ci"
-        },
-        {
-          "path": "tests/integration/credentials/reconcile.test.ts",
-          "kind": "ci"
-        },
-        {
-          "path": "tests/integration/credentials/sweep.test.ts",
-          "kind": "ci"
-        },
-        {
-          "path": "tests/integration/lifecycle/archive.test.ts",
-          "kind": "ci"
-        },
-        {
-          "path": "tests/staging/credentials.staging.test.ts",
-          "kind": "staging"
-        }
-      ]
-    },
     "PO-19": {
       "files": [
         {
@@ -2636,10 +2443,14 @@
     }
   },
   "notProven": {
+    "AC-1.18": "The staging drill (until Run 8.7 the second test of credentials.staging.test.ts, now credential-drill.staging.test.ts: 'an issuance left unknown raises operations_unresolved and is settled by quiesce → reconcile-credentials → resume') was red on host-v0.8.1: 20 attempts in two runs (21 Nov 2026, 13:14 and 13:45 UTC) caught no issuance after its marker. Its pause of OpenBao lands over SSH between 2.5 and 3.4 s after it is sent, so the five shots aimed at the last landing either finished first (201), were refused busy, or were caught before the marker (correctly 503 dependency_unavailable); the window after the marker is one OpenBao call. The same fault at the exact point is proven on CI by tests/fault/credentials/issuance.test.ts; the journey that shared its file (issue, inventory, replay, revoke, the search for the token) is credentials.staging.test.ts and is green. Re-aiming the drill is Session 9's (report.md). Its other files were green on the candidate: ci: tests/integration/credentials/issue.test.ts; ci: tests/integration/credentials/protocol.test.ts; ci: tests/integration/credentials/inventory.test.ts; ci: tests/integration/credentials/surfaces.test.ts; ci: tests/integration/credentials/sweep.test.ts; ci: tests/integration/credentials/revoke.test.ts; ci: tests/integration/openbao/issuance.test.ts; ci: tests/integration/machine/native-scope.test.ts; ci: tests/integration/machine/authentication.test.ts; ci: tests/unit/probe/evaluate-v2.test.ts; ci: tests/unit/hosts/checks.test.ts; ci: tests/browser/credentials.test.ts; staging: tests/staging/alerts.staging.test.ts.",
     "AC-1.25": "The stopped checker (probe-watch) is proven by the verdict's unit test (tests/unit/probe/watch.test.ts) and a hand run with the probe's cron removed in Run 6.4; no file runs the real watcher against a stopped probe.",
     "AC-1.26": "'A revoked certificate prevents unseal' ran once, in Run 2.7 (12 Nov 2026, the owner deleted staging-seal-1 in the console); on a rerun unseal.staging.test.ts only checks that the old key is gone and the current certificate unseals. 'Certificate reissued without old host' is the drill of Run 6.8 only. The expired-certificate case is checkpoint kms-cert-expiry (due 12 Dec 2026), not run.",
     "AC-1.36": "'Referenced KMS key destruction refused' has no test: unseal.staging.test.ts ('rights are what was granted') shows only that the seal certificate cannot create a key, and keyReadable reports a destroyed key; no file tries to destroy a referenced key.",
+    "AC-1.40": "The staging drill (until Run 8.7 the second test of credentials.staging.test.ts, now credential-drill.staging.test.ts: 'an issuance left unknown raises operations_unresolved and is settled by quiesce → reconcile-credentials → resume') was red on host-v0.8.1: 20 attempts in two runs (21 Nov 2026, 13:14 and 13:45 UTC) caught no issuance after its marker. Its pause of OpenBao lands over SSH between 2.5 and 3.4 s after it is sent, so the five shots aimed at the last landing either finished first (201), were refused busy, or were caught before the marker (correctly 503 dependency_unavailable); the window after the marker is one OpenBao call. The same fault at the exact point is proven on CI by tests/fault/credentials/issuance.test.ts; the journey that shared its file (issue, inventory, replay, revoke, the search for the token) is credentials.staging.test.ts and is green. Re-aiming the drill is Session 9's (report.md). Its other files were green on the candidate: ci: tests/fault/credentials/issuance.test.ts; ci: tests/fault/credentials/revocation.test.ts; ci: tests/fault/credentials/archive.test.ts; ci: tests/integration/credentials/issue.test.ts; ci: tests/integration/credentials/protocol.test.ts; ci: tests/integration/credentials/sweep.test.ts; ci: tests/integration/credentials/reconcile.test.ts.",
     "AC-1.52": "The owner's hour starts from an operator reset of the existing staging owner; install/deploy and bootstrap are proven by the agent's automated files (deploy.staging, api.staging, ops/bootstrap), not executed independently by the owner.",
-    "AC-1.55": "'Delayed events' (a row committed late into a day already counted) are not simulated for the summary; metrics.test.ts writes the earlier days' rows directly before reading."
+    "AC-1.55": "'Delayed events' (a row committed late into a day already counted) are not simulated for the summary; metrics.test.ts writes the earlier days' rows directly before reading.",
+    "AC-1.57": "The staging drill (until Run 8.7 the second test of credentials.staging.test.ts, now credential-drill.staging.test.ts: 'an issuance left unknown raises operations_unresolved and is settled by quiesce → reconcile-credentials → resume') was red on host-v0.8.1: 20 attempts in two runs (21 Nov 2026, 13:14 and 13:45 UTC) caught no issuance after its marker. Its pause of OpenBao lands over SSH between 2.5 and 3.4 s after it is sent, so the five shots aimed at the last landing either finished first (201), were refused busy, or were caught before the marker (correctly 503 dependency_unavailable); the window after the marker is one OpenBao call. The same fault at the exact point is proven on CI by tests/fault/credentials/issuance.test.ts; the journey that shared its file (issue, inventory, replay, revoke, the search for the token) is credentials.staging.test.ts and is green. Re-aiming the drill is Session 9's (report.md). Its other files were green on the candidate: staging: tests/staging/workspace.staging.test.ts; staging: tests/staging/identity.staging.test.ts; staging: tests/staging/reconcile.staging.test.ts; staging: tests/staging/alerts.staging.test.ts; staging: tests/staging/status.staging.test.ts; staging: tests/staging/unseal.staging.test.ts; staging: tests/staging/key-loss.staging.test.ts; staging: tests/staging/backup.staging.test.ts; ci: tests/integration/restore/full.test.ts; ci: tests/fault/restore/interrupted.test.ts; cloud: tests/restore/retention/fixture.cloud.test.ts; cloud: tests/restore/retention/cleanup.cloud.test.ts; ci: tests/unit/registry/release-manifest.test.ts. Its earlier item (docs/evidence/session-6/run-6.8.md) stands as recorded.",
+    "PO-18": "The staging drill (until Run 8.7 the second test of credentials.staging.test.ts, now credential-drill.staging.test.ts: 'an issuance left unknown raises operations_unresolved and is settled by quiesce → reconcile-credentials → resume') was red on host-v0.8.1: 20 attempts in two runs (21 Nov 2026, 13:14 and 13:45 UTC) caught no issuance after its marker. Its pause of OpenBao lands over SSH between 2.5 and 3.4 s after it is sent, so the five shots aimed at the last landing either finished first (201), were refused busy, or were caught before the marker (correctly 503 dependency_unavailable); the window after the marker is one OpenBao call. The same fault at the exact point is proven on CI by tests/fault/credentials/issuance.test.ts; the journey that shared its file (issue, inventory, replay, revoke, the search for the token) is credentials.staging.test.ts and is green. Re-aiming the drill is Session 9's (report.md). Its other files were green on the candidate: ci: tests/fault/credentials/issuance.test.ts; ci: tests/fault/credentials/archive.test.ts; ci: tests/integration/credentials/reconcile.test.ts; ci: tests/integration/credentials/sweep.test.ts; ci: tests/integration/lifecycle/archive.test.ts."
   }
 }

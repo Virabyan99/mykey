@@ -1,5 +1,5 @@
 # Canary sweep on staging (Run 8.4, P-152)
-# 2026-11-20T13:26:01.748Z; project 53df369a-beec-4872-9712-dd2d1b1c0cce, environment 98444645-31d5-4c67-aa62-122003bb885a; seeded from 2026-11-20T13:22:39.914Z
+# 2026-11-21T13:13:40.689Z; project 4b874d04-8520-454c-8de4-042f34e7a58e, environment c1095613-c690-4309-a867-18b96cf929d7; seeded from 2026-11-21T13:10:10.533Z
 # needles: backup_password, machine_token, maintenance_password, password, recovery_code, reset_token, root_token, session, totp_seed, value
 # Values reach the host on fd 3 of the search, never an argument; only counts come back.
 # surface | needles searched | needles found | kinds found | controls found
