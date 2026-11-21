@@ -20,7 +20,7 @@ The project is in **Stage 1**, a 14-day plan of nine sessions.
 
 ## Where we stand
 
-_Last updated: 20 Nov 2026, after the Session 7 merge (PR #19) and its two owner answers._
+_Last updated: 21 Nov 2026, at the Session 8 gate (PR #22), Gate R asked._
 
 | Session | Topic                                       | State                               |
 | ------- | ------------------------------------------- | ----------------------------------- |
@@ -31,10 +31,21 @@ _Last updated: 20 Nov 2026, after the Session 7 merge (PR #19) and its two owner
 | 5       | Machine access, CLI and API reference       | **Done** (PASS WITH ISSUES), merged |
 | 6       | Audit, limits, backup, recovery, deployment | **Done** (PASS WITH ISSUES), merged |
 | 7       | Web workspace                               | **Done** (PASS WITH ISSUES), merged |
-| 8       | Security review and controlled-use release  | Not started (needs its plan)        |
+| 8       | Security review and controlled-use release  | **Gate R asked** (D-67), not merged |
 | 9       | Real use, agent experiment, stage exit      | Not started                         |
 
-Each session's detail is in `docs/evidence/session-N/report.md`. Session 7's report has "What Sessions 8 and 9 must know", and Session 6's has the same for 7, 8 and 9: the Session 8 plan is built on both.
+Each session's detail is in `docs/evidence/session-N/report.md`. Session 8's report has "What Session 9 must know"; Gate R's document is `docs/evidence/session-8/gate-r.md`.
+
+### Session 8 (release)
+
+- **The candidate:** `host-v0.8.1` (`9af7051`) with `cli-v0.1.2`, recorded in `docs/evidence/session-8/candidate.json`.
+- **The release manifest** (`manifest.md`, built by `scripts/release-manifest.ts`):
+  - 144 PASS, 9 of them `earlier`;
+  - 9 NOT PROVEN, among them the staging drill of an unknown issuance (AC-1.18, 1.40, 1.57, PO-18), whose fault is proven only on CI;
+  - 7 NOT YET DUE (Gate F).
+- **Reviews:** six fresh-context reviews, no Critical or High. Their accepted Mediums and Lows are lines in `known-limits.md`.
+- **Production** has its own OpenBao and KMS key, closed, with no account. It opens only by `production.md` (`deploy --owner-confirmed`, D-64), after "approved".
+- **The owner wants the workspace's UI and UX reworked in Session 9** (first-visit navigation is poor; `walkthrough.md`).
 
 ### What the product has now (Session 7)
 
@@ -73,35 +84,31 @@ Each session's detail is in `docs/evidence/session-N/report.md`. Session 7's rep
 
 ### Hosts
 
-- **Staging** runs `host-v0.7.0` (`236083a`), gate open, timers installed. Its host files are those of the Session 7 gate (`host.ts staging push`).
-- **Production** (reinstalled 19 Nov 2026) runs `host-v0.6.3` **closed**:
-  - a closed v2 gate record;
-  - no OpenBao and no owner;
-  - migrations up to `0018`;
-  - in the probe as `inService: false`, with `checks_unknown` open (no OpenBao to read).
-  - its host files are those of the Session 7 gate (`host.ts prod push`, 20 Nov 2026, with the owner's word).
+- **Staging** runs `host-v0.8.1`, gate open (epoch 315), timers installed. Its host files are `d53254e`.
+- **Production** runs `host-v0.8.1` **closed** (epoch 3):
+  - its own OpenBao, unsealed by `mykey-prod-seal-1` (KMS domain `mykey-prod-kms`; the seal policy keeps five rights, create refused);
+  - custody in `~/.mykey/custody/prod/` and the password manager; backup timers; its first pair eligible;
+  - no account, no organization, no data; migrations up to `0018`;
+  - in the probe as `inService: false`, nothing open;
+  - its host files are `d53254e`.
 
   Production deploys need the owner's permission.
 
-- **Evidence registry:** 172 `SPIKE_PASS`, 19 `OPEN`, nothing `PASS`.
+- **Evidence registry:** 144 `PASS` (from the manifest only), 35 `SPIKE_PASS`, 12 `OPEN`.
 
 ### Open items
 
-- **Session 8:** its plan is written first.
-- **Carried to Session 8:**
-  - the thirteen Minor findings and two open questions of Session 7's review (its report);
-  - the resting custody root token (M1, Blocker candidate);
-  - `reconcile-credentials --all`;
-  - the OpenBao user lockout;
-  - review findings C–I;
-  - `CVE-2026-97054` in OpenBao and Traefik (HTTP/1 servers; reviewed into `.trivyignore.images`);
-  - the credential drill's fault placement is probabilistic.
+- **Owner:** Gate R ("approved" or not, D-67) and the merge of PR #22. Without "approved" nothing of Session 9 starts and production stays closed.
+- **Carried to Session 9** (Session 8's report, "What Session 9 must know"):
+  - the workspace's UI and UX, the owner's request; the project id is shown only in the address;
+  - the credential drill's aim (`credential-drill.staging.test.ts`): its pause over SSH misses the one-call window after the dispatch marker;
+  - the restore Mediums R4-2, R4-3, R4-4, R4-10 (restore code unchanged, P-150), before Run 9.7's drill;
+  - the reviewers' smallest change for M1 (R3-1, D-65): a dated root token, the recovery share out of the workstation's file (Stage 2).
 - **Dated:**
   - **Staging's KMS certificates expire on 12 Dec 2026** (staging seal at 10:50 UTC). Replace them before then (runbook `kms-and-unseal.md`). The checkpoint `kms-cert-expiry` is due from 12 Dec 09:57 UTC, and `certificate_expiring` opens 10 days before.
   - **Production's seal certificate `prod-seal-1` expires on 21 Dec 2026, 07:48 UTC** (issued 21 Nov 2026). Replace it before then, the same way, with production's names (`production.md`).
   - `.trivyignore.images` expires on 14 Dec 2026.
   - The checkpoint `pair-30-day` is due from 17 Dec 2026 19:00 UTC, before the 05:00 retention of 18 Dec.
-- **Owner:** nothing is open. OWN-4 is confirmed (20 Nov 2026): the two files of `~/.mykey/custody/staging/backup/` are also in the owner's password manager.
 
 ## Commands
 
@@ -144,6 +151,10 @@ MSYS_NO_PATHCONV=1 node scripts/host.ts <host> restore --source <host> --newest 
 MSYS_NO_PATHCONV=1 node scripts/host.ts <host> ops <command> [--flag v]   # operator commands (apps/ops) as maintenance over a tunnel
 MSYS_NO_PATHCONV=1 node scripts/host.ts <host> gate close|status            # a v2 gate opens only through deploy (below)
 node scripts/probe.ts deploy | secrets | state <host>   # the probe Worker
+MSYS_NO_PATHCONV=1 node scripts/host.ts prod deploy --release <dir> --owner-confirmed   # production with a real owner: after --stay-closed and the owner's journey (D-64)
+node scripts/release-candidate.ts --release <dir> --cli cli-vX.Y.Z | --deploy <host> --at <ISO> --epoch <n>   # candidate.json
+node scripts/release-manifest.ts [--apply]       # manifest.md from proof-map.json, results.json, candidate.json; --apply sets the registry (no force)
+node scripts/sweep-ci.ts <file>…                 # counts canary and token shapes in downloaded CI logs and reports
 node scripts/ci-scan.ts secrets | dependencies | images | selftest   # the CI scanners, locally
 ```
 
@@ -255,6 +266,7 @@ Scripts in `scripts/` and `infra/` are TypeScript run directly by Node (type str
   - The WSL VM keeps its memory after a job; quitting Docker Desktop (or `wsl --shutdown`) frees it.
   - After a killed job, find orphan vitest processes by command line (`Win32_Process`) and remove leftover `mykey-t-*` Compose projects.
   - Claude Code also stops background jobs when memory is short while the session is idle. It asks that they are not started again without the owner's word: report, and wait.
+- **After the owner has edited files, read every changed line before committing.** Session 8 committed the owner's in-place edit of a runbook (a real staging id), and the secret scan went red.
 - **Long or quoted text never goes through the shell.** A heredoc holding `'''`, a regex or non-ASCII text breaks. Write a script file with the editor tools and run that.
 
 ### CI and scans
@@ -290,6 +302,12 @@ Scripts in `scripts/` and `infra/` are TypeScript run directly by Node (type str
 - **CLI tests on Windows** run only through `pnpm run test:cli`. Its arguments may hold only letters, digits and `. _ / = -`: use `--testNamePattern=word`.
 - **The token sweep** (`token-sweep.staging.test.ts`): tokens are stored nowhere, so each test searches the tokens it holds, with a control per surface.
 - **Synthetic users:** sign-in lowercases e-mail, so synthetic users must be stored lower-case.
+
+- **A bound on the probe is its worst case, never a typical run** (Session 8). Doc 06 §12: a check every minute and a three-minute grace, counted from the last good observation; the evaluation comes a minute later and the cron can run a minute late. `kms_unreachable` opened at 292 and 300 s, and the blackout's `health_failing` at 304 s: the tests now allow 410 s and 360 s. A drill's cause must outlast the window in which its alert is looked for.
+- **A pause sent over SSH cannot hit a one-call window.** It lands 2.5 to 3.4 s after it is sent. The credential drill caught nothing in 20 attempts on `host-v0.8.1`, and `reconcile` missed once. The exact placement is proven by `tests/fault`; a staging drill needs a trigger on the host.
+- **One staging file, one fate.** A red test makes every id that names its file unproven. Keep a probabilistic drill in a file of its own (`credential-drill.staging.test.ts`).
+- **`probe.staging`'s blackout darkens staging for 8 minutes** (480 s, restored by a timer). Nothing else may run then, and a unit that runs during it (`mykey-sweep`) fails once.
+- **The release manifest (Session 8).** PASS comes only from `scripts/release-manifest.ts --apply`. After an apply the registry holds PASS, so rerun the manifest after any change to `proof-map.json` or `results.json`. Do the claims walk before the freeze: a false text on the page makes a new candidate.
 
 ### Browser tests (`tests/browser`, harness `tests/harness/web.ts`)
 

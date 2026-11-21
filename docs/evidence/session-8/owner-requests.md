@@ -42,6 +42,8 @@ The first-run walk of Run 8.8 on staging, with an authenticator application and 
 
 Read `docs/evidence/session-8/gate-r.md`, answer "approved" or not, and say "merge".
 
+**Asked:** 21 Nov 2026, with the manifest built (144 PASS, 9 NOT PROVEN, 7 NOT YET DUE). The answer goes here and into D-67, with its date.
+
 ## 5. Only if the agent says so
 
 The repository secret `PROBE_READ_TOKEN`, needed again only when `probe.ts secrets` has to run.
