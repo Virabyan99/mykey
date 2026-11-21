@@ -36,12 +36,15 @@ What a token can read, how to replace one (issue the new one, then revoke the ol
 
 `consumer-local.md`, steps 1 to 10:
 
-- download and check the release `cli-v0.1.2`, then install it;
-- name the service and the environment;
-- store the token on standard input, into a file only you can read;
+- download and check the release `cli-v0.1.2`, then install it. The repository is public: without `gh`, step 1 has the same downloads with `curl`;
+- name the service and the environment:
+  - the service is this page's address (on staging `https://mykey-staging.nomikey.com`);
+  - the **project's id** is the part of the workspace's address after `/p/` (not the one after `/o/` or `/e/`);
+  - the environment is its name, `development`;
+- store the token on standard input, into a file only you can read. The pasted token stays on the screen, so never copy that terminal into a chat or a screenshot (`stty -echo` keeps it off);
 - start the application through `secrets-launch.sh`.
 
-To try it without an application of your own, start the fixture in `tests/fixtures/consumers/fastapi-app` or `next-app`.
+Without an application of your own, step 9 has a command that only lists the names it was started with.
 
 Then revoke the credential on the workspace's Machine credentials screen and start the application again. It must not start: the CLI exits with `denied` and runs nothing.
 
@@ -51,7 +54,15 @@ The **Activity** screen shows who issued and revoked the credential, and each ti
 
 ## 6. If the server is ever restored
 
-Read `restore.md`, "Between 7 and 8: the owner comes back". A restore resets every account and revokes every token. You get a new reset link (always the kind that enrols a new authenticator), then check one secret you know through a private tunnel before the service opens again. Every application needs a new token (`consumer-local.md`, "After a restore").
+If the server is ever rebuilt from a backup, this is what it asks of you:
+
+1. Every sign-in and every machine token stops working. Nothing old is let back in.
+2. The operator gives you a new reset link, the same kind as in step 1. It always enrols a new authenticator.
+3. The operator opens a private link that works only from their computer. Through it, you set a new password, enrol the new authenticator, open **one secret whose value you know** and check it, and try **one change**, which must be refused ("The service is not open"). Then you sign out.
+4. You tell the operator in one line that the value was right. Only then does the service open.
+5. Every application gets a new token (`consumer-local.md`, "After a restore").
+
+The operator's side of the same steps is `restore.md`, "Between 7 and 8: the owner comes back".
 
 ## 7. What the service does not do
 

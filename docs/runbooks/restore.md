@@ -56,7 +56,7 @@ New role passwords go where they were: `api_runtime` and `provisioner_runtime` o
 
 ## Between 7 and 8: the owner comes back
 
-Every account is `recovery_pending` and every machine token is revoked.
+Every account is `recovery_pending` and every machine token is revoked. The owner's part, in plain words, is `start-here.md`, step 6; give them that page, not this section.
 
 1. `host.ts <host> ops verify-organization --organization <id>` and `host.ts <host> ops reconcile-credentials --environment <id>` for every environment. Until step 9, `host.ts <host> ops` uses the restore's root token (`restore-root-token`): the snapshot replaced the token store the host's custody copy belonged to.
 2. `host.ts <host> ops reset-account --email <owner> --kind mfa` (`operator-accounts.md`). Give the link to the owner.

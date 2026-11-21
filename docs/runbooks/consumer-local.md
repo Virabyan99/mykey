@@ -4,7 +4,7 @@ How an application on your own Linux or macOS machine gets its secrets from MyKe
 
 Every shell block marked `<!-- rehearsed … -->` in this file is run, in order, by `tests/consumers/runbook.test.ts` on a clean Linux machine against staging (`pnpm run test:consumers`). If the file and the product drift apart, that test fails.
 
-- **Needs:** Linux (glibc) or macOS on x86_64 or arm64, `sh`, `curl`, `tar`, `sha256sum` or `shasum`, and `gh` signed in to GitHub with access to the repository. Windows is not supported (D-43).
+- **Needs:** Linux (glibc) or macOS on x86_64 or arm64, `sh`, `curl`, `tar`, and `sha256sum` or `shasum`. Windows is not supported (D-43); WSL is Linux. The repository is public, so step 1 needs no GitHub account: `gh` is one way, `curl` the other.
 - **Variables used below:**
   - `SECRETS_API_URL`, `SECRETS_PROJECT`, `SECRETS_ENVIRONMENT`: the service and the environment to read;
   - `APP_DIR`, `APP_START`: your application's directory and the command that starts it.
@@ -21,6 +21,18 @@ gh release download cli-v0.1.2 --repo Virabyan99/mykey --dir "$HOME/mykey-releas
 gh api -H "Accept: application/vnd.github.raw" \
   "repos/Virabyan99/mykey/contents/tests/fixtures/consumers/secrets-launch.sh?ref=cli-v0.1.2" \
   > "$HOME/mykey-release/secrets-launch.sh"
+```
+
+Without `gh` (`gh: not found`), the same four files with `curl`:
+
+```sh
+mkdir -p "$HOME/mykey-release"
+cd "$HOME/mykey-release"
+for f in install.sh mykey-cli-0.1.2.tgz SHA256SUMS; do
+  curl --proto '=https' -fsSLO "https://github.com/Virabyan99/mykey/releases/download/cli-v0.1.2/$f"
+done
+curl --proto '=https' -fsSL -o secrets-launch.sh \
+  "https://raw.githubusercontent.com/Virabyan99/mykey/cli-v0.1.2/tests/fixtures/consumers/secrets-launch.sh"
 ```
 
 ## 2. Check the files
@@ -57,13 +69,17 @@ export PATH="$HOME/.local/bin:$PATH"
 
 ## 5. Name the service and the environment
 
-`SECRETS_PROJECT` is the project's id and `SECRETS_ENVIRONMENT` the environment's name. `APP_START` is the command that starts your application, and `APP_DIR` is the directory it starts in.
+`SECRETS_PROJECT` is the project's id and `SECRETS_ENVIRONMENT` the environment's name. `APP_START` is the command that starts your application, and `APP_DIR` is the directory it starts in. The values below are examples: replace every one.
+
+- **The project's id** is in the workspace's address, on any screen of the project: `…/o/<organization id>/p/<project id>/e/<environment id>`. Take the segment **after `/p/`**. Either of the other two (the organization's, or the environment's) answers `denied … 404 (code: not_found)`.
+- **The environment** is its name, as the workspace shows it (`development`), not the id after `/e/`.
+- **No application yet?** Leave `APP_DIR` and `APP_START` out, and in step 9 start a command that prints only the names it was given (below).
 
 <!-- rehearsed: provided -->
 
 ```sh
-export SECRETS_API_URL="https://mykey.example"
-export SECRETS_PROJECT="<project id>"
+SECRETS_API_URL="https://mykey-staging.nomikey.com"
+export SECRETS_PROJECT="b75ad1e7-424a-4f3a-a59b-58eaa8f424f1"
 export SECRETS_ENVIRONMENT="development"
 export APP_DIR="$HOME/my-app"
 export APP_START="npm start"
@@ -87,7 +103,9 @@ The owner issues a token for the environment, with a name and a lifetime: "Issue
 
 ## 8. Store the token
 
-Run the block, paste the token, press Enter, then Ctrl-D. The token is typed into `cat`, not into the shell, so it is in no shell history and no command's arguments. The file is readable by you alone:
+Run the block, paste the token, press Enter, then Ctrl-D. The token is typed into `cat`, not into the shell, so it is in no shell history and no command's arguments. The file is readable by you alone.
+
+**The pasted token stays on the screen.** Do not copy that terminal into a chat, a ticket or a screenshot. To keep it off the screen, type `stty -echo` before the block and `stty echo` after it. A token that was shown to anyone is revoked and replaced (`machine-credentials.md`).
 
 <!-- rehearsed: stdin -->
 
@@ -104,6 +122,12 @@ Run the block, paste the token, press Enter, then Ctrl-D. The token is typed int
 ```sh
 cd "$APP_DIR"
 secrets-launch.sh -- sh -c "exec $APP_START"
+```
+
+Without an application, a command that lists the names it was started with, never a value. The environment's secret names appear among the shell's own:
+
+```sh
+secrets-launch.sh -- sh -c 'echo "started; these names are set:"; env | cut -d= -f1 | sort'
 ```
 
 ## 10. Check
