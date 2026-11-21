@@ -78,8 +78,8 @@ export PATH="$HOME/.local/bin:$PATH"
 <!-- rehearsed: provided -->
 
 ```sh
-SECRETS_API_URL="https://mykey-staging.nomikey.com"
-export SECRETS_PROJECT="b75ad1e7-424a-4f3a-a59b-58eaa8f424f1"
+export SECRETS_API_URL="https://mykey.example"
+export SECRETS_PROJECT="<project id>"
 export SECRETS_ENVIRONMENT="development"
 export APP_DIR="$HOME/my-app"
 export APP_START="npm start"
