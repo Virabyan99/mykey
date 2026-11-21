@@ -124,6 +124,8 @@ export function scenarioRequirements(doc04: string): Map<string, string[]> {
 function allowedChange(path: string, candidate: Candidate): boolean {
   if (path.startsWith("tests/") || path.startsWith("docs/") || path.startsWith(".github/"))
     return true;
+  // A document at the root (CLAUDE.md, README.md) builds nothing either.
+  if (/^[^/]+\.md$/.test(path)) return true;
   if (/^scripts\/registry-[^/]+\.ts$/.test(path)) return true;
   if (path === "scripts/release-manifest.ts" || path === "scripts/sweep-ci.ts") return true;
   return (candidate.tooling ?? []).some(

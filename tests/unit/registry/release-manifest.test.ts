@@ -168,6 +168,7 @@ describe("release-manifest", () => {
       ["tests/unit/x.test.ts", "docs/evidence/session-8/run-8.7.md", ".github/workflows/ci.yml"],
       ["scripts/release-manifest.ts", "scripts/registry-verify.ts", "scripts/sweep-ci.ts"],
       ["scripts/host.ts"], // listed under tooling in candidate.json
+      ["CLAUDE.md", "README.md"], // documents at the root build nothing (Run 8.7)
     ]) {
       expect(
         buildManifest(input(map, at(later), { changedPaths: () => allowed })).problems,
