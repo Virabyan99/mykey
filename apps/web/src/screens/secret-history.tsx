@@ -3,6 +3,7 @@
 // server gives it, and a version nobody of the product wrote says "unknown",
 // never a guess and never a blank. Delete, undelete and restore sit behind
 // the typed confirmation and name the version and tag the page last read.
+import { ACTIONS } from "../copy/actions.ts";
 import { useQuery } from "@tanstack/react-query";
 import { LIMITS, type SecretsHistoryBody } from "@mykey/contracts";
 import { useState } from "react";
@@ -235,24 +236,13 @@ export function ChangeDialog(props: {
       onConfirm={() => void send()}
       onCancel={props.onCancel}
     >
-      {change.kind === "delete" ? (
-        <p>
-          Version {expected.version} stops being readable, by people and by machines. No older
-          version takes its place: the name then has no value. It can be undeleted while it is among
-          the last {LIMITS.secret.versionsKept} versions.
-        </p>
-      ) : change.kind === "undelete" ? (
-        <p>
-          Version {expected.version} becomes the current value again, readable as before. No new
-          version is made.
-        </p>
-      ) : (
-        <p>
-          The value of version {change.source} is written as a new version on top of version{" "}
-          {expected.version}. Nothing is removed: version {expected.version} and the versions before
-          it stay in the history.
-        </p>
-      )}
+      <p>
+        {change.kind === "delete"
+          ? ACTIONS.deleteSecret(expected.version)
+          : change.kind === "undelete"
+            ? ACTIONS.undeleteSecret(expected.version)
+            : ACTIONS.restoreVersion(change.source, expected.version)}
+      </p>
       {action.failure === null ? null : (
         <ErrorPanel failure={action.failure} action={`${confirm.toLowerCase()} the secret`} />
       )}

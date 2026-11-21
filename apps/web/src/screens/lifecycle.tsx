@@ -3,6 +3,7 @@
 // revoke, and which needs the resource's name typed. What the dialog counts
 // is read when it opens, from the same lists the owner can open; a number
 // that could not be read is said to be unread, never shown as 0.
+import { ACTIONS } from "../copy/actions.ts";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { LIMITS, type OperationResponse } from "@mykey/contracts";
 import { CallError, call, type CallResult } from "../api/client.ts";
@@ -99,20 +100,6 @@ function Total(props: {
   );
 }
 
-const ARCHIVE_TEXT: Readonly<Record<Target["kind"], string>> = {
-  environment:
-    "Archiving revokes every active machine credential of this environment at once: its consumers can no longer read. An issuance that is not finished is withdrawn. The secrets and their history are kept and can still be read here. Nothing is deleted.",
-  project:
-    "Archiving revokes every active machine credential of every environment of this project at once: their consumers can no longer read. An issuance that is not finished is withdrawn. The secrets and their history are kept and can still be read here. Nothing is deleted.",
-};
-
-const REACTIVATE_TEXT: Readonly<Record<Target["kind"], string>> = {
-  environment:
-    "Reactivating opens this environment for writes and for new machine credentials again. Its revoked credentials stay revoked: each consumer needs a new one.",
-  project:
-    "Reactivating opens this project again, with the environments that were archived with it; an environment that was archived on its own stays archived. Their revoked credentials stay revoked: each consumer needs a new one.",
-};
-
 const routeOf = (target: Target, verb: "archive" | "reactivate") =>
   target.kind === "project" ? (`projects.${verb}` as const) : (`environments.${verb}` as const);
 const paramsOf = (target: Target): Record<string, string> => ({
@@ -172,7 +159,7 @@ export function ArchiveDialog(props: {
       onConfirm={() => void archive()}
       onCancel={props.onCancel}
     >
-      <p>{ARCHIVE_TEXT[target.kind]}</p>
+      <p>{ACTIONS.archive[target.kind]}</p>
       {facts.isPending ? <Loading what="what the archive revokes" /> : null}
       {facts.isError ? (
         <p>
@@ -246,7 +233,7 @@ export function ReactivateDialog(props: {
       onConfirm={() => void reactivate()}
       onCancel={props.onCancel}
     >
-      <p>{REACTIVATE_TEXT[target.kind]}</p>
+      <p>{ACTIONS.reactivate[target.kind]}</p>
       {action.failure === null ? null : (
         <ErrorPanel failure={action.failure} action={`reactivate the ${target.kind}`} />
       )}

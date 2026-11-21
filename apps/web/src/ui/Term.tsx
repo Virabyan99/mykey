@@ -10,16 +10,16 @@
 import { webPath } from "@mykey/contracts";
 import { useEffect, useId, useRef, type ReactNode } from "react";
 import { createPortal } from "react-dom";
+import { GLOSSARY, type GlossaryId } from "../copy/glossary.ts";
 import { Link } from "../router.tsx";
 
 export function Term(props: {
+  /** The entry of copy/glossary.ts. */
+  id: GlossaryId;
   /** The word as it stands in the sentence. */
   children: ReactNode;
-  /** The definition, from copy/glossary.ts. */
-  definition: string;
-  /** The article that explains it. */
-  article: string;
 }) {
+  const entry = GLOSSARY[props.id];
   const id = useId();
   const button = useRef<HTMLButtonElement>(null);
   return (
@@ -29,9 +29,9 @@ export function Term(props: {
       </button>
       {createPortal(
         <div id={id} popover="auto" className="pop" role="note">
-          <p>{props.definition}</p>
+          <p>{entry.definition}</p>
           <p>
-            <Link to={webPath("help-article", { article: props.article })}>Read more</Link>
+            <Link to={webPath("help-article", { article: entry.article })}>Read more</Link>
           </p>
         </div>,
         document.body,

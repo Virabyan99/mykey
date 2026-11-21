@@ -5,6 +5,7 @@
 // hides the tab, leaves the screen or signs out. It cannot be shown again,
 // and the page says so before and after. A row whose outcome is open is
 // settled by an operator: the page offers nothing on it.
+import { ACTIONS } from "../copy/actions.ts";
 import { useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
 import { LIMITS, checkProjectName, type CredentialView } from "@mykey/contracts";
 import { useId, useState, type SyntheticEvent } from "react";
@@ -129,8 +130,8 @@ function IssueForm(props: {
         <h2>New credential</h2>
         <p>
           A credential lets one consumer read the complete secret set of this environment, and
-          nothing else. Its token is shown once, right after it is issued. Issuing needs a code from
-          your authenticator of the last ten minutes.
+          nothing else. {ACTIONS.issue} Issuing needs a code from your authenticator of the last ten
+          minutes.
         </p>
         {blocked === null ? null : <p role="status">{blocked}</p>}
         <Field
@@ -211,13 +212,9 @@ function RevokeDialog(props: {
       onConfirm={() => void revoke()}
       onCancel={props.onCancel}
     >
-      <p>
-        The token of this credential is refused from the moment the server answers. A consumer that
-        still uses it can no longer read its secrets.
-      </p>
-      <p>
-        A revocation cannot be undone. To give the consumer access again, issue a new credential.
-      </p>
+      {ACTIONS.revoke.map((line) => (
+        <p key={line}>{line}</p>
+      ))}
       {action.failure === null ? null : (
         <ErrorPanel failure={action.failure} action="revoke the credential" />
       )}

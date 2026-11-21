@@ -3,6 +3,7 @@
 // need a code from the last ten minutes; when the server says so, the
 // step-up dialog asks for one, and the owner then sends the change again
 // with the same button. The page never sends it for them.
+import { ACTIONS } from "../copy/actions.ts";
 import { useQuery } from "@tanstack/react-query";
 import { LIMITS } from "@mykey/contracts";
 import { useRef, useState, type SyntheticEvent } from "react";
@@ -129,7 +130,7 @@ function Sessions() {
       <ConfirmButton
         label="End every session"
         confirm="Yes, end every session"
-        warning="Every session of this account ends, this one included. You sign in again afterwards."
+        warning={ACTIONS.endEverySession}
         disabled={busy}
         onConfirm={() => {
           void endAll();
@@ -279,7 +280,7 @@ function Recovery() {
         <ConfirmButton
           label="Make new recovery codes"
           confirm="Yes, replace my recovery codes"
-          warning="Every recovery code you have now stops working, used or not."
+          warning={ACTIONS.newRecoveryCodes}
           disabled={busy}
           onConfirm={() => {
             void make();
