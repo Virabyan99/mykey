@@ -103,13 +103,9 @@ FR-1.75 (P-130). This is an honest list: each line names what the service does n
   Without the seal key there is no restore at all (Run 2.7, D-56, `custody-map.md`).
 
 - **A restore resets everyone.** Every account returns to `recovery_pending` and every machine token is revoked: every person needs an operator reset of kind `mfa`, and every consumer needs a new token (D-55, Run 8.6).
-- **After a restore no root token is left.** The restore revokes the source's, and `--open` revokes its own. Until one is made with the source's recovery key, `host.ts <host> ops`, a deploy and a restore of the host's own later pairs cannot use OpenBao (Run 8.5, R4-2; Gate R; carried to Session 9).
-- **A deploy could open a restored host with the deploy's checks alone.** Only the standalone `gate open` refuses a restore's record; today the dead root token stops such a deploy first (Run 8.5, R4-7; carried with R4-2).
-- **An interrupted restore can be run again only before its OpenBao step.** After that step the target's root token is gone, and a rerun needs OpenBao wiped and initialised again (Run 8.5, R4-3; Gate R; carried to Session 9).
-- **A finished restore's state file can stay behind.** If `--open` stops after opening the gate, `restore-state.json` stays, and a later restore of the same pair skips its refusal of a serving host: check that the file is gone after `--open` (Run 8.5, R4-4; Gate R; carried to Session 9).
-- **A host cannot be restored onto its own reinstalled server by the runbook.** The new server's init answer and the lost host's share one custody path, and `bao-init` refuses to overwrite it (Run 8.5, R4-10; Gate R; carried to Session 9).
-- **A restore onto another name installs the source's backup password.** The target's later pairs use it while its custody copy keeps the old one, so those pairs cannot be restored from custody (Run 8.5, R4-13; carried with R4-2).
-- **The target's timers run during a restore.** The nightly backup and the five-minute sweep can act on the restored data before `--open` (Run 8.5, R4-14; carried with R4-2).
+- **A rerun of a restore has two hours after its step 5.** The restore's own root token lasts two hours, and step 5 revokes the pair's. A rerun later than that finds no root token the target's OpenBao accepts, and OpenBao must be initialised anew (Run 9.7, which fixed R4-3).
+- **A restore onto another name installs the source's backup password.** The target's later pairs use it while its custody copy keeps the old one, so those pairs cannot be restored from custody (Run 8.5, R4-13; not closed by Run 9.7).
+- **The target's timers run during a restore.** The nightly backup and the five-minute sweep can act on the restored data before `--open` (Run 8.5, R4-14; not closed by Run 9.7).
 - **`restore-verify --journey` is not refused on production.** It would write the owner's new password and authenticator seed to the workstation; `restore.md` forbids it in words only (Run 8.5, R4-8).
 - **A report can open the gate again within its 30 minutes.** It is not bound to the gate's epoch: after a close, the same report reopens without a new journey (Run 8.5, R4-11).
 - **A restore takes about 42 minutes of work on staging's data**, of which `reconcile-credentials` is 27 minutes. It runs once per environment, about 19 s each (84 environments). There is no `--all` form: the restore code stays as Run 6.8's drill proved it (Run 6.8, `drill.json`; accepted in D-66, measured again by Run 9.7's drill).
@@ -121,7 +117,7 @@ FR-1.75 (P-130). This is an honest list: each line names what the service does n
 
 - **The drill borrowed production's empty server.** From the day production holds data, a drill needs a temporary server (OWN-5) (D-56).
 - **The ops image knows two host names**, `staging` and `prod`. On a third host every job fails closed (Run 6.8).
-- **The deploy reads OpenBao with the custody root token.** Once that token is revoked (M1) or made useless by a restore (R4-2), a deploy cannot fill `openbao_readable` or `incarnation_three_places` until another namespace-listing identity exists (Run 6.9).
+- **The deploy reads OpenBao with the custody root token.** Once that token is revoked (M1), a deploy cannot fill `openbao_readable` or `incarnation_three_places` until another namespace-listing identity exists (Run 6.9).
 - **The custody root token never expires.** It rests in `openbao-init.json` beside the single recovery share; whoever reads that file and reaches OpenBao is root in every namespace (D-65; Run 8.5, R3-1; Gate R).
 - **One operator, one workstation.** Custody copies, release builds and every host command live on the owner's workstation. Its loss is covered only by the owner's offline copies (OWN-4).
 - **Two workers may repeat a change, by design.** The provisioner retries an unclear OpenBao answer and takes over an operation whose heartbeat is 60 s old, and the archive tick drives an archive again; each compares before it acts (D-32, D-35, D-41; Run 8.5, R2-2).

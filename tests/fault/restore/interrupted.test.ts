@@ -5,7 +5,14 @@
 // check ok. Before anything is written, a restore refuses a target that holds
 // another database, a pair whose KMS key is not usable here, and a
 // globals.sql that creates a role nobody listed.
-import { existsSync, readFileSync, renameSync, writeFileSync } from "node:fs";
+//
+// Run 9.7 (Session 8's review R4-2, R4-3): the target's OpenBao is now one
+// instance for all the runs of a target, as a host's is, so a rerun meets
+// the store the stopped run left. After the last run, generate-root with the
+// source's recovery key makes the restored OpenBao's next root token.
+import { existsSync, mkdtempSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { randomUUID } from "node:crypto";
 import { REQUIRED_CHECKS, type VerificationReport } from "@mykey/contracts";
 import { readGate } from "@mykey/operations";
@@ -20,7 +27,14 @@ import {
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { TEST_BUILD } from "../../harness/gate.ts";
 import { createLostWorld, type LostWorld } from "../../harness/restore-fixture.ts";
-import { localRestoreTarget } from "../../harness/restore-target.ts";
+import { localRestoreTarget, type LocalTarget } from "../../harness/restore-target.ts";
+import { baoFetch } from "../../harness/stack.ts";
+import {
+  generateRoot,
+  rootTokenCandidates,
+  writeCustodyAfterRestore,
+  type SysCall,
+} from "../../../scripts/host-restore.ts";
 
 let world: LostWorld;
 
@@ -40,6 +54,26 @@ const fileWriter = (path: string) => ({
     return Promise.resolve();
   },
 });
+
+/** The target's OpenBao answers lookup-self for `token`: its HTTP status. */
+const lookup = async (target: LocalTarget, token: string): Promise<number> => {
+  if (target.scratch === null) throw new Error("no scratch OpenBao yet");
+  return (await baoFetch(target.scratch.stack, "/v1/auth/token/lookup-self", { token })).status;
+};
+
+/** generate-root's sys/ calls to the target's OpenBao, with the restore's own root token. */
+const sysCallTo =
+  (target: LocalTarget, token: string): SysCall =>
+  async (method, path, body) => {
+    if (target.scratch === null) throw new Error("no scratch OpenBao yet");
+    const answer = await baoFetch(target.scratch.stack, `/v1/${path}`, {
+      method,
+      token,
+      ...(body === undefined ? {} : { body }),
+    });
+    const text = await answer.text();
+    return { status: answer.status, body: text === "" ? null : (JSON.parse(text) as unknown) };
+  };
 
 const codeOf = async (r: Response) => {
   try {
@@ -147,6 +181,79 @@ describe("a restore stopped after each step (P-124)", () => {
       const pub = await target.request("public", "GET", "/v1/organizations");
       expect(await codeOf(pub)).toBe("quarantined");
       expect((await target.request("verify", "GET", "/v1/version")).status).toBe(200);
+
+      // R4-2: after restore-verify --open, a new root token is made with the source's
+      // recovery key (generate-root), written to the target's custody copy, and the old
+      // one is revoked; ops and deploy work after the restore.
+      const sourceKey = world.f.stack.bao.recoveryKey ?? "";
+      expect(sourceKey, "the source stack's recovery key (stack.json)").not.toBe("");
+      const scratchKey = target.scratch?.own.recoveryKey ?? "";
+      expect(scratchKey).not.toBe("");
+      // The snapshot carries the source's recovery configuration: the target's own key fails.
+      await expect(
+        generateRoot(sysCallTo(target, restored.rootToken), scratchKey),
+      ).rejects.toThrow();
+      const next = await generateRoot(sysCallTo(target, restored.rootToken), sourceKey);
+      expect(await lookup(target, next)).toBe(200);
+      const home = mkdtempSync(join(tmpdir(), "mykey-restore-custody-"));
+      try {
+        const sourceAnswer = `${JSON.stringify({ root_token: world.old.rootToken, recovery_keys_base64: [sourceKey] })}\n`;
+        writeCustodyAfterRestore("local", sourceAnswer, next, new Date(), home);
+        // What ops and a deploy read (opsRootToken: the custody copy, no restore token left).
+        const offered = rootTokenCandidates("local", home);
+        expect(offered.map((c) => c.from)).toEqual(["custody"]);
+        expect(await lookup(target, offered[0]?.token ?? "")).toBe(200);
+      } finally {
+        rmSync(home, { recursive: true, force: true });
+      }
+      // The restore's own token is revoked at the opening; the new one stays.
+      await restored.admin.revokeSelf();
+      expect(await lookup(target, restored.rootToken)).toBe(403);
+      expect(await lookup(target, next)).toBe(200);
+    } finally {
+      await restored?.pool.end();
+      await target.stop();
+    }
+  }, 1_800_000);
+
+  it("a restore stopped after its OpenBao step can be run again: the step records that the target's token was replaced, and the rerun uses the custody copy written in that step", async () => {
+    const target = await localRestoreTarget(world);
+    let restored: Restored | null = null;
+    try {
+      // The scratch cluster holds this pair's database from the test above: this target's
+      // state line says the same pair's restore stopped there, so it starts over.
+      await target.state.write({ pairId: world.pair.pairId, step: "start" });
+      // Stopped right after the snapshot: the target's own token is gone, the pair's is live.
+      await expect(
+        restoreToVerifying(target, {
+          crashAt: (at) => {
+            if (at === "snapshot") throw new Error("stopped after snapshot");
+          },
+        }),
+      ).rejects.toThrow("stopped after snapshot");
+      expect(await target.state.read()).toEqual({ pairId: world.pair.pairId, step: "snapshot" });
+      const own = target.scratch?.own.rootToken ?? "";
+      expect(await lookup(target, own)).toBe(403);
+      expect(target.keptRootToken).toBeNull();
+
+      // Stopped after step 5: the pair's token is revoked; only the kept one is live.
+      await expect(
+        restoreToVerifying(target, {
+          crashAt: (at) => {
+            if (at === "invalidate") throw new Error("stopped after invalidate");
+          },
+        }),
+      ).rejects.toThrow("stopped after invalidate");
+      const kept = target.keptRootToken ?? "";
+      expect(kept).not.toBe("");
+      expect(await lookup(target, kept)).toBe(200);
+      expect(await lookup(target, world.old.rootToken)).toBe(403);
+
+      // The rerun offers the kept token first and completes.
+      restored = await restoreToVerifying(target);
+      expect(restored.rootToken).not.toBe(kept);
+      expect(await lookup(target, restored.rootToken)).toBe(200);
+      expect(target.keptRootToken).toBe(restored.rootToken);
     } finally {
       await restored?.pool.end();
       await target.stop();
