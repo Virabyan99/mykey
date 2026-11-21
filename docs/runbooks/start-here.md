@@ -2,7 +2,7 @@
 
 One page in the order the owner meets the service, from a reset link to an application that starts with its secrets and no `.env` file. Each step names the screen or the runbook that holds the detail. Use synthetic values only until Gate R is signed.
 
-On staging the address is `https://mykey-staging.nomikey.com`. On production the first account is made by the operator's bootstrap (`operator-accounts.md`, "Bootstrap of the owner"); everything after step 1 is the same.
+On staging the address is `https://mykey-staging.nomikey.com`. On production the first account is made by the operator's bootstrap (`operator-accounts.md`, "Bootstrap of the owner"), and you enrol the authenticator after your first sign-in, through the operator's private link (`production.md`, "The first opening"), not on a reset page. Everything after step 2 is the same.
 
 ## 1. The link
 

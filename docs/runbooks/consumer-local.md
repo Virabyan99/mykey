@@ -2,7 +2,7 @@
 
 How an application on your own Linux or macOS machine gets its secrets from MyKey at start, with no `.env` file. The CLI `secrets` reads the complete set of one environment and starts the application with it, or starts nothing.
 
-Every shell block marked `<!-- rehearsed … -->` in this file is run, in order, by `tests/consumers/runbook.test.ts` on a clean Linux machine against staging (`pnpm run test:consumers`). If the file and the product drift apart, that test fails.
+Every shell block marked `<!-- rehearsed … -->` in this file is run, in order (a block marked `rehearsed: provided` is replaced by the test's own equivalent, because its values are the reader's), by `tests/consumers/runbook.test.ts` on a clean Linux machine against staging (`pnpm run test:consumers`). If the file and the product drift apart, that test fails.
 
 - **Needs:** Linux (glibc) or macOS on x86_64 or arm64, `sh`, `curl`, `tar`, and `sha256sum` or `shasum`. Windows is not supported (D-43); WSL is Linux. The repository is public, so step 1 needs no GitHub account: `gh` is one way, `curl` the other.
 - **Variables used below:**
@@ -99,7 +99,7 @@ echo
 
 ## 7. Issue a machine token
 
-The owner issues a token for the environment, with a name and a lifetime: "Issue" in `docs/runbooks/machine-credentials.md` (through the API until the web workspace exists). The token is shown once. Copy it now: the service stores no copy.
+The owner issues a token for the environment, with a name and a lifetime: on the workspace's Machine credentials screen, as "Issue" in `docs/runbooks/machine-credentials.md` describes. The token is shown once. Copy it now: the service stores no copy.
 
 ## 8. Store the token
 

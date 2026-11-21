@@ -2,7 +2,7 @@
 
 This is MyKey dotenv format v1; it does not claim universal dotenv compatibility.
 
-It is the one text format the service accepts on import and writes on export (Document 04 §5: FR-1.33, FR-1.34, FR-1.38). The format is deliberately narrow: anything two dotenv loaders could read differently is rejected on the way in, and the way out has exactly one spelling.
+It is the one text format the service accepts on import and writes on export (Document 04 §5: FR-1.33, FR-1.34, FR-1.38). The format is deliberately narrow: what this service's parser could read two ways is rejected on the way in, a value another loader would read differently is accepted with a loader warning ("Loader compatibility"), and the way out has exactly one spelling.
 
 | What                 | Where                                                                                    |
 | -------------------- | ---------------------------------------------------------------------------------------- |

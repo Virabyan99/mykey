@@ -281,8 +281,9 @@ export function Secrets() {
     <>
       <h1>Secrets</h1>
       <p className="hint">
-        {project.name} / {environment.name}. Names and versions only: a value is read from the
-        secret store when you press Reveal on a secret&apos;s page, and at no other time.
+        {project.name} / {environment.name}. Names and versions only. Values are read from the
+        secret store when you press Reveal on a secret&apos;s page, when you export the environment,
+        and when you preview an import (to compare, without showing them).
       </p>
       <EnvironmentNotice state={environment.state} reason={environment.reviewReason} />
       {creating ? (

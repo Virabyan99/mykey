@@ -52,7 +52,7 @@ It also prints the measurements (`measured (FR-1.69): …`) and checks two old c
 
 New role passwords go where they were: `api_runtime` and `provisioner_runtime` on the host, the others in `~/.mykey/secrets/hosts/<host>/<role>`. The restore's root token waits in `~/.mykey/secrets/hosts/<host>/restore-root-token` (0600) for step 9; the hand-off in `restore.json` beside it.
 
-**When it stops.** Each step writes `/var/lib/mykey/restore-state.json` on the host. Run the same command again: it starts from step 1 and does every step again (nothing is skipped on the word of an earlier run). Until a report opens it, the host stays closed whatever step it stopped at.
+**When it stops.** Each step writes `/var/lib/mykey/restore-state.json` on the host. Run the same command again: it starts from step 1 and does every step again (nothing is skipped on the word of an earlier run). This works only while the run stopped **before its OpenBao step**; after that step the target's root token is gone, and a rerun needs OpenBao wiped and initialised again (`known-limits.md`). Until a report opens it, the host stays closed whatever step it stopped at.
 
 ## Between 7 and 8: the owner comes back
 

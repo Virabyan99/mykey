@@ -115,8 +115,8 @@ export function Help() {
         </li>
         <li>
           <strong>Install the CLI on the machine that runs the application.</strong> Follow{" "}
-          <Runbook file="consumer-local.md" />, steps 1 to 6: it checks every file it downloads
-          before it installs anything.
+          <Runbook file="consumer-local.md" />, steps 1 to 6: it checks the CLI and the Node runtime
+          it downloads against pinned sums before it installs them.
         </li>
         <li>
           <strong>Store the token and start the application.</strong> The same runbook, steps 8 to

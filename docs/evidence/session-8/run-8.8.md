@@ -58,7 +58,8 @@ _21 Nov 2026. Plan: `docs/plans/session-8-plan.md`, Run 8.8 (P-155)._
 
 ## Deviations and decisions
 
-- **The project id stays a document fix in Session 8.** The plan sends a page behaviour that did not stop the owner to a hardening run. The owner reached the step with the corrected text and asks for the UI and UX in Session 9. A `host-v0.8.1` now would repeat the candidate's proofs for a change the owner wants rethought anyway.
+- **The project id stays a document fix in Session 8.** The plan sends a page behaviour that did not stop the owner to a hardening run. The owner reached the step with the corrected text and asks for the UI and UX in Session 9. A `host-v0.8.1` now would repeat the candidate's proofs for a change the owner wants rethought anyway. (`host-v0.8.1` came later for the claims walk's page texts, Run 8.7; it holds text corrections only, and the project id stays with Session 9's work.)
+- **An edit of the owner's was committed.** During the hour the owner edited the runbook's step 5 block in place: staging's address, and an id of the staging workspace instead of `SECRETS_PROJECT`'s placeholder. `aaeab2a` committed it with the run's corrections, unnoticed. gitleaks' generic rule matched the id (a UUID, no credential), and the secret scan went red. `b093f65` put the placeholders back and recorded the fingerprint in `.gitleaksignore` with the reason; a scan of the whole history is clean. **Lesson:** after someone has worked with the files, read every changed line before committing.
 - **The token in the chat.** It belonged to a staging credential over synthetic values, and it was revoked within minutes. No other value was shown, and `walkthrough.md` does not hold it.
 
 ## Open issues

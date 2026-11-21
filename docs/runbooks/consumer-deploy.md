@@ -2,7 +2,7 @@
 
 How a first consumer application runs in a container on a Linux host with Docker, getting its secrets from MyKey at start. The image carries the CLI and no credential. The token is a file on the host, mounted read-only when the container runs.
 
-Every shell block marked `<!-- rehearsed … -->` in this file is run, in order, by `tests/consumers/runbook.test.ts` against staging, once for each fixture in `tests/fixtures/consumers/`, on a Linux shell with Docker (`pnpm run test:consumers`).
+Every shell block marked `<!-- rehearsed … -->` in this file is run, in order (a block marked `rehearsed: provided` is replaced by the test's own equivalent, because its values are the reader's), by `tests/consumers/runbook.test.ts` against staging, once for each fixture in `tests/fixtures/consumers/`, on a Linux shell with Docker (`pnpm run test:consumers`).
 
 - **Needs:** Linux (glibc) on x86_64 or arm64 with Docker, `sh`, `curl`, `sha256sum`, and `gh` signed in to GitHub with access to the repository.
 - **The application's Dockerfile** ends like the fixtures' (`tests/fixtures/consumers/*/Dockerfile`):

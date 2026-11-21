@@ -56,5 +56,5 @@ The CLI prints the same failure on one line: its category, a text, the code and 
 
 - **Headers** on the page and on every file of it: a content policy that allows this origin's script and stylesheet only, no frame (`frame-ancestors 'none'` and `x-frame-options: DENY`), no referrer, `nosniff`, `no-store`.
 - **Every change needs this origin.** A request that changes something with a foreign, missing or cross-site origin is refused before the session is read (`tests/integration/authz/origin.test.ts`).
-- **A read changes nothing.** No GET of the API changes a row; a refused one writes its denial to the audit log (`tests/integration/browser-security/origin.test.ts`).
+- **A read changes nothing.** No GET a browser session sends changes a row (a machine's GET of its keys records its use); a refused one writes its denial to the audit log (`tests/integration/browser-security/origin.test.ts`).
 - **The proofs in a browser** are `tests/browser/access.test.ts` (keyboard, narrow screen, framing, colours off, refusals) and the files beside it.
