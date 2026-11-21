@@ -86,13 +86,10 @@ describe("the off-host probe", () => {
       expect(current.now - (current.state.lastHeartbeatAt ?? 0), host.name).toBeLessThan(90_000);
       // Production runs without a gate file (the owner opens it): its /health answers down by
       // design, and the probe marks it `inService: false`, so health_failing does not open there
-      // either (after Session 5). Nothing may be open on staging. Production has no OpenBao
-      // yet (reinstalled 19 Nov 2026): its heartbeat cannot read the seal, the KMS or the
-      // capacity record, and unknown is never healthy (Run 6.4), so checks_unknown is open
-      // there and nothing else. The day production gets its OpenBao this is [] again.
-      expect(Object.keys(current.state.open).sort(), host.name).toEqual(
-        host.name === "prod" ? ["checks_unknown"] : [],
-      );
+      // either (after Session 5). Production got its OpenBao on 21 Nov 2026 (Run 8.1): its
+      // heartbeat reads the seal, the KMS and the capacity record again, so checks_unknown
+      // resolved there. Nothing may be open on either host.
+      expect(Object.keys(current.state.open).sort(), host.name).toEqual([]);
     }
   });
 

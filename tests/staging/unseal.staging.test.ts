@@ -268,7 +268,7 @@ describe("staging OpenBao on the OVHcloud KMS seal", () => {
 
   it("KMS away while running: still serving, separately visible", async () => {
     await waitUnsealedAndReadable(60);
-    expectSuccess(await sshExec(staging.host, `${EGRESS} block kms 300`, { sudo: true }), "block");
+    expectSuccess(await sshExec(staging.host, `${EGRESS} block kms 420`, { sudo: true }), "block");
     const blockedAt = Date.now();
     await sleep(15_000);
     // Reads and writes go on: the seal key is not needed while unsealed.
@@ -288,9 +288,12 @@ describe("staging OpenBao on the OVHcloud KMS seal", () => {
     });
     expect(await publicHealth()).toBe(200);
 
-    // The probe tells the two apart: kms_unreachable, not openbao_sealed.
+    // The probe tells the two apart: kms_unreachable, not openbao_sealed. It opens after three
+    // minutes of bad reports, and the first bad report can come a minute after the block, with
+    // the cron's minute on top: 255 to 292 s on staging (Sessions 2 to 8). The block outlasts
+    // the window, so the condition is still open when it is looked for.
     let opened: ProbeView | undefined;
-    while (Date.now() - blockedAt < 290_000 && opened === undefined) {
+    while (Date.now() - blockedAt < 410_000 && opened === undefined) {
       const current = await probeView().catch(() => undefined);
       if (current?.state.open.kms_unreachable !== undefined) opened = current;
       else await sleep(15_000);
@@ -309,7 +312,7 @@ describe("staging OpenBao on the OVHcloud KMS seal", () => {
     }
     expect(resolved).toBe(true);
     record(
-      `KMS away while running: kms_unreachable resolved ${Math.round((Date.now() - blockedAt) / 1000)} s after the block began (block 300 s)`,
+      `KMS away while running: kms_unreachable resolved ${Math.round((Date.now() - blockedAt) / 1000)} s after the block began (block 420 s)`,
     );
   }, 1_200_000);
 });
