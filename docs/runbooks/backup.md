@@ -61,7 +61,7 @@ node scripts/host.ts <host> r2-install pairs  # mykey-<host>-pairs-upload
 node scripts/host.ts <host> timers            # installs mykey-backup.timer and mykey-capture-recover; sets MYKEY_BACKUP_EXPECTED=yes
 ```
 
-The bucket's lock rule `pairs-30d` is set by `infra/backup/retention-fixture/provision.ts --locks-only`. From then on every object under `pairs/` stays 30 days, test pairs included.
+The bucket's lock rule `pairs-30d` is set by `infra/backup/retention-fixture/provision.ts --locks-only`. From then on every object under `pairs/` stays 30 days, test pairs included: no token a host or CI holds can delete it or change the rule. The workstation's `mykey-r2-admin`, which sets the rule, could remove it (D-16).
 
 ## Retention (Run 6.6, D-53)
 
@@ -93,7 +93,7 @@ Install on a host: `node scripts/host.ts <host> r2-install pairs-cleanup`, then 
 
 ## What a restore needs (the custody set)
 
-R2 holds only ciphertext and signed records. A restore also needs:
+The pairs bucket holds only ciphertext and signed records (the audit archive's segments are audit rows, gzipped, not encrypted). A restore also needs:
 
 - **the backup password** (`~/.mykey/custody/<host>/backup/password` and the owner's offline copy);
 - **the trust anchor** `infra/hosts/backup/trust/<host>-<keyId>.pub` in this repository, to verify `eligible.json`;

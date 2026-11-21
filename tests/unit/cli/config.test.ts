@@ -1,6 +1,6 @@
 // Run 5.5 Task A (P-96, FR-1.79): where the CLI finds its API URL, which URLs
 // it refuses, and how it picks the environment.
-import { CliError, parseArgs, resolveApiUrl, selectorOf } from "@mykey/cli";
+import { CliError, extraCaOf, parseArgs, resolveApiUrl, selectorOf } from "@mykey/cli";
 import { describe, expect, it } from "vitest";
 
 const UID = 1000;
@@ -124,5 +124,25 @@ describe("selectorOf", () => {
       () => selectorOf(parseArgs(["keys", "--project", PROJECT, "--env", "Dev"]), {}),
       "usage",
     );
+  });
+});
+
+// R5-2 (Run 8.6, D-68): a certificate authority for this CLI alone.
+describe("extraCaOf", () => {
+  const PEM = ["-----BEGIN CERTIFICATE-----", "AAAA", "-----END CERTIFICATE-----", ""].join("\n");
+  const reads = (text: string | null) => (path: string) => {
+    if (path !== "/etc/ca.pem" || text === null) throw new Error("ENOENT");
+    return text;
+  };
+  it("is nothing without SECRETS_CA_FILE, or with it empty", () => {
+    expect(extraCaOf({}, reads(PEM))).toBeUndefined();
+    expect(extraCaOf({ SECRETS_CA_FILE: "" }, reads(PEM))).toBeUndefined();
+  });
+  it("is the file's certificates", () => {
+    expect(extraCaOf({ SECRETS_CA_FILE: "/etc/ca.pem" }, reads(PEM))).toBe(PEM);
+  });
+  it("refuses a file it cannot read, or one with no certificate", () => {
+    refused(() => extraCaOf({ SECRETS_CA_FILE: "/etc/other.pem" }, reads(PEM)), "unsupported");
+    refused(() => extraCaOf({ SECRETS_CA_FILE: "/etc/ca.pem" }, reads("not a pem")), "unsupported");
   });
 });

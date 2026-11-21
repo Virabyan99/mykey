@@ -86,7 +86,7 @@ sha256_of() {
 }
 
 launcher_text() {
-  printf '#!/bin/sh\n%s %s\nexec '"'"'%s/node/bin/node'"'"' '"'"'%s/secrets.mjs'"'"' "$@"\n' \
+  printf '#!/bin/sh\n%s %s\nexec '"'"'%s/node/bin/node'"'"' --disable-sigusr1 '"'"'%s/secrets.mjs'"'"' "$@"\n' \
     "$marker" "$VERSION" "$dir" "$dir"
 }
 

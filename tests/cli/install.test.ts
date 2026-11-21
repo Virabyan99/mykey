@@ -134,6 +134,8 @@ describe("install.sh", () => {
     expect(shown.status, shown.stderr).toBe(0);
     expect(shown.stdout).toContain(`secrets ${version} `);
     expect(shown.stdout).toContain(`node ${lock.node.version}`);
+    // R5-3 (Run 8.6): SIGUSR1 never opens Node's inspector in the CLI.
+    expect(readFileSync(launcher, "utf8")).toMatch(/\/node\/bin\/node' --disable-sigusr1 '/);
     const top = Object.keys(tree(home)).filter((path) => !path.slice(0, -1).includes("/"));
     expect(top).toEqual([".local/"]);
     expect(readdirSync(join(home, ".local"))).toEqual(["bin", "share"]);

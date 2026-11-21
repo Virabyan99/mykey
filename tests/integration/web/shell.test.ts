@@ -7,6 +7,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { SHELL_HEADERS } from "@mykey/api";
+import { matchWebRoute } from "@mykey/contracts";
 import { errorOf, startTestApi, type TestApi } from "../../harness/api.ts";
 import { FIXTURE_DIST, writeFixtureDist } from "../../harness/web-dist.ts";
 
@@ -63,6 +64,20 @@ describe("the workspace's shell in the app", () => {
       expect(response.status).toBe(404);
       expect(response.headers.get("content-type")).toMatch(/^application\/json/);
       expect((await errorOf(response)).code).toBe("not_found");
+    },
+  );
+
+  // Run 8.0 Task C (Session 7's Minors 8 and 13): the page's router reads
+  // location.pathname as it came, never decoded. The API answers the same
+  // paths: a percent-encoded form of a page path is not a page.
+  it.each(["/help", "/%68elp", "/sign-in", "/sign%2Din", "/account", "/%61ccount", "/help%2F"])(
+    "a percent-encoded page path and its plain form get the same answer from the API and from the page's router: %s",
+    async (path) => {
+      const response = await api.request("GET", path);
+      const routerShows = matchWebRoute(new URL(path, "https://mykey.invalid").pathname) !== null;
+      expect(response.status, path).toBe(routerShows ? 200 : 404);
+      if (!routerShows) expect((await errorOf(response)).code).toBe("not_found");
+      else await response.arrayBuffer();
     },
   );
 

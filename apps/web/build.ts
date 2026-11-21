@@ -70,6 +70,8 @@ export async function buildWeb(
     // The licences of what is bundled stay in the file.
     legalComments: "eof",
     define: { "process.env.NODE_ENV": '"production"' },
+    // Run 8.0 (FR-1.102): docs/runbooks/known-limits.md is bundled as text for the Help screen.
+    loader: { ".md": "text" },
     metafile: true,
     logLevel: "warning",
   });

@@ -32,6 +32,13 @@ audit "file" "main" {
   }
 }
 
+# Run 8.0 (P-149, D-66): no user lockout for AppRole. The secret ids are random
+# and OpenBao is reachable only from the product's own containers; the lockout
+# turned one credential mistake into 15 minutes without secrets (Run 6.9).
+user_lockout "approle" {
+  disable_lockout = true
+}
+
 api_addr                     = "https://openbao:8200"
 cluster_addr                 = "https://openbao:8201"
 disable_mlock                = true

@@ -303,6 +303,18 @@ async function throttled(
   });
 }
 
+/**
+ * R1-1: an admitted attempt that did not fail gives its count back. A counter
+ * that cannot be written leaves the attempt counted, the safe side.
+ */
+async function settled(env: AuthRouteEnv, phase: ThrottlePhase, account: string): Promise<void> {
+  try {
+    await env.throttle.settle(phase, account);
+  } catch {
+    // Counted as a failure until its window passes.
+  }
+}
+
 /** Counts a failed credential; a counter that cannot be written is never answered as a success. */
 async function failed(
   env: AuthRouteEnv,
@@ -387,6 +399,7 @@ export function mountAuthRoutes(app: AnyHono, auth: Auth, env: AuthRouteEnv): vo
         { ...body, headers: c.req.raw.headers, requestId: env.requestId(c) },
       );
       if (!result.ok) return await failed(env, c, "password", account, "unauthenticated");
+      await settled(env, "password", account);
       return json({ phase: result.phase }, result.setCookie);
     } catch (error) {
       if (error instanceof AuditUnavailable) return refuse(c, "audit_unavailable");
@@ -450,10 +463,11 @@ export function mountAuthRoutes(app: AnyHono, auth: Auth, env: AuthRouteEnv): vo
       if (error instanceof AuditUnavailable) return refuse(c, "audit_unavailable");
       throw error;
     }
-    if (result.ok) return json({ revokedSessions: result.revoked });
-    if (result.reason === "wrong_password") {
+    if (!result.ok && result.reason === "wrong_password") {
       return failed(env, c, "password", account, "unauthenticated");
     }
+    await settled(env, "password", account);
+    if (result.ok) return json({ revokedSessions: result.revoked });
     return refuse(
       c,
       result.reason === "not_fresh"
@@ -575,11 +589,11 @@ function mountFactorRoutes(
       if (error instanceof AuditUnavailable) return refuse(c, "audit_unavailable");
       throw error;
     }
-    if (result.ok) return json(result.body, result.setCookie);
     // A refused state or a stale session is not a wrong credential: not counted.
-    if (!opts.throttled || result.reason === "wrong_state" || result.reason === "not_fresh") {
-      return refuse(c, factorFailureCode(result.reason));
-    }
+    const counted = !result.ok && result.reason !== "wrong_state" && result.reason !== "not_fresh";
+    if (opts.throttled && !counted) await settled(env, "factor", ready.userId);
+    if (result.ok) return json(result.body, result.setCookie);
+    if (!opts.throttled || !counted) return refuse(c, factorFailureCode(result.reason));
     return failed(env, c, "factor", ready.userId, factorFailureCode(result.reason));
   };
 

@@ -126,6 +126,43 @@ describe("denied native routes", () => {
     }
   });
 
+  // Run 8.2 (P-151): the spellings a router may read as the same path.
+  it('upper case, percent-encoding, a ";" suffix and ".." do not open a refused native route, and create no row', async () => {
+    const before = await authRowCounts(api.superuser);
+    const owned = new Set(PRODUCT_OWNED.map((route) => `${route.method} ${route.path}`));
+    const spellings = (path: string): string[] => {
+      const last = path.lastIndexOf("/");
+      const head = path.slice(0, last + 1);
+      const tail = path.slice(last + 1);
+      const encoded = `${head}%${tail.charCodeAt(0).toString(16).toUpperCase()}${tail.slice(1)}`;
+      return [
+        `/v1/auth${path.toUpperCase()}`,
+        `/v1/AUTH${path}`,
+        `/v1/auth${encoded}`,
+        `/v1/auth${path.replace("/", "%2F")}`,
+        `/v1/auth${path};x`,
+        `/v1/auth${path};`,
+        `/v1/auth/x/..${path}`,
+        `/v1/auth/x/%2E%2E${path}`,
+        `/v1/x/../auth${path}`,
+      ];
+    };
+    let asked = 0;
+    for (const route of NATIVE_DENIED.filter((r) => !owned.has(`${r.method} ${r.path}`))) {
+      const path = route.path.replaceAll(/:[a-z]+/g, "x");
+      for (const spelled of spellings(path)) {
+        const response = await api.request(route.method, spelled, {
+          ...(route.method === "POST" ? { body: BODIES[route.path] ?? {} } : {}),
+          cookie: elevatedCookie,
+        });
+        asked += 1;
+        await expectNotFound(response, `${route.method} ${spelled}`);
+      }
+    }
+    expect(asked).toBeGreaterThanOrEqual(9 * 10);
+    expect(await authRowCounts(api.superuser)).toEqual(before);
+  });
+
   it("sign-up is refused even when called in-process", async () => {
     const before = await authRowCounts(api.superuser);
     await expect(

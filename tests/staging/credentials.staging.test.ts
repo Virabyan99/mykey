@@ -7,37 +7,21 @@
 //    the host the token's bytes are searched (on fd 3, counts only) in the
 //    API's log, a pg_dump and Traefik's access log: 0 each, with the controls
 //    found.
-// 2. The drill: five issuances (Run 6.3: five a minute per person), aimed at
-//    the measured moment the OpenBao container's 8 s pause lands,
-//    each attempt in a fresh minute; one caught after its marker answers 503
-//    outcome_unknown. Then: the probe raises operations_unresolved; quiesce;
-//    ops reconcile-credentials --executors-excluded yes; resume; a redeploy of
-//    the running release opens the v2 gate with a report; a new issuance for
-//    that environment → 201, revoked; the alert clears.
+// 2. The drill of an issuance left unknown is credential-drill.staging.test.ts
+//    since Run 8.7, so that this journey's result stands on its own.
 //
-// Every credential this file issues is revoked in `finally` (they live 60 to
-// 300 s in any case). The token never leaves this process except on stdin.
-import { spawnSync } from "node:child_process";
+// Every credential this file issues is revoked in `finally` (they live 300 s
+// in any case). The token never leaves this process except on stdin.
 import { randomBytes, randomUUID } from "node:crypto";
 import { writeFileSync } from "node:fs";
 import { setTimeout as sleep } from "node:timers/promises";
 import { beforeAll, describe, expect, it } from "vitest";
-import {
-  countOnHost,
-  expectSuccess,
-  hostStatus,
-  loadHosts,
-  nextMinute,
-  registerSecret,
-  sshExec,
-  stagingRelease,
-} from "../harness/staging.ts";
+import { countOnHost, loadHosts, registerSecret } from "../harness/staging.ts";
 import { publicRequest, stagingOwnerSession, type PublicAnswer } from "../harness/staging-owner.ts";
 
 const host = loadHosts().staging;
 /** The staging owner's organization (Run 3.2). */
 const ORGANIZATION = "e2350312-420b-4fde-84c5-d582a008080b";
-const OPENBAO = "mykey-openbao-1";
 
 let cookie: string;
 let projectPath: string;
@@ -101,30 +85,6 @@ async function revokeAll(): Promise<number> {
   return revoked;
 }
 
-/** `scripts/host.ts staging …` as a child process. */
-function hostTs(args: string[], timeoutMs = 600_000): { code: number | null; out: string } {
-  const result = spawnSync(process.execPath, ["scripts/host.ts", "staging", ...args], {
-    encoding: "utf8",
-    timeout: timeoutMs,
-    env: { ...process.env, MSYS_NO_PATHCONV: "1" },
-  });
-  return { code: result.status, out: `${result.stdout}${result.stderr}` };
-}
-
-/** The probe's view of staging (`probe.ts state`). */
-function probeState(): { open?: Record<string, { lastAlertAt?: number | null }> } {
-  const result = spawnSync(process.execPath, ["scripts/probe.ts", "state", "staging"], {
-    encoding: "utf8",
-    timeout: 60_000,
-  });
-  if (result.status !== 0) throw new Error(`probe.ts state: ${result.stderr.slice(-300)}`);
-  return (
-    JSON.parse(result.stdout) as {
-      state: { open?: Record<string, { lastAlertAt?: number | null }> };
-    }
-  ).state;
-}
-
 async function waitUntil<T>(
   what: string,
   read: () => Promise<T>,
@@ -139,16 +99,6 @@ async function waitUntil<T>(
     await sleep(5000);
   }
 }
-
-const pauseOpenBao = async (paused: boolean): Promise<void> => {
-  expectSuccess(
-    await sshExec(host, `docker ${paused ? "pause" : "unpause"} ${OPENBAO}`, {
-      sudo: true,
-      timeoutMs: 60_000,
-    }),
-    paused ? "docker pause" : "docker unpause",
-  );
-};
 
 async function environmentActive(environmentId: string): Promise<void> {
   await waitUntil(
@@ -170,13 +120,9 @@ beforeAll(async () => {
   expect(created.status).toBe(201);
   const result = json(created).result as { projectId: string; developmentEnvironmentId: string };
   projectPath = `/v1/organizations/${ORGANIZATION}/projects/${result.projectId}`;
-  const second = await send("POST", `${projectPath}/environments`, { name: "drill" });
-  expect(second.status, second.body.slice(0, 200)).toBe(201);
-  const secondId = (json(second).result as { environmentId: string }).environmentId;
-  for (const id of [result.developmentEnvironmentId, secondId]) {
-    await environmentActive(id);
-    environments.push({ id, path: `${projectPath}/environments/${id}` });
-  }
+  const id = result.developmentEnvironmentId;
+  await environmentActive(id);
+  environments.push({ id, path: `${projectPath}/environments/${id}` });
   record("project", { name, id: result.projectId, environments: environments.map((e) => e.id) });
 }, 420_000);
 
@@ -234,173 +180,4 @@ describe("machine credentials on staging", () => {
       await revokeAll();
     }
   }, 600_000);
-
-  it("the drill: an issuance left unknown raises operations_unresolved and is settled by quiesce → reconcile-credentials → resume", async () => {
-    let paused = false;
-    let quiesced = false;
-    const caught = new Map<string, string>(); // environment id → operation id
-    try {
-      // 1. Five issuances, 250 ms apart, across the moment OpenBao is paused,
-      //    until one is unknown. Run 6.3 allows five issuances a minute per
-      //    person, so each attempt starts in a fresh minute and spends five.
-      //    An issuance logs in before its marker: one sent into a paused
-      //    OpenBao fails before the marker, so the pause must land mid-flight.
-      let attempts = 0;
-      // The pause lands over SSH, more than a second after it is sent (the
-      // gate's run: all 25 shots fired within the first second finished first).
-      // Each attempt measures that delay and the next aims its five shots at it:
-      // four in the last 600 ms before it and one just after.
-      let landsAfterMs = 1500;
-      for (let attempt = 1; attempt <= 10 && caught.size === 0; attempt += 1) {
-        attempts = attempt;
-        await nextMinute();
-        ({ cookie } = await stagingOwnerSession());
-        const answers: Record<string, number> = {};
-        const sentAt = Date.now();
-        const pausing = pauseOpenBao(true).then(() => {
-          landsAfterMs = Date.now() - sentAt;
-          return now();
-        });
-        const aim = landsAfterMs;
-        const shots = [-600, -450, -300, -150, 100].map(async (offset, i) => {
-          await sleep(Math.max(0, aim + offset));
-          const environment = environments[i % environments.length]!;
-          const { answer } = await issue(environment.path, 60);
-          const code = errorOf(answer).code;
-          const label = answer.status === 201 ? "201" : `${answer.status} ${code ?? ""}`;
-          answers[label] = (answers[label] ?? 0) + 1;
-          const operationId = errorOf(answer).operationId;
-          if (code === "outcome_unknown" && operationId !== undefined) {
-            if (!caught.has(environment.id)) caught.set(environment.id, operationId);
-          }
-        });
-        const pausedAt = await pausing;
-        paused = true;
-        await sleep(8000);
-        await pauseOpenBao(false);
-        paused = false;
-        await Promise.all(shots);
-        record(`attempt${String(attempt)}`, { pausedAt, aimMs: aim, answers });
-        await revokeAll();
-      }
-      record("caught", { attempts, operations: Object.fromEntries(caught) });
-      expect(caught.size, "no issuance was caught after its marker").toBeGreaterThan(0);
-      const [environmentId] = [...caught.keys()];
-      const environment = environments.find((e) => e.id === environmentId)!;
-
-      // 2. The caught issuance is unresolved in one of its two documented states
-      //    (P-87): `needs_review` (no token proven) blocks the next issuance;
-      //    `revoking` (OpenBao made a token, its withdrawal is unproven) is closed
-      //    to machines and blocks nothing. Where the pause lands decides which
-      //    (Run 5.2 caught the first, the Session 5 gate the second).
-      const unresolved = (await inventory(environment.path)).filter(
-        (c) => c.state === "needs_review" || c.state === "revoking",
-      );
-      expect(unresolved).toHaveLength(1);
-      const caughtState = unresolved[0]!.state;
-      record("caughtState", caughtState);
-      if (caughtState === "needs_review") {
-        // The attempt spent the minute's five issuances: a sixth would be 429.
-        await nextMinute();
-        const blocked = await send("POST", `${environment.path}/credentials`, {
-          name: "s5-machine",
-          ttlSeconds: 60,
-        });
-        expect(blocked.status).toBe(409);
-        expect(errorOf(blocked).code).toBe("state_conflict");
-      }
-
-      // 3. The probe raises operations_unresolved.
-      const raised = await waitUntil(
-        "operations_unresolved at the probe",
-        () => Promise.resolve(probeState()),
-        (s) => typeof s.open?.operations_unresolved?.lastAlertAt === "number",
-        420_000,
-      );
-      record("alert", {
-        delivered: new Date(raised.open?.operations_unresolved?.lastAlertAt ?? 0).toISOString(),
-      });
-
-      // 4. quiesce → reconcile-credentials with exclusion → resume → gate open.
-      quiesced = true;
-      const quiesce = hostTs(["quiesce"]);
-      expect(quiesce.code, quiesce.out.slice(-300)).toBe(0);
-      expect(quiesce.out).toContain("executors: stopped");
-      record("quiesced", now());
-      for (const id of caught.keys()) {
-        const settled = hostTs([
-          "ops",
-          "reconcile-credentials",
-          "--environment",
-          id,
-          "--executors-excluded",
-          "yes",
-        ]);
-        expect(settled.code, settled.out.slice(-300)).toBe(0);
-        record(`reconciled ${id}`, settled.out.trim().split("\n")[0]);
-      }
-      expect(hostTs(["resume"]).code).toBe(0);
-      // A v2 gate opens only with a report: redeploy the running release.
-      const reopened = hostTs(["deploy", "--release", stagingRelease()], 1_800_000);
-      expect(reopened.code, reopened.out.slice(-500)).toBe(0);
-      quiesced = false;
-      record("resumed", now());
-
-      // 5. A new issuance for that environment → 201, revoked; the alert clears.
-      await waitUntil(
-        "API answering",
-        async () => (await publicRequest("GET", "/health", {})).status,
-        (status) => status === 200,
-        180_000,
-      );
-      ({ cookie } = await stagingOwnerSession());
-      const next = await issue(environment.path, 60);
-      expect(next.answer.status, next.answer.body.slice(0, 200)).toBe(201);
-      expect(await revokeAll()).toBeGreaterThanOrEqual(1);
-      await waitUntil(
-        "operations_unresolved leaves",
-        () => Promise.resolve(probeState()),
-        (s) => s.open?.operations_unresolved === undefined,
-        420_000,
-      );
-      record("cleared", now());
-      const status = await hostStatus(host);
-      expect(status.operationsUnresolved).toBe(0);
-      expect(status.reviewOpen).toBe(0);
-      expect(status.gate).toBe("open");
-    } finally {
-      if (paused) await pauseOpenBao(false).catch(() => undefined);
-      if (
-        caught.size > 0 &&
-        !quiesced &&
-        ((await hostStatus(host)).operationsUnresolved ?? 1) > 0
-      ) {
-        // Stopped before the settlement: settle it the runbook's way, so no alert stays open.
-        hostTs(["quiesce"]);
-        quiesced = true;
-        for (const id of caught.keys()) {
-          hostTs([
-            "ops",
-            "reconcile-credentials",
-            "--environment",
-            id,
-            "--executors-excluded",
-            "yes",
-          ]);
-        }
-      }
-      if (quiesced) {
-        hostTs(["resume"]);
-        hostTs(["deploy", "--release", stagingRelease()], 1_800_000);
-      }
-      await waitUntil(
-        "API answering",
-        async () => (await publicRequest("GET", "/health", {})).status,
-        (status) => status === 200,
-        180_000,
-      ).catch(() => undefined);
-      ({ cookie } = await stagingOwnerSession());
-      await revokeAll();
-    }
-  }, 4_200_000);
 });

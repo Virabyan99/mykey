@@ -1057,6 +1057,30 @@
       "status": "SPIKE_PASS",
       "evidence": ["docs/evidence/session-7/run-7.9.md"],
       "note": "The browser's content policy on the workspace: headers on the page and every asset, enforced by Chromium (framing and injected scripts refused, no violation from any screen). Local proof; the staging check is the gate's."
+    },
+    {
+      "id": "FR-1.13",
+      "status": "SPIKE_PASS",
+      "evidence": ["docs/evidence/session-8/run-8.2.md"],
+      "note": "Two organizations on one stack, each served by its own API process and provisioned by the product's provisioner: A's AppRole pairs log in nowhere but A's namespace, A's machine token is refused on every KV, token and sys path of B's namespace, api_runtime cannot change an identity column of schema app, and staging's grants equal the matrix. PASS comes from the manifest."
+    },
+    {
+      "id": "AC-1.07",
+      "status": "SPIKE_PASS",
+      "evidence": ["docs/evidence/session-8/run-8.2.md"],
+      "note": "Every human route with ids answers the other organization's real ids exactly as ids nobody has, on both APIs; selectors naming B change nothing of B and make no request in B's namespace; cursors open only their own listing; A's aggregates do not move when B grows; hidden and absent take the same time. PASS comes from the manifest."
+    },
+    {
+      "id": "AC-1.13",
+      "status": "SPIKE_PASS",
+      "evidence": ["docs/evidence/session-8/run-8.4.md"],
+      "note": "After a create, update, import, reveal, historical reveal, export, issuance, resolve, revocation, operator reset, recovery-code regeneration and sign-out on staging, no needle of ten kinds is on any of the host's surfaces, in the audit archive, in a pair captured afterwards, in the operator's views or in the shell histories; every surface has a control. The browser's local half also searches the dump, the logs and OpenBao's audit device. PASS comes from the manifest (the sweep on the candidate)."
+    },
+    {
+      "id": "AC-1.50",
+      "status": "SPIKE_PASS",
+      "evidence": ["docs/evidence/session-8/run-8.4.md"],
+      "note": "Synthetic secrets and identifiers are seeded labelled: canary-shaped, upper case, assembled at run time (tests/harness/sweep.ts), with a canary-shaped control that travels as the needles do; the secret scan's rule matches them, and scripts/sweep-ci.ts counts them in CI logs. PASS comes from the manifest."
     }
   ]
 }

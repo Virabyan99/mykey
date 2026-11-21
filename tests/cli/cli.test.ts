@@ -44,7 +44,7 @@ describe("the executable (Run 5.5)", () => {
     const server = await startCliServer();
     try {
       const result = await runCli(["--version"], {
-        env: { SECRETS_API_URL: server.url, NODE_EXTRA_CA_CERTS: server.caPath },
+        env: { SECRETS_API_URL: server.url, SECRETS_CA_FILE: server.caPath },
       });
       const { version } = JSON.parse(readFileSync("apps/cli/package.json", "utf8")) as {
         version: string;

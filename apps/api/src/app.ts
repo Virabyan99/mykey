@@ -57,7 +57,7 @@ import {
   type ReferencePage,
 } from "./reference/page.ts";
 import { resetCompleteHandler } from "./routes/reset.ts";
-import { DEFAULT_WEB_DIRECTORY, loadWebShell, shellAnswer } from "./web/shell.ts";
+import { DEFAULT_WEB_DIRECTORY, loadWebShell, shellAnswer, shellPathOf } from "./web/shell.ts";
 import {
   secretsCreateHandler,
   secretsDeleteHandler,
@@ -321,7 +321,7 @@ export function createApp(given: AppDeps): Hono<ApiEnv> {
   }
   app.notFound((c) => {
     if (webDirectory === null) return errorResponse("not_found", c.get("requestId"));
-    const answer = shellAnswer(c.req.method, c.req.path, shell);
+    const answer = shellAnswer(c.req.method, shellPathOf(c.req.url), shell);
     if (answer === null) return errorResponse("not_found", c.get("requestId"));
     if (answer.kind === "unavailable") {
       return errorResponse("dependency_unavailable", c.get("requestId"));

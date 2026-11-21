@@ -107,16 +107,16 @@ export const USAGE = `usage: node scripts/host.ts <staging|prod> <command> [--pu
   maint <minutes> -- <command>   open registry egress, run the command, close it
   acme <staging|production>      choose the Let's Encrypt directory; drops the edge's certificates
   kms-csr <name>                 new EC key on the host (kept there) and its CSR, printed
-  kms-install <tar>              okms from the pinned release archive (staging only)
-  kms-cert <name> <crt>          install a KMS certificate next to its key (staging only)
-  kms-use <name>                 point seal.crt/seal.key at that certificate (staging only)
-  kms-import <name> <crt> <key>  a workstation key and its certificate, for a test (staging only)
-  kms-remove <name>              shred a certificate's key, unless the seal uses it (staging only)
-  kms <name> -- <okms args>      run okms with that certificate (staging only)
-  env <key> <value>              set an OpenBao/KMS setting in host.env (staging only)
+  kms-install <tar>              okms from the pinned release archive
+  kms-cert <name> <crt>          install a KMS certificate next to its key
+  kms-use <name>                 point seal.crt/seal.key at that certificate
+  kms-import <name> <crt> <key>  a workstation key and its certificate, for a test (not prod)
+  kms-remove <name>              shred a certificate's key, unless the seal uses it
+  kms <name> -- <okms args>      run okms with that certificate
+  env <key> <value>              set an OpenBao/KMS setting in host.env
   up                             create missing host secrets, then docker compose up -d
   db-init                        roles and migrations through an SSH tunnel
-  bao-init                       initialise OpenBao once; custody copy; root-namespace setup (staging only)
+  bao-init                       initialise OpenBao once; custody copy; root-namespace setup
   status [--json]                the private status view: every check with its observation time (P-117)
   gate <open|close|status>       the service gate record (P-43); every deploy starts closed
   keys init                      the auth key rings: new files on the workstation, installed on the host
@@ -129,10 +129,11 @@ export const USAGE = `usage: node scripts/host.ts <staging|prod> <command> [--pu
   gate open --report <file>      opens with a verification report (v2; Run 6.7)
   gate close [--verifying]       closes; --verifying lets the verification listener serve
   tunnel verify                  a local port to the API's verification listener (Ctrl-C ends it)
-  deploy --release <dir> [--resume] [--install-only|--stay-closed]   P-128: a release through the closed gate
+  deploy --release <dir> [--resume] [--install-only|--stay-closed|--owner-confirmed]   P-128: a release through the closed gate;
+                                 --owner-confirmed: the owner did the journey (tunnel verify); prod needs it to open
   restore --source <host> (--pair <id> | --newest)   P-124 steps 1–7: restore a pair, start closed + verifying
   restore-verify --confirm-members <n> (--journey | --owner-confirmed) [--open]   the report; --open opens
-  quiesce                        gate close, stop api and provisioner, restart OpenBao (staging only)
+  quiesce                        gate close, stop api and provisioner, restart OpenBao
   resume                         start api and provisioner; the gate stays closed until gate open
 --public uses the public address instead of the VPN (bootstrap always does).`;
 
@@ -174,6 +175,8 @@ export type HostCommand = { host: HostName; via: Address } & (
       resume: boolean;
       installOnly: boolean;
       stayClosed: boolean;
+      /** P-147: the owner did the journey through `tunnel verify`; no scripted journey. */
+      ownerConfirmed: boolean;
       images: string[];
     }
   | {
@@ -200,7 +203,7 @@ const PAIR_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 function parseDeployArgs(host: HostName, rest: string[]): HostCommand {
   let release: string | null = null;
   const images: string[] = [];
-  const flags = { resume: false, installOnly: false, stayClosed: false };
+  const flags = { resume: false, installOnly: false, stayClosed: false, ownerConfirmed: false };
   for (let i = 0; i < rest.length; i += 1) {
     const word = rest[i];
     const value = rest[i + 1];
@@ -216,13 +219,24 @@ function parseDeployArgs(host: HostName, rest: string[]): HostCommand {
       flags.installOnly = true;
     } else if (word === "--stay-closed") {
       flags.stayClosed = true;
+    } else if (word === "--owner-confirmed") {
+      flags.ownerConfirmed = true;
     } else {
       throw new Error(`deploy: unexpected ${String(word)} (deploy --release <dir> …)`);
     }
   }
   if (release === null) throw new Error("deploy needs --release <dir>");
-  if (flags.installOnly && flags.stayClosed) {
-    throw new Error("deploy: --install-only and --stay-closed exclude each other");
+  if ([flags.installOnly, flags.stayClosed, flags.ownerConfirmed].filter(Boolean).length > 1) {
+    throw new Error(
+      "deploy: --install-only, --stay-closed and --owner-confirmed exclude each other",
+    );
+  }
+  // P-147: production never holds a workstation copy of the owner's password or
+  // authenticator, so a deploy that opens it takes the owner's own journey.
+  if (host === "prod" && !flags.installOnly && !flags.stayClosed && !flags.ownerConfirmed) {
+    throw new Error(
+      "deploy: production opens only with --owner-confirmed (the owner's journey through tunnel verify); or use --stay-closed",
+    );
   }
   return { host, via: "vpn", command: "deploy", release, images, ...flags };
 }
@@ -332,19 +346,11 @@ export const OPENBAO_ENV_KEYS = [
 ] as const;
 export type OpenBaoEnvKey = (typeof OPENBAO_ENV_KEYS)[number];
 
-/** Production holds no OpenBao and no KMS material in Session 2. */
-const STAGING_ONLY = new Set([
-  "kms-install",
-  "kms-cert",
-  "kms-use",
-  "kms-import",
-  "kms-remove",
-  "kms",
-  "env",
-  "bao-init",
-  "quiesce",
-  "resume",
-]);
+/**
+ * Run 8.0 (P-146): production gets its own OpenBao and KMS material, made on
+ * the host. Only kms-import (a key made on the workstation, for a test) is refused.
+ */
+const NOT_ON_PROD = new Set(["kms-import"]);
 const CERT_NAME = /^[a-z][a-z0-9-]{0,39}$/;
 
 export function parseHostArgs(argv: string[]): HostCommand {
@@ -353,8 +359,8 @@ export function parseHostArgs(argv: string[]): HostCommand {
   if (host !== "staging" && host !== "prod" && host !== "drill") {
     throw new Error(`unknown host "${host}": use staging, prod or drill`);
   }
-  if (host === "prod" && STAGING_ONLY.has(command)) {
-    throw new Error(`${command}: production holds no OpenBao or KMS material in Session 2`);
+  if (host === "prod" && NOT_ON_PROD.has(command)) {
+    throw new Error(`${command}: production's KMS keys are made on the host, never imported`);
   }
   if (command === "ops") {
     // Everything after `ops` belongs to the operator tool, flags included.
@@ -2588,7 +2594,7 @@ async function runGateV2(
   address: Address,
   log: Logger,
 ): Promise<number> {
-  const { closeGate, openGate } = await import("@mykey/operations/operator");
+  const { closeGate } = await import("@mykey/operations/operator");
   // A deploy binds the release it brings, not the build still running (Run 6.9).
   const releaseBuild =
     command.releaseBuild ??
@@ -2657,17 +2663,37 @@ async function runGateV2(
       return 0;
     }
     if (pool === null) throw new Error("gate open: PostgreSQL is not reachable for the audit");
-    const opened = await openGate({
-      writer,
-      pool,
-      expect,
-      report,
-      kind:
-        (report as { origin?: { kind?: unknown } }).origin?.kind === "restore"
-          ? "restore"
-          : "deploy",
-      now: () => new Date(),
-    });
+    // P-147 (d): a deploy report only (a restore report opens through
+    // restore-verify --open), and the four store checks run again first.
+    const { openWithDeployReport } = await import("@mykey/ops");
+    const { OpenBaoAdmin } = await import("@mykey/openbao/admin");
+    const custody = custodyCopyPath(host.name);
+    const token = (JSON.parse(readFileSync(custody, "utf8")) as { root_token?: unknown })
+      .root_token;
+    if (typeof token !== "string" || token === "") {
+      throw new Error(`${custody} holds no root token`);
+    }
+    registerSecret(token);
+    const baoTunnel = await openTunnel(host, REMOTE.openbao);
+    let opened: Awaited<ReturnType<typeof openWithDeployReport>>;
+    try {
+      opened = await openWithDeployReport({
+        writer,
+        pool,
+        admin: new OpenBaoAdmin(
+          {
+            url: `https://127.0.0.1:${String(baoTunnel.localPort)}`,
+            caCertPath: join(dir, "ca.crt"),
+          },
+          token,
+        ),
+        expect,
+        report,
+        now: () => new Date(),
+      });
+    } finally {
+      await baoTunnel.close();
+    }
     if (!opened.ok) {
       log.error(`${host.name}: gate open refused: ${opened.cause}`);
       return 1;
@@ -3176,6 +3202,7 @@ async function runDeployCommand(
     resume: boolean;
     installOnly: boolean;
     stayClosed: boolean;
+    ownerConfirmed: boolean;
     images: string[];
   },
   address: Address,
@@ -3187,7 +3214,7 @@ async function runDeployCommand(
   const { openGate } = await import("@mykey/operations/operator");
   const { OpenBaoAdmin } = await import("@mykey/openbao/admin");
   const { codeAt, stepAt } = await import("@mykey/auth");
-  const { deployJourney, deployVerify } = await import("@mykey/ops");
+  const { deployJourney, deployVerify, ownerConfirmedJourney } = await import("@mykey/ops");
   const dir = resolve(command.release);
   const release = releaseSchema.parse(JSON.parse(readFileSync(join(dir, "release.json"), "utf8")));
   const build = release.commit.slice(0, 12);
@@ -3296,7 +3323,11 @@ async function runDeployCommand(
       current,
       release,
       { related, imageIds: command.images },
-      { installOnly: command.installOnly, stayClosed: command.stayClosed },
+      {
+        installOnly: command.installOnly,
+        stayClosed: command.stayClosed,
+        ownerConfirmed: command.ownerConfirmed,
+      },
     );
     if ("refused" in plan) {
       log.error(`${host.name}: deploy refused: ${plan.refused}`);
@@ -3422,6 +3453,15 @@ async function runDeployCommand(
                 throw new Error(`the API does not run ${build}`);
               const code = await runGate(host, gateCommand("close", true), address, log);
               if (code !== 0) throw new Error("gate close (verifying) failed");
+              if (command.ownerConfirmed) {
+                // P-147 (b): the owner did the journey in their own browser through
+                // `tunnel verify`, on this build; no owner secret is read here.
+                writeFileSync(files.journeyChecks, JSON.stringify(ownerConfirmedJourney().checks), {
+                  mode: 0o600,
+                });
+                log.info(`${host.name}: journey: owner confirmed (--owner-confirmed)`);
+                break;
+              }
               const env = await hostEnv();
               const origin = env.MYKEY_BASE_URL;
               if (origin === undefined) throw new Error("host.env holds no MYKEY_BASE_URL");
@@ -3457,14 +3497,18 @@ async function runDeployCommand(
                   return { code: codeAt(base32Bytes(seed), step) };
                 };
                 // The first deploy picks the first secret it can list and records its path.
-                const target: { path: string; organizationId: string } =
+                // With none (P-147 c) there is no reveal, and the report counts the index.
+                const target: { path: string | null; organizationId: string } =
                   saved ?? (await firstSecret(request, owner, totp));
                 const journey = await deployJourney({
                   request,
                   cookieOf: sessionPairOf,
                   owner,
                   totp,
-                  reveal: { path: target.path, sha256: saved?.sha256 ?? null },
+                  reveal:
+                    target.path === null
+                      ? null
+                      : { path: target.path, sha256: saved?.sha256 ?? null },
                   mutation: {
                     method: "POST",
                     path: `/v1/organizations/${target.organizationId}/projects`,
@@ -3565,7 +3609,7 @@ async function firstSecret(
   ) => Promise<Response>,
   owner: { email: string; password: string },
   totp: () => Promise<{ code: string }>,
-): Promise<{ path: string; organizationId: string }> {
+): Promise<{ path: string | null; organizationId: string }> {
   const signedIn = await request("POST", "/v1/auth/sign-in/email", { body: owner });
   const first = sessionPairOf(signedIn);
   if (first === null) throw new Error("journey: sign-in failed");
@@ -3582,7 +3626,8 @@ async function firstSecret(
         throw new Error(`journey: ${path} answered ${String(answer.status)}`);
       return ((await answer.json()) as Record<string, T[] | undefined>)[key] ?? [];
     };
-    for (const org of await list<{ id: string }>("/v1/organizations", "organizations")) {
+    const organizations = await list<{ id: string }>("/v1/organizations", "organizations");
+    for (const org of organizations) {
       const o = `/v1/organizations/${org.id}`;
       for (const project of await list<{ id: string }>(`${o}/projects`, "projects")) {
         const p = `${o}/projects/${project.id}`;
@@ -3595,7 +3640,8 @@ async function firstSecret(
         }
       }
     }
-    throw new Error("journey: the owner can list no secret to reveal");
+    // No secret to reveal (P-147 c); the quarantined write still needs a path.
+    return { path: null, organizationId: organizations[0]?.id ?? randomUUID() };
   } finally {
     await request("POST", "/v1/auth/sign-out", { body: {}, cookie });
   }

@@ -8,7 +8,7 @@ import { isatty } from "node:tty";
 import { API_MAJOR } from "@mykey/contracts";
 import { parseArgs } from "./args.ts";
 import { createClient } from "./client.ts";
-import { resolveApiUrl, selectorOf } from "./config.ts";
+import { extraCaOf, resolveApiUrl, selectorOf } from "./config.ts";
 import { CliError, EXIT, formatError } from "./errors.ts";
 import { exportCommand } from "./export.ts";
 import { refuseUnsafeRuntime } from "./guard.ts";
@@ -75,7 +75,8 @@ export async function main(argv: readonly string[], io: Io): Promise<number> {
         command.name === "run" ? null : io.stdin,
       ),
     };
-    const client = createClient(apiUrl);
+    const extraCa = extraCaOf(io.env, (path) => readFileSync(path, "utf8"));
+    const client = createClient(apiUrl, extraCa === undefined ? {} : { extraCa });
     await client.version();
     switch (command.name) {
       case "keys":

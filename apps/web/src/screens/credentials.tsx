@@ -162,7 +162,7 @@ function IssueForm(props: {
         )}
         <div className="actions">
           {blocked === null ? (
-            <button type="submit" disabled={action.busy}>
+            <button type="submit" disabled={action.busy || action.held}>
               Issue credential
             </button>
           ) : null}
@@ -207,7 +207,7 @@ function RevokeDialog(props: {
       title={`Revoke ${credential.name}`}
       name={credential.name}
       confirm="Revoke"
-      busy={action.busy}
+      busy={action.busy || action.held}
       onConfirm={() => void revoke()}
       onCancel={props.onCancel}
     >

@@ -70,7 +70,7 @@ export function ExportPanel(props: { at: At; environmentName: string }) {
       <p>
         An export writes every live value of this environment into one dotenv file. It needs a code
         from your authenticator of the last ten minutes, and it is recorded in the audit log with
-        the names it holds.
+        the number of names it holds.
       </p>
       {note === null ? null : <p role="status">{note}</p>}
       {failure === null ? null : <ErrorPanel failure={failure} action="export the environment" />}

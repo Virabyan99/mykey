@@ -127,6 +127,26 @@ describe("a GET changes nothing", () => {
     expect(changed(before, await snapshot())).toEqual([]);
   });
 
+  // Run 8.0 Task C (Session 7's Minor 11): the auth module's two GETs are not
+  // in ROUTES (docs/auth-route-contract.md). A session near its end shows
+  // whether asking it keeps it alive.
+  it("the two GET paths of the auth module change no row either", async () => {
+    const cookie = await f.tenants.cookie("ownerA");
+    await f.api.superuser.query(
+      "UPDATE auth.session SET expires_at = now() + interval '1 hour' WHERE expires_at > now()",
+    );
+    const before = await snapshot();
+    for (const [label, headers] of ASKED_AS) {
+      for (const path of ["/v1/auth/get-session", "/v1/auth/sessions"]) {
+        const response = await f.api.request("GET", path, { cookie, headers });
+        const body = await response.text();
+        expect(response.status, `${path}, ${label}`).toBe(200);
+        expect(body, `${path}, ${label}`).not.toBe("null");
+      }
+    }
+    expect(changed(before, await snapshot())).toEqual([]);
+  });
+
   it("a refused GET writes its denial to the audit log and changes nothing else", async () => {
     const cookie = await f.tenants.cookie("readerA");
     const before = await snapshot();

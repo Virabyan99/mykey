@@ -167,7 +167,7 @@ export function ArchiveDialog(props: {
       title={`Archive the ${target.kind} ${target.name}`}
       name={target.name}
       confirm="Archive"
-      busy={action.busy}
+      busy={action.busy || action.held}
       blocked={facts.isPending}
       onConfirm={() => void archive()}
       onCancel={props.onCancel}
@@ -242,7 +242,7 @@ export function ReactivateDialog(props: {
       title={`Reactivate the ${target.kind} ${target.name}`}
       name={target.name}
       confirm="Reactivate"
-      busy={action.busy}
+      busy={action.busy || action.held}
       onConfirm={() => void reactivate()}
       onCancel={props.onCancel}
     >

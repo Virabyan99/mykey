@@ -33,6 +33,10 @@ export const resetAccountCommand: OpsCommand = {
       );
       if (result.outcome === "refused") {
         io.stdout.write(`refused: ${result.reason}\n`);
+        if (result.reason === "restored_factor") {
+          // R1-2: after a restore the factor came from the pair; it is never trusted.
+          io.stdout.write("the active factor is older than the restore: use --kind mfa\n");
+        }
         return EXIT.refused;
       }
       const path = writeSecretFile(

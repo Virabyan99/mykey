@@ -19,6 +19,13 @@ const operationOf = (body: unknown): string | null => {
 
 export interface Action {
   busy: boolean;
+  /**
+   * The last answer was "the outcome is not known" (Run 8.0). The form's own
+   * button stays disabled: the server would answer a repeated request and not
+   * do it twice, but the page does not offer it. The operation's state is read
+   * on its own screen; closing the form or leaving the page ends the hold.
+   */
+  held: boolean;
   failure: Failure | null;
   /**
    * Sends one change. `print` describes the request (route and input, never
@@ -83,7 +90,7 @@ export function useAction(): Action {
   const clear = useCallback(() => {
     setFailure(null);
   }, []);
-  return { busy, failure, run, clear };
+  return { busy, held: isCode(failure, "outcome_unknown"), failure, run, clear };
 }
 
 export const isCode = (failure: Failure | null, code: string): boolean =>

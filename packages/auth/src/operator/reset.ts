@@ -8,6 +8,11 @@
 //
 // After the commit the throttle locks of the account are cleared, so an owner
 // locked out by failures can complete the reset (Review focus 2).
+//
+// R1-2 / R4-1 (Run 8.6, rule 9): a `password` reset accepts a code of the
+// active factor. After a restore that factor came from the pair, so the
+// reset refuses `password` while the account's active enrolment is no newer
+// than the latest `operator.restore_begin`; `mfa` retires it.
 import { randomBytes, randomUUID } from "node:crypto";
 import { appendAudit } from "@mykey/audit";
 import { LIMITS, type UserId } from "@mykey/contracts";
@@ -27,7 +32,7 @@ export type ResetPoint = (typeof RESET_POINTS)[number];
 
 export type InitiateResult =
   | { outcome: "issued"; userId: UserId; token: string; expiresAt: Date }
-  | { outcome: "refused"; reason: "no_such_account" | "disabled" };
+  | { outcome: "refused"; reason: "no_such_account" | "disabled" | "restored_factor" };
 
 export interface InitiateDeps {
   /** maintenance. */
@@ -60,6 +65,20 @@ export async function initiateReset(
     const account = found.rows[0];
     if (account === undefined) return { outcome: "refused", reason: "no_such_account" };
     if (account.state === "disabled") return { outcome: "refused", reason: "disabled" };
+    if (input.kind === "password") {
+      const restored = await tx.query<{ restored: boolean }>(
+        `SELECT EXISTS (
+           SELECT 1 FROM auth.totp_enrollment e
+            WHERE e.user_id = $1 AND e.state = 'active'
+              AND e.created_at <= (SELECT max(occurred_at) FROM audit.event
+                                    WHERE action = 'operator.restore_begin')
+         ) AS restored`,
+        [account.id],
+      );
+      if (restored.rows[0]?.restored === true) {
+        return { outcome: "refused", reason: "restored_factor" };
+      }
+    }
     await tx.query(
       `UPDATE auth.account_state
           SET state = 'recovery_pending', auth_epoch = auth_epoch + 1, updated_at = now()

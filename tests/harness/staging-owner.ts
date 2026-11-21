@@ -3,7 +3,9 @@
 // and keeps the seed and the recovery codes in workstation custody under
 // ~/.mykey/secrets/hosts/staging/ (0600, never printed); every later call
 // completes sign-in with a code of the stored seed. Synthetic owner only.
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+import { randomBytes } from "node:crypto";
+import { existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
@@ -119,11 +121,19 @@ export async function stagingOwnerSession(): Promise<{ cookie: string }> {
     return { cookie: sessionPair(verified) };
   }
 
-  // First use: enroll and activate; the seed and the codes go to custody only.
-  const enrolled = await publicRequest("POST", "/v1/auth/totp/enroll", {
-    body: {},
-    cookie: passwordCookie,
-  });
+  // First use: enroll and activate.
+  return { cookie: sessionPair(await enrollOwner(passwordCookie)) };
+}
+
+/**
+ * Enrolls and activates a new authenticator on a session that may enroll (a
+ * password sign-in of an `enrollment_pending` owner, or the session an `mfa`
+ * reset hands back). The seed and the codes go to custody only. Answers the
+ * activation's answer: after a reset it ends every session (P-51), so it may
+ * carry no cookie.
+ */
+async function enrollOwner(cookie: string): Promise<PublicAnswer> {
+  const enrolled = await publicRequest("POST", "/v1/auth/totp/enroll", { body: {}, cookie });
   if (enrolled.status !== 200) throw new Error(`enroll answered ${String(enrolled.status)}`);
   const { secret } = JSON.parse(enrolled.body) as { secret: string };
   registerSecret(secret);
@@ -131,11 +141,84 @@ export async function stagingOwnerSession(): Promise<{ cookie: string }> {
   const seed = OTPAuth.Secret.fromBase32(secret).bytes;
   const activated = await publicRequest("POST", "/v1/auth/totp/activate", {
     body: { code: await freshCode(seed) },
-    cookie: passwordCookie,
+    cookie,
   });
   if (activated.status !== 200) throw new Error(`activate answered ${String(activated.status)}`);
   const { recoveryCodes } = JSON.parse(activated.body) as { recoveryCodes: string[] };
   for (const code of recoveryCodes) registerSecret(code);
   writeCustody("owner-recovery-codes", recoveryCodes.join("\n"));
-  return { cookie: sessionPair(activated) };
+  return activated;
+}
+
+/** Runs `host.ts staging ops <argv>` (the operator's own path, over the tunnel). */
+export function stagingOps(argv: string[]): { code: number | null; stdout: string } {
+  const result = spawnSync(process.execPath, ["scripts/host.ts", "staging", "ops", ...argv], {
+    encoding: "utf8",
+    timeout: 120_000,
+    env: { ...process.env, MSYS_NO_PATHCONV: "1" },
+  });
+  return { code: result.status, stdout: result.stdout };
+}
+
+/**
+ * Run 3.10, moved here in Run 8.4: `ops reset-account` for the staging owner.
+ * Answers the link and its token (both registered as secrets); the link file
+ * is shredded.
+ */
+export function initiateOwnerReset(kind: "password" | "mfa"): { link: string; token: string } {
+  const run = stagingOps(["reset-account", "--email", STAGING_OWNER_EMAIL, "--kind", kind]);
+  if (run.code !== 0) throw new Error(`reset-account exited ${String(run.code)}`);
+  const path = /link in (\S+);/.exec(run.stdout)?.[1];
+  if (path === undefined) throw new Error("reset-account printed no link file");
+  const link = readFileSync(path, "utf8").trim();
+  rmSync(path, { force: true });
+  const token = /#t=([A-Za-z0-9_-]{43})&k=/.exec(link)?.[1];
+  if (token === undefined) throw new Error("the link file holds no token");
+  registerSecret(link);
+  registerSecret(token);
+  return { link, token };
+}
+
+/**
+ * Run 8.8 Step 3: gives the staging owner back to the workstation after a
+ * person used the account with their own password and authenticator. An
+ * `mfa` reset, completed as the reset page does: a new password, then a new
+ * authenticator enrolled on the session the reset hands back (a password
+ * sign-in is refused until then). Password, seed and recovery codes go to
+ * custody only, never printed; a fresh sign-in proves them.
+ */
+export async function reestablishStagingOwner(): Promise<void> {
+  const { token } = initiateOwnerReset("mfa");
+  const newPassword = `staging-${randomBytes(18).toString("base64url")}`;
+  registerSecret(newPassword);
+  const done = await publicRequest("POST", "/v1/auth/reset/complete", {
+    body: { token, newPassword },
+  });
+  if (done.status !== 200) throw new Error(`reset/complete answered ${String(done.status)}`);
+  const { next } = JSON.parse(done.body) as { next: string };
+  if (next !== "enroll") throw new Error(`an mfa reset answered next "${next}", not "enroll"`);
+  writeCustody("owner-password", newPassword);
+  // The old seed and codes belong to an enrollment the reset removed.
+  rmSync(custody("owner-totp-seed"), { force: true });
+  rmSync(custody("owner-recovery-codes"), { force: true });
+  await enrollOwner(sessionPair(done));
+  await stagingOwnerSession();
+}
+
+/**
+ * Completes a password reset with a new password and a code of the stored
+ * seed; the new password goes to custody. Answers it (registered as a secret).
+ */
+export async function completeOwnerPasswordReset(token: string): Promise<string> {
+  const stored = readCustody("owner-totp-seed");
+  if (stored === null) throw new Error("no owner-totp-seed in workstation custody");
+  const seed = OTPAuth.Secret.fromBase32(stored).bytes;
+  const newPassword = `staging-${randomBytes(18).toString("base64url")}`;
+  registerSecret(newPassword);
+  const done = await publicRequest("POST", "/v1/auth/reset/complete", {
+    body: { token, newPassword, code: await freshCode(seed) },
+  });
+  if (done.status !== 200) throw new Error(`reset/complete answered ${String(done.status)}`);
+  writeCustody("owner-password", newPassword);
+  return newPassword;
 }

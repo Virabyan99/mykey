@@ -19,3 +19,9 @@ ebd03634b9a217641010e7718745f5b2292ed884:docs/runbooks/kms-and-unseal.md:generic
 # is a credential id (a catalog row id, never a token). Reviewed false positives.
 ceeebde38137c10631a3d7b48e6833100de16036:tests/unit/cli/config.test.ts:generic-api-key:102
 98ceaf97406e1114e392a41032c1ab50ff176f7d:docs/evidence/session-5/run-5.4-staging-archive.json:generic-api-key:34
+
+# Session 8, Run 8.8: during the owner's first run the runbook's example block got staging's
+# address and a resource id of the staging workspace (a UUID of the address bar, never a token) in
+# place of SECRETS_PROJECT's placeholder, and was committed with the run's corrections; the next
+# commit put the placeholder back. Reviewed false positive.
+aaeab2a78fea7b594227af829c92c0d6c188c76e:docs/runbooks/consumer-local.md:generic-api-key:82

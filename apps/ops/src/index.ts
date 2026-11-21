@@ -61,6 +61,9 @@ export {
 } from "./commands/verify-journey.ts";
 export {
   deployVerify,
+  openWithDeployReport,
+  ownerConfirmedJourney,
   previousGateClosed,
+  revealCheckWithoutSecrets,
   type DeployVerifyDeps,
 } from "./commands/deploy-verify.ts";

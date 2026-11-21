@@ -75,6 +75,8 @@ COPY apps/web/package.json apps/web/
 RUN pnpm install --frozen-lockfile --ignore-scripts --filter "@mykey/web..."
 COPY packages/contracts/src packages/contracts/src
 COPY apps/web/src apps/web/src
+# Help shows the known limits, bundled from the runbook (Run 8.0).
+COPY docs/runbooks/known-limits.md docs/runbooks/
 COPY apps/web/build.ts apps/web/
 RUN node apps/web/build.ts
 

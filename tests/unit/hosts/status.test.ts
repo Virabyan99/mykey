@@ -1,3 +1,4 @@
+import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -116,6 +117,53 @@ describe("status.sh", () => {
       expect(line).toMatch(/timeout -k \d+ \d+ docker run /);
       expect(line).toContain(" --init ");
     }
+  });
+
+  // Run 8.0 (P-149, Session 6 finding F): the audit block, run in a shell with
+  // the host's commands stubbed. OpenBao's audit directory is one of the three
+  // parts; a host without the container has not measured it.
+  describe("the audit block", () => {
+    const script = readFileSync(
+      resolve(import.meta.dirname, "../../../infra/hosts/checks/status.sh"),
+      "utf8",
+    ).replaceAll("\r\n", "\n");
+    const start = script.indexOf("# Audit (P-116)");
+    const end = script.indexOf("# Certificates");
+    const block = script.slice(start, end);
+
+    function audit(openbao: "absent" | "writable" | "unwritable"): string {
+      const stubs = [
+        // the API's log holds no health_down line
+        'docker() { case "$1" in',
+        '  logs) echo \'{"event":"request"}\'; return 0 ;;',
+        `  inspect) [ "${openbao}" != absent ] ;;`,
+        `  exec) [ "${openbao}" = writable ] ;;`,
+        "  *) return 1 ;;",
+        "esac; }",
+        "jq() { cat >/dev/null; }",
+        "systemctl() { echo active; }",
+        "pg_read() { echo f; }",
+      ].join("\n");
+      const out = spawnSync("bash", ["-c", `${stubs}\n${block}\necho "$audit_failing"`], {
+        encoding: "utf8",
+      });
+      expect(out.status, out.stderr).toBe(0);
+      return out.stdout.trim();
+    }
+
+    it("is a whole block of the script", () => {
+      expect(start).toBeGreaterThan(0);
+      expect(end).toBeGreaterThan(start);
+    });
+
+    it("status: with no OpenBao container the audit device is unknown, not healthy", () => {
+      expect(audit("absent")).toBe("null");
+    });
+
+    it("control: with OpenBao's audit directory writable it is healthy, and failing when not", () => {
+      expect(audit("writable")).toBe("false");
+      expect(audit("unwritable")).toBe("true");
+    });
   });
 
   it("reports the service gate as the host reads it (Run 3.1)", () => {

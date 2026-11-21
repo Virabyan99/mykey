@@ -85,7 +85,7 @@ function EditForm(props: {
         <ErrorPanel failure={action.failure} action="save the new value" />
       )}
       <div className="actions">
-        <button type="submit" disabled={action.busy}>
+        <button type="submit" disabled={action.busy || action.held}>
           Save
         </button>
         <button type="button" onClick={props.onCancel} disabled={action.busy}>

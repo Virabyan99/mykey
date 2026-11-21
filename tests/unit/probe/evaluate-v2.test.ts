@@ -228,17 +228,50 @@ describe("checks_unknown (P-116)", () => {
     }
   });
 
-  it("the old heartbeat shapes never open it", () => {
+  // R6-6 (Run 8.6): an old heartbeat shape measures none of the checks it does
+  // not carry, so they are unknown: it opens checks_unknown and never resolves it.
+  const oldStep = (state: HostState, now: number, beatV1: Record<string, unknown>) => {
+    const recorded = recordHeartbeat(state, now, beatV1 as never);
+    const result = evaluate(now, recorded, true, L);
+    let delivered = result.next;
+    for (const alert of result.alerts) delivered = markDelivered(delivered, alert, now);
+    return { state: delivered, alerts: result.alerts.map((a) => `${a.kind} ${a.condition}`) };
+  };
+
+  it("an old heartbeat shape opens it, and never resolves it", () => {
     let state = initialState("staging", T);
+    const seen: string[] = [];
     for (let offset = 0; offset <= 900; offset += 60) {
-      state = recordHeartbeat(state, T + offset * S, {
+      const result = oldStep(state, T + offset * S, {
         bootId: "b",
-        sealed: null,
-        kmsReachable: null,
+        sealed: false,
+        kmsReachable: true,
+        reviewOpen: 0,
+        operationsUnresolved: 0,
       });
-      const result = evaluate(T + offset * S, state, true, L);
-      expect(result.alerts).toEqual([]);
-      state = result.next;
+      seen.push(...result.alerts);
+      state = result.state;
+    }
+    expect(seen).toEqual(["opened checks_unknown"]);
+  });
+
+  it("an open checks_unknown is not resolved by an old heartbeat shape", () => {
+    let state = initialState("staging", T);
+    const seen: string[] = [];
+    for (const offset of [0, 60, 120, 181]) {
+      const result = step(state, T + offset * S, beat(T + offset * S, { diskLow: null }));
+      seen.push(...result.alerts);
+      state = result.state;
+    }
+    expect(seen).toEqual(["opened checks_unknown"]);
+    for (let offset = 240; offset <= 900; offset += 60) {
+      const result = oldStep(state, T + offset * S, {
+        bootId: "b",
+        sealed: false,
+        kmsReachable: true,
+      });
+      expect(result.alerts.filter((alert) => alert.startsWith("resolved"))).toEqual([]);
+      state = result.state;
     }
   });
 });

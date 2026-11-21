@@ -1,0 +1,23 @@
+# Canary sweep on staging (Run 8.4, P-152)
+# 2026-11-20T13:26:01.748Z; project 53df369a-beec-4872-9712-dd2d1b1c0cce, environment 98444645-31d5-4c67-aa62-122003bb885a; seeded from 2026-11-20T13:22:39.914Z
+# needles: backup_password, machine_token, maintenance_password, password, recovery_code, reset_token, root_token, session, totp_seed, value
+# Values reach the host on fd 3 of the search, never an argument; only counts come back.
+# surface | needles searched | needles found | kinds found | controls found
+database (pg_dump, every schema) | 25 | 0 | - | 2 of 2
+OpenBao audit device (live and rotated) | 25 | 0 | - | 1 of 1
+audit archive (1 segments since the start) | 25 | 0 | - | 1 segments hold the control
+pair: database dump as text | 25 | 0 | - | 2 of 2
+pair: globals.sql | 25 | 0 | - | 1 of 1
+pair: restic check --read-data log | 25 | 0 | - | 1 of 1
+pair: manifest (eligible.json) | 25 | 0 | - | 1 of 1
+pair: openbao.snap as bytes (encrypted by OpenBao: proves little) | 25 | 0 | - | 0 of 0
+containers' environments and arguments, every process's arguments and environment | 25 | 0 | - | 1 of 1
+API log | 25 | 0 | - | 1 of 1
+edge (Traefik) log | 25 | 0 | - | 1 of 1
+provisioner log | 25 | 0 | - | 1 of 1
+postgres and openbao logs, every mykey-* unit's journal | 25 | 0 | - | 1 of 1
+reference page with its inline bundle | 26 | 0 | - | 1 of 1
+OpenAPI document | 26 | 0 | - | 1 of 1
+host.ts staging status --json | 26 | 0 | - | 1 of 1
+probe.ts state staging | 26 | 0 | - | 1 of 1
+shell histories (2 files) | 26 | 0 | - | 1 of 1
