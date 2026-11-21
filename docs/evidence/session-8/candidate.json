@@ -1,21 +1,21 @@
 {
-  "hostRelease": "host-v0.8.0",
+  "hostRelease": "host-v0.8.1",
   "cliRelease": "cli-v0.1.2",
-  "sourceCommit": "b6592006b6ca8cba7b2078a2dda417df17db5471",
-  "builtAt": "2026-11-20T17:42:33.392Z",
-  "releaseJsonSha256": "709b030b55adde1aeeec103015648d224d498a6781a963cb5b240161b8622382",
+  "sourceCommit": "9af70510325975bb03238492c4a5c6b5115b2c09",
+  "builtAt": "2026-11-21T12:11:25.521Z",
+  "releaseJsonSha256": "95521bcbb905c8bd821728944f9127a2724690a383090dcbf7f227fd19080974",
   "images": [
     {
       "name": "api",
-      "imageId": "sha256:b0ebb2e9683cc32d7ae87c471f2ec3e9b538d33a6a8ae974aff69adc03797a94"
+      "imageId": "sha256:753c2604b7e6c6e88b218330e598851cebf98852e5ca293ee097da4148b2b8e8"
     },
     {
       "name": "provisioner",
-      "imageId": "sha256:2ea5b5dfc760e94245ef9cbde4fe76225d910157f2fed79b703be42fa2c64487"
+      "imageId": "sha256:9a647b8635330121e301775da25092ce8cac4c4e834c16da22519bd65591218e"
     },
     {
       "name": "ops",
-      "imageId": "sha256:c0fb784ad9ad028f355340002a88e29fb05e6d2f8c2bc387dacf48154abaeaef"
+      "imageId": "sha256:c25e7102b8cbcf1adb0fa34ffbc8976e8fcb72493decb89dbda522676f744447"
     }
   ],
   "baseDigests": {
@@ -38,21 +38,16 @@
     "python": "python:3.13.18-slim-trixie@sha256:e48f59cdba69a3cbd9ed2cf0f348d90d45a8d350d98134cf1070bc106ee9ed90"
   },
   "lastMigration": "0018_incarnation",
-  "hostFilesCommit": "c46bac6285002b0175b69f58acd488efbae7287b",
-  "tooling": [
-    {
-      "path": "infra/hosts/backup/trust/prod-k1.pub",
-      "note": "Run 8.1 Task A: production's pair-signing trust anchor, written by backup-init; a host file, so a tooling line (P-145), no build"
-    }
-  ],
+  "hostFilesCommit": "d53254e5c7caf1796c51f48233b22b6a7d4d6157",
+  "tooling": [],
   "deploys": {
     "staging": {
-      "at": "2026-11-20T17:52:32.034Z",
-      "gateEpoch": 312
+      "at": "2026-11-21T12:23:57.333Z",
+      "gateEpoch": 315
     },
     "prod": {
-      "at": "2026-11-20T17:57:22.407Z",
-      "gateEpoch": 2
+      "at": "2026-11-21T12:27:16.383Z",
+      "gateEpoch": 3
     }
   }
 }
