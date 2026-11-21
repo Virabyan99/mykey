@@ -20,19 +20,19 @@ The project is in **Stage 1**, a 14-day plan of nine sessions.
 
 ## Where we stand
 
-_Last updated: 21 Nov 2026, at the Session 8 gate (PR #22), Gate R asked._
+_Last updated: 21 Nov 2026, after the Session 8 merge (PR #22); Gate R signed by the owner._
 
-| Session | Topic                                       | State                               |
-| ------- | ------------------------------------------- | ----------------------------------- |
-| 1       | Foundation                                  | **Done** (PASS WITH ISSUES), merged |
-| 2       | Infrastructure and make-or-break proofs     | **Done** (GO, no fallback), merged  |
-| 3       | Identity, access and resources              | **Done** (PASS WITH ISSUES), merged |
-| 4       | Operations engine and secret lifecycle      | **Done** (PASS WITH ISSUES), merged |
-| 5       | Machine access, CLI and API reference       | **Done** (PASS WITH ISSUES), merged |
-| 6       | Audit, limits, backup, recovery, deployment | **Done** (PASS WITH ISSUES), merged |
-| 7       | Web workspace                               | **Done** (PASS WITH ISSUES), merged |
-| 8       | Security review and controlled-use release  | **Gate R asked** (D-67), not merged |
-| 9       | Real use, agent experiment, stage exit      | Not started                         |
+| Session | Topic                                       | State                                  |
+| ------- | ------------------------------------------- | -------------------------------------- |
+| 1       | Foundation                                  | **Done** (PASS WITH ISSUES), merged    |
+| 2       | Infrastructure and make-or-break proofs     | **Done** (GO, no fallback), merged     |
+| 3       | Identity, access and resources              | **Done** (PASS WITH ISSUES), merged    |
+| 4       | Operations engine and secret lifecycle      | **Done** (PASS WITH ISSUES), merged    |
+| 5       | Machine access, CLI and API reference       | **Done** (PASS WITH ISSUES), merged    |
+| 6       | Audit, limits, backup, recovery, deployment | **Done** (PASS WITH ISSUES), merged    |
+| 7       | Web workspace                               | **Done** (PASS WITH ISSUES), merged    |
+| 8       | Security review and controlled-use release  | **Done**, Gate R signed (D-67), merged |
+| 9       | Real use, agent experiment, stage exit      | Not started                            |
 
 Each session's detail is in `docs/evidence/session-N/report.md`. Session 8's report has "What Session 9 must know"; Gate R's document is `docs/evidence/session-8/gate-r.md`.
 
@@ -98,7 +98,7 @@ Each session's detail is in `docs/evidence/session-N/report.md`. Session 8's rep
 
 ### Open items
 
-- **Owner:** Gate R ("approved" or not, D-67) and the merge of PR #22. Without "approved" nothing of Session 9 starts and production stays closed.
+- **Session 9:** its plan is written first. Gate R is signed (D-67): Run 9.1 may open production by `production.md`, for real non-critical secrets and one first consumer.
 - **Carried to Session 9** (Session 8's report, "What Session 9 must know"):
   - the workspace's UI and UX, the owner's request; the project id is shown only in the address;
   - the credential drill's aim (`credential-drill.staging.test.ts`): its pause over SSH misses the one-call window after the dispatch marker;

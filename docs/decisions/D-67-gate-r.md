@@ -2,7 +2,7 @@
 
 **Date:** 2026-11-21
 
-**Status:** ASKED. The owner reads `docs/evidence/session-8/gate-r.md` and answers "approved", or not. The answer is written here and in `owner-requests.md`, with its date. Evidence:
+**Status:** APPROVED by the owner on 2026-11-21 (19:25 UTC). Evidence:
 
 - `docs/evidence/session-8/gate-r.md`, `manifest.md`, `candidate.json`;
 - `docs/evidence/session-8/report.md`.
@@ -37,4 +37,4 @@ Doc 10's Run 8.9 (OWN-7) ends Session 8 with one owner decision: whether real, n
 
 ## Answer
 
-_(to be recorded: the owner's words and the date)_
+"approved, merge" (the owner, 21 Nov 2026, 19:25 UTC, after the full CI run `44938741102` at `9a4c9f4` was green). Gate R is signed: controlled use of `host-v0.8.1` with `cli-v0.1.2` is authorized, real non-critical secrets on production for one declared first consumer, from Run 9.1. Production stays closed until Run 9.1 opens it by `production.md`.

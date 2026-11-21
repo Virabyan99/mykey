@@ -15,7 +15,7 @@ _20–21 Nov 2026. Plan: `docs/plans/session-8-plan.md`. Branch `session-8`, pul
 
 What is not proven is listed in `gate-r.md` above the signature line. The weightiest item is the staging drill of an issuance left unknown. It was red on the candidate, and its fault is proven on CI only. So AC-1.57, and with it FR-1.101, is not PASS.
 
-**Gate R is not signed yet.** The owner is asked for "approved" and "merge" (D-67).
+**Gate R is signed.** The owner answered "approved, merge" on 21 Nov 2026, 19:25 UTC (D-67).
 
 ## What ran where, once
 
@@ -82,10 +82,9 @@ FR-1.102 forbids a claim the product does not keep. A page's text is part of the
 
 ## Open issues
 
-1. **Gate R and the merge:** the owner's answers (D-67).
-2. **The credential drill's aim.** The same SSH-timed pause also failed `reconcile` once. The pause should be triggered on the host, by the API's dispatch marker, not sent over SSH.
-3. **The nine NOT PROVEN items** (Gate R, section 4), each with its reason.
-4. **The accepted Mediums.** The four restore items (R4-2, R4-3, R4-4, R4-10) are in the restore code, which stays as proven (P-150).
+1. **The credential drill's aim.** The same SSH-timed pause also failed `reconcile` once. The pause should be triggered on the host, by the API's dispatch marker, not sent over SSH.
+2. **The nine NOT PROVEN items** (Gate R, section 4), each with its reason.
+3. **The accepted Mediums.** The four restore items (R4-2, R4-3, R4-4, R4-10) are in the restore code, which stays as proven (P-150).
 
 ## What Session 9 must know
 
