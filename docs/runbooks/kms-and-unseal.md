@@ -70,5 +70,5 @@ A new key id in the same domain: create and activate it (`kms … kmip create sy
 
 ## Owed later
 
-- Production: the same layout with its own KMS domain, user, policy and certificate (`production.md`, Session 8). The operator tool accepts every KMS command for production but `kms-import`.
+- ~~Production~~: done on 21 Nov 2026 (Run 8.1 Task A), the same layout with its own domain `mykey-prod-kms`, user `mykey-prod-seal`, policy `mykey-prod-kms-seal`, seal key `mykey-prod-seal-1` and certificate `prod-seal-1` (**until 21 Dec 2026, 07:48 UTC**); the commands are in `production.md`. The operator tool accepts every KMS command for production but `kms-import`.
 - Checkpoint `kms-cert-expiry` (`docs/evidence/session-2/kms-checkpoints.json`): from 12 Dec 2026, 09:57 UTC, prove that an expired certificate cannot unseal.

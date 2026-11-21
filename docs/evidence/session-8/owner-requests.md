@@ -24,6 +24,14 @@ The agent pushed production's host files, installed the pinned `okms` and made t
 
 Sitting 2 (later the same day): remove `create` and `activate` from `mykey-prod-kms-seal`, after the agent says the seal key exists.
 
+**Sitting 1 answered:** "prod KMS done" (the owner, 21 Nov 2026), domain `edafd078-…`; the certificate matched the CSR.
+
+### Sitting 2, asked on 21 Nov 2026 (the seal key `mykey-prod-seal-1` is active)
+
+1. IAM → policy `mykey-prod-kms-seal` → remove `okms:kmip:create` and `okms:kmip:activate`, leaving five actions.
+2. Copy `~/.mykey/custody/prod/` (the init answer and the backup folder) into the password manager.
+3. Reply "prod sitting 2 done".
+
 **Answered:** —
 
 ## 3. After the freeze: one hour (OWN-6)

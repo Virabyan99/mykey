@@ -39,7 +39,12 @@
   },
   "lastMigration": "0018_incarnation",
   "hostFilesCommit": "c46bac6285002b0175b69f58acd488efbae7287b",
-  "tooling": [],
+  "tooling": [
+    {
+      "path": "infra/hosts/backup/trust/prod-k1.pub",
+      "note": "Run 8.1 Task A: production's pair-signing trust anchor, written by backup-init; a host file, so a tooling line (P-145), no build"
+    }
+  ],
   "deploys": {
     "staging": {
       "at": "2026-11-20T17:52:32.034Z",

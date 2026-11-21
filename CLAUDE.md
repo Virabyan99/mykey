@@ -97,7 +97,8 @@ Each session's detail is in `docs/evidence/session-N/report.md`. Session 7's rep
   - `CVE-2026-97054` in OpenBao and Traefik (HTTP/1 servers; reviewed into `.trivyignore.images`);
   - the credential drill's fault placement is probabilistic.
 - **Dated:**
-  - **All KMS certificates expire on 12 Dec 2026** (staging seal at 10:50 UTC). Replace them before then (runbook `kms-and-unseal.md`). The checkpoint `kms-cert-expiry` is due from 12 Dec 09:57 UTC, and `certificate_expiring` opens 10 days before.
+  - **Staging's KMS certificates expire on 12 Dec 2026** (staging seal at 10:50 UTC). Replace them before then (runbook `kms-and-unseal.md`). The checkpoint `kms-cert-expiry` is due from 12 Dec 09:57 UTC, and `certificate_expiring` opens 10 days before.
+  - **Production's seal certificate `prod-seal-1` expires on 21 Dec 2026, 07:48 UTC** (issued 21 Nov 2026). Replace it before then, the same way, with production's names (`production.md`).
   - `.trivyignore.images` expires on 14 Dec 2026.
   - The checkpoint `pair-30-day` is due from 17 Dec 2026 19:00 UTC, before the 05:00 retention of 18 Dec.
 - **Owner:** nothing is open. OWN-4 is confirmed (20 Nov 2026): the two files of `~/.mykey/custody/staging/backup/` are also in the owner's password manager.

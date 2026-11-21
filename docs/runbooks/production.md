@@ -45,30 +45,40 @@ MSYS_NO_PATHCONV=1 node scripts/host.ts prod kms-csr prod-seal-1                
 ```sh
 MSYS_NO_PATHCONV=1 node scripts/host.ts prod kms-cert prod-seal-1 C:/Users/<you>/.mykey/kms/prod-seal-1.crt
 MSYS_NO_PATHCONV=1 node scripts/host.ts prod kms-use prod-seal-1
+MSYS_NO_PATHCONV=1 node scripts/host.ts prod env MYKEY_KMS_HOST us-east-vin.okms.ovh.us   # before any `kms … --`: okms.sh reads it
+MSYS_NO_PATHCONV=1 node scripts/host.ts prod maint 10 -- docker pull -q <restic image by digest>    # okms runs in the pinned restic image
+MSYS_NO_PATHCONV=1 node scripts/host.ts prod maint 10 -- docker pull -q <openbao image by digest>
+MSYS_NO_PATHCONV=1 node scripts/host.ts prod kms prod-seal-1 -- kmip locate --details   # the certificate works; the domain is empty
 MSYS_NO_PATHCONV=1 node scripts/host.ts prod kms prod-seal-1 -- kmip create symmetric --alg AES --size 256 --usage encrypt,decrypt --name mykey-prod-seal-1 --extractable=false --sensitive
 MSYS_NO_PATHCONV=1 node scripts/host.ts prod kms prod-seal-1 -- kmip activate <key id>
-MSYS_NO_PATHCONV=1 node scripts/host.ts prod env MYKEY_KMS_HOST us-east-vin.okms.ovh.us
+MSYS_NO_PATHCONV=1 node scripts/host.ts prod kms prod-seal-1 -- kmip attributes get <key id>   # Active, Never Extractable, Sensitive
 MSYS_NO_PATHCONV=1 node scripts/host.ts prod env MYKEY_KMS_SEAL_KEY_ID <key id>
 MSYS_NO_PATHCONV=1 node scripts/host.ts prod env MYKEY_OPENBAO 1
+MSYS_NO_PATHCONV=1 node scripts/host.ts prod env MYKEY_BAO_URL https://openbao:8200       # without it `up` stops: the provisioner requires it
 ```
 
-**Owner, console, sitting 2:** remove `create` and `activate` from `mykey-prod-kms-seal`.
+**Owner, console, sitting 2** (as soon as the key is active; nothing below needs the two rights): remove `create` and `activate` from `mykey-prod-kms-seal`.
 
 **Agent:**
 
 ```sh
-MSYS_NO_PATHCONV=1 node scripts/host.ts prod maint 10 -- docker pull -q <openbao image by digest>
-MSYS_NO_PATHCONV=1 node scripts/host.ts prod up               # renders openbao.hcl; OpenBao starts and is unsealed by the KMS
+MSYS_NO_PATHCONV=1 node scripts/host.ts prod up               # renders openbao.hcl; OpenBao starts, waits for init, and is unsealed by the KMS after it
 MSYS_NO_PATHCONV=1 node scripts/host.ts prod bao-init         # once; the custody copy lands in ~/.mykey/custody/prod/
 MSYS_NO_PATHCONV=1 node scripts/host.ts prod ops-secrets
-MSYS_NO_PATHCONV=1 node scripts/host.ts prod backup-init
+MSYS_NO_PATHCONV=1 node scripts/host.ts prod backup-init      # writes infra/hosts/backup/trust/prod-k<n>.pub: commit it, then push
 MSYS_NO_PATHCONV=1 node scripts/host.ts prod backup-custody   # ~/.mykey/custody/prod/backup/
-MSYS_NO_PATHCONV=1 node scripts/host.ts prod r2-install audit-archive    # and pairs, pairs-cleanup: production's own tokens, mykey-* buckets only
-MSYS_NO_PATHCONV=1 node scripts/host.ts prod timers
-MSYS_NO_PATHCONV=1 node scripts/host.ts prod status           # OpenBao unsealed, KMS reachable, gate closed
+MSYS_NO_PATHCONV=1 node scripts/host.ts prod r2-install audit-archive    # and pairs, pairs-cleanup: the workstation's mykey-prod-pairs-* and the shared audit-archive token
+MSYS_NO_PATHCONV=1 node scripts/host.ts prod timers           # sets MYKEY_BACKUP_EXPECTED=yes
+# the first pair at once rather than at 03:00 (on the host, as root): systemctl start mykey-backup.service → "eligible <id>"
+MSYS_NO_PATHCONV=1 node scripts/host.ts prod status           # OpenBao unsealed, KMS reachable, backup fresh, gate closed
+node scripts/probe.ts state prod                              # `open` empty: checks_unknown closes with the first heartbeat that reads OpenBao
 ```
 
+OpenBao's incarnation copy lives in each organization's namespace and is written by `provision-organization`: an empty production has only the two others (`app.service_control`, `host.env`), and that is complete.
+
 **Owner:** copy `~/.mykey/custody/prod/` (the init answer and the backup folder) into the password manager, as OWN-4 was for staging, and confirm. The certificate's end date (30 days from issue) goes into CLAUDE.md's dated items; it is replaced as `kms-and-unseal.md` says.
+
+**Done on 21 Nov 2026 (Run 8.1 Task A):** domain `mykey-prod-kms` (`edafd078-…`), seal key `mykey-prod-seal-1` (`eb5e0572-…`), certificate `prod-seal-1` until 21 Dec 2026, 07:48 UTC; the first pair eligible at 08:00 UTC; the probe with nothing open (`custody-map.md`, production).
 
 No `bootstrap-owner` and no `provision-organization` here: production holds no account, no organization and no data until the first opening. The probe keeps it `inService: false`.
 

@@ -4,7 +4,33 @@ _20 Nov 2026. Plan: `docs/plans/session-8-plan.md`, Run 8.1 (D08-S45, P-145)._
 
 ## What was done
 
-**Task A** (production's OpenBao) has not started yet. It waits for the owner's KMS sitting (`owner-requests.md`, item 2). Under P-145 its host-file and tooling changes build nothing, so it can follow the freeze. The candidate was deployed to production closed and without OpenBao, as the plan's Step 6 allows.
+**Task A — production gets its OpenBao** (21 Nov 2026, after the freeze; P-146, with the owner's yes of 20 Nov).
+
+1. **Host files (Step 1).** Production's files were pushed at the freeze (`c46bac6`). Nothing under `infra/hosts` or `infra/compose` changed between `b659200` and the start of this task.
+2. **KMS (Step 2).**
+   - Owner, sitting 1: domain `mykey-prod-kms` (`edafd078-1db6-41a0-8431-ad65eb03ea8d`, `us-east-vin`), user `mykey-prod-seal`, policy `mykey-prod-kms-seal` with the seven actions, and the certificate for the CSR `prod-seal-1` (made on the host in Run 8.0 Task B).
+   - The downloaded certificate's public key equals the CSR's (SHA-256 of both: the same). It is `CN=prod-seal-1`, issued by `us-east-vin KMS user ECC CA`, valid from 21 Nov 07:48 to **21 Dec 2026, 07:48 UTC**.
+   - `kms-cert`, `kms-use`; `env MYKEY_KMS_HOST`; the restic and OpenBao images by digest in two `maint` windows; `kmip locate`: the domain is empty.
+   - `kmip create symmetric` (AES-256, `--extractable=false --sensitive`), then `kmip activate`. The key is `mykey-prod-seal-1`, id `eb5e0572-a9a6-435f-9d84-6c1155596004`. Its attributes: `State Active`, `Extractable false`, `Never Extractable true`, `Sensitive true`, `Always Sensitive true`.
+   - `env` for `MYKEY_KMS_SEAL_KEY_ID`, `MYKEY_OPENBAO=1` and `MYKEY_BAO_URL=https://openbao:8200`.
+   - Sitting 2 (removing `create` and `activate`) is asked of the owner; see "Open issues".
+3. **OpenBao and the rest (Step 3).**
+   - `up`: `openbao.hcl` rendered; OpenBao started with the KMIP seal and waited for its init. The API (closed) and the provisioner started; the provisioner is healthy.
+   - `bao-init`: initialised; the recovery key was printed as `[redacted]`; the custody copy is in `~/.mykey/custody/prod/openbao-init.json`; audit headers and the root-namespace policy backup written.
+   - `ops-secrets`, `backup-init` (trust anchor `infra/hosts/backup/trust/prod-k1.pub`, committed), `backup-custody` (`~/.mykey/custody/prod/backup/`).
+   - `r2-install` for `audit-archive`, `pairs` and `pairs-cleanup`: production's pair tokens (`mykey-prod-pairs-upload`, `-cleanup`, made in Session 1) and the shared audit-archive token were already in workstation custody. No Cloudflare token was made, and only `mykey-*` buckets are involved.
+   - `timers`: seven job timers, with `MYKEY_BACKUP_EXPECTED=yes`.
+   - **The first pair at once**, rather than at 03:00: `systemctl start mykey-backup.service` → `eligible 543e2b7a-983f-40ed-9484-c9963a7ba07e` (uploaded, read back, checked, signed).
+   - `status`: `sealed false`, `sealType kmip`, `kmsReachable true`, the provisioner healthy, backup fresh, `kms-client` until 21 Dec. `gate closed` is the only line not ok, on purpose.
+   - `probe.ts state prod`: `open` is empty. **`checks_unknown` closed** with the first heartbeat that read OpenBao, and production stays `inService: false`.
+   - No `bootstrap-owner` and no `provision-organization`: production holds no account, organization or data.
+4. **Custody (Step 4).** `custody-map.md` has a production table, and `credential-custody.md` has the `prod-seal-1` key and production's init answer (names and places only). The owner is asked to copy `~/.mykey/custody/prod/` into the password manager. CLAUDE.md's dated items name the new certificate's end.
+5. **What broke (Step 5).** Three gaps of `production.md`, none in the tool:
+   - `MYKEY_KMS_HOST` must be set **before** the first `kms … --` command (`okms.sh` reads it), not after the key is made.
+   - `okms` runs in the pinned restic image, which a fresh production lacks: the first `kms` command failed on the closed registry egress. The restic image is now pulled in a `maint` window first.
+   - `MYKEY_BAO_URL` was not in the runbook. Without it, `up` stops on the provisioner's required variable.
+
+   `production.md` now has the order that ran, with the readings to expect. `candidate.json` gets one `tooling` line (the trust anchor); everything else is documentation (P-145).
 
 **Task B — the freeze.**
 
@@ -71,6 +97,7 @@ _20 Nov 2026. Plan: `docs/plans/session-8-plan.md`, Run 8.1 (D08-S45, P-145)._
 
 ## Open issues
 
-- Task A: production's KMS, OpenBao, custody, backup and timers. It waits for "prod KMS done".
+- Task A, owner: sitting 2 (remove `create` and `activate` from `mykey-prod-kms-seal`), and `~/.mykey/custody/prod/` into the password manager.
+- Task A: `infra/hosts/backup/trust/prod-k1.pub` reaches staging at its next `push` (the drill and restore checks read the trust directory). Production got it by `push` after the commit.
 - The candidate's CLI proofs (`cli-matrix`, `cli.staging`, `test:consumers`) and the one pass belong to Run 8.7 Task B (P-145).
 - Staging is ready for the owner's hour (Run 8.8).
