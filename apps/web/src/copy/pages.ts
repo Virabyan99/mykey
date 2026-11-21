@@ -125,7 +125,7 @@ export const PAGES = {
     title: "Audit",
     summary: "Every recorded event of this organization and its outcome, for checking.",
     how: [
-      "Events are filtered by the server: by outcome, by actor kind and by time.",
+      "Filter by day, action, outcome, actor, place, operation or request; without a window it shows the last 30 days.",
       "Audit events are kept for 365 days and copied to locked storage.",
       "Activity tells the same story in plain words.",
     ],

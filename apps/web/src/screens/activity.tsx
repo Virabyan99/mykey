@@ -4,6 +4,8 @@
 // they happened, beside the operation's state as it is now. A target is
 // shown by its current name. The words are the server's: an outcome that is
 // not known stays "not known".
+import { PageHeader, ThreeViews } from "../ui/PageHeader.tsx";
+import { PAGES } from "../copy/pages.ts";
 import { useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query";
 import { LIMITS, type ActivityListBody } from "@mykey/contracts";
 import { useState } from "react";
@@ -252,7 +254,8 @@ export function Activity() {
   if (organization === null) return null;
   return (
     <>
-      <h1>Activity</h1>
+      <PageHeader page={PAGES.activity} />
+      <ThreeViews />
       <form
         className="filters"
         onSubmit={(event) => {

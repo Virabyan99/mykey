@@ -3,14 +3,18 @@
 // narrows it by name only. A list that changed between two pages is not
 // stitched together: it is read again from its first page, and the page says so.
 import { useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
-import { webPath } from "@mykey/contracts";
+import { LIMITS, webPath } from "@mykey/contracts";
 import { useRef, useState, type SyntheticEvent } from "react";
 import { call, callSecret, failureOf, need } from "../api/client.ts";
 import { ErrorPanel } from "../errors/ErrorPanel.tsx";
-import { Link } from "../router.tsx";
+import { PAGES } from "../copy/pages.ts";
+import { Link, navigate } from "../router.tsx";
 import { useScope } from "../state/scope.tsx";
 import { isCode, useAction } from "../state/use-action.ts";
 import { AreaField, Field } from "../ui/Field.tsx";
+import { Icon } from "../ui/icons.tsx";
+import { Menu } from "../ui/Menu.tsx";
+import { EmptyState, PageHeader, ScopeIds } from "../ui/PageHeader.tsx";
 import { EnvironmentNotice } from "../ui/Resource.tsx";
 import { Loading, StateBadge } from "../ui/StateBadge.tsx";
 import { Time } from "../ui/Time.tsx";
@@ -121,6 +125,7 @@ function Search(props: { prefix: string; onSearch: (prefix: string) => void }) {
     <form className="search" role="search" onSubmit={submit} noValidate>
       <Field
         label="Name starts with"
+        hint="The server's prefix search: the names that start with what you type."
         error={problem}
         inputRef={input}
         type="text"
@@ -149,7 +154,7 @@ function Search(props: { prefix: string; onSearch: (prefix: string) => void }) {
   );
 }
 
-function Names(props: { at: At; userId: string; prefix: string }) {
+function Names(props: { at: At; userId: string; prefix: string; onFirst?: () => void }) {
   const { at, userId, prefix } = props;
   const client = useQueryClient();
   const [notice, setNotice] = useState<string | null>(null);
@@ -199,15 +204,29 @@ function Names(props: { at: At; userId: string; prefix: string }) {
     <>
       {notice === null ? null : <p role="status">{notice}</p>}
       {rows.length === 0 ? (
-        <p>
-          {prefix === "" ? (
-            "This environment has no secret yet."
-          ) : (
-            <>
-              No name here starts with <code>{prefix}</code>.
-            </>
-          )}
-        </p>
+        prefix === "" ? (
+          <EmptyState
+            title="No secrets yet"
+            text="Secrets are the values your application reads at start, such as API keys and passwords. Add the first one, or import a .env file."
+            learn="add-secrets"
+            {...(props.onFirst === undefined
+              ? {}
+              : {
+                  action: (
+                    <>
+                      <button type="button" className="primary" onClick={props.onFirst}>
+                        Add the first secret
+                      </button>
+                      <Link to={webPath("import", at)}>Import a .env file</Link>
+                    </>
+                  ),
+                })}
+          />
+        ) : (
+          <p>
+            No name here starts with <code>{prefix}</code>.
+          </p>
+        )
       ) : (
         <div className="scroll">
           <table aria-label="Secrets">
@@ -217,6 +236,9 @@ function Names(props: { at: At; userId: string; prefix: string }) {
                 <th scope="col">State</th>
                 <th scope="col">Version</th>
                 <th scope="col">Last change</th>
+                <th scope="col">
+                  <span className="visually-hidden">Actions</span>
+                </th>
               </tr>
             </thead>
             <tbody>
@@ -231,6 +253,18 @@ function Names(props: { at: At; userId: string; prefix: string }) {
                   <td>{row.version ?? <span className="muted">none</span>}</td>
                   <td>
                     <Time at={row.changedAt} />
+                  </td>
+                  <td>
+                    <Menu
+                      label={`Actions for ${row.name}`}
+                      items={[
+                        { label: "Open", to: webPath("secret", { ...at, name: row.name }) },
+                        {
+                          label: "History",
+                          to: `${webPath("secret", { ...at, name: row.name })}#history`,
+                        },
+                      ]}
+                    />
                   </td>
                 </tr>
               ))}
@@ -279,12 +313,35 @@ export function Secrets() {
 
   return (
     <>
-      <h1>Secrets</h1>
-      <p className="hint">
-        {project.name} / {environment.name}. Names and versions only. Values are read from the
-        secret store when you press Reveal on a secret&apos;s page, when you export the environment,
-        and when you preview an import (to compare, without showing them).
-      </p>
+      <PageHeader
+        page={PAGES.secrets}
+        meta={<ScopeIds project={project} environment={environment} />}
+        actions={
+          writable && !creating ? (
+            <>
+              <button
+                type="button"
+                className="primary"
+                onClick={() => {
+                  setNotice(null);
+                  setCreating(true);
+                }}
+              >
+                <Icon name="plus" />
+                New secret
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  navigate(webPath("import", at));
+                }}
+              >
+                Import
+              </button>
+            </>
+          ) : undefined
+        }
+      />
       <EnvironmentNotice state={environment.state} reason={environment.reviewReason} />
       {creating ? (
         <NewSecret
@@ -298,24 +355,31 @@ export function Secrets() {
             void client.invalidateQueries({ queryKey: [userId, at.org] });
           }}
         />
-      ) : writable ? (
-        <div className="actions">
-          <button
-            type="button"
-            onClick={() => {
-              setNotice(null);
-              setCreating(true);
-            }}
-          >
-            New secret
-          </button>
-        </div>
       ) : null}
       {notice === null ? null : <p role="status">{notice}</p>}
       {readable ? (
         <>
+          <p className="hint">
+            Values stay hidden in lists. Open a secret to reveal its value for{" "}
+            {String(LIMITS.reveal.displayMaxSeconds)} seconds. Values are read from the secret store
+            when you press Reveal on a secret&apos;s page, when you export the environment, and when
+            you preview an import (to compare, without showing them).
+          </p>
           <Search prefix={prefix} onSearch={setPrefix} />
-          <Names key={prefix} at={at} userId={userId} prefix={prefix} />
+          <Names
+            key={prefix}
+            at={at}
+            userId={userId}
+            prefix={prefix}
+            {...(writable
+              ? {
+                  onFirst: () => {
+                    setNotice(null);
+                    setCreating(true);
+                  },
+                }
+              : {})}
+          />
         </>
       ) : null}
     </>

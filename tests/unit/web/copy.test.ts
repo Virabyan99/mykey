@@ -12,11 +12,13 @@ import {
   ARTICLES,
   CATEGORIES,
   CLI_EXIT_CODES,
+  CONNECT_STEPS,
   GLOSSARY,
   OPERATOR_RUNBOOKS,
   PAGES,
   STATES,
   STATE_LABELS,
+  TOKEN_WARNING,
   lintText,
   stringsOf,
 } from "@mykey/web";
@@ -56,6 +58,8 @@ const everyText = (): string[] => [
   ...stringsOf(CATEGORIES),
   ...stringsOf(CLI_EXIT_CODES),
   ...stringsOf(OPERATOR_RUNBOOKS),
+  ...stringsOf(CONNECT_STEPS),
+  TOKEN_WARNING,
 ];
 
 describe("the copy catalogue", () => {

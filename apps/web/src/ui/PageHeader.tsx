@@ -5,6 +5,7 @@
 import { webPath } from "@mykey/contracts";
 import { useId, type ReactNode } from "react";
 import { Link } from "../router.tsx";
+import { IdLine } from "./IdChip.tsx";
 import { Icon } from "./icons.tsx";
 
 export interface PageText {
@@ -98,4 +99,29 @@ export function Callout(props: { tone?: "info" | "warning"; title?: string; chil
 /** A key of the keyboard, as text. */
 export function Kbd(props: { children: string }) {
   return <kbd>{props.children}</kbd>;
+}
+
+/** The ids of the project and the environment a screen is in, each copyable. */
+export function ScopeIds(props: { project: { id: string }; environment?: { id: string } | null }) {
+  return (
+    <>
+      <IdLine of="project" id={props.project.id} />
+      {props.environment === undefined || props.environment === null ? null : (
+        <IdLine of="environment" id={props.environment.id} />
+      )}
+    </>
+  );
+}
+
+/** Activity, Audit and Operations, told apart in one line each (the same callout on all three). */
+export function ThreeViews() {
+  return (
+    <Callout title="Activity, Audit and Operations">
+      <ul>
+        <li>Activity: what people and machines did, in plain words.</li>
+        <li>Audit: every recorded event and its outcome, for checking.</li>
+        <li>Operations: changes the service carried out for one environment, and their state.</li>
+      </ul>
+    </Callout>
+  );
 }

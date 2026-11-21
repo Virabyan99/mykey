@@ -4,6 +4,8 @@
 // whose outcome is not known is shown as that: never as failed, never with a
 // button that sends the change again. Settling it is an operator's work on
 // the host; this screen can only look.
+import { EmptyState, PageHeader, ScopeIds, ThreeViews } from "../ui/PageHeader.tsx";
+import { PAGES } from "../copy/pages.ts";
 import { useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query";
 import { LIMITS, webPath, type ErrorCode, type OperationsListBody } from "@mykey/contracts";
 import { useId, useState } from "react";
@@ -227,7 +229,12 @@ function List(props: { at: At; userId: string }) {
         />
       )}
       {rows.length === 0 ? (
-        <p>No operation is recorded for this environment.</p>
+        <EmptyState
+          title="No operations"
+          text="No operation is recorded for this environment. Changes that take longer, or whose end was not seen, are listed here."
+          action={<Link to={webPath("secrets", props.at)}>Go to Secrets</Link>}
+          learn="activity-audit-operations"
+        />
       ) : (
         <div className="scroll">
           <table aria-label="Operations">
@@ -300,13 +307,20 @@ export function Operations() {
   const at: At = { org: organization.id, project: project.id, env: environment.id };
   return (
     <>
-      <h1>Operations</h1>
-      <p className="hint">
-        {project.name} / {environment.name}.{" "}
-        {organization.role === "owner" || organization.role === "admin"
-          ? "Every member's operations."
-          : "Your own operations."}
-      </p>
+      <PageHeader
+        page={PAGES.operations}
+        meta={
+          <>
+            <ScopeIds project={project} environment={environment} />
+            <span className="muted">
+              {organization.role === "owner" || organization.role === "admin"
+                ? "Every member's operations."
+                : "Your own operations."}
+            </span>
+          </>
+        }
+      />
+      <ThreeViews />
       <EnvironmentNotice state={environment.state} reason={environment.reviewReason} />
       <List at={at} userId={userId} />
     </>

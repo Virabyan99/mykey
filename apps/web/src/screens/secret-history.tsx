@@ -64,8 +64,8 @@ export function History(props: {
   });
 
   return (
-    <section>
-      <h2>History</h2>
+    <section id="history" aria-labelledby="history-title">
+      <h2 id="history-title">History</h2>
       {history.isPending ? (
         <Loading what="the history" />
       ) : history.isError ? (

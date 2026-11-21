@@ -20,6 +20,13 @@ function OperationsLink() {
   );
 }
 
+/** The anchor of a failure's entry in the help article "Error messages, A to Z". */
+export function errorAnchor(failure: Failure): string {
+  if (failure.kind === "transport") return "error-transport";
+  if (failure.kind === "unfinished") return "error-unfinished";
+  return `error-${failure.code}`;
+}
+
 export function ErrorPanel(props: {
   failure: Failure;
   /** Completes "… to {action}", e.g. "save the secret". */
@@ -64,6 +71,13 @@ export function ErrorPanel(props: {
         {operationId === null ? null : <OperationsLink />}
         {props.children}
       </div>
+      <p className="hint">
+        <Link
+          to={`${webPath("help-article", { article: "errors" })}#${errorAnchor(props.failure)}`}
+        >
+          Learn more about this message
+        </Link>
+      </p>
     </section>
   );
 }

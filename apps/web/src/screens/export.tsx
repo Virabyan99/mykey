@@ -63,7 +63,7 @@ export function ExportPanel(props: { at: At; environmentName: string }) {
   };
 
   return (
-    <section aria-labelledby="export-title">
+    <section className="card" aria-labelledby="export-title">
       <h2 id="export-title">Export</h2>
       <p>
         An export writes every live value of this environment into one dotenv file. It needs a code

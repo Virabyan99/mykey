@@ -7,6 +7,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { webPath } from "@mykey/contracts";
 import { useState } from "react";
 import { call } from "../api/client.ts";
+import { PAGES } from "../copy/pages.ts";
 import { Link } from "../router.tsx";
 import { useScope, type Environment } from "../state/scope.tsx";
 import { useAction } from "../state/use-action.ts";
@@ -20,6 +21,8 @@ import {
   environmentNameProblem,
   projectNameProblem,
 } from "../ui/Resource.tsx";
+import { Icon } from "../ui/icons.tsx";
+import { EmptyState, PageHeader, ScopeIds } from "../ui/PageHeader.tsx";
 import { StateBadge } from "../ui/StateBadge.tsx";
 import { ArchiveDialog, ReactivateDialog, type Target } from "./lifecycle.tsx";
 
@@ -110,59 +113,67 @@ export function Project() {
 
   return (
     <>
-      <h1>{project.name}</h1>
-      <p>
-        Project · <StateBadge kind="resource" state={project.state} /> · id{" "}
-        <code>{project.id}</code>
-      </p>
+      <PageHeader
+        page={PAGES.project}
+        title={project.name}
+        meta={
+          <>
+            <StateBadge kind="resource" state={project.state} />
+            <ScopeIds project={project} />
+          </>
+        }
+        actions={
+          manages && open === null ? (
+            <>
+              {nameable(project.state) ? (
+                <>
+                  <button
+                    type="button"
+                    className="primary"
+                    onClick={() => {
+                      show({ kind: "new-environment" });
+                    }}
+                  >
+                    <Icon name="plus" />
+                    New environment
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      show({ kind: "rename-project" });
+                    }}
+                  >
+                    Rename project
+                  </button>
+                </>
+              ) : null}
+              {project.state === "active" ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    show({ kind: "archive", target: projectTarget });
+                  }}
+                >
+                  Archive project
+                </button>
+              ) : null}
+              {project.state === "archived" ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    show({ kind: "reactivate", target: projectTarget });
+                  }}
+                >
+                  Reactivate project
+                </button>
+              ) : null}
+            </>
+          ) : undefined
+        }
+      />
       <ReviewNote state={project.state} reason={project.reviewReason} />
       <FollowNote waiting={waiting} follow={follow} />
       {notice === null ? null : <p role="status">{notice}</p>}
-
-      {manages && open === null ? (
-        <div className="actions">
-          {nameable(project.state) ? (
-            <>
-              <button
-                type="button"
-                onClick={() => {
-                  show({ kind: "new-environment" });
-                }}
-              >
-                New environment
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  show({ kind: "rename-project" });
-                }}
-              >
-                Rename project
-              </button>
-            </>
-          ) : null}
-          {project.state === "active" ? (
-            <button
-              type="button"
-              onClick={() => {
-                show({ kind: "archive", target: projectTarget });
-              }}
-            >
-              Archive project
-            </button>
-          ) : null}
-          {project.state === "archived" ? (
-            <button
-              type="button"
-              onClick={() => {
-                show({ kind: "reactivate", target: projectTarget });
-              }}
-            >
-              Reactivate project
-            </button>
-          ) : null}
-        </div>
-      ) : null}
 
       {open?.kind === "rename-project" ? (
         <NameForm
@@ -241,7 +252,11 @@ export function Project() {
         <p role="status">Only the first {rows.length} environments are shown.</p>
       ) : null}
       {rows.length === 0 ? (
-        <p>This project has no environment you can see.</p>
+        <EmptyState
+          title="No environments you can see"
+          text="An environment is one set of secrets of this project, such as development or production."
+          learn="projects-environments"
+        />
       ) : (
         <div className="scroll">
           <table aria-label="Environments">

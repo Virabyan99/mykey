@@ -19,6 +19,8 @@ import { signOut, type SessionView } from "../api/auth.ts";
 import { call } from "../api/client.ts";
 import { SESSION_KEY } from "../api/query.ts";
 import { ErrorPanel } from "../errors/ErrorPanel.tsx";
+import { ContextHelp } from "../help/ContextHelp.tsx";
+import { Palette } from "../palette/Palette.tsx";
 import type { Failure } from "../errors/explain.ts";
 import { stateLabel } from "../labels.ts";
 import { Link, navigate, onNavigate } from "../router.tsx";
@@ -302,8 +304,6 @@ function Drawer(props: { onClose: () => void; children: ReactNode }) {
 export function AppShell(props: {
   session: SessionView;
   route: { id: string; params: Readonly<Record<string, string>> };
-  /** Tools of the top bar: the search and the help. */
-  tools?: ReactNode;
   children: ReactNode;
 }) {
   useActivity();
@@ -357,7 +357,15 @@ export function AppShell(props: {
               ? { secret: props.route.params.name }
               : {})}
           />
-          {props.tools === undefined ? null : <div className="tools">{props.tools}</div>}
+          <div className="tools">
+            <Palette
+              scope={scope}
+              onSignOut={() => {
+                void leave();
+              }}
+            />
+            <ContextHelp route={props.route.id} />
+          </div>
         </header>
         {drawer ? <Drawer onClose={closeDrawer}>{sidebar}</Drawer> : null}
         <main id="content" tabIndex={-1}>

@@ -197,7 +197,7 @@ export const ARTICLES: readonly Article[] = [
       ),
       steps(
         "Open the environment, then Connect an application. Its commands hold this page's address, the project's id and the environment's name.",
-        "Download the CLI and check its sums, then install it. It needs no root.",
+        "Download the CLI and check its sums, then install it. The installer checks the CLI and the Node runtime it downloads against pinned sums, and needs no root.",
         "Issue a machine credential for the environment, and copy the token.",
         "Store the token with the command shown, typed on standard input into a file only you can read.",
         "Start the application through secrets-launch.sh.",

@@ -4,6 +4,8 @@
 // a filter it refuses is shown as its refusal. A cursor belongs to the
 // filters it was made with: when the server says the listing changed, the
 // page reads it again from the start and says so.
+import { PageHeader, ThreeViews } from "../ui/PageHeader.tsx";
+import { PAGES } from "../copy/pages.ts";
 import { useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
 import { LIMITS, type AuditListBody } from "@mykey/contracts";
 import { useState, type SyntheticEvent } from "react";
@@ -221,7 +223,8 @@ export function Audit() {
   };
   return (
     <>
-      <h1>Audit</h1>
+      <PageHeader page={PAGES.audit} />
+      <ThreeViews />
       <p className="hint">
         The audit log of this organization and of its members&apos; accounts, newest first. Without
         a window it shows the last 30 days; a window may be at most 92 days.

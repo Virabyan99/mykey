@@ -34,3 +34,8 @@ export {
   type Article,
   type Block,
 } from "./help/articles.ts";
+export { searchHelp, stem, words, type HelpHit } from "./help/search.ts";
+export { localSteps, runbookSections, serverSteps, type ConnectStep } from "./connect/commands.ts";
+export { matchEntries, paletteEntries, type PaletteEntry } from "./palette/sources.ts";
+export { CONNECT_STEPS } from "./copy/connect.ts";
+export { TOKEN_WARNING } from "./connect/commands.ts";

@@ -12,10 +12,12 @@ import {
   type MetricsBody,
   type OverviewBody,
 } from "@mykey/contracts";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { call, failureOf, need } from "../api/client.ts";
 import { ErrorPanel } from "../errors/ErrorPanel.tsx";
+import { PAGES } from "../copy/pages.ts";
 import { Link } from "../router.tsx";
+import { onIntent, take } from "../state/intent.ts";
 import { useScope } from "../state/scope.tsx";
 import { useAction } from "../state/use-action.ts";
 import { isMoving, useFollow } from "../state/use-follow.ts";
@@ -26,7 +28,11 @@ import {
   ReviewNote,
   projectNameProblem,
 } from "../ui/Resource.tsx";
+import { IdChip, IdLine } from "../ui/IdChip.tsx";
+import { Icon } from "../ui/icons.tsx";
+import { EmptyState, PageHeader } from "../ui/PageHeader.tsx";
 import { Loading, StateBadge } from "../ui/StateBadge.tsx";
+import { GettingStarted } from "./getting-started.tsx";
 import { Time } from "../ui/Time.tsx";
 
 type Project = OverviewBody["projects"][number];
@@ -78,7 +84,7 @@ function Environments(props: { org: string; project: Project }) {
   );
 }
 
-function Counted(props: { org: string; userId: string }) {
+function Counted(props: { org: string; userId: string; onFirst?: () => void }) {
   const { org, userId } = props;
   const client = useQueryClient();
   const overview = useQuery({
@@ -112,13 +118,31 @@ function Counted(props: { org: string; userId: string }) {
         value is read for this page.
       </p>
       <FollowNote waiting={waiting} follow={follow} />
-      {projects.length === 0 ? <p>This organization has no project yet.</p> : null}
+      {projects.length === 0 ? (
+        <EmptyState
+          title="No projects yet"
+          text="A project holds the environments and secrets of one application. Create one to begin."
+          learn="getting-started"
+          {...(props.onFirst === undefined
+            ? {}
+            : {
+                action: (
+                  <button type="button" className="primary" onClick={props.onFirst}>
+                    Create your first project
+                  </button>
+                ),
+              })}
+        />
+      ) : null}
       {projects.map((project) => (
         <section key={project.id} aria-labelledby={`project-${project.id}`}>
           <h2 id={`project-${project.id}`}>
             <Link to={webPath("project", { org, project: project.id })}>{project.name}</Link>{" "}
             <StateBadge kind="resource" state={project.state} />
           </h2>
+          <p className="page-ids">
+            <IdChip of={`${project.name} project`} id={project.id} />
+          </p>
           <ReviewNote state={project.state} reason={project.reviewReason} />
           <Environments org={org} project={project} />
         </section>
@@ -360,7 +384,11 @@ function Listed(props: { org: string }) {
         Key counts and the summary are shown to owners and admins of the organization.
       </p>
       {projects === null || projects.items.length === 0 ? (
-        <p>There is no project you can see.</p>
+        <EmptyState
+          title="No projects you can see"
+          text="An owner or an admin gives you access to a project or an environment."
+          learn="projects-environments"
+        />
       ) : (
         <ul className="rows">
           {projects.items.map((project) => (
@@ -377,72 +405,97 @@ function Listed(props: { org: string }) {
   );
 }
 
-function NewProject(props: { org: string; userId: string }) {
+/** The new-project form: opened by the page's primary action, by the empty state, or by the sidebar. */
+function NewProject(props: {
+  org: string;
+  userId: string;
+  onCreated: (notice: string) => void;
+  onClose: () => void;
+}) {
   const { org, userId } = props;
   const client = useQueryClient();
   const action = useAction();
-  const [open, setOpen] = useState(false);
-  const [notice, setNotice] = useState<string | null>(null);
 
   const create = async (name: string): Promise<void> => {
     const result = await action.run(`projects.create ${org} ${name}`, (key) =>
       call("projects.create", { params: { org }, body: { name }, idempotencyKey: key }),
     );
     if (!result.ok) return;
-    setOpen(false);
-    setNotice(
+    props.onCreated(
       `The project ${name} is created. The server is preparing its first environment (development): both are pending until the server says active.`,
     );
     await client.invalidateQueries({ queryKey: [userId, org] });
   };
 
   return (
-    <>
-      {open ? (
-        <NameForm
-          label="Project name"
-          submit="Create project"
-          rule={PROJECT_NAME_RULE}
-          problem={projectNameProblem}
-          within="this organization"
-          busy={action.busy || action.held}
-          failure={action.failure}
-          action="create the project"
-          onSubmit={(name) => void create(name)}
-          onCancel={() => {
-            setOpen(false);
-            action.clear();
-          }}
-        />
-      ) : (
-        <div className="actions">
-          <button
-            type="button"
-            onClick={() => {
-              setNotice(null);
-              setOpen(true);
-            }}
-          >
-            New project
-          </button>
-        </div>
-      )}
-      {notice === null ? null : <p role="status">{notice}</p>}
-    </>
+    <NameForm
+      label="Project name"
+      submit="Create project"
+      rule={PROJECT_NAME_RULE}
+      problem={projectNameProblem}
+      within="this organization"
+      busy={action.busy || action.held}
+      failure={action.failure}
+      action="create the project"
+      onSubmit={(name) => void create(name)}
+      onCancel={() => {
+        action.clear();
+        props.onClose();
+      }}
+    />
   );
 }
 
 export function Overview() {
   const { organization, userId } = useScope();
+  const [creating, setCreating] = useState(() => take("new-project"));
+  const [notice, setNotice] = useState<string | null>(null);
+  // The sidebar's "New project" while this page is already open.
+  useEffect(
+    () =>
+      onIntent(() => {
+        if (take("new-project")) setCreating(true);
+      }),
+    [],
+  );
   if (organization === null) return null;
   const manages = organization.role === "owner" || organization.role === "admin";
+  const open = (): void => {
+    setNotice(null);
+    setCreating(true);
+  };
   return (
     <>
-      <h1>Overview</h1>
+      <PageHeader
+        page={PAGES.overview}
+        meta={<IdLine of="organization" id={organization.id} />}
+        actions={
+          manages && !creating ? (
+            <button type="button" className="primary" onClick={open}>
+              <Icon name="plus" />
+              New project
+            </button>
+          ) : undefined
+        }
+      />
+      {manages && creating ? (
+        <NewProject
+          org={organization.id}
+          userId={userId}
+          onCreated={(text) => {
+            setCreating(false);
+            setNotice(text);
+          }}
+          onClose={() => {
+            setCreating(false);
+          }}
+        />
+      ) : null}
+      {notice === null ? null : <p role="status">{notice}</p>}
       {manages ? (
         <>
-          <NewProject org={organization.id} userId={userId} />
-          <Counted org={organization.id} userId={userId} />
+          <GettingStarted org={organization.id} userId={userId} />
+          <Counted org={organization.id} userId={userId} {...(creating ? {} : { onFirst: open })} />
           <Summary org={organization.id} userId={userId} />
         </>
       ) : (
