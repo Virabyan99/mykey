@@ -36,6 +36,7 @@ FR-1.75 (P-130). This is an honest list: each line names what the service does n
 - **After a reset of the authenticator, a reload loses the hand-over to enrolment.** A new reset link is needed (Run 7.2).
 - **The script is about 875 kB, 216 kB compressed.** It is one file with no splitting (Run 7.9).
 - **The history does not say which version a restore copied.** The server keeps the source with the operation, not in `secrets.history` (Run 7.5).
+- **The connect panel's token step is three blocks: `stty -echo`, the store block, then `stty echo`.** If the store block fails, typing stays hidden, and a token pasted afterwards goes to the shell, its history and the screen. This happened on the first real use (Run 9.2, F-9.2-1); the token was revoked unused. Until a release changes it, store the token with one silent command instead: `( umask 077; mkdir -p "$HOME/.config/mykey"; IFS= read -rs -p "Paste the token, then press Enter: " t; echo; printf '%s\n' "$t" > "$HOME/.config/mykey/machine-token" )`.
 - **An import that waits for its file shows no progress per entry**, and only the member who started it can resume it (Run 7.6).
 - **An exported file is held for 30 seconds before it must be saved.** Waiting longer means a second export and a second audit row (Run 7.6).
 - **The page names runbooks by their path.** It serves no document but this list, which the Help screen shows: the owner reads the other runbooks in the repository (Run 7.6, Run 8.0).

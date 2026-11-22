@@ -35,4 +35,4 @@ A task that is "not found" is fixed before production, in `host-v0.9.1`, which i
 
 ## Production, first visit
 
-(Run 9.1: the owner's words on the first visit to production's workspace, if any of them is like a failure above.)
+22 Nov 2026, on `host-v0.9.1`. After enrolment, before the organization was provisioned, the page answered "Not possible in the current state". That was expected: the organization was still `provisioning`. The owner then created the first project and environment, entered the secret set and issued credentials with no question about where things are. The difficulty of the visit was the connect panel's token step (`run-9.2.md`, F-9.2-1), not the navigation.
