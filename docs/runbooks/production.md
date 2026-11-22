@@ -89,8 +89,10 @@ The gate is closed with phase `verifying` after a `--stay-closed` deploy, so the
 1. **The owner's account.** In the owner's own terminal, with a password file the owner made (0600; never on a command line, never seen by the agent):
 
    ```sh
-   MSYS_NO_PATHCONV=1 node scripts/host.ts prod ops bootstrap-owner --email <owner address> < <password file>
+   MSYS_NO_PATHCONV=1 node.exe scripts/host.ts prod ops bootstrap-owner --email <owner address> < <password file>
    ```
+
+   In Git Bash's own window, `node` runs through `winpty`, which refuses a file on stdin ("stdin is not a tty"; nothing is created). Use `node.exe` there. Make the file with `read -s`, so the password never appears on screen or in a history, and shred it afterwards (Run 9.1).
 
 2. **Enrolment.** `node scripts/host.ts prod tunnel verify --browser`. It opens a Chrome window of its own at production's own name, through the tunnel (see "The browser window" below). In that window the owner signs in, enrols their own authenticator and keeps the recovery codes (`operator-accounts.md`).
 3. **The organization.** `MSYS_NO_PATHCONV=1 node scripts/host.ts prod ops provision-organization --organization <id>` (the id `bootstrap-owner` printed); `ops verify-organization` → `equal`.
