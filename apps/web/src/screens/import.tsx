@@ -6,6 +6,8 @@
 // value. A result is shown entry by entry: an import is never called done
 // when one entry was not written. An import the server stopped before the
 // end waits for the same file, which the owner chooses again.
+import { PageHeader, ScopeIds } from "../ui/PageHeader.tsx";
+import { PAGES } from "../copy/pages.ts";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   LIMITS,
@@ -398,7 +400,7 @@ function ImportPanel(props: { at: At; userId: string }) {
   };
 
   return (
-    <section aria-labelledby="import-title">
+    <section className="card" aria-labelledby="import-title">
       <h2 id="import-title">Import</h2>
       {result !== null ? (
         <>
@@ -478,10 +480,10 @@ export function ImportExport() {
   const readable = environment.state !== "needs_review" && environment.state !== "pending";
   return (
     <>
-      <h1>Import and export</h1>
-      <p className="hint">
-        {project.name} / {environment.name}
-      </p>
+      <PageHeader
+        page={PAGES.import}
+        meta={<ScopeIds project={project} environment={environment} />}
+      />
       <EnvironmentNotice state={environment.state} reason={environment.reviewReason} />
       {environment.state === "active" ? <ImportPanel at={at} userId={userId} /> : null}
       {readable ? <ExportPanel at={at} environmentName={environment.name} /> : null}

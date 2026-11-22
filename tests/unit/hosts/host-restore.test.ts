@@ -33,7 +33,8 @@ function fakeIo(gate: string | null): { io: HostIo; ran: { command: string; stdi
     caCertPath: "ca.crt",
     superuserPassword: "unused",
     pairRootToken: "unused",
-    targetRootToken: "unused",
+    rootTokens: () => [],
+    keepRootToken: () => Promise.resolve(),
     sourceBackupPassword: "unused",
     kmsKeyUsable: () => Promise.resolve(true),
     keepPassword: () => Promise.resolve(),
@@ -101,7 +102,7 @@ describe("the host restore target (P-124)", () => {
   it("a host whose gate is open is refused before anything else is asked", async () => {
     const { io } = fakeIo(JSON.stringify({ version: 2, state: "open" }));
     const target = await hostRestoreTarget(io, pair);
-    expect(await target.holding()).toBe("the gate is open");
+    expect(await target.holding()).toEqual({ why: "the gate is open", serving: true });
     await target.close();
   });
 

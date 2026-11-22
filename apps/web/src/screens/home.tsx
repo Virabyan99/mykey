@@ -2,8 +2,10 @@
 // said plainly (Stage 1 has no way to create one from the workspace).
 import { webPath } from "@mykey/contracts";
 import { useEffect } from "react";
+import { PAGES } from "../copy/pages.ts";
 import { Link, navigate } from "../router.tsx";
 import { useScope } from "../state/scope.tsx";
+import { PageHeader } from "../ui/PageHeader.tsx";
 import { StateBadge } from "../ui/StateBadge.tsx";
 
 export function Home() {
@@ -15,7 +17,7 @@ export function Home() {
   if (only !== undefined) return null;
   return (
     <>
-      <h1>Organizations</h1>
+      <PageHeader page={PAGES.home} />
       {organizations.length === 0 ? (
         <p>
           This account is not a member of any organization. An operator creates an organization from

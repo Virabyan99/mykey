@@ -11,19 +11,7 @@ Every shell block marked `<!-- rehearsed … -->` in this file is run, in order 
 
 ## 1. Get the release
 
-The CLI release `cli-v0.1.2` (three files) and the launch wrapper `secrets-launch.sh`, which reads the token from a file:
-
-<!-- rehearsed: provided -->
-
-```sh
-mkdir -p "$HOME/mykey-release"
-gh release download cli-v0.1.2 --repo Virabyan99/mykey --dir "$HOME/mykey-release"
-gh api -H "Accept: application/vnd.github.raw" \
-  "repos/Virabyan99/mykey/contents/tests/fixtures/consumers/secrets-launch.sh?ref=cli-v0.1.2" \
-  > "$HOME/mykey-release/secrets-launch.sh"
-```
-
-Without `gh` (`gh: not found`), the same four files with `curl`:
+The CLI release `cli-v0.1.2` (three files) and the launch wrapper `secrets-launch.sh`, which reads the token from a file. The repository is public, so `curl` needs no account:
 
 ```sh
 mkdir -p "$HOME/mykey-release"
@@ -33,6 +21,18 @@ for f in install.sh mykey-cli-0.1.2.tgz SHA256SUMS; do
 done
 curl --proto '=https' -fsSL -o secrets-launch.sh \
   "https://raw.githubusercontent.com/Virabyan99/mykey/cli-v0.1.2/tests/fixtures/consumers/secrets-launch.sh"
+```
+
+With `gh`, if you have it, the same four files:
+
+<!-- rehearsed: provided -->
+
+```sh
+mkdir -p "$HOME/mykey-release"
+gh release download cli-v0.1.2 --repo Virabyan99/mykey --dir "$HOME/mykey-release"
+gh api -H "Accept: application/vnd.github.raw" \
+  "repos/Virabyan99/mykey/contents/tests/fixtures/consumers/secrets-launch.sh?ref=cli-v0.1.2" \
+  > "$HOME/mykey-release/secrets-launch.sh"
 ```
 
 ## 2. Check the files
@@ -71,7 +71,8 @@ export PATH="$HOME/.local/bin:$PATH"
 
 `SECRETS_PROJECT` is the project's id and `SECRETS_ENVIRONMENT` the environment's name. `APP_START` is the command that starts your application, and `APP_DIR` is the directory it starts in. The values below are examples: replace every one.
 
-- **The project's id** is in the workspace's address, on any screen of the project: `…/o/<organization id>/p/<project id>/e/<environment id>`. Take the segment **after `/p/`**. Either of the other two (the organization's, or the environment's) answers `denied … 404 (code: not_found)`.
+- **The workspace fills these in for you:** open the environment, then **Connect an application**. Its commands are this file's, with the service's address, the project's id and the environment's name in place.
+- **The project's id** is shown, with a Copy button, under the title of every screen of the project, and is in the address: `…/o/<organization id>/p/<project id>/e/<environment id>`. Take the segment **after `/p/`**. Either of the other two (the organization's, or the environment's) answers `denied … 404 (code: not_found)`.
 - **The environment** is its name, as the workspace shows it (`development`), not the id after `/e/`.
 - **No application yet?** Leave `APP_DIR` and `APP_START` out, and in step 9 start a command that prints only the names it was given (below).
 

@@ -5,6 +5,7 @@
 // A refused sign-in has one text for every cause, as the server has one
 // answer for every cause. The password is read from its field when the form
 // is sent and the field is emptied at once; it is never in the page's state.
+import { AuthCard } from "../ui/AuthCard.tsx";
 import { useRef, useState, type SyntheticEvent } from "react";
 import { signIn, signOut, verifyRecovery, verifyTotp } from "../api/auth.ts";
 import { ErrorPanel } from "../errors/ErrorPanel.tsx";
@@ -53,7 +54,7 @@ export function SignIn() {
   };
 
   return (
-    <main className="narrow">
+    <AuthCard step="Step 1 of 2: your password">
       <h1>Sign in</h1>
       {notice === null ? null : <p role="status">{NOTICES[notice]}</p>}
       <p>The workspace opens after your password and a code from your authenticator app.</p>
@@ -106,7 +107,7 @@ export function SignIn() {
         </div>
       ) : null}
       {failure === null ? null : <ErrorPanel failure={failure} action="sign in" />}
-    </main>
+    </AuthCard>
   );
 }
 
@@ -156,7 +157,7 @@ export function SecondStep() {
   };
 
   return (
-    <main className="narrow">
+    <AuthCard step="Step 2 of 2: your code">
       <h1>Enter your code</h1>
       <p>Your password was accepted. The workspace opens after the second step.</p>
       <form
@@ -228,6 +229,6 @@ export function SecondStep() {
         "Set up an authenticator" is for an account that has none yet: a new account, or one the
         operator has reset.
       </p>
-    </main>
+    </AuthCard>
   );
 }

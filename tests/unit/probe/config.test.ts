@@ -23,10 +23,10 @@ describe("wrangler.jsonc", () => {
     expect(config.triggers.crons).toEqual(["* * * * *"]);
   });
 
-  it("watches both hosts by their public names; production is not in service yet", () => {
+  it("watches both hosts by their public names; production in service since Run 9.1", () => {
     expect(JSON.parse(config.vars.HOSTS ?? "[]")).toEqual([
       { name: "staging", hostname: "mykey-staging.nomikey.com" },
-      { name: "prod", hostname: "mykey.nomikey.com", inService: false },
+      { name: "prod", hostname: "mykey.nomikey.com", inService: true },
     ]);
   });
 });

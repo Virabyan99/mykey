@@ -4,6 +4,10 @@
 // (same static seal), with an API process on the restored database started
 // closed + verifying, its verification listener on a port of its own.
 //
+// Run 9.7 (R4-3): the scratch OpenBao is new once per target, as a host's is
+// once per install; every restore into the target, a rerun included, meets
+// the instance the earlier run left, and must offer it a token it accepts.
+//
 // The local path skips R2 and the signature: the pair is the lost world's
 // artifacts directory, and fetchEligiblePair's refusals are proven by
 // tests/unit/backup/restore.test.ts.
@@ -36,6 +40,10 @@ export interface LocalTarget extends RestoreTarget {
   delivered: Map<string, { roleId: string; secretId: string }>;
   gatePath: string;
   api: ApiProcess | null;
+  /** The restore's own token, as keepRootToken kept it (null before step 4). */
+  keptRootToken: string | null;
+  /** The scratch OpenBao's own init (null before the first restore). */
+  scratch: ScratchBao | null;
   /** A request to the restored API: its public or its verification listener. */
   request(
     listener: "public" | "verify",
@@ -63,6 +71,7 @@ export async function localRestoreTarget(
   const gatePath = join(directory, "gate.json");
   const ca = readFileSync(stack.api.certAuthorityPath);
   let bao: ScratchBao | null = null;
+  let kept: string | null = null;
   let api: ApiProcess | null = null;
   let capacity: { stop(): void } | null = null;
 
@@ -133,13 +142,26 @@ export async function localRestoreTarget(
     get api() {
       return api;
     },
+    get keptRootToken() {
+      return kept;
+    },
+    get scratch() {
+      return bao;
+    },
     async holding() {
       const exists = await adminClient((c) =>
         c.query("SELECT 1 FROM pg_database WHERE datname = $1", [RESTORED_DATABASE]),
       );
-      return (exists.rowCount ?? 0) > 0 ? "the target holds a database already" : null;
+      return (exists.rowCount ?? 0) > 0
+        ? { why: "the target holds a database already", serving: false }
+        : null;
+    },
+    keepRootToken(token) {
+      kept = token;
+      return Promise.resolve();
     },
     state: {
+      path: stateFile,
       read: () =>
         Promise.resolve(
           existsSync(stateFile)
@@ -172,9 +194,14 @@ export async function localRestoreTarget(
         if (bao === null) throw new Error("no scratch OpenBao yet");
         return { url: bao.stack.bao.url, caCertPath: bao.stack.bao.caCertPath };
       },
-      async restoreSnapshot(file) {
-        bao = await freshScratchBao(stack);
-        await bao.restore(new Uint8Array(readFileSync(file)));
+      async rootTokens() {
+        // A target's OpenBao is new once, like a host's at install.
+        bao ??= await freshScratchBao(stack);
+        return [...(kept === null ? [] : [kept]), bao.own.rootToken];
+      },
+      async restoreSnapshot(file, token) {
+        bao ??= await freshScratchBao(stack);
+        await bao.restore(new Uint8Array(readFileSync(file)), token);
       },
       async warm(token) {
         const deadline = Date.now() + 120_000;

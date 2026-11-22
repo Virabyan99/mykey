@@ -15,6 +15,8 @@ const EXAMPLES: Record<string, { path: string; params: Record<string, string> }>
   reset: { path: "/reset", params: {} },
   account: { path: "/account", params: {} },
   help: { path: "/help", params: {} },
+  // Run 9.0 (P-161): an article of the help centre, and Connect an application.
+  "help-article": { path: "/help/project-id", params: { article: "project-id" } },
   overview: { path: `/o/${ORG}`, params: { org: ORG } },
   activity: { path: `/o/${ORG}/activity`, params: { org: ORG } },
   audit: { path: `/o/${ORG}/audit`, params: { org: ORG } },
@@ -39,10 +41,14 @@ const EXAMPLES: Record<string, { path: string; params: Record<string, string> }>
     path: `/o/${ORG}/p/${PROJECT}/e/${ENV}/operations`,
     params: { org: ORG, project: PROJECT, env: ENV },
   },
+  connect: {
+    path: `/o/${ORG}/p/${PROJECT}/e/${ENV}/connect`,
+    params: { org: ORG, project: PROJECT, env: ENV },
+  },
 };
 
 describe("the table of client paths", () => {
-  it("has exactly the fifteen screens of the plan", () => {
+  it("has exactly the seventeen screens of the plans (Session 7, and P-161's two)", () => {
     expect(WEB_ROUTES.map((route) => route.id).sort()).toEqual(Object.keys(EXAMPLES).sort());
     expect(new Set(WEB_ROUTES.map((route) => route.pattern)).size).toBe(WEB_ROUTES.length);
   });

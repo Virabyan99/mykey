@@ -43,6 +43,9 @@ export {
 export { RECHECKED, clipObserved, recheckForOpen } from "./commands/restore-verify.ts";
 export {
   RESTORE_STEPS,
+  acceptedRootToken,
+  startRefusal,
+  type Holding,
   RestoreRefused,
   restoreMeasurements,
   restoreToVerifying,

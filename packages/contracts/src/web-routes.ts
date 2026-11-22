@@ -19,6 +19,8 @@ export const WEB_ROUTES: readonly WebRoute[] = Object.freeze([
   { id: "reset", pattern: "/reset" },
   { id: "account", pattern: "/account" },
   { id: "help", pattern: "/help" },
+  // Run 9.0 (P-161): an article of the help centre, deep-linked from every page.
+  { id: "help-article", pattern: "/help/:article" },
   { id: "overview", pattern: O },
   { id: "activity", pattern: `${O}/activity` },
   { id: "audit", pattern: `${O}/audit` },
@@ -28,6 +30,8 @@ export const WEB_ROUTES: readonly WebRoute[] = Object.freeze([
   { id: "import", pattern: `${E}/import` },
   { id: "credentials", pattern: `${E}/credentials` },
   { id: "operations", pattern: `${E}/operations` },
+  // Run 9.0 (P-161): Connect an application, with this environment's ids filled in.
+  { id: "connect", pattern: `${E}/connect` },
 ]);
 
 /** What a parameter may be: an id or a secret's name. Nothing that needs encoding. */

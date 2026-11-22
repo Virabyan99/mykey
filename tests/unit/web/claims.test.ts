@@ -24,8 +24,9 @@ describe("the page claims no more than the product does", () => {
     expect(text).toContain("preview an import");
   });
 
+  // Run 9.0: the first-run guide of help.tsx became the help centre's articles (help/articles.ts).
   it("help: the install checks the CLI and its Node runtime, not every file", () => {
-    const text = textOf("apps/web/src/screens/help.tsx");
+    const text = textOf("apps/web/src/help/articles.ts");
     expect(text).not.toContain("checks every file it downloads");
     expect(text).toContain("checks the CLI and the Node runtime it downloads");
   });

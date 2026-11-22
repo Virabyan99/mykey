@@ -4,13 +4,17 @@
 // and a snapshot are restored, where credentials are delivered and how the
 // executors start. The steps:
 //
-//   1 refuse   a target that holds data or whose gate is open (unless the state
-//              line says this pair's restore stopped there: then it starts over)
+//   1 refuse   a target whose gate is open, or that holds data (unless the state
+//              line says this pair's restore stopped before the gate's opening:
+//              then it starts over); a line left by a finished restore is refused
 //   2 fetch    the signed, verified pair; its KMS key must be usable here
 //   3 postgres a new database: roles with new passwords (globals.sql compared,
 //              never executed), pg_restore
-//   4 openbao  the snapshot on the same seal, served again; the restore's own
-//              root token, minted with the pair's
+//   4 openbao  the snapshot on the same seal, sent with the first root token the
+//              target's OpenBao accepts (state "snapshot": the target's own
+//              token is gone from then on); served again; the restore's own
+//              root token, minted with the pair's and kept by the target
+//              before the step is recorded (R4-3: a rerun needs it)
 //   5+6        restoreInvalidate: every credential class, a new incarnation
 //   7 start    the executors, closed + verifying, with a new host instance id
 //
@@ -41,19 +45,35 @@ import { OpenBaoAdmin } from "@mykey/openbao/admin";
 import type pg from "pg";
 import { restoreInvalidate, type RestoreDeps } from "./restore-invalidate.ts";
 
-export const RESTORE_STEPS = ["fetch", "postgres", "openbao", "invalidate", "start"] as const;
+export const RESTORE_STEPS = [
+  "fetch",
+  "postgres",
+  "snapshot",
+  "openbao",
+  "invalidate",
+  "start",
+] as const;
 export type RestoreStep = (typeof RESTORE_STEPS)[number];
 
 export interface RestoreState {
   pairId: string;
-  step: RestoreStep;
+  /** "opened": written by restore-verify --open before it removes the line (R4-4). */
+  step: RestoreStep | "opened";
+}
+
+/** Why a target may not be restored into; `serving` when its gate is open. */
+export interface Holding {
+  why: string;
+  serving: boolean;
 }
 
 export interface RestoreTarget {
   /** Step 1: why this target may not be restored into (data, an open gate), or null. */
-  holding(): Promise<string | null>;
+  holding(): Promise<Holding | null>;
   /** The restore's state line on the target. */
   state: {
+    /** Where the line is, as the operator would look for it. */
+    path: string;
     read(): Promise<RestoreState | null>;
     write(state: RestoreState): Promise<void>;
   };
@@ -74,12 +94,23 @@ export interface RestoreTarget {
   };
   openbao: {
     target: OpenBaoTarget;
-    restoreSnapshot(file: string): Promise<void>;
+    /**
+     * The root tokens the target's OpenBao may accept now, in the order to
+     * try them: the restore's own kept token (a rerun), then the target's own.
+     */
+    rootTokens(): Promise<readonly string[]>;
+    /** Restores the snapshot with `token`, a root token the instance accepts. */
+    restoreSnapshot(file: string, token: string): Promise<void>;
     /** Waits until the restored instance serves `token` (~6 s after a restore). */
     warm(token: string): Promise<void>;
   };
   /** The lost host's root token (its custody copy): it mints the restore's own. */
   pairRootToken: string;
+  /**
+   * Keeps the restore's own root token where a rerun and restore-verify find
+   * it (R4-3); called before step 4 is recorded.
+   */
+  keepRootToken(token: string): Promise<void>;
   deliver: RestoreDeps["deliver"];
   /** Roles globals.sql may create (the inventory). */
   knownRoles: readonly string[];
@@ -88,6 +119,43 @@ export interface RestoreTarget {
 }
 
 export class RestoreRefused extends Error {}
+
+/**
+ * Step 1 (R4-4). A serving target (gate open) is always refused. A state line
+ * of a finished restore ("opened") is refused with its path: the opening
+ * removes it, so one that is left means the opening did not end. Data is
+ * refused unless the line names this pair at a step before the opening.
+ */
+export function startRefusal(input: {
+  previous: RestoreState | null;
+  pairId: string;
+  holding: Holding | null;
+  statePath: string;
+}): string | null {
+  const { previous, pairId, holding, statePath } = input;
+  if (previous?.step === "opened") {
+    return `a finished restore of pair ${previous.pairId} left its state line at ${statePath}: check that restore-verify --open ended (the gate, the root token), then remove the file`;
+  }
+  if (holding === null) return null;
+  if (holding.serving) return holding.why;
+  return previous?.pairId === pairId ? null : holding.why;
+}
+
+/** The first of `tokens` the target's OpenBao accepts (lookup-self), or null. */
+export async function acceptedRootToken(
+  target: OpenBaoTarget,
+  tokens: readonly string[],
+): Promise<string | null> {
+  for (const token of tokens) {
+    try {
+      await new OpenBaoAdmin(target, token).lookupSelf();
+      return token;
+    } catch {
+      // refused or unreachable: the next one
+    }
+  }
+  return null;
+}
 
 /** FR-1.69: what a restore measured. A measured duration is never an SLA. */
 export interface RestoreMeasurements {
@@ -162,11 +230,13 @@ export async function restoreToVerifying(
   const fetched = await target.fetch();
   if (!fetched.ok) throw new RestoreRefused(fetched.cause);
   const { manifest, files } = fetched;
-  const previous = await target.state.read();
-  if (previous?.pairId !== manifest.pairId) {
-    const why = await target.holding();
-    if (why !== null) throw new RestoreRefused(why);
-  }
+  const refusal = startRefusal({
+    previous: await target.state.read(),
+    pairId: manifest.pairId,
+    holding: await target.holding(),
+    statePath: target.state.path,
+  });
+  if (refusal !== null) throw new RestoreRefused(refusal);
   // PO-22: before anything is written, the state line included.
   const kms = await preflightKms(manifest, (id) => target.kmsUsable(id));
   if (!kms.ok) throw new RestoreRefused(kms.cause);
@@ -198,13 +268,25 @@ export async function restoreToVerifying(
   await target.postgres.restoreDump(files["postgres.dump"]);
   await done(manifest.pairId, "postgres");
 
-  // 4: the snapshot; the restore's own root token.
-  await target.openbao.restoreSnapshot(files["openbao.snap"]);
+  // 4: the snapshot, sent with a root token the target accepts now. A rerun
+  // after the snapshot finds its own token gone: the restore's kept token, or
+  // the pair's (live again until step 5 revokes it), is the one accepted.
+  // The tokens first: a target may make its OpenBao when asked for them.
+  const offered = [...(await target.openbao.rootTokens()), target.pairRootToken];
+  const live = await acceptedRootToken(target.openbao.target, offered);
+  if (live === null) {
+    throw new RestoreRefused(
+      "the target's OpenBao accepts none of its root tokens, the restore's own (two hours) or the pair's: it must be initialised anew (restore.md, Before)",
+    );
+  }
+  await target.openbao.restoreSnapshot(files["openbao.snap"], live);
+  await done(manifest.pairId, "snapshot");
   await target.openbao.warm(target.pairRootToken);
   const minted = await new OpenBaoAdmin(
     target.openbao.target,
     target.pairRootToken,
   ).createRootToken();
+  await target.keepRootToken(minted.token);
   const admin = new OpenBaoAdmin(target.openbao.target, minted.token);
   await done(manifest.pairId, "openbao");
 

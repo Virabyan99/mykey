@@ -1,0 +1,8 @@
+[Unit]
+Description=MyKey field record of the previous day (Run 9.6, P-166)
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/opt/mykey/hosts/field/field-day.sh

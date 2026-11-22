@@ -6,6 +6,7 @@
 //
 // No QR code (P-135): the key is shown in groups of four beside the
 // otpauth:// address as text.
+import { AuthCard } from "../ui/AuthCard.tsx";
 import { LIMITS } from "@mykey/contracts";
 import { useRef, useState, type SyntheticEvent } from "react";
 import { activateTotp, enrollTotp } from "../api/auth.ts";
@@ -85,7 +86,7 @@ export function Enroll() {
 
   if (activated) {
     return (
-      <main className="narrow">
+      <AuthCard step="Set up: one code from the app">
         <h1>Set up your authenticator</h1>
         <p role="status">The authenticator is active.</p>
         {codes === null ? (
@@ -113,13 +114,13 @@ export function Enroll() {
             }}
           />
         )}
-      </main>
+      </AuthCard>
     );
   }
 
   const conflict = failure?.kind === "api" && failure.code === "state_conflict";
   return (
-    <main className="narrow">
+    <AuthCard step="Set up: one code from the app">
       <h1>Set up your authenticator</h1>
       {key === null ? (
         <>
@@ -188,6 +189,6 @@ export function Enroll() {
       ) : (
         <ErrorPanel failure={failure} action="set up the authenticator" />
       )}
-    </main>
+    </AuthCard>
   );
 }

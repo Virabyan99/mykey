@@ -3,6 +3,7 @@
 // for saving only after api/export.ts read the whole answer and checked its
 // digest; until it is saved it lives in the forgetting holder, like every
 // other secret of the page, and after the save the page has none of it.
+import { ACTIONS } from "../copy/actions.ts";
 import { useState } from "react";
 import { exportEnvironment, type ExportedFile } from "../api/export.ts";
 import { ErrorPanel } from "../errors/ErrorPanel.tsx";
@@ -14,9 +15,6 @@ import { useEphemeral } from "../state/use-ephemeral.ts";
 import { ConfirmDialog } from "../ui/Dialog.tsx";
 import { StepUp } from "../ui/StepUp.tsx";
 import type { At } from "./secret-value.tsx";
-
-const OUTSIDE =
-  "The file is outside MyKey from the moment it is saved: MyKey cannot protect it, cannot see who reads it and cannot take it back.";
 
 /** Hands the bytes to the browser's own save, and lets go of the address right after. */
 function save(file: ExportedFile): void {
@@ -65,7 +63,7 @@ export function ExportPanel(props: { at: At; environmentName: string }) {
   };
 
   return (
-    <section aria-labelledby="export-title">
+    <section className="card" aria-labelledby="export-title">
       <h2 id="export-title">Export</h2>
       <p>
         An export writes every live value of this environment into one dotenv file. It needs a code
@@ -101,7 +99,7 @@ export function ExportPanel(props: { at: At; environmentName: string }) {
             against the server&apos;s digest. It is kept here for {String(EPHEMERAL_TTL_MS / 1000)}{" "}
             seconds, or until you leave this page or this tab.
           </p>
-          <p>{OUTSIDE}</p>
+          <p>{ACTIONS.export[1]}</p>
           {file.warnings === null ? (
             <p>
               {file.warningCount} names hold a value another dotenv loader would read differently;
@@ -147,8 +145,9 @@ export function ExportPanel(props: { at: At; environmentName: string }) {
             setConfirming(false);
           }}
         >
-          <p>Every live value of this environment is written into one file.</p>
-          <p>{OUTSIDE}</p>
+          {ACTIONS.export.map((line) => (
+            <p key={line}>{line}</p>
+          ))}
         </ConfirmDialog>
       ) : null}
       <StepUp

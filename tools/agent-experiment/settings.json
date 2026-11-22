@@ -1,0 +1,18 @@
+{
+  "apiKeyHelper": "cat /run/secrets/anthropic-api-key",
+  "permissions": {
+    "allow": ["Bash(node /fixture/ask.mjs:*)"],
+    "deny": [
+      "Read",
+      "Edit",
+      "Write",
+      "Glob",
+      "Grep",
+      "WebFetch",
+      "WebSearch",
+      "NotebookEdit",
+      "Task",
+      "Agent"
+    ]
+  }
+}

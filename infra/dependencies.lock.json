@@ -239,6 +239,11 @@
       "version": "1.64.1",
       "advisoriesChecked": "2026-11-16",
       "note": "Test only: project browser (Run 5.9, the reference capture). Its Chromium is the build playwright-core 1.64.1 names (browsers.json: chromium revision 1248, Chrome for Testing 156.0.8078.4), installed by `pnpm exec playwright install chromium`, never by pnpm install. 1.65.x is younger than two weeks. npm audit of a lock with 1.64.1: 0."
+    },
+    "axe-core": {
+      "version": "4.14.0",
+      "advisoriesChecked": "2026-11-22",
+      "note": "Test only: project browser (Run 9.0 Task A, tests/browser/a11y.test.ts). Its source is injected into the page by the test; never bundled into the workspace. 4.14.1 is younger than two weeks (16 Nov 2026). No dependencies of its own."
     }
   },
   "binaries": {

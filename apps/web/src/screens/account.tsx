@@ -3,6 +3,9 @@
 // need a code from the last ten minutes; when the server says so, the
 // step-up dialog asks for one, and the owner then sends the change again
 // with the same button. The page never sends it for them.
+import { PAGES } from "../copy/pages.ts";
+import { PageHeader } from "../ui/PageHeader.tsx";
+import { ACTIONS } from "../copy/actions.ts";
 import { useQuery } from "@tanstack/react-query";
 import { LIMITS } from "@mykey/contracts";
 import { useRef, useState, type SyntheticEvent } from "react";
@@ -67,7 +70,7 @@ function Sessions() {
   };
 
   return (
-    <section>
+    <section className="card">
       <h2>Sessions</h2>
       <p>
         Every place this account is signed in. A session ends by itself after{" "}
@@ -129,7 +132,7 @@ function Sessions() {
       <ConfirmButton
         label="End every session"
         confirm="Yes, end every session"
-        warning="Every session of this account ends, this one included. You sign in again afterwards."
+        warning={ACTIONS.endEverySession}
         disabled={busy}
         onConfirm={() => {
           void endAll();
@@ -191,9 +194,12 @@ function Password() {
   };
 
   return (
-    <section>
+    <section className="card">
       <h2>Password</h2>
-      <p>Changing the password ends every other session of this account.</p>
+      <p>
+        Changing the password needs a recent code from your authenticator and ends every other
+        session of this account. This one stays signed in.
+      </p>
       <form
         method="post"
         onSubmit={(event) => {
@@ -269,7 +275,7 @@ function Recovery() {
   };
 
   return (
-    <section>
+    <section className="card">
       <h2>Recovery codes</h2>
       <p>
         Ten codes, each good for one sign-in without the authenticator. The page cannot show the
@@ -279,7 +285,7 @@ function Recovery() {
         <ConfirmButton
           label="Make new recovery codes"
           confirm="Yes, replace my recovery codes"
-          warning="Every recovery code you have now stops working, used or not."
+          warning={ACTIONS.newRecoveryCodes}
           disabled={busy}
           onConfirm={() => {
             void make();
@@ -311,7 +317,7 @@ function Recovery() {
 export function Account() {
   return (
     <>
-      <h1>Account</h1>
+      <PageHeader page={PAGES.account} />
       <Sessions />
       <Password />
       <Recovery />

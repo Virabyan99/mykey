@@ -11,9 +11,8 @@
     { "binding": "DB", "database_name": "mykey-probe", "migrations_dir": "migrations" },
   ],
   "vars": {
-    "HOSTS": "[{\"name\":\"staging\",\"hostname\":\"mykey-staging.nomikey.com\"},{\"name\":\"prod\",\"hostname\":\"mykey.nomikey.com\",\"inService\":false}]",
-    // prod is not in service yet (gate closed on purpose, no OpenBao): no health_failing for it.
-    // Set inService to true (or remove it) when production is brought into service.
+    "HOSTS": "[{\"name\":\"staging\",\"hostname\":\"mykey-staging.nomikey.com\"},{\"name\":\"prod\",\"hostname\":\"mykey.nomikey.com\",\"inService\":true}]",
+    // Production is in service since Run 9.1 (22 Nov 2026): health_failing applies to it.
     "SINK": "telegram",
     // LIMITS.monitoring (a unit test keeps them equal). D-22: the three graces are one number on purpose.
     "HEARTBEAT_GRACE_SECONDS": "180",

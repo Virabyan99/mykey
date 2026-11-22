@@ -463,15 +463,36 @@ describe("the first-run guide", () => {
     const session = await web.signedIn("ownerA");
     const { page } = session;
     try {
-      await page.goto(`${web.origin}/help`);
-      await page.getByRole("heading", { level: 1, name: "Help" }).waitFor();
-      const steps = page.getByRole("list", { name: "First run" }).locator("> li");
+      // Run 9.0 (P-162): the Help screen's "First run" guide became the help centre's
+      // article "Getting started"; the runbooks are the centre's "For the operator" and
+      // the API reference its own article. The same checks, over the three pages.
+      await page.goto(`${web.origin}/help/getting-started`);
+      await page.getByRole("heading", { level: 1, name: "Getting started" }).waitFor();
+      const steps = page.locator("main article ol").first().locator("> li");
       expect(await steps.count()).toBe(6);
 
-      const links = await page.locator("main a[href]").evaluateAll(
-        // No DOM types in the tests' TypeScript.
-        (anchors) => anchors.map((anchor) => (anchor as unknown as { href: string }).href),
-      );
+      const links: string[] = [];
+      const files: string[] = [];
+      for (const path of ["/help/getting-started", "/help", "/help/api-reference"]) {
+        await page.goto(`${web.origin}${path}`);
+        await page.getByRole("heading", { level: 1 }).waitFor();
+        links.push(
+          ...(await page.locator("main a[href]").evaluateAll(
+            // No DOM types in the tests' TypeScript.
+            (anchors) => anchors.map((anchor) => (anchor as unknown as { href: string }).href),
+          )),
+        );
+        // The help centre names a runbook by its file under docs/runbooks/.
+        files.push(
+          ...(
+            await page
+              .locator("main section[aria-labelledby='for-the-operator'] li code")
+              .allTextContents()
+          ).map((file) => `docs/runbooks/${file}`),
+        );
+        // Nothing of a real deployment: no address, no token.
+        expect(await page.locator("main").textContent(), path).not.toMatch(/https?:\/\//);
+      }
       expect(links.length).toBeGreaterThan(2);
       for (const link of links) {
         const url = new URL(link);
@@ -481,9 +502,6 @@ describe("the first-run guide", () => {
       }
       expect(links.some((link) => new URL(link).pathname === "/v1/reference")).toBe(true);
 
-      const files = (await page.locator("main code").allTextContents()).filter((text) =>
-        text.startsWith("docs/"),
-      );
       expect(files).toEqual(
         expect.arrayContaining([
           "docs/runbooks/consumer-local.md",
@@ -492,8 +510,6 @@ describe("the first-run guide", () => {
         ]),
       );
       for (const file of files) expect(existsSync(resolve(REPO, file)), file).toBe(true);
-      // Nothing of a real deployment: no address, no token.
-      expect(await page.locator("main").textContent()).not.toMatch(/https?:\/\//);
     } finally {
       await session.close();
     }

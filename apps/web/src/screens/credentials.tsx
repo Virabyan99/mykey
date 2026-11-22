@@ -5,16 +5,21 @@
 // hides the tab, leaves the screen or signs out. It cannot be shown again,
 // and the page says so before and after. A row whose outcome is open is
 // settled by an operator: the page offers nothing on it.
+import { ACTIONS } from "../copy/actions.ts";
 import { useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
-import { LIMITS, checkProjectName, type CredentialView } from "@mykey/contracts";
+import { LIMITS, checkProjectName, webPath, type CredentialView } from "@mykey/contracts";
 import { useId, useState, type SyntheticEvent } from "react";
 import { call, callSecret, failureOf, need } from "../api/client.ts";
+import { PAGES } from "../copy/pages.ts";
 import { ErrorPanel } from "../errors/ErrorPanel.tsx";
+import { Link } from "../router.tsx";
 import { useScope } from "../state/scope.tsx";
 import { isCode, useAction } from "../state/use-action.ts";
 import { useEphemeral } from "../state/use-ephemeral.ts";
 import { ConfirmDialog } from "../ui/Dialog.tsx";
 import { Field } from "../ui/Field.tsx";
+import { Icon } from "../ui/icons.tsx";
+import { Callout, EmptyState, PageHeader, ScopeIds } from "../ui/PageHeader.tsx";
 import { EnvironmentNotice } from "../ui/Resource.tsx";
 import { CopyButton, SecretLine } from "../ui/Secret.tsx";
 import { Loading, StateBadge } from "../ui/StateBadge.tsx";
@@ -129,8 +134,8 @@ function IssueForm(props: {
         <h2>New credential</h2>
         <p>
           A credential lets one consumer read the complete secret set of this environment, and
-          nothing else. Its token is shown once, right after it is issued. Issuing needs a code from
-          your authenticator of the last ten minutes.
+          nothing else. {ACTIONS.issue} Issuing needs a code from your authenticator of the last ten
+          minutes.
         </p>
         {blocked === null ? null : <p role="status">{blocked}</p>}
         <Field
@@ -211,13 +216,9 @@ function RevokeDialog(props: {
       onConfirm={() => void revoke()}
       onCancel={props.onCancel}
     >
-      <p>
-        The token of this credential is refused from the moment the server answers. A consumer that
-        still uses it can no longer read its secrets.
-      </p>
-      <p>
-        A revocation cannot be undone. To give the consumer access again, issue a new credential.
-      </p>
+      {ACTIONS.revoke.map((line) => (
+        <p key={line}>{line}</p>
+      ))}
       {action.failure === null ? null : (
         <ErrorPanel failure={action.failure} action="revoke the credential" />
       )}
@@ -321,12 +322,14 @@ function Inventory(props: { at: At; userId: string; scope: string; writable: boo
         <div className="actions">
           <button
             type="button"
+            className="primary"
             onClick={() => {
               setNotice(null);
               hide();
               setForm(true);
             }}
           >
+            <Icon name="plus" />
             New credential
           </button>
         </div>
@@ -341,7 +344,28 @@ function Inventory(props: { at: At; userId: string; scope: string; writable: boo
         />
       ) : null}
       {list.data === undefined ? null : rows.length === 0 ? (
-        <p>This environment has no machine credential.</p>
+        <EmptyState
+          title="No machine credentials yet"
+          text="A machine credential lets the machine that runs your application read this environment's secrets."
+          learn="machine-credentials"
+          {...(writable && blocked === null && !form
+            ? {
+                action: (
+                  <button
+                    type="button"
+                    className="primary"
+                    onClick={() => {
+                      setNotice(null);
+                      hide();
+                      setForm(true);
+                    }}
+                  >
+                    Issue the first credential
+                  </button>
+                ),
+              }
+            : {})}
+        />
       ) : (
         <div className="scroll">
           <table aria-label="Machine credentials">
@@ -432,10 +456,10 @@ export function Credentials() {
   const at: At = { org: organization.id, project: project.id, env: environment.id };
   return (
     <>
-      <h1>Machine credentials</h1>
-      <p className="hint">
-        {project.name} / {environment.name}
-      </p>
+      <PageHeader
+        page={PAGES.credentials}
+        meta={<ScopeIds project={project} environment={environment} />}
+      />
       <EnvironmentNotice state={environment.state} reason={environment.reviewReason} />
       <Inventory
         at={at}
@@ -443,8 +467,7 @@ export function Credentials() {
         scope={`${project.name} / ${environment.name}`}
         writable={environment.state === "active"}
       />
-      <section>
-        <h2>Replacing a token</h2>
+      <Callout title="Replacing a token">
         <p>
           A token cannot be renewed and cannot be shown again. To replace one, issue a new
           credential, move the consumer to the new token, then revoke the old credential.
@@ -453,6 +476,12 @@ export function Credentials() {
           When the service is restored from a backup, every token is revoked, and each consumer
           needs a new credential.
         </p>
+        <p>
+          <Link to={webPath("connect", at)}>Connect an application</Link> shows the commands that
+          store a token and start the application with it.
+        </p>
+      </Callout>
+      <section>
         <p>
           &quot;Last used&quot; is the last time the service saw the token, to the minute. &quot;Not
           known&quot; means the service has no record of a use, not that there was none.

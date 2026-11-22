@@ -219,72 +219,8 @@ describe("without a mouse", () => {
   }, 300_000);
 });
 
-describe("a narrow screen", () => {
-  it("at 360 by 740 the overview, the secrets list, a secret, the credentials and the activity screens have no sideways scroll", async () => {
-    const { name } = await seeded();
-    await issueFor(web.f, "env1a", { name: `narrow-${randomBytes(8).toString("hex")}` });
-    const session = await web.signedIn("ownerA");
-    const { page } = session;
-    const screens: [string, string, string][] = [
-      ["the overview", overviewPath(), "Overview"],
-      ["the secrets list", webPath("secrets", at()), "Secrets"],
-      ["a secret", webPath("secret", { ...at(), name }), name],
-      ["the credentials", webPath("credentials", at()), "Machine credentials"],
-      ["the activity", webPath("activity", { org: at().org }), "Activity"],
-    ];
-    try {
-      await page.setViewportSize({ width: 360, height: 740 });
-      for (const [label, path, title] of screens) {
-        await page.goto(`${web.origin}${path}`);
-        await heading(page, title).waitFor();
-        await page.waitForLoadState("networkidle");
-        if (label !== "a secret") await page.getByRole("table").first().waitFor();
-        const sizes = await page.evaluate<{
-          view: number;
-          page: number;
-          body: number;
-          moved: number;
-        }>(`(() => {
-          window.scrollTo(500, 0);
-          return {
-            view: document.documentElement.clientWidth,
-            page: document.documentElement.scrollWidth,
-            body: document.body.scrollWidth,
-            moved: window.scrollX,
-          };
-        })()`);
-        expect(sizes.view, label).toBe(360);
-        // What ends outside the screen, outside a table's own frame: named, so a failure says what to repair.
-        const outside = await page.evaluate<string[]>(`
-          Array.from(document.querySelectorAll("body *"))
-            .filter((element) => element.closest(".scroll") === null || element.classList.contains("scroll"))
-            .filter((element) => element.getBoundingClientRect().right > 360.5)
-            .map((element) => element.tagName.toLowerCase() + "." + element.className)
-        `);
-        expect(outside, label).toEqual([]);
-        expect(sizes.page, `${label}: the page is wider than the screen`).toBeLessThanOrEqual(360);
-        expect(sizes.body, `${label}: the body is wider than the screen`).toBeLessThanOrEqual(360);
-        expect(sizes.moved, `${label}: the page moved sideways`).toBe(0);
-        // A table wider than the screen moves inside its own frame, and the frame fits.
-        const frames = await page.evaluate<number[]>(`
-          Array.from(document.querySelectorAll("table")).map((table) => {
-            const frame = table.closest(".scroll");
-            return frame === null ? -1 : Math.ceil(frame.getBoundingClientRect().right);
-          })
-        `);
-        for (const right of frames) {
-          expect(right, `${label}: a table outside a frame`).not.toBe(-1);
-          expect(right, `${label}: a table's frame ends outside the screen`).toBeLessThanOrEqual(
-            360,
-          );
-        }
-      }
-      expect(await session.violations()).toEqual([]);
-    } finally {
-      await session.close();
-    }
-  }, 240_000);
-});
+// Run 9.0: the 360 by 740 case ("a narrow screen") moved to navigation.test.ts,
+// with every new screen added.
 
 describe("another site", () => {
   it("the page cannot be framed: a page of another origin that embeds it gets nothing", async () => {
@@ -351,7 +287,7 @@ describe("the content policy", () => {
     const { page } = session;
     try {
       await page.goto(`${web.origin}${overviewPath()}`);
-      await heading(page, "Overview").waitFor();
+      await heading(page, "Home").waitFor();
       expect(await session.violations()).toEqual([]);
       // What an injected markup would try: each is put into the page, and none takes effect.
       await page.evaluate(`(() => {
@@ -423,7 +359,7 @@ describe("labels and what cannot be read", () => {
     const session = await web.signedIn("ownerA");
     const { page } = session;
     const screens: [string, string][] = [
-      [overviewPath(), "Overview"],
+      [overviewPath(), "Home"],
       [webPath("secrets", at()), "Secrets"],
       [webPath("secret", { ...at(), name }), name],
       [webPath("credentials", at()), "Machine credentials"],

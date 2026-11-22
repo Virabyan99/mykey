@@ -5,6 +5,7 @@
 //
 // Every refusal of a reset is one answer (an unknown, expired, replaced or
 // used link, a wrong code), so the page has one text for it.
+import { AuthCard } from "../ui/AuthCard.tsx";
 import { LIMITS, PASSWORD_MIN_CHARACTERS, checkPassword } from "@mykey/contracts";
 import { useEffect, useRef, useState, type SyntheticEvent } from "react";
 import { callSecret } from "../api/client.ts";
@@ -86,7 +87,7 @@ export function Reset() {
   if (!looked) return null;
   if (link === null) {
     return (
-      <main className="narrow">
+      <AuthCard step="Reset: a new password">
         <h1>Reset your account</h1>
         <p>
           This page opens from a reset link. A link works once, for 15 minutes, in the tab it was
@@ -95,11 +96,11 @@ export function Reset() {
         <p>
           <Link to="/sign-in">Sign in</Link>
         </p>
-      </main>
+      </AuthCard>
     );
   }
   return (
-    <main className="narrow">
+    <AuthCard step="Reset: a new password">
       <h1>Reset your account</h1>
       <p>
         {link.kind === "mfa"
@@ -158,6 +159,6 @@ export function Reset() {
         </div>
       ) : null}
       {failure === null ? null : <ErrorPanel failure={failure} action="reset the account" />}
-    </main>
+    </AuthCard>
   );
 }

@@ -24,7 +24,13 @@ export interface Stack {
     superuser: { user: string; password: string };
     caCertPath: string;
   };
-  bao: { url: string; caCertPath: string; rootToken: string };
+  bao: {
+    url: string;
+    caCertPath: string;
+    rootToken: string;
+    /** Run 9.7: the recovery key of its init (absent in a stack.json written before). */
+    recoveryKey?: string;
+  };
   /**
    * A server certificate (names `api`, `localhost`, 127.0.0.1) signed by the
    * stack's CA, for an API that a test starts in its own process.
@@ -256,8 +262,13 @@ async function initialiseOpenBao(state: StackState): Promise<void> {
       body: { recovery_shares: 1, recovery_threshold: 1 },
     });
     if (created.status !== 200) throw new Error(`OpenBao init returned HTTP ${created.status}`);
-    const body = (await created.json()) as { root_token: string };
+    const body = (await created.json()) as {
+      root_token: string;
+      recovery_keys_base64?: string[];
+    };
     state.bao.rootToken = body.root_token;
+    // Run 9.7 (R4-2): generate-root after a restore needs the source's recovery key.
+    state.bao.recoveryKey = body.recovery_keys_base64?.[0] ?? "";
   } else if (state.bao.rootToken === "") {
     throw new Error("OpenBao is initialised but its root token is not in stack.json; reset it");
   }
@@ -327,6 +338,7 @@ export async function startStack(opts?: {
       url: "",
       caCertPath: join(directory, "ca.crt"),
       rootToken: previous?.bao.rootToken ?? "",
+      recoveryKey: previous?.bao.recoveryKey ?? "",
     },
     api: {
       certPath: join(directory, "api.crt"),
@@ -806,7 +818,10 @@ export async function scratchPg(stack: Stack): Promise<DbTarget> {
 export interface ScratchBao {
   /** The scratch as a Stack whose `bao` is the scratch (for baoFetch and friends). */
   stack: Stack;
-  restore(snapshot: Uint8Array): Promise<void>;
+  /** Its own root token and recovery key, from its init (before any restore). */
+  own: { rootToken: string; recoveryKey: string };
+  /** snapshot-force with `token` (the instance's current root token by default). */
+  restore(snapshot: Uint8Array, token?: string): Promise<void>;
 }
 
 export async function scratchBao(stack: Stack): Promise<ScratchBao> {
@@ -821,12 +836,15 @@ export async function scratchBao(stack: Stack): Promise<ScratchBao> {
   await waitForOpenBaoListener(state);
   await initialiseOpenBao(state);
   await waitForOpenBaoActive(state);
+  const own = { rootToken: state.bao.rootToken, recoveryKey: state.bao.recoveryKey ?? "" };
   return {
     stack: state as unknown as Stack,
-    async restore(snapshot) {
+    own,
+    async restore(snapshot, token) {
       const response = await baoRequest(state, "/v1/sys/storage/raft/snapshot-force", {
         method: "POST",
         body: snapshot,
+        ...(token === undefined ? {} : { token }),
       });
       if (response.status !== 204 && response.status !== 200) {
         throw new Error(`snapshot-force returned HTTP ${String(response.status)}`);

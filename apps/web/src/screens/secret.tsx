@@ -10,6 +10,8 @@ import { useRef, useState, type SyntheticEvent } from "react";
 import { call, callSecret, failureOf, need } from "../api/client.ts";
 import { ErrorPanel } from "../errors/ErrorPanel.tsx";
 import type { Failure } from "../errors/explain.ts";
+import { PAGES } from "../copy/pages.ts";
+import { PageHeader, ScopeIds } from "../ui/PageHeader.tsx";
 import { Link } from "../router.tsx";
 import { useScope } from "../state/scope.tsx";
 import { isCode, useAction } from "../state/use-action.ts";
@@ -304,10 +306,18 @@ export function Secret(props: { name: string }) {
 
   return (
     <>
-      <h1>{name}</h1>
-      <p className="hint">
-        Secret of {project.name} / {environment.name}. {list}
-      </p>
+      <PageHeader
+        page={PAGES.secret}
+        title={name}
+        meta={
+          <>
+            {/* A secret's page offers no button that is not about the value (history.test):
+                its ids are text here, and the breadcrumbs copy them. */}
+            <ScopeIds project={project} environment={environment} copy={false} />
+            {list}
+          </>
+        }
+      />
       <EnvironmentNotice state={environment.state} reason={environment.reviewReason} />
       {!readable ? null : !named ? (
         <p>There is no secret with this name in this environment.</p>

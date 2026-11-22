@@ -93,6 +93,16 @@ describe("the units of host jobs (P-112)", () => {
     expect(command).toContain("MYKEY_BACKUP_EXPECTED=yes");
   });
 
+  // Run 9.6 (P-166, D-72): one field record per day at 00:10 UTC, from the host's own facts.
+  it("the field day has a daily timer at 00:10 UTC that runs field-day.sh, and timers installs it", () => {
+    expect(jobTimers()).toContain("mykey-field-day");
+    expect(field(read("mykey-field-day.timer"), "OnCalendar")).toBe("*-*-* 00:10:00 UTC");
+    expect(field(read("mykey-field-day.service"), "ExecStart")).toBe(
+      "/opt/mykey/hosts/field/field-day.sh",
+    );
+    expect(timersCommand(jobTimers())).toContain("mykey-field-day.timer");
+  });
+
   // Run 6.9 (P-129): expiry at 02:00, auth clean-up hourly, the PostgreSQL sweeps every 5 minutes.
   it("operations-expire, auth-cleanup and sweep each have a timer that runs their command through ops-run.sh", () => {
     const want = {

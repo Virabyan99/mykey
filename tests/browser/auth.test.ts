@@ -115,7 +115,13 @@ describe("sign-in and the security screens", () => {
     expect(signedIn.status).toBe(200);
     const session = await web.withCookie(sessionCookieOf(signedIn));
     const { a } = web.tenants;
-    const params = { org: a.organizationId, project: a.project1, env: a.env1a, name: "API_KEY" };
+    const params = {
+      org: a.organizationId,
+      project: a.project1,
+      env: a.env1a,
+      name: "API_KEY",
+      article: "project-id",
+    };
     try {
       // The paths of signing in are not workspace routes.
       const workspace = WEB_ROUTES.filter((route) => !["reset", "enroll"].includes(route.id));
@@ -351,11 +357,11 @@ describe("sign-in and the security screens", () => {
     try {
       await page.goto(`${web.origin}/`);
       await page.waitForURL(`${web.origin}${overview()}`);
+      // Run 9.0 (P-162): the projects are the sidebar's links, no longer the scope bar's select.
       await page
-        .getByRole("navigation", { name: "Scope" })
-        .getByLabel("Project", { exact: true })
-        .locator("option", { hasText: "Project One" })
-        .waitFor({ state: "attached" });
+        .getByRole("navigation", { name: "Sections" })
+        .getByRole("link", { name: "Project One", exact: true })
+        .waitFor();
       await page.getByRole("link", { name: "Account" }).click();
       await heading(page, "Account").waitFor();
 

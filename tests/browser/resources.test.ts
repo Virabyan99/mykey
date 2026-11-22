@@ -104,6 +104,8 @@ describe("the overview and the resource screens", () => {
 
       const load = apiCalls(session);
       expect(load.length, load.join(" ")).toBeLessThanOrEqual(6);
+      // Run 9.0: Getting started asks the audit log only once a credential is active.
+      expect(load).not.toContain(`/v1/organizations/${org()}/audit`);
       expect(load).toContain(`/v1/organizations/${org()}/overview`);
       expect(load).toContain(`/v1/organizations/${org()}/credentials/summary`);
       expect(load).toContain(`/v1/organizations/${org()}/metrics`);
@@ -181,12 +183,16 @@ describe("the overview and the resource screens", () => {
       await page.getByRole("button", { name: "Rename", exact: true }).click();
       await page.getByRole("heading", { level: 1, name: projectName }).waitFor();
       expect((await projectByName(projectName)).id).toBe(made.projectId);
-      // The scope bar reads the same list.
+      // The breadcrumbs and the sidebar read the same list (Run 9.0, P-162: the scope
+      // bar's select became these two).
       await page
         .getByRole("navigation", { name: "Scope" })
-        .getByLabel("Project", { exact: true })
-        .locator("option:checked", { hasText: projectName })
-        .waitFor({ state: "attached" });
+        .getByRole("link", { name: projectName, exact: true })
+        .waitFor();
+      await page
+        .getByRole("navigation", { name: "Sections" })
+        .getByRole("link", { name: projectName, exact: true })
+        .waitFor();
 
       await rowOf(page, made.environmentName).getByRole("button", { name: "Rename" }).click();
       await page.getByLabel("New name").fill(environmentName);

@@ -18,6 +18,19 @@ import pg from "pg";
 import { restoreSteps } from "../infra/hosts/backup/restore-steps.ts";
 import { BACKUP_PASSWORD_FILE } from "../infra/hosts/backup/steps.ts";
 
+export {
+  custodyAfterRestore,
+  custodyInitPlan,
+  datedCustodyCopies,
+  datedCustodyPath,
+  decodeGeneratedRoot,
+  generateRoot,
+  recoveryKeyOf,
+  rootTokenCandidates,
+  writeCustodyAfterRestore,
+  type SysCall,
+} from "./host-custody.ts";
+
 export const RESTORE_STATE_FILE = "/var/lib/mykey/restore-state.json";
 const GATE_FILE = "/etc/mykey/gate/gate.json";
 const SECRETS = "/etc/mykey/secrets";
@@ -72,11 +85,15 @@ export interface HostIo {
   /** The lost host's root token (its custody copy): valid in OpenBao once the snapshot is in. */
   pairRootToken: string;
   /**
-   * Run 6.8: this host's own OpenBao root token (its custody copy, from its
-   * bao-init). A clean host's OpenBao knows only that one, so it is the token
-   * `snapshot-force` is sent with; the drill found the pair's token refused.
+   * Run 6.8, Run 9.7 (R4-3, R4-10): the root tokens this host's OpenBao may
+   * accept, in order: the restore's own kept token, the dated init answers,
+   * the custody copy (host-custody.ts, rootTokenCandidates). A clean host's
+   * OpenBao knows only its own, so `snapshot-force` is sent with the first
+   * one accepted; the drill found the pair's token refused.
    */
-  targetRootToken: string;
+  rootTokens(): readonly string[];
+  /** Keeps the restore's own root token on the workstation (0600) before step 4 is recorded. */
+  keepRootToken(token: string): Promise<void>;
   /** Run 6.8: the source host's backup password (its custody copy), as the file holds it. */
   sourceBackupPassword: string;
   kmsKeyUsable(keyId: string): Promise<boolean>;
@@ -172,15 +189,20 @@ export async function hostRestoreTarget(
   return {
     async holding() {
       const gate = await io.exec(`cat ${GATE_FILE}`);
-      if (gate.code === 0 && /"state"\s*:\s*"open"/.test(gate.stdout)) return "the gate is open";
+      if (gate.code === 0 && /"state"\s*:\s*"open"/.test(gate.stdout)) {
+        return { why: "the gate is open", serving: true };
+      }
       const table = await query<{ found: string | null }>(
         "SELECT to_regclass('app.organization')::text AS found",
       );
       if (table[0]?.found === null || table[0]?.found === undefined) return null;
       const orgs = await query<{ n: string }>("SELECT count(*) AS n FROM app.organization");
-      return Number(orgs[0]?.n ?? "0") > 0 ? "the host holds organizations" : null;
+      return Number(orgs[0]?.n ?? "0") > 0
+        ? { why: "the host holds organizations", serving: false }
+        : null;
     },
     state: {
+      path: RESTORE_STATE_FILE,
       async read() {
         const text = (await ok(restoreStateCommand().read, "reading the restore state")).trim();
         return text === "" ? null : (JSON.parse(text) as RestoreState);
@@ -255,8 +277,9 @@ export async function hostRestoreTarget(
         url: `https://127.0.0.1:${String(baoTunnel.localPort)}`,
         caCertPath: io.caCertPath,
       },
-      async restoreSnapshot() {
-        await header(io.targetRootToken);
+      rootTokens: () => Promise.resolve(io.rootTokens()),
+      async restoreSnapshot(_file, token) {
+        await header(token);
         await ok(stepsOf().baoRestore, "the OpenBao snapshot", {
           secretOutput: true,
           timeoutMs: 900_000,
@@ -272,6 +295,7 @@ export async function hostRestoreTarget(
       },
     },
     pairRootToken: io.pairRootToken,
+    keepRootToken: (token) => io.keepRootToken(token),
     async deliver(namespace, name, credential) {
       const ours =
         namespace === "" ? name === "backup" : namespace === `org-${io.organizationId ?? ""}`;

@@ -60,6 +60,13 @@ export interface VerifyDeps {
   /** The operator's `--confirm-members <count>`. */
   confirmMembers?: number;
   boundCidrs: Record<AppRoleName, readonly string[]>;
+  /**
+   * Run 9.7 (R4-2, review RR-1): the accessors of root tokens the operator made on
+   * the restored OpenBao after the restore (its next root token, by generate-root).
+   * They are the operator's own, not the old world's, and are not counted in the
+   * root namespace. Every other accessor still fails machine_accessors_none.
+   */
+  operatorAccessors?: readonly string[];
   now?: () => Date;
 }
 
@@ -133,9 +140,12 @@ export function storeChecks(deps: VerifyDeps): Record<string, () => Promise<Chec
     },
     machine_accessors_none: async () => {
       const self = (await admin.lookupSelf()).accessor;
+      const operator = new Set(deps.operatorAccessors ?? []);
       let left = 0;
       for (const namespace of await namespaces()) {
-        left += (await admin.listAccessors(namespace)).filter((a) => a !== self).length;
+        left += (await admin.listAccessors(namespace)).filter(
+          (a) => a !== self && !(namespace === "" && operator.has(a)),
+        ).length;
       }
       return zero(left, "token accessors besides the restore's own");
     },

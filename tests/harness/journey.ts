@@ -182,7 +182,7 @@ export async function ownerJourney(
     );
 
   // --- a project, and an environment in it -------------------------------
-  await heading(page, "Overview").waitFor();
+  await heading(page, "Home").waitFor();
   await page.getByRole("button", { name: "New project" }).click();
   await page.getByLabel("Project name").fill(values.project);
   await page.getByRole("button", { name: "Create project" }).click();

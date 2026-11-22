@@ -52,6 +52,19 @@ import {
 import { KEY_RINGS } from "@mykey/auth";
 import { loadR2Credentials } from "@mykey/backup";
 import type { RoleName } from "@mykey/db";
+import {
+  custodyCopyPath,
+  custodyInitPlan,
+  datedCustodyCopies,
+  datedCustodyPath,
+  generateRoot,
+  recoveryKeyOf,
+  restoreRootTokenPath,
+  rootTokenCandidates,
+  writeCustodyAfterRestore,
+  type SysCall,
+} from "./host-custody.ts";
+import { FIELD_PULL_COMMAND, parseFieldPull } from "./field-report.ts";
 import { readOpsJobs } from "./ops-jobs.ts";
 import { probeState } from "./probe.ts";
 
@@ -125,7 +138,8 @@ export const USAGE = `usage: node scripts/host.ts <staging|prod> <command> [--pu
   r2-install <audit-archive|pairs|pairs-cleanup>  the S3 credentials of that job's R2 token, on stdin
   backup-init                    backup password and signing key made on the host; trust anchor; AppRole backup
   backup-custody                 copy the backup password and signing key to ~/.mykey/custody/<host>/backup/
-  timers                         install and start the job timers (ops-jobs.json, audit rotation)
+  timers                         install and start the job timers (ops-jobs.json, audit rotation, field day)
+  field-pull                     copy the day records (P-166) to ~/.mykey/field/<host>/; never labels.json
   gate open --report <file>      opens with a verification report (v2; Run 6.7)
   gate close [--verifying]       closes; --verifying lets the verification listener serve
   tunnel verify                  a local port to the API's verification listener (Ctrl-C ends it)
@@ -151,7 +165,8 @@ export type HostCommand = { host: HostName; via: Address } & (
         | "ops-secrets"
         | "backup-init"
         | "backup-custody"
-        | "timers";
+        | "timers"
+        | "field-pull";
     }
   | { command: "status"; json: boolean }
   | { command: "apply"; target: "firewall" | "ssh" }
@@ -167,7 +182,7 @@ export type HostCommand = { host: HostName; via: Address } & (
   | { command: "env"; key: OpenBaoEnvKey; value: string }
   | { command: "maint"; minutes: number; argv: string[] }
   | { command: "gate"; action: GateAction; report?: string; verifying?: true }
-  | { command: "tunnel"; target: "verify" }
+  | { command: "tunnel"; target: "verify"; browser: boolean }
   | { command: "restore"; source: HostName; pair: string; organization?: string }
   | {
       command: "deploy";
@@ -372,8 +387,11 @@ export function parseHostArgs(argv: string[]): HostCommand {
   if (command === "deploy") return parseDeployArgs(host, rest);
   if (command === "restore-verify") return parseRestoreVerifyArgs(host, rest);
   if (command === "tunnel") {
-    if (rest.length !== 1 || rest[0] !== "verify") throw new Error("tunnel needs verify");
-    return { host, via: "vpn", command, target: "verify" };
+    const browser = rest.length === 2 && rest[1] === "--browser";
+    if (rest[0] !== "verify" || (rest.length !== 1 && !browser)) {
+      throw new Error("tunnel needs verify [--browser]");
+    }
+    return { host, via: "vpn", command, target: "verify", browser };
   }
   let words = rest;
   let tail: string[] = [];
@@ -405,6 +423,7 @@ export function parseHostArgs(argv: string[]): HostCommand {
     case "backup-init":
     case "backup-custody":
     case "timers":
+    case "field-pull":
       if (positional.length !== 0) throw new Error(USAGE);
       return { ...base, command };
     case "status":
@@ -1127,10 +1146,8 @@ export function baoInitCommand(): string {
   ].join(" && ");
 }
 
-/** The workstation's copy of a host's init answer (P-35). */
-export function custodyCopyPath(host: HostName, home: string = homedir()): string {
-  return join(home, ".mykey", "custody", host, "openbao-init.json");
-}
+/** The workstation's copy of a host's init answer (P-35); Run 9.7: host-custody.ts. */
+export { custodyCopyPath };
 
 /**
  * Run 6.8: the organization a restored host's API serves (its credentials are
@@ -1174,7 +1191,7 @@ export function opsRootToken(
   host: HostName,
   home: string = homedir(),
 ): { token: string; from: "restore" | "custody" } | null {
-  const restoreToken = join(home, ".mykey", "secrets", "hosts", host, "restore-root-token");
+  const restoreToken = restoreRootTokenPath(host, home);
   if (existsSync(restoreToken)) {
     const token = readFileSync(restoreToken, "utf8").trim();
     if (token !== "") return { token, from: "restore" };
@@ -1895,13 +1912,20 @@ async function runBaoInit(host: HostEntry, address: Address, log: Logger): Promi
   if (typeof rootToken !== "string" || rootToken === "") {
     throw new Error("the init answer has no root token");
   }
+  // Run 9.7 (R4-10): a copy that holds another answer (the lost host's, when a
+  // host is restored onto its own reinstalled server) stays; this one goes beside it, dated.
   const copy = custodyCopyPath(host.name);
   mkdirSync(dirname(copy), { recursive: true, mode: 0o700 });
-  if (!existsSync(copy)) writeFileSync(copy, answer, { mode: 0o600, flag: "wx" });
-  else if (readFileSync(copy, "utf8") !== answer) {
-    throw new Error(`${copy} differs from the host's init answer; it is never overwritten`);
-  }
-  log.info(`${host.name}: custody copy at ${copy}`);
+  const plan = custodyInitPlan({
+    current: existsSync(copy) ? readFileSync(copy, "utf8") : null,
+    dated: datedCustodyCopies(host.name),
+    answer,
+    datedPath: datedCustodyPath(host.name, new Date()),
+  });
+  if (plan.write !== null) writeFileSync(plan.write, answer, { mode: 0o600, flag: "wx" });
+  log.info(
+    `${host.name}: custody copy at ${plan.write ?? copy}${plan.write !== null && plan.write !== copy ? ` (beside ${copy}, which holds another answer)` : ""}`,
+  );
 
   await waitForOpenBao(host, address, 120);
   const { OpenBaoAdmin } = await import("@mykey/openbao/admin");
@@ -2115,7 +2139,7 @@ async function main(argv: string[], log: Logger): Promise<number> {
     case "gate":
       return runGate(host, command, address, log);
     case "tunnel":
-      return runVerifyTunnel(host, log);
+      return runVerifyTunnel(host, command.browser, log);
     case "restore":
       return runRestore(host, command, address, log);
     case "restore-verify":
@@ -2147,6 +2171,9 @@ async function main(argv: string[], log: Logger): Promise<number> {
       return 0;
     case "timers":
       await runTimers(host, address, log);
+      return 0;
+    case "field-pull":
+      await runFieldPull(host, address, log);
       return 0;
   }
 }
@@ -2343,7 +2370,8 @@ export function jobTimers(): string[] {
     job.unit === null ? [] : [job.unit],
   );
   // Run 6.5 (P-119): the daily pair, run by backup.sh rather than ops-run.sh.
-  return ["mykey-bao-audit-rotate", ...units, "mykey-backup"];
+  // Run 9.6 (P-166): the field day, run by field/field-day.sh.
+  return ["mykey-bao-audit-rotate", ...units, "mykey-backup", "mykey-field-day"];
 }
 
 /** Run 6.5 (P-120): services enabled at boot without a timer. */
@@ -2380,6 +2408,20 @@ async function runTimers(host: HostEntry, address: Address, log: Logger): Promis
     "installing the job timers",
   );
   log.info(`${host.name}: timers enabled: ${units.join(", ")}`);
+}
+
+/** Run 9.6 (P-166): the host's day records, each checked, to ~/.mykey/field/<host>/ (outside the repository). */
+async function runFieldPull(host: HostEntry, address: Address, log: Logger): Promise<void> {
+  const answer = await sshExec(host, FIELD_PULL_COMMAND, { sudo: true, address });
+  const pulled = parseFieldPull(expectSuccess(answer, "reading the field records").stdout);
+  const directory = join(homedir(), ".mykey", "field", host.name);
+  mkdirSync(directory, { recursive: true, mode: 0o700 });
+  for (const { date, record } of pulled) {
+    writeFileSync(join(directory, `${date}.json`), `${JSON.stringify(record, null, 2)}\n`, {
+      mode: 0o600,
+    });
+  }
+  log.info(`${host.name}: ${String(pulled.length)} field record(s) in ${directory}`);
 }
 
 /** Run 6.2 (P-111): the role passwords ops jobs log in with, where ops-run.sh mounts them. */
@@ -2709,6 +2751,62 @@ async function runGateV2(
 
 // ------------------------------------------------------------------ restore (Run 6.7)
 
+const RESTORE_STATE_PATH = "/var/lib/mykey/restore-state.json";
+
+/**
+ * Run 9.7 (R4-7): a deploy opens the gate with the deploy checks only, so it
+ * never opens a host whose restore is not finished: restore-state.json is
+ * there from a restore's first step until restore-verify --open removes it.
+ */
+export function deployRestoreRefusal(state: string | null): string | null {
+  if (state === null || state.trim() === "") return null;
+  let step: unknown;
+  try {
+    step = (JSON.parse(state) as { step?: unknown }).step;
+  } catch {
+    step = null;
+  }
+  // Review RR-3: --open removed the hand-off files, so restore-verify cannot help here.
+  if (step === "opened") {
+    return `deploy refused: a restore of this host opened the gate but its state was not removed (${RESTORE_STATE_PATH}); check the host and remove the file by hand (restore.md, "Steps 8–9")`;
+  }
+  return `deploy refused: a restore of this host is not finished (${RESTORE_STATE_PATH} is there); it opens with restore-verify --open`;
+}
+
+/**
+ * Run 9.7 (R4-2): one sys/ call to the host's OpenBao, by curl on the host as
+ * bao-init does, with `token` (the restore's own root token). The token's
+ * header is the first line on stdin, kept in a 0600 file only while curl
+ * runs; a body (the recovery key) follows it on stdin. The answer (the
+ * one-time password, the encoded token) comes back redacted.
+ */
+function hostSysCall(host: HostEntry, address: Address, token: string): SysCall {
+  const { address: ip, port } = REMOTE.openbao;
+  return async (method, path, body) => {
+    const curl = [
+      "curl --silent --show-error --max-time 30",
+      `--cacert ${REMOTE.caCert} --resolve openbao:${String(port)}:${ip}`,
+      `-X ${method} -H @"$h"`,
+      body === undefined ? "" : "-H 'Content-Type: application/json' --data-binary @-",
+      `-w '\n%{http_code}' https://openbao:${String(port)}/v1/${path}`,
+    ]
+      .filter((part) => part !== "")
+      .join(" ");
+    const command = `umask 077 && h=$(mktemp) && IFS= read -r line && printf '%s\\n' "$line" > "$h" && ${curl}; rc=$?; rm -f "$h"; exit $rc`;
+    const answer = await sshExec(host, command, {
+      sudo: true,
+      address,
+      secretOutput: true,
+      stdin: `X-Vault-Token: ${token}\n${body === undefined ? "" : JSON.stringify(body)}`,
+    });
+    if (answer.code !== 0) throw new Error(`OpenBao ${path}: curl exit ${String(answer.code)}`);
+    const lines = answer.stdout.trimEnd().split("\n");
+    const status = Number(lines.pop() ?? "0");
+    const text = lines.join("\n").trim();
+    return { status, body: text === "" ? null : (JSON.parse(text) as unknown) };
+  };
+}
+
 /** Where `restore` leaves what `restore-verify` needs, on the workstation (0600). */
 export function restoreHandoffFiles(
   host: HostName,
@@ -2841,15 +2939,20 @@ async function runRestore(
         registerSecret(password.trim());
         return password;
       })(),
-      // Run 6.8: the host's own root token; after a first restore's snapshot
-      // that is the restore's own (a second run of the same pair).
-      targetRootToken: ((): string => {
-        const chosen = opsRootToken(host.name);
-        if (chosen === null)
-          throw new Error(`${host.name}: no root token (bao-init's custody copy)`);
-        registerSecret(chosen.token);
-        return chosen.token;
-      })(),
+      // Run 6.8, Run 9.7 (R4-3, R4-10): the restore's own kept token (a rerun),
+      // the dated init answers (a new server beside a lost host's copy), the copy.
+      rootTokens: () => {
+        const found = rootTokenCandidates(host.name).map((candidate) => candidate.token);
+        found.forEach(registerSecret);
+        return found;
+      },
+      keepRootToken: (token) => {
+        registerSecret(token);
+        mkdirSync(dirname(files.token), { recursive: true, mode: 0o700 });
+        writeFileSync(files.token, token, { mode: 0o600 });
+        chmodSync(files.token, 0o600);
+        return Promise.resolve();
+      },
       kmsKeyUsable: async (keyId) => {
         try {
           const answer = await sshExec(host, kmsKeyStateCommand("seal", keyId), {
@@ -2952,9 +3055,8 @@ async function runRestore(
                 },
         },
       };
+      // The restore's own token is already kept (keepRootToken, before step 4 was recorded).
       mkdirSync(dirname(files.state), { recursive: true, mode: 0o700 });
-      writeFileSync(files.token, restored.rootToken, { mode: 0o600 });
-      chmodSync(files.token, 0o600);
       writeFileSync(files.state, JSON.stringify(handoff, null, 2), { mode: 0o600 });
       log.info(
         `${host.name}: pair ${handoff.pairId} restored; closed + verifying; incarnation ${handoff.backendIncarnation}`,
@@ -3067,6 +3169,31 @@ async function runRestoreVerify(
       );
       for (const c of failed) log.error(`${host.name}:   ${c.id}: ${c.state} (${c.observed})`);
       if (!command.open) return failed.length === 0 ? 0 : 1;
+      // Run 9.7 (R4-2): before the opening, the restored OpenBao's next root token,
+      // made with the source's recovery key (the snapshot carries the source's
+      // recovery configuration). Without it every later pair of this host, ops and
+      // deploys would hold a dead token. Review RR-1: the opening's recheck counts
+      // every accessor, so this one is named to it as the operator's own; the
+      // custody copy is rewritten only once the gate is open, and a refused
+      // opening revokes the new token, so no attempt leaves a live one behind.
+      // A failure here leaves the restore token: --open can be run again.
+      let next: { token: string; accessor: string } | null = null;
+      if (failed.length === 0) {
+        const source = handoff.source ?? host.name;
+        const sourceAnswer = readFileSync(custodyCopyPath(source), "utf8");
+        const recoveryKey = recoveryKeyOf(sourceAnswer);
+        registerSecret(recoveryKey);
+        const rootToken = await generateRoot(hostSysCall(host, address, token), recoveryKey);
+        registerSecret(rootToken);
+        const checked = await new OpenBaoAdmin(
+          { url: `https://127.0.0.1:${String(baoTunnel.localPort)}`, caCertPath },
+          rootToken,
+        ).lookupSelf();
+        if (!checked.policies.includes("root")) {
+          throw new Error("generate-root: the new token does not hold the root policy");
+        }
+        next = { token: rootToken, accessor: checked.accessor };
+      }
       const opened = await openGate({
         writer: hostGateWriter(host, address),
         pool,
@@ -3074,17 +3201,42 @@ async function runRestoreVerify(
         report,
         kind: "restore",
         now: () => new Date(),
-        recheck: () => recheckForOpen(deps),
+        recheck: () =>
+          recheckForOpen({ ...deps, operatorAccessors: next === null ? [] : [next.accessor] }),
       });
       if (!opened.ok) {
+        if (next !== null) await admin.revokeAccessor("", next.accessor);
         log.error(`${host.name}: gate open refused: ${opened.cause}`);
         return 1;
       }
+      if (next !== null) {
+        const source = handoff.source ?? host.name;
+        const kept = writeCustodyAfterRestore(
+          host.name,
+          readFileSync(custodyCopyPath(source), "utf8"),
+          next.token,
+          new Date(),
+        );
+        log.info(
+          `${host.name}: a new root token made with ${source}'s recovery key; custody copy ${kept.copy}${kept.replaced === null ? "" : ` (the one it replaced kept at ${kept.replaced})`}`,
+        );
+      }
+      // Run 9.7 (R4-4): the state line says the restore is finished before its
+      // token and files go; a line left behind is refused by the next restore.
+      const { RESTORE_STATE_FILE, restoreStateCommand } = await import("./host-restore.ts");
+      expectSuccess(
+        await sshExec(host, restoreStateCommand().write, {
+          sudo: true,
+          address,
+          stdin: JSON.stringify({ pairId: handoff.pairId, step: "opened" }),
+        }),
+        "recording the opening in the restore state",
+      );
       await admin.revokeSelf();
       rmSync(files.token, { force: true });
       rmSync(files.state, { force: true });
       expectSuccess(
-        await sshExec(host, `rm -f /var/lib/mykey/restore-state.json`, { sudo: true, address }),
+        await sshExec(host, `rm -f ${RESTORE_STATE_FILE}`, { sudo: true, address }),
         "removing the restore state",
       );
       log.info(`${host.name}: ${JSON.stringify(opened.record)}; the restore's root token revoked`);
@@ -3567,6 +3719,18 @@ async function runDeployCommand(
               break;
             }
             case "gate_open": {
+              // Run 9.7 (R4-7): a restored host opens through restore-verify --open only.
+              // Review RR-3: an answer that cannot be read refuses; it never reads as "no restore".
+              const restoreState = expectSuccess(
+                await sshExec(
+                  host,
+                  `if test -e ${RESTORE_STATE_PATH}; then cat ${RESTORE_STATE_PATH}; fi`,
+                  remote,
+                ),
+                "reading the restore state",
+              );
+              const refusal = deployRestoreRefusal(restoreState.stdout);
+              if (refusal !== null) throw new Error(refusal);
               const report = JSON.parse(readFileSync(files.report, "utf8")) as unknown;
               const expect = await binding();
               const opened = await withMaintenance((pool) =>
@@ -3742,12 +3906,83 @@ async function hostRestoreJourney(
   }
 }
 
-/** Run 6.7 (P-123): a local port to the verification listener until Ctrl-C. */
-async function runVerifyTunnel(host: HostEntry, log: Logger): Promise<number> {
+/**
+ * Run 9.0: the argv of the owner's browser window for the journey. A page on
+ * 127.0.0.1 is refused by the API's origin check (MYKEY_BASE_URL) and warned
+ * off by the listener's own CA; this window reaches the host's own name through
+ * the tunnel, in a profile of its own, and trusts only the listener's key.
+ */
+export function verifyBrowserArgs(input: {
+  hostname: string;
+  localPort: number;
+  spki: string;
+  profileDir: string;
+}): string[] {
+  if (!/^[a-z0-9.-]{1,253}$/.test(input.hostname)) {
+    throw new Error("verify browser: the hostname is not a plain host name");
+  }
+  if (!/^[A-Za-z0-9+/=]{1,100}$/.test(input.spki)) {
+    throw new Error("verify browser: the key hash is not base64");
+  }
+  return [
+    `--user-data-dir=${input.profileDir}`,
+    `--host-resolver-rules=MAP ${input.hostname}:443 127.0.0.1:${String(input.localPort)}`,
+    `--ignore-certificate-errors-spki-list=${input.spki}`,
+    "--no-first-run",
+    "--new-window",
+    `https://${input.hostname}/`,
+  ];
+}
+
+/** The SHA-256 of the verification listener's public key (base64), read through the tunnel. */
+async function listenerSpki(localPort: number): Promise<string> {
+  const { connect } = await import("node:tls");
+  const { X509Certificate } = await import("node:crypto");
+  const raw = await new Promise<Buffer>((resolveCert, rejectCert) => {
+    const socket = connect(
+      { host: "127.0.0.1", port: localPort, rejectUnauthorized: false },
+      () => {
+        const cert = socket.getPeerCertificate();
+        socket.end();
+        resolveCert(cert.raw);
+      },
+    );
+    socket.once("error", rejectCert);
+  });
+  const der = new X509Certificate(raw).publicKey.export({ type: "spki", format: "der" });
+  return createHash("sha256").update(der).digest("base64");
+}
+
+const CHROME_PATHS = [
+  "C:/Program Files/Google/Chrome/Application/chrome.exe",
+  "C:/Program Files (x86)/Google/Chrome/Application/chrome.exe",
+];
+
+/** Run 6.7 (P-123): a local port to the verification listener until Ctrl-C; Run 9.0: --browser. */
+async function runVerifyTunnel(host: HostEntry, browser: boolean, log: Logger): Promise<number> {
   const tunnel = await openTunnel(host, REMOTE_API_VERIFY);
   log.info(
     `${host.name}: the verification listener is at https://127.0.0.1:${String(tunnel.localPort)} (Ctrl-C ends it)`,
   );
+  if (browser) {
+    const chrome = CHROME_PATHS.find((path) => existsSync(path));
+    if (chrome === undefined) {
+      log.info(`${host.name}: no Chrome found (${CHROME_PATHS.join(", ")}); the tunnel stays open`);
+    } else {
+      const profileDir = mkdtempSync(join(tmpdir(), "mykey-verify-browser-"));
+      const argv = verifyBrowserArgs({
+        hostname: host.hostname,
+        localPort: tunnel.localPort,
+        spki: await listenerSpki(tunnel.localPort),
+        profileDir,
+      });
+      const { spawn } = await import("node:child_process");
+      spawn(chrome, argv, { detached: true, stdio: "ignore" }).unref();
+      log.info(
+        `${host.name}: a browser window of its own opened at https://${host.hostname}/ through the tunnel`,
+      );
+    }
+  }
   await new Promise<void>((resolveStop) => {
     process.once("SIGINT", () => {
       resolveStop();

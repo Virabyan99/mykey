@@ -6,7 +6,7 @@
 // proxy's own for longer than a restart. After each: the running images are
 // the release's, the record is v2 open + serving with this build and a report
 // hash, and the journey revealed the same digest. Releases are read from
-// MYKEY_RELEASE_NEW and MYKEY_RELEASE_PREVIOUS (default ~/mykey-release/host-v*).
+// MYKEY_RELEASE_NEW and MYKEY_RELEASE_PREVIOUS, both required (Session 9).
 import { spawn } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
@@ -17,9 +17,17 @@ import { connectStaging, expectSuccess, sshExec, type StagingStack } from "../ha
 import { stagingDatabase } from "../harness/staging-db.ts";
 import { STAGING_ORIGIN } from "../harness/staging-owner.ts";
 
-const NEW = process.env.MYKEY_RELEASE_NEW ?? join(homedir(), "mykey-release", "host-v0.6.0");
-const PREVIOUS =
-  process.env.MYKEY_RELEASE_PREVIOUS ?? join(homedir(), "mykey-release", "host-v0.5.9");
+// Session 9: no default. Run 6.9's defaults (host-v0.6.0 over host-v0.5.9) left
+// staging on a six-week-old release when the variables were forgotten.
+function releaseDir(name: string): string {
+  const value = process.env[name];
+  if (value === undefined || value === "") {
+    throw new Error(`${name} must name a release directory (the candidate and the one before it)`);
+  }
+  return value;
+}
+const NEW = releaseDir("MYKEY_RELEASE_NEW");
+const PREVIOUS = releaseDir("MYKEY_RELEASE_PREVIOUS");
 const JOURNEY = join(homedir(), ".mykey", "secrets", "hosts", "staging", "deploy-journey.json");
 const ROOT = resolve(import.meta.dirname, "..", "..");
 const PROXY_5XX_LIMIT_MS = 120_000;

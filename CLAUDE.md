@@ -20,21 +20,37 @@ The project is in **Stage 1**, a 14-day plan of nine sessions.
 
 ## Where we stand
 
-_Last updated: 21 Nov 2026, after the Session 8 merge (PR #22); Gate R signed by the owner._
+_Last updated: 22 Nov 2026, at the end of Session 9 (PR #23, merged). Gate F was decided HARDEN (D-74): Stage 1 stays open._
 
-| Session | Topic                                       | State                                  |
-| ------- | ------------------------------------------- | -------------------------------------- |
-| 1       | Foundation                                  | **Done** (PASS WITH ISSUES), merged    |
-| 2       | Infrastructure and make-or-break proofs     | **Done** (GO, no fallback), merged     |
-| 3       | Identity, access and resources              | **Done** (PASS WITH ISSUES), merged    |
-| 4       | Operations engine and secret lifecycle      | **Done** (PASS WITH ISSUES), merged    |
-| 5       | Machine access, CLI and API reference       | **Done** (PASS WITH ISSUES), merged    |
-| 6       | Audit, limits, backup, recovery, deployment | **Done** (PASS WITH ISSUES), merged    |
-| 7       | Web workspace                               | **Done** (PASS WITH ISSUES), merged    |
-| 8       | Security review and controlled-use release  | **Done**, Gate R signed (D-67), merged |
-| 9       | Real use, agent experiment, stage exit      | Not started                            |
+| Session | Topic                                       | State                                   |
+| ------- | ------------------------------------------- | --------------------------------------- |
+| 1       | Foundation                                  | **Done** (PASS WITH ISSUES), merged     |
+| 2       | Infrastructure and make-or-break proofs     | **Done** (GO, no fallback), merged      |
+| 3       | Identity, access and resources              | **Done** (PASS WITH ISSUES), merged     |
+| 4       | Operations engine and secret lifecycle      | **Done** (PASS WITH ISSUES), merged     |
+| 5       | Machine access, CLI and API reference       | **Done** (PASS WITH ISSUES), merged     |
+| 6       | Audit, limits, backup, recovery, deployment | **Done** (PASS WITH ISSUES), merged     |
+| 7       | Web workspace                               | **Done** (PASS WITH ISSUES), merged     |
+| 8       | Security review and controlled-use release  | **Done**, Gate R signed (D-67), merged  |
+| 9       | Real use, agent experiment, stage exit      | **Done**, Gate F: HARDEN (D-74), merged |
 
-Each session's detail is in `docs/evidence/session-N/report.md`. Session 8's report has "What Session 9 must know"; Gate R's document is `docs/evidence/session-8/gate-r.md`.
+Each session's detail is in `docs/evidence/session-N/report.md`. Gate R's document is `docs/evidence/session-8/gate-r.md`, Gate F's is `docs/evidence/session-9/gate-f.md`.
+
+### Session 9 (real use, 22 Nov 2026, one day at the owner's request)
+
+- **Production is open** on `host-v0.9.1` (`b19ca6671e14`), epoch 7, opened through the owner's own journey (`run-9.1.md`).
+  - consumer-1 is the owner's WSL. It makes names-only starts: **no application runs yet** (Gate F's condition is open).
+  - The real-use clock starts at 22 Nov 2026, 14:27:41 UTC.
+- **The workspace was reworked** (D-70). `host-v0.9.0` failed the owner's first look; `host-v0.9.1` passed the seven tasks (`task-test.md`).
+- **The manifest** (`session-9/manifest.md`, `--session 9`): 144 PASS (33 `earlier`; 29 of them on `host-v0.8.1` staging results, by the owner's focused pass), 9 NOT PROVEN, 7 NOT YET DUE.
+- **Gate F: HARDEN** (D-74), on the owner's word. PR #23 is merged.
+- **The agent experiment** (D-71) is not a pass by the plan's rule:
+  - the boundary held in every request the agent sent;
+  - the model's safeguards declined scenarios 2, 3 and 10.
+- **The exit dossier** (`exit-dossier.md`) was corrected after the gate review (`gate-review.md`: 2 High, 8 Medium, all applied).
+- **Open findings:**
+  - **F-9.2-1,** the connect panel's three-block token step: it leaked a token on first use, as in Run 8.8. The one-command form is in `known-limits.md`; the panel needs a release.
+  - **The restore changes** (R4-*, RR-1) are proven locally only. The re-drill is deferred (D-73), and generate-root's host path (`hostSysCall`) has no test.
 
 ### Session 8 (release)
 
@@ -84,31 +100,35 @@ Each session's detail is in `docs/evidence/session-N/report.md`. Session 8's rep
 
 ### Hosts
 
-- **Staging** runs `host-v0.8.1`, gate open (epoch 315), timers installed. Its host files are `d53254e`.
-- **Production** runs `host-v0.8.1` **closed** (epoch 3):
+- **Staging** runs `host-v0.9.1`, gate open (epoch 354), timers installed (with `mykey-field-day`). The staging test owner was re-established after the task test.
+- **Production** runs `host-v0.9.1` **open and in service** (epoch 7; the probe's `inService: true`):
   - its own OpenBao, unsealed by `mykey-prod-seal-1` (KMS domain `mykey-prod-kms`; the seal policy keeps five rights, create refused);
   - custody in `~/.mykey/custody/prod/` and the password manager; backup timers; its first pair eligible;
-  - no account, no organization, no data; migrations up to `0018`;
-  - in the probe as `inService: false`, nothing open;
-  - its host files are `d53254e`.
+  - the owner's account and one organization, with the owner's secrets. Their ids, names and the owner's address never go into Git;
+  - eight job timers, `mykey-field-day` among them; migrations up to `0018`.
 
-  Production deploys need the owner's permission.
+  Production deploys need the owner's permission. Every one is `--stay-closed`, then the owner's journey in the `tunnel verify --browser` window, then `--owner-confirmed` (`production.md`).
 
 - **Evidence registry:** 144 `PASS` (from the manifest only), 35 `SPIKE_PASS`, 12 `OPEN`.
 
 ### Open items
 
-- **Session 9:** its plan is written first. Gate R is signed (D-67): Run 9.1 may open production by `production.md`, for real non-critical secrets and one first consumer.
-- **Carried to Session 9** (Session 8's report, "What Session 9 must know"):
-  - the workspace's UI and UX, the owner's request; the project id is shown only in the address;
-  - the credential drill's aim (`credential-drill.staging.test.ts`): its pause over SSH misses the one-call window after the dispatch marker;
-  - the restore Mediums R4-2, R4-3, R4-4, R4-10 (restore code unchanged, P-150), before Run 9.7's drill;
-  - the reviewers' smallest change for M1 (R3-1, D-65): a dated root token, the recovery share out of the workstation's file (Stage 2).
+- **Gate F was decided HARDEN** (D-74, 22 Nov 2026). Stage 1 stays open, and Gate F is decided again at W-2 (20 Dec 2026) on 28 days of use. The next session needs its own plan (three layers); Stage 2 does not start.
+- **The hardening list** (D-74):
+  - connect a real application;
+  - the panel's token step as one silent command;
+  - the restore re-drill, with a test for `hostSysCall`;
+  - the credential drill re-aimed (its pause over SSH misses the one-call window);
+  - outside the list: the reviewers' M1 change (R3-1, D-65), in Stage 2.
 - **Dated:**
-  - **Staging's KMS certificates expire on 12 Dec 2026** (staging seal at 10:50 UTC). Replace them before then (runbook `kms-and-unseal.md`). The checkpoint `kms-cert-expiry` is due from 12 Dec 09:57 UTC, and `certificate_expiring` opens 10 days before.
+  - **Staging's KMS certificates expire on 12 Dec 2026** (staging seal at 10:50 UTC). Replace them by 5 Dec, at least a week before (runbook `kms-and-unseal.md`). The checkpoint `kms-cert-expiry` is due from 12 Dec 09:57 UTC, and `certificate_expiring` opens 10 days before.
   - **Production's seal certificate `prod-seal-1` expires on 21 Dec 2026, 07:48 UTC** (issued 21 Nov 2026). Replace it before then, the same way, with production's names (`production.md`).
   - `.trivyignore.images` expires on 14 Dec 2026.
   - The checkpoint `pair-30-day` is due from 17 Dec 2026 19:00 UTC, before the 05:00 retention of 18 Dec.
+  - **consumer-1's token** expires by about 22 Dec 2026: rotate it around 20 Dec, with the one-command form.
+  - **W-2,** the 28-day report: 20 Dec 2026 (D-05, D-72). **W-1,** retention ageing: 23 to 26 Dec 2026.
+  - **The staging restore re-drill** (D-73): before 31 Dec 2026, and before production's first restore unless it is an emergency.
+  - Weekly from 29 Nov: `host.ts prod field-pull` and `node scripts/field-report.ts prod --week <n>`.
 
 ## Commands
 
@@ -154,6 +174,12 @@ node scripts/probe.ts deploy | secrets | state <host>   # the probe Worker
 MSYS_NO_PATHCONV=1 node scripts/host.ts prod deploy --release <dir> --owner-confirmed   # production with a real owner: after --stay-closed and the owner's journey (D-64)
 node scripts/release-candidate.ts --release <dir> --cli cli-vX.Y.Z | --deploy <host> --at <ISO> --epoch <n>   # candidate.json
 node scripts/release-manifest.ts [--apply]       # manifest.md from proof-map.json, results.json, candidate.json; --apply sets the registry (no force)
+#   both take --session <n> (default 8): that session's evidence folder; an earlier entry may name the staging release it keeps (earlier.release)
+node scripts/host.ts <host> tunnel verify --browser   # the owner's journey: a Chrome window of its own at the host's name, through the tunnel
+MSYS_NO_PATHCONV=1 node scripts/host.ts prod field-pull   # the day records to ~/.mykey/field/prod/; then:
+node scripts/field-report.ts prod --week <n>     # docs/evidence/field/week-<n>.md (week 1 starts at docs/evidence/field/clock.json)
+pnpm run test:staging tests/staging/agent-experiment.staging.test.ts   # the agent experiment (needs ~/.mykey/secrets/anthropic/api-key; reseed with agent-runner.staging first)
+MYKEY_RELEASE_NEW=<dir> MYKEY_RELEASE_PREVIOUS=<dir> pnpm run test:staging tests/staging/deploy.staging.test.ts   # both required
 node scripts/sweep-ci.ts <file>…                 # counts canary and token shapes in downloaded CI logs and reports
 node scripts/ci-scan.ts secrets | dependencies | images | selftest   # the CI scanners, locally
 ```
@@ -304,6 +330,9 @@ Scripts in `scripts/` and `infra/` are TypeScript run directly by Node (type str
 - **Synthetic users:** sign-in lowercases e-mail, so synthetic users must be stored lower-case.
 
 - **A bound on the probe is its worst case, never a typical run** (Session 8). Doc 06 §12: a check every minute and a three-minute grace, counted from the last good observation; the evaluation comes a minute later and the cron can run a minute late. `kms_unreachable` opened at 292 and 300 s, and the blackout's `health_failing` at 304 s: the tests now allow 410 s and 360 s. A drill's cause must outlast the window in which its alert is looked for.
+- **The deploy staging test deploys releases.** Without its two variables it used to deploy Run 6.9's pair and left staging on `host-v0.6.0` (Session 9). It now refuses to start without them.
+- **The agent experiment's `finally` revokes the runner's credential.** Every rerun needs `agent-runner.staging.test.ts` first (a new seed).
+- **Claude's safeguards stop adversarial agent prompts** (the classifier ends the session before any tool call). Record such a session as "not exercised", never rephrase to get past it.
 - **A pause sent over SSH cannot hit a one-call window.** It lands 2.5 to 3.4 s after it is sent. The credential drill caught nothing in 20 attempts on `host-v0.8.1`, and `reconcile` missed once. The exact placement is proven by `tests/fault`; a staging drill needs a trigger on the host.
 - **One staging file, one fate.** A red test makes every id that names its file unproven. Keep a probabilistic drill in a file of its own (`credential-drill.staging.test.ts`).
 - **`probe.staging`'s blackout darkens staging for 8 minutes** (480 s, restored by a timer). Nothing else may run then, and a unit that runs during it (`mykey-sweep`) fails once.
@@ -357,6 +386,10 @@ Scripts in `scripts/` and `infra/` are TypeScript run directly by Node (type str
 - **Other buckets:** the Cloudflare account holds buckets that are not MyKey's. Touch only the four `mykey-*` buckets.
 
 ### Hosts and releases (`docs/runbooks/network.md`, `deploy.md`, `kms-and-unseal.md`)
+
+- **The owner's journey needs the host's own name.** A browser at `https://127.0.0.1:<port>` meets the listener's own CA and then `origin_rejected`, because the API takes changes only from `MYKEY_BASE_URL`. Use `tunnel verify --browser` (Session 9).
+- **Owner commands in Git Bash that read a file on stdin** need `node.exe`, not `node`: winpty refuses it ("stdin is not a tty").
+- **The owner pastes whole blocks.** A prompt that wants one value gets a dotenv file, and a hidden-echo step that fails sends the next paste, a token, to the shell. The two first uses (Runs 8.8 and 9.2) both leaked a token into the chat. Give one command per step, reading silently (`read -rs`).
 
 - **Access:**
   - Reach hosts only over the VPN through `scripts/host.ts <staging|prod> <command>` and the harness `sshExec`.

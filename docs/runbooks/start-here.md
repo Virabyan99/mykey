@@ -24,22 +24,24 @@ Ten recovery codes are shown **once**. Keep them where you keep the password. Th
 
 ## 3. The workspace
 
-The **Help** screen's "First run" guide takes you through it:
+After the sign-in you land on **Home**. Its **Getting started** checklist has six steps and marks each one from what the service knows (the CLI step stays "Not checked": the service cannot see your computer):
 
 1. a project (its first environment, `development`, comes with it);
 2. secrets, one by one or by an import of a dotenv file (the preview shows what would change before anything is written);
 3. a machine credential for the environment. Its token is shown once.
 
+The sidebar on the left holds Home, your projects and their environments, and each environment's sections. The breadcrumbs at the top name where you are, with a **Copy** button for the organization's, the project's and the environment's ids. **Ctrl K** (or `/`) goes to any page, project, environment or help article. The **?** button at the top of every page opens that page's help, and the **Help centre** has the rest.
+
 What a token can read, how to replace one (issue the new one, then revoke the old one) and what to do when a delivery was lost are in `machine-credentials.md`.
 
 ## 4. The CLI and an application (WSL or any Linux)
 
-`consumer-local.md`, steps 1 to 10:
+Open the environment's **Connect an application** page (in the sidebar, under the environment). It shows `consumer-local.md`'s own commands, step by step, with this service's address, the project's id and the environment's name already filled in, and a **Copy** button on each block. The token is never filled in. A second tab has the same for a server (`consumer-deploy.md`). In short:
 
-- download and check the release `cli-v0.1.2`, then install it. The repository is public: without `gh`, step 1 has the same downloads with `curl`;
+- download and check the release `cli-v0.1.2`, then install it. The repository is public: step 1 uses `curl`, and `gh` is the alternative;
 - name the service and the environment:
   - the service is this page's address (on staging `https://mykey-staging.nomikey.com`);
-  - the **project's id** is the part of the workspace's address after `/p/` (not the one after `/o/` or `/e/`);
+  - the **project's id** is shown with a Copy button in the breadcrumbs and on the project's page (it is also the part of the address after `/p/`);
   - the environment is its name, `development`;
 - store the token on standard input, into a file only you can read. The pasted token stays on the screen, so never copy that terminal into a chat or a screenshot (`stty -echo` keeps it off);
 - start the application through `secrets-launch.sh`.
@@ -66,4 +68,4 @@ The operator's side of the same steps is `restore.md`, "Between 7 and 8: the own
 
 ## 7. What the service does not do
 
-`known-limits.md`. The same list is on the Help screen.
+`known-limits.md`. The same list is the Help centre's article "What MyKey does not do".
