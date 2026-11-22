@@ -225,6 +225,41 @@ describe("release-manifest", () => {
     expect(built.earlier).toEqual(["PO-3"]);
   });
 
+  it("Session 9's focused pass: an earlier entry that names its release counts a staging result of that release, and no other entry does", () => {
+    const { map, results } = complete();
+    results.results.push({
+      kind: "staging",
+      files: [STAGING],
+      green: true,
+      release: "host-v0.7.0",
+      ref: "an earlier session's run",
+    });
+    map.entries["PO-3"] = {
+      files: [
+        { path: TEST, kind: "ci" },
+        { path: STAGING, kind: "staging" },
+      ],
+    };
+    // Without the earlier release named, the old staging result is refused.
+    expect(buildManifest(input(map, results)).problems.join("\n")).toMatch(
+      /PO-3: .*host-v0\.7\.0, not the candidate's host-v0\.8\.0/,
+    );
+    map.entries["PO-3"].earlier = {
+      evidence: "docs/evidence/session-6/run-6.8.md",
+      changedSince: "host-v0.7.0 → host-v0.8.0: the workspace only",
+      covering: [STAGING],
+      release: "host-v0.7.0",
+    };
+    const built = buildManifest(input(map, results));
+    expect(built.problems).toEqual([]);
+    expect(lineOf(built.text, "PO-3")).toMatch(/PASS \(earlier: .*on host-v0\.7\.0/);
+    // Another entry with the same file and no earlier release is still refused.
+    map.entries["PO-4"] = { files: [{ path: STAGING, kind: "staging" }] };
+    expect(buildManifest(input(map, results)).problems.join("\n")).toMatch(
+      /PO-4: .*host-v0\.7\.0, not the candidate's/,
+    );
+  });
+
   it("an FR is PASS when every release scenario of Doc 04 §12 that names it is PASS; FR-1.98, 1.99 and 1.100 stay OPEN", () => {
     const { map, results } = complete();
     const all = buildManifest(input(map, results));

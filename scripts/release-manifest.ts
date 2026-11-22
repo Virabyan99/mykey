@@ -38,7 +38,13 @@ const KINDS: readonly string[] = ["ci", "staging", "cloud", "cli", "consumers", 
 export interface ProofEntry {
   files: { path: string; kind: ProofKind }[];
   /** A proof that needs a calendar or a clean server keeps the evidence of the run that made it. */
-  earlier?: { evidence: string; changedSince: string; covering: string[] };
+  earlier?: {
+    evidence: string;
+    changedSince: string;
+    covering: string[];
+    /** Session 9's focused pass: the staging release whose results this entry keeps. */
+    release?: string;
+  };
 }
 export interface ProofMap {
   version: 1;
@@ -152,7 +158,12 @@ export function buildManifest(input: ManifestInput): Manifest {
   };
 
   /** Problems of one proving file; empty when a green result of the candidate covers it. */
-  const fileProblems = (id: string, path: string, kind: ProofKind): string[] => {
+  const fileProblems = (
+    id: string,
+    path: string,
+    kind: ProofKind,
+    earlierRelease?: string,
+  ): string[] => {
     if (!KINDS.includes(kind)) return [`${id}: ${path}: unknown kind ${kind}`];
     if (!input.exists(path)) return [`${id}: ${path} does not exist`];
     const mine = results.results.filter((r) => r.kind === kind && r.files.includes(path));
@@ -174,6 +185,9 @@ export function buildManifest(input: ManifestInput): Manifest {
       } else if (kind === "staging" || kind === "cli") {
         const wanted = kind === "staging" ? candidate.hostRelease : candidate.cliRelease;
         if (r.release === wanted) return [];
+        if (kind === "staging" && earlierRelease !== undefined && r.release === earlierRelease) {
+          return [];
+        }
         wrong.push(
           `${id}: ${path}: the ${kind} result ran on ${r.release ?? "no release"}, not the candidate's ${wanted}`,
         );
@@ -206,7 +220,9 @@ export function buildManifest(input: ManifestInput): Manifest {
     if (notProven[id] !== undefined) problems.push(`${id}: both an entry and "not proven"`);
     const own: string[] = [];
     if (entry.files.length === 0) own.push(`${id}: an entry with no file`);
-    for (const file of entry.files) own.push(...fileProblems(id, file.path, file.kind));
+    for (const file of entry.files) {
+      own.push(...fileProblems(id, file.path, file.kind, entry.earlier?.release));
+    }
     if (entry.earlier !== undefined) {
       const e = entry.earlier;
       if (!input.exists(e.evidence))
@@ -232,7 +248,7 @@ export function buildManifest(input: ManifestInput): Manifest {
       earlier.push(id);
       details.set(
         id,
-        `(earlier: ${entry.earlier.evidence}; changed since: ${entry.earlier.changedSince}; covered by: ${entry.earlier.covering.join(", ")}) ${files}`,
+        `(earlier: ${entry.earlier.evidence}${entry.earlier.release === undefined ? "" : `, staging on ${entry.earlier.release}`}; changed since: ${entry.earlier.changedSince}; covered by: ${entry.earlier.covering.join(", ")}) ${files}`,
       );
     }
   }

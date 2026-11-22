@@ -39,7 +39,24 @@
   },
   "lastMigration": "0018_incarnation",
   "hostFilesCommit": "aa69922f772cf287311edefe87ddf686244036c5",
-  "tooling": [],
+  "tooling": [
+    {
+      "path": "scripts/host.ts",
+      "note": "The operator tool on the workstation: tunnel verify --browser (Run 9.0, F-9.1-1) and a lint fix; not in any release image."
+    },
+    {
+      "path": "scripts/release-candidate.ts",
+      "note": "--session <n> for this file's folder (Run 9.0); workstation only."
+    },
+    {
+      "path": "scripts/consumer-leak-check.sh",
+      "note": "Run 9.2's leak check, run by the owner on the consumer; not in any release."
+    },
+    {
+      "path": "workers/probe/wrangler.jsonc",
+      "note": "The probe Worker's config: production in service (Run 9.1); deployed to Cloudflare, not part of the host release."
+    }
+  ],
   "deploys": {
     "staging": {
       "at": "2026-11-22T13:04:32.286Z",
