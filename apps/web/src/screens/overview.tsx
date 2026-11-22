@@ -28,6 +28,7 @@ import {
   ReviewNote,
   projectNameProblem,
 } from "../ui/Resource.tsx";
+import { EnvironmentLinks } from "../ui/EnvironmentLinks.tsx";
 import { IdChip, IdLine } from "../ui/IdChip.tsx";
 import { Icon } from "../ui/icons.tsx";
 import { EmptyState, PageHeader } from "../ui/PageHeader.tsx";
@@ -56,6 +57,7 @@ function Environments(props: { org: string; project: Project }) {
             <th scope="col">Deleted</th>
             <th scope="col">Under review</th>
             <th scope="col">Last change</th>
+            <th scope="col">Open</th>
           </tr>
         </thead>
         <tbody>
@@ -75,6 +77,9 @@ function Environments(props: { org: string; project: Project }) {
               <td>{count(row, (keys) => keys.needsReview)}</td>
               <td>
                 {row.keys === null ? NOT_AVAILABLE : <Time at={row.changedAt} none="none yet" />}
+              </td>
+              <td>
+                <EnvironmentLinks org={org} project={project.id} env={row.id} name={row.name} />
               </td>
             </tr>
           ))}

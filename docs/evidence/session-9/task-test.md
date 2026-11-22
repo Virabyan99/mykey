@@ -23,6 +23,10 @@ The baseline is Run 8.8's walkthrough on the old page (`docs/evidence/session-8/
 
 ## Findings
 
+- **22 Nov 2026, about 07:40 UTC, on `host-v0.9.0`, before task 1.** The owner, after the reset and the first sign-in, said: "UI of the project got even worse, now i barely found how to create secret for my project and i am searching for 10 minutes and i cant even find how to create machine identity, all functionalities we had before is lost i cant find anything it so confusing".
+  - **Cause, as the screens show:** the secrets, machine credentials and Connect live inside an environment. Their sidebar entries appear only once an environment is open, and the project page offers only "New environment", "Rename" and "Archive". The environment's name is a small link in a table, and nothing says that secrets and credentials are found there.
+  - **The baseline was better on this point:** the old page reached them through one select.
+
 A task that is "not found" is fixed before production, in `host-v0.9.1`, which is then built once and deployed to staging, with `workspace` run again.
 
 ## Production, first visit

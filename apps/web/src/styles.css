@@ -162,6 +162,43 @@ button.small {
   font-size: 0.8125rem;
 }
 
+/* Run 9.0 (task test, host-v0.9.1): an environment's sections as buttons in its row. */
+.env-go {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 0.375rem;
+}
+
+a.go {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  min-height: 2rem;
+  padding: 0.25rem 0.75rem;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: inherit;
+  font-weight: 500;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+a.go:hover {
+  background: var(--surface-2);
+}
+
+a.go.primary {
+  border-color: var(--brand);
+  background: var(--brand);
+  color: var(--brand-text);
+}
+
+a.go.primary:hover {
+  border-color: var(--brand-hover);
+  background: var(--brand-hover);
+}
+
 button:disabled,
 select:disabled {
   cursor: not-allowed;

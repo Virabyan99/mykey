@@ -29,7 +29,12 @@ export function navigate(path: string, options: { replace?: boolean } = {}): voi
   for (const listener of listeners) listener();
 }
 
-export function Link(props: { to: string; current?: boolean; children: ReactNode }) {
+export function Link(props: {
+  to: string;
+  current?: boolean;
+  className?: string;
+  children: ReactNode;
+}) {
   const follow = (event: MouseEvent<HTMLAnchorElement>): void => {
     // A new tab or window is the browser's business.
     if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) {
@@ -39,7 +44,12 @@ export function Link(props: { to: string; current?: boolean; children: ReactNode
     navigate(props.to);
   };
   return (
-    <a href={props.to} onClick={follow} aria-current={props.current === true ? "page" : undefined}>
+    <a
+      href={props.to}
+      onClick={follow}
+      className={props.className}
+      aria-current={props.current === true ? "page" : undefined}
+    >
       {props.children}
     </a>
   );

@@ -21,6 +21,7 @@ import {
   environmentNameProblem,
   projectNameProblem,
 } from "../ui/Resource.tsx";
+import { EnvironmentLinks } from "../ui/EnvironmentLinks.tsx";
 import { Icon } from "../ui/icons.tsx";
 import { EmptyState, PageHeader, ScopeIds } from "../ui/PageHeader.tsx";
 import { StateBadge } from "../ui/StateBadge.tsx";
@@ -248,6 +249,10 @@ export function Project() {
       ) : null}
 
       <h2>Environments</h2>
+      <p>
+        Secrets, machine credentials and Connect an application belong to one environment: open them
+        from the environment&apos;s row.
+      </p>
       {environments?.more === true ? (
         <p role="status">Only the first {rows.length} environments are shown.</p>
       ) : null}
@@ -265,6 +270,7 @@ export function Project() {
                 <th scope="col">Environment</th>
                 <th scope="col">State</th>
                 <th scope="col">Id</th>
+                <th scope="col">Open</th>
                 <th scope="col">
                   <span className="visually-hidden">Actions</span>
                 </th>
@@ -282,6 +288,14 @@ export function Project() {
                   </td>
                   <td>
                     <code>{row.id}</code>
+                  </td>
+                  <td>
+                    <EnvironmentLinks
+                      org={at.org}
+                      project={at.project}
+                      env={row.id}
+                      name={row.name}
+                    />
                   </td>
                   <td>
                     {manages && projectOpen && open === null ? (

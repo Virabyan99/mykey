@@ -111,7 +111,9 @@ function Sidebar(props: {
   const listed = useProjects(props.session.userId, org?.id);
   const projects = scope?.organization !== null ? (scope?.projects ?? null) : (listed.data ?? null);
   const project = scope?.project ?? null;
-  const environment = scope?.environment ?? null;
+  // Task test (host-v0.9.1): with a project open and no environment yet, the
+  // sections of its first environment are listed, so they are never hidden.
+  const environment = scope?.environment ?? scope?.environments?.items[0] ?? null;
   const manages = org !== null && (org.role === "owner" || org.role === "admin");
 
   const newProject = (event: MouseEvent<HTMLAnchorElement>): void => {

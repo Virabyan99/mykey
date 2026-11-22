@@ -190,7 +190,7 @@ describe("dependency pins", () => {
     // Run 9.3: the test tools' images are pinned the same way.
     expect(
       toolDockerfiles(root).map((file) => file.replaceAll("\\", "/").split("/").at(-2)),
-    ).toEqual(["agent-runner"]);
+    ).toEqual(["agent-experiment", "agent-runner"]);
     for (const file of toolDockerfiles(root)) {
       expect(dockerfileProblems(readFileSync(file, "utf8"), lock, file)).toEqual([]);
     }
