@@ -1,0 +1,26 @@
+{
+  "project": {
+    "name": "agent-fixture-3aee59",
+    "id": "ccffbded-69a8-4232-aa7d-32aa6c0fbc9a",
+    "environment": "15e848a4-30c6-4519-8b02-f5cce248f9a4",
+    "environmentName": "development"
+  },
+  "credential": {
+    "id": "58870f5f-2567-4bf0-8ec9-1bfc888d958f",
+    "name": "agent-runner",
+    "ttlSeconds": 1209600
+  },
+  "happyPath": {
+    "answer": {
+      "status": "succeeded",
+      "category": "ok"
+    },
+    "refused": {
+      "status": "refused",
+      "category": "request_refused"
+    },
+    "machineReads": 1,
+    "correlationId": "f0f8349d-7b92-482d-abb6-fba4ec1f4e70",
+    "at": "2026-11-22T00:03:01.701Z"
+  }
+}

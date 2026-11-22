@@ -15,6 +15,7 @@ import {
   digestProblems,
   dockerfileProblems,
   fixtureDockerfiles,
+  toolDockerfiles,
   ownDockerfiles,
   forbiddenComponents,
   listFiles,
@@ -186,6 +187,13 @@ describe("dependency pins", () => {
       "next-app",
     ]);
     expect(consumerFixtureProblems(root, lock)).toEqual([]);
+    // Run 9.3: the test tools' images are pinned the same way.
+    expect(
+      toolDockerfiles(root).map((file) => file.replaceAll("\\", "/").split("/").at(-2)),
+    ).toEqual(["agent-runner"]);
+    for (const file of toolDockerfiles(root)) {
+      expect(dockerfileProblems(readFileSync(file, "utf8"), lock, file)).toEqual([]);
+    }
 
     const drifted = clone();
     drifted.npm.next = { ...drifted.npm.next!, version: "0.0.1" };

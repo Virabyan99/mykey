@@ -443,6 +443,16 @@ export function fixtureDockerfiles(root: string): string[] {
     .filter((file) => existsSync(file));
 }
 
+/** Run 9.3: the Dockerfile of every test tool under tools/ (the agent runner): never deployed. */
+export function toolDockerfiles(root: string): string[] {
+  const directory = join(root, "tools");
+  if (!existsSync(directory)) return [];
+  return readdirSync(directory)
+    .sort()
+    .map((tool) => join(directory, tool, "Dockerfile"))
+    .filter((file) => existsSync(file));
+}
+
 /**
  * The consumer fixtures' packages are exactly the lock's: the Next.js fixture's
  * direct dependencies against `npm`, the FastAPI fixture's fastapi and uvicorn
@@ -498,7 +508,7 @@ export function verifyPins(root: string): string[] {
     ...cliReleaseProblems(root, lock),
     ...consumerFixtureProblems(root, lock),
   ];
-  for (const file of fixtureDockerfiles(root)) {
+  for (const file of [...fixtureDockerfiles(root), ...toolDockerfiles(root)]) {
     problems.push(...dockerfileProblems(readFileSync(file, "utf8"), lock, relative(root, file)));
   }
   for (const file of listFiles(join(root, "infra/compose"), /\.ya?ml$/)) {

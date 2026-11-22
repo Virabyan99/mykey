@@ -14,3 +14,7 @@ tests/fixtures/consumers/*/mykey-release/
 tests/fixtures/consumers/next-app/.next/
 # The API reference's asset (Run 5.9): copied from the pinned package by `pnpm run reference:asset`.
 apps/api/assets/
+
+# Run 9.3: the agent runner's build context (release files, the seeded digests)
+tools/agent-runner/mykey-release/
+tools/agent-runner/digests.json
