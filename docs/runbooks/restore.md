@@ -73,7 +73,7 @@ Every account is `recovery_pending` and every machine token is revoked. The owne
 
 1. `host.ts <host> ops verify-organization --organization <id>` and `host.ts <host> ops reconcile-credentials --environment <id>` for every environment. Until step 9, `host.ts <host> ops` uses the restore's root token (`restore-root-token`): the snapshot replaced the token store the host's custody copy belonged to.
 2. `host.ts <host> ops reset-account --email <owner> --kind mfa` (`operator-accounts.md`). Give the link to the owner.
-3. `host.ts <host> tunnel verify` opens a local port to the verification listener. Through it the owner completes the reset, enrols a new authenticator, signs in, reveals one secret they know and checks its value, and tries one change (it must answer `quarantined`). Then the owner signs out: the report requires that no session exists.
+3. `host.ts <host> tunnel verify --browser` opens a local port to the verification listener. Through it the owner completes the reset, enrols a new authenticator, signs in, reveals one secret they know and checks its value, and tries one change (it must answer `quarantined`). Then the owner signs out: the report requires that no session exists.
 
 ## Steps 8–9: `restore-verify`
 
@@ -98,4 +98,4 @@ After opening: every person signs in after an `mfa` reset (`reset-account --kind
 
 ## Production
 
-The same commands with the owner's permission for each one that touches the host. The owner completes the reset and the journey in their own browser through `tunnel verify` and says so; the operator then runs `restore-verify … --owner-confirmed`.
+The same commands with the owner's permission for each one that touches the host. The owner completes the reset and the journey in the window of `tunnel verify --browser` and says so; the operator then runs `restore-verify … --owner-confirmed`.

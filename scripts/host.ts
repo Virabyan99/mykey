@@ -182,7 +182,7 @@ export type HostCommand = { host: HostName; via: Address } & (
   | { command: "env"; key: OpenBaoEnvKey; value: string }
   | { command: "maint"; minutes: number; argv: string[] }
   | { command: "gate"; action: GateAction; report?: string; verifying?: true }
-  | { command: "tunnel"; target: "verify" }
+  | { command: "tunnel"; target: "verify"; browser: boolean }
   | { command: "restore"; source: HostName; pair: string; organization?: string }
   | {
       command: "deploy";
@@ -387,8 +387,11 @@ export function parseHostArgs(argv: string[]): HostCommand {
   if (command === "deploy") return parseDeployArgs(host, rest);
   if (command === "restore-verify") return parseRestoreVerifyArgs(host, rest);
   if (command === "tunnel") {
-    if (rest.length !== 1 || rest[0] !== "verify") throw new Error("tunnel needs verify");
-    return { host, via: "vpn", command, target: "verify" };
+    const browser = rest.length === 2 && rest[1] === "--browser";
+    if (rest[0] !== "verify" || (rest.length !== 1 && !browser)) {
+      throw new Error("tunnel needs verify [--browser]");
+    }
+    return { host, via: "vpn", command, target: "verify", browser };
   }
   let words = rest;
   let tail: string[] = [];
@@ -2136,7 +2139,7 @@ async function main(argv: string[], log: Logger): Promise<number> {
     case "gate":
       return runGate(host, command, address, log);
     case "tunnel":
-      return runVerifyTunnel(host, log);
+      return runVerifyTunnel(host, command.browser, log);
     case "restore":
       return runRestore(host, command, address, log);
     case "restore-verify":
@@ -3903,12 +3906,83 @@ async function hostRestoreJourney(
   }
 }
 
-/** Run 6.7 (P-123): a local port to the verification listener until Ctrl-C. */
-async function runVerifyTunnel(host: HostEntry, log: Logger): Promise<number> {
+/**
+ * Run 9.0: the argv of the owner's browser window for the journey. A page on
+ * 127.0.0.1 is refused by the API's origin check (MYKEY_BASE_URL) and warned
+ * off by the listener's own CA; this window reaches the host's own name through
+ * the tunnel, in a profile of its own, and trusts only the listener's key.
+ */
+export function verifyBrowserArgs(input: {
+  hostname: string;
+  localPort: number;
+  spki: string;
+  profileDir: string;
+}): string[] {
+  if (!/^[a-z0-9.-]{1,253}$/.test(input.hostname)) {
+    throw new Error("verify browser: the hostname is not a plain host name");
+  }
+  if (!/^[A-Za-z0-9+/=]{1,100}$/.test(input.spki)) {
+    throw new Error("verify browser: the key hash is not base64");
+  }
+  return [
+    `--user-data-dir=${input.profileDir}`,
+    `--host-resolver-rules=MAP ${input.hostname}:443 127.0.0.1:${String(input.localPort)}`,
+    `--ignore-certificate-errors-spki-list=${input.spki}`,
+    "--no-first-run",
+    "--new-window",
+    `https://${input.hostname}/`,
+  ];
+}
+
+/** The SHA-256 of the verification listener's public key (base64), read through the tunnel. */
+async function listenerSpki(localPort: number): Promise<string> {
+  const { connect } = await import("node:tls");
+  const { X509Certificate } = await import("node:crypto");
+  const raw = await new Promise<Buffer>((resolveCert, rejectCert) => {
+    const socket = connect(
+      { host: "127.0.0.1", port: localPort, rejectUnauthorized: false },
+      () => {
+        const cert = socket.getPeerCertificate();
+        socket.end();
+        resolveCert(cert.raw);
+      },
+    );
+    socket.once("error", rejectCert);
+  });
+  const der = new X509Certificate(raw).publicKey.export({ type: "spki", format: "der" });
+  return createHash("sha256").update(der).digest("base64");
+}
+
+const CHROME_PATHS = [
+  "C:/Program Files/Google/Chrome/Application/chrome.exe",
+  "C:/Program Files (x86)/Google/Chrome/Application/chrome.exe",
+];
+
+/** Run 6.7 (P-123): a local port to the verification listener until Ctrl-C; Run 9.0: --browser. */
+async function runVerifyTunnel(host: HostEntry, browser: boolean, log: Logger): Promise<number> {
   const tunnel = await openTunnel(host, REMOTE_API_VERIFY);
   log.info(
     `${host.name}: the verification listener is at https://127.0.0.1:${String(tunnel.localPort)} (Ctrl-C ends it)`,
   );
+  if (browser) {
+    const chrome = CHROME_PATHS.find((path) => existsSync(path));
+    if (chrome === undefined) {
+      log.info(`${host.name}: no Chrome found (${CHROME_PATHS.join(", ")}); the tunnel stays open`);
+    } else {
+      const profileDir = mkdtempSync(join(tmpdir(), "mykey-verify-browser-"));
+      const argv = verifyBrowserArgs({
+        hostname: host.hostname,
+        localPort: tunnel.localPort,
+        spki: await listenerSpki(tunnel.localPort),
+        profileDir,
+      });
+      const { spawn } = await import("node:child_process");
+      spawn(chrome, argv, { detached: true, stdio: "ignore" }).unref();
+      log.info(
+        `${host.name}: a browser window of its own opened at https://${host.hostname}/ through the tunnel`,
+      );
+    }
+  }
   await new Promise<void>((resolveStop) => {
     process.once("SIGINT", () => {
       resolveStop();

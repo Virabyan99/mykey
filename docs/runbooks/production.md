@@ -92,9 +92,9 @@ The gate is closed with phase `verifying` after a `--stay-closed` deploy, so the
    MSYS_NO_PATHCONV=1 node scripts/host.ts prod ops bootstrap-owner --email <owner address> < <password file>
    ```
 
-2. **Enrolment.** `node scripts/host.ts prod tunnel verify`; the owner opens the printed local address in their own browser, signs in, enrols their own authenticator and keeps the recovery codes (`operator-accounts.md`).
+2. **Enrolment.** `node scripts/host.ts prod tunnel verify --browser`. It opens a Chrome window of its own at production's own name, through the tunnel (see "The browser window" below). In that window the owner signs in, enrols their own authenticator and keeps the recovery codes (`operator-accounts.md`).
 3. **The organization.** `MSYS_NO_PATHCONV=1 node scripts/host.ts prod ops provision-organization --organization <id>` (the id `bootstrap-owner` printed); `ops verify-organization` → `equal`.
-4. **The owner's journey,** through `tunnel verify` again: sign in with password and code; there is no secret yet, so nothing is revealed; one write (a new project) must answer "The service is not open" (`quarantined`); sign out. The owner says "journey done".
+4. **The owner's journey,** through `tunnel verify --browser` again: sign in with password and code; there is no secret yet, so nothing is revealed; one write (a new project) must answer "The service is not open" (`quarantined`); sign out. The owner says "journey done".
 5. **The opening:**
 
    ```sh
@@ -109,15 +109,29 @@ The gate is closed with phase `verifying` after a `--stay-closed` deploy, so the
 
 ```sh
 MSYS_NO_PATHCONV=1 node scripts/host.ts prod deploy --release <new dir> --stay-closed     # loads, closes (verifying), migrates, starts
-node scripts/host.ts prod tunnel verify                                                  # the owner's journey on the new build
+node scripts/host.ts prod tunnel verify --browser                                        # the owner's journey on the new build
 MSYS_NO_PATHCONV=1 node scripts/host.ts prod deploy --release <new dir> --owner-confirmed # the report, then open
 ```
 
 `--owner-confirmed` refuses a release that is not the running build: the owner's journey must be of the build that opens. A deploy of production without `--owner-confirmed`, `--stay-closed` or `--install-only` is refused before anything is touched: production never holds a workstation copy of the owner's password or authenticator.
 
+## The browser window
+
+A browser pointed at the printed `https://127.0.0.1:<port>` cannot do the journey, as staging showed on 22 Nov 2026:
+
+- the listener's certificate is from the host's own CA, so Chrome warns and may offer no way past;
+- once past, sign-in is refused with "The request did not come from this site". The API accepts changes only from its own origin (`MYKEY_BASE_URL`), and 127.0.0.1 is not it.
+
+`--browser` opens Chrome with a new, empty profile. That window:
+
+- sends the host's own name on port 443 to the tunnel;
+- trusts only the listener's key, read through the tunnel.
+
+The page therefore has the product's real address. There is no warning, and sign-in is accepted. A yellow bar about an unsupported command-line flag is expected. The window's profile is a temporary directory. Close the window after the journey; Ctrl-C ends the tunnel.
+
 ## What the owner confirms
 
-Through `tunnel verify`, on the build that runs, in their own browser:
+Through `tunnel verify --browser`, on the build that runs, in the window it opens:
 
 - **sign-in:** the password and a current code from their authenticator work;
 - **reveal:** one secret they know is revealed and is the value they expect (with no secret yet, nothing — the report counts the index);

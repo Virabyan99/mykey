@@ -6,22 +6,27 @@ The baseline is Run 8.8's walkthrough on the old page (`docs/evidence/session-8/
 
 ## Staging
 
-- Release: (filled in at the test)
-- Start: (UTC)
+- Release: `host-v0.9.1` (`b19ca66`), gate epoch 336, after the owner's journey (`--owner-confirmed`)
+- Start: 22 Nov 2026, after the v0.9.1 opening (task 1 restarted)
 
 ## The tasks
 
 | #   | Task                                                           | Time | Result | The owner said |
 | --- | -------------------------------------------------------------- | ---- | ------ | -------------- |
-| 1   | Copy the project's id.                                         |      |        |                |
-| 2   | Get the commands to connect an application to `development`.   |      |        |                |
-| 3   | Find what "uncertain" means.                                   |      |        |                |
-| 4   | Revoke a machine credential.                                   |      |        |                |
-| 5   | Find who revealed a secret today.                              |      |        |                |
-| 6   | Find what to do after losing the phone with the authenticator. |      |        |                |
-| 7   | Find what the service does not do (the known limits).          |      |        |                |
+| 1   | Copy the project's id.                                         | about 1 min | found unaided | "done, found it in about a minute" (pasted the right id) |
+| 2   | Get the commands to connect an application to `development`.   | about 30 s | found unaided | "done, found it in about 30 seconds" |
+| 3   | Find what "uncertain" means.                                   | about 1 min | found unaided | "done, found it in about a minute" |
+| 4   | Revoke a machine credential.                                   | about 1 min | found unaided | "done, found it in about a minute" |
+| 5   | Find who revealed a secret today.                              | about 1 min | found unaided | "done, found it in about a minute" |
+| 6   | Find what to do after losing the phone with the authenticator. | about 1 min | found unaided | "done, found it in about a minute" |
+| 7   | Find what the service does not do (the known limits).          | about 1 min | found unaided | "done, found it in about a minute" |
+
+## Result
+
+On `host-v0.9.1`, all seven tasks were found unaided, each in about a minute or less, with no help asked for. On the old page (Run 8.8) task 1 failed and task 6 needed the agent. OWN-UX: met on `host-v0.9.1`. It was not met on `host-v0.9.0`, whose finding is below.
 
 ## Findings
+
 
 - **22 Nov 2026, about 07:40 UTC, on `host-v0.9.0`, before task 1.** The owner, after the reset and the first sign-in, said: "UI of the project got even worse, now i barely found how to create secret for my project and i am searching for 10 minutes and i cant even find how to create machine identity, all functionalities we had before is lost i cant find anything it so confusing".
   - **Cause, as the screens show:** the secrets, machine credentials and Connect live inside an environment. Their sidebar entries appear only once an environment is open, and the project page offers only "New environment", "Rename" and "Archive". The environment's name is a small link in a table, and nothing says that secrets and credentials are found there.
