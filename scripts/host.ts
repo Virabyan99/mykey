@@ -2760,7 +2760,7 @@ const RESTORE_STATE_PATH = "/var/lib/mykey/restore-state.json";
  */
 export function deployRestoreRefusal(state: string | null): string | null {
   if (state === null || state.trim() === "") return null;
-  let step: unknown = null;
+  let step: unknown;
   try {
     step = (JSON.parse(state) as { step?: unknown }).step;
   } catch {
