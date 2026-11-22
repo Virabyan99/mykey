@@ -82,7 +82,14 @@ function StateText(props: {
     );
   }
   if (state === "rejected") {
-    if (row.errorCode === null) return <p>The server refused it. Nothing was changed.</p>;
+    if (row.errorCode === null) {
+      return (
+        <p>
+          The change did not take effect: the server refused it, or found that it was not carried
+          out.
+        </p>
+      );
+    }
     const refused = codeText(row.errorCode, row.operationId);
     return (
       <p>

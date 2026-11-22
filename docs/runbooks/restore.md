@@ -69,6 +69,8 @@ So a rerun works whatever step the run stopped at. One limit: the restore's own 
 
 Every account is `recovery_pending` and every machine token is revoked. The owner's part, in plain words, is `start-here.md`, step 6; give them that page, not this section.
 
+**`--open` must come within two hours of step 4.** Everything below and both `restore-verify` runs use the restore's own root token, which lasts two hours from step 4. `--open` uses it to make the host's next root token. Later than that, no token the restored OpenBao accepts is left, and OpenBao must be initialised anew and the restore run from the start (`known-limits.md`). Plan the owner's part before you start step 1: `reconcile-credentials` took 27 minutes on staging.
+
 1. `host.ts <host> ops verify-organization --organization <id>` and `host.ts <host> ops reconcile-credentials --environment <id>` for every environment. Until step 9, `host.ts <host> ops` uses the restore's root token (`restore-root-token`): the snapshot replaced the token store the host's custody copy belonged to.
 2. `host.ts <host> ops reset-account --email <owner> --kind mfa` (`operator-accounts.md`). Give the link to the owner.
 3. `host.ts <host> tunnel verify` opens a local port to the verification listener. Through it the owner completes the reset, enrols a new authenticator, signs in, reveals one secret they know and checks its value, and tries one change (it must answer `quarantined`). Then the owner signs out: the report requires that no session exists.
@@ -85,9 +87,10 @@ MSYS_NO_PATHCONV=1 node scripts/host.ts <host> restore-verify --confirm-members 
 - `--owner-confirmed`: the owner did the journey above in a browser.
 - `--journey` (staging and the drill; never production): the operator runs the journey itself through the verification listener, with the newest reset link `ops reset-account` wrote since the restore began. The new password and authenticator seed go to `~/.mykey/secrets/hosts/<host>/` (`owner-password`, `owner-totp-seed`). A second `--journey` (for `--open`, after a report went stale) needs a new reset link first.
 - `--open`, in this order:
-  1. **The next root token.** A new root token for the restored OpenBao is made with generate-root and the **source's** recovery key: the snapshot carries the source's recovery configuration, so the target's own key no longer works. The target's custody copy `~/.mykey/custody/<host>/openbao-init.json` becomes the source's answer with that token. The copy it replaces is kept beside it, as `openbao-init.<UTC stamp>.json`. `ops`, a deploy and a restore of this host's later pairs use the new token.
-  2. **The gate.** `gate open` with the report, after re-checking sessions, accessors, the control row and the incarnation. A report older than 30 minutes is refused: run `restore-verify` again.
-  3. **The state.** The state line is marked `opened`. Then the restore's root token is revoked, and its copy and the state files are removed.
+  1. **The next root token.** A new root token for the restored OpenBao is made with generate-root and the **source's** recovery key: the snapshot carries the source's recovery configuration, so the target's own key no longer works.
+  2. **The gate.** `gate open` with the report, after re-checking sessions, accessors (all but the restore's token and the new root token), the control row and the incarnation. A report older than 30 minutes is refused: run `restore-verify` again. If the opening is refused, the new root token is revoked at once, so an attempt leaves no live token behind.
+  3. **The custody copy.** Only once the gate is open, the target's custody copy `~/.mykey/custody/<host>/openbao-init.json` becomes the source's answer with the new token. The copy it replaces is kept beside it, as `openbao-init.<UTC stamp>.json`. `ops`, a deploy and a restore of this host's later pairs use the new token.
+  4. **The state.** The state line is marked `opened`. Then the restore's root token is revoked, and its copy and the state files are removed.
 
   Check that `/var/lib/mykey/restore-state.json` is gone. A restore refuses a host where a finished one is left, and so does a deploy, which opens no host whose restore is not finished. Copy the new custody copy to the password manager, in place of the one it replaced.
 

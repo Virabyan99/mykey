@@ -81,10 +81,15 @@ function fillVariables(block: string, fill: Fill): string {
 }
 
 export const TOKEN_WARNING =
-  "The pasted token stays on the screen. Do not copy this terminal into a chat, a ticket or a screenshot. stty -echo keeps it off the screen while you paste, and stty echo turns the echo back on.";
+  "stty -echo keeps the pasted token off the screen; stty echo turns the echo back on. Run them as separate lines, not pasted together with the block. Without stty -echo the pasted token stays on the screen: do not copy that terminal into a chat, a ticket or a screenshot.";
 
-/** The token block with the terminal's echo off around it. The block itself is the runbook's. */
-const quietly = (block: string): string => `stty -echo\n${block}\nstty echo`;
+/**
+ * The token block with the terminal's echo off around it, as three blocks run one
+ * at a time, as the runbook says to type them (review RR-5): pasted as one, a shell
+ * without bracketed paste would read the last line into the token file. The middle
+ * block is the runbook's own.
+ */
+const quietly = (block: string): string[] => ["stty -echo", block, "stty echo"];
 
 const blocks = (sections: RunbookSection[], n: number): string[] => {
   const found = sections.find((section) => section.number === n);
@@ -126,12 +131,13 @@ export function localSteps(
     { id: "local-install", commands: [...blocks(sections, 3), ...blocks(sections, 4)] },
     { id: "local-name", commands: [variables] },
     { id: "local-check", commands: blocks(sections, 6) },
-    { id: "local-issue", commands: [] },
+    // Review RR-9: the terminal waits for the token before the token is issued.
     {
       id: "local-store",
-      commands: [quietly(one(blocks(sections, 8), "the token"))],
+      commands: quietly(one(blocks(sections, 8), "the token")),
       warning: TOKEN_WARNING,
     },
+    { id: "local-issue", commands: [] },
     {
       id: options.application ? "local-start" : "local-names",
       commands: [options.application ? one(start, "the start") : (start[1] ?? one(start, "names"))],
@@ -153,7 +159,7 @@ export function serverSteps(text: string, fill: Fill): ConnectStep[] {
     { id: "server-build", commands: blocks(sections, 4) },
     {
       id: "server-store",
-      commands: [quietly(one(blocks(sections, 5), "the token"))],
+      commands: quietly(one(blocks(sections, 5), "the token")),
       warning: TOKEN_WARNING,
     },
     { id: "server-run", commands: blocks(sections, 6) },

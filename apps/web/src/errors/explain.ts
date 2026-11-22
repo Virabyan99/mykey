@@ -110,7 +110,7 @@ const ENTRIES: Readonly<Record<ErrorCode, Entry>> = Object.freeze({
   },
   key_under_review: {
     title: "This secret is under review",
-    text: "An earlier change to this secret has an outcome that is not known, so it is closed until that is settled.",
+    text: "An earlier change to this secret is not finished, or its outcome is not known, so it is closed until that is settled.",
     next: OPERATOR,
   },
   environment_changed: {
@@ -145,8 +145,8 @@ const ENTRIES: Readonly<Record<ErrorCode, Entry>> = Object.freeze({
   },
   precondition_required: {
     title: "The request was incomplete",
-    text: "The request did not say which version it expected. Nothing was changed.",
-    next: "Reload to see the current version, or cancel.",
+    text: "The request had no valid idempotency key, which the service needs to make a change only once. Nothing was changed.",
+    next: "Reload the page and enter it once more.",
   },
   rate_limited: {
     title: "Too many requests",

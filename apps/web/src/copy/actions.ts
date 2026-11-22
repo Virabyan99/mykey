@@ -11,7 +11,7 @@ export const ACTIONS = {
   undeleteSecret: (version: number): string =>
     `Version ${String(version)} becomes the current value again, readable as before. No new version is made.`,
   restoreVersion: (source: number, current: number): string =>
-    `The value of version ${String(source)} is written as a new version on top of version ${String(current)}. Nothing is removed: version ${String(current)} and the versions before it stay in the history.`,
+    `The value of version ${String(source)} is written as a new version on top of version ${String(current)}. Version ${String(current)} stays in the history. As with every new version, only the last ${String(VERSIONS)} are kept, so the oldest may leave it.`,
   archive: {
     environment:
       "Archiving revokes every active machine credential of this environment at once: its consumers can no longer read. An issuance that is not finished is withdrawn. The secrets and their history are kept and can still be read here. Nothing is deleted.",

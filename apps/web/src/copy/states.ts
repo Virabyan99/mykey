@@ -51,7 +51,7 @@ export const STATES = {
   credential: {
     issuing: {
       meaning: "The server is issuing the token.",
-      next: "Wait: the token is shown once when it is ready.",
+      next: "Wait. The token is shown once, only on the page that issued it. If that page is gone, revoke the credential once it is active and issue a new one.",
     },
     active: {
       meaning: "The token is accepted until it expires or is revoked.",
@@ -101,7 +101,8 @@ export const STATES = {
       next: "Import the same file again: the preview shows what is still missing.",
     },
     rejected: {
-      meaning: "The server refused the change. Nothing was changed.",
+      meaning:
+        "The change did not take effect: the server refused it, or found that it was not carried out.",
       next: "Read the reason in the operation's details, correct what it names, and try again.",
     },
   },

@@ -58,7 +58,7 @@ export const PAGES = {
   reset: {
     title: "Reset your account",
     summary:
-      "Set a new password or a new authenticator with the single-use link your operator gave you.",
+      "Set a new password, and a new authenticator if yours is lost, with the single-use link your operator gave you.",
     how: [
       "The link comes from your operator, works once, and expires after 15 minutes.",
       "When the operator issues the link, every session of the account ends.",
@@ -70,7 +70,7 @@ export const PAGES = {
     title: "Account",
     summary: "Your password, your recovery codes and the sessions signed in to this account.",
     how: [
-      "Changing the password ends your other sessions and asks for a code again.",
+      "Changing the password needs a recent code from your authenticator and ends your other sessions. This one stays signed in.",
       `Recovery codes can be replaced, never shown again: the ${String(CODES)} new ones replace every old one.`,
       "A session ends after 30 minutes without use, and after 12 hours in any case.",
     ],
@@ -112,10 +112,11 @@ export const PAGES = {
   },
   activity: {
     title: "Activity",
-    summary: "What people and machines did in this organization, in plain words.",
+    summary:
+      "What people and machines did in this organization in the last 30 days, one line per operation.",
     how: [
       "Each line says who did what, where, and how it ended.",
-      "A change that is still running is shown with its operation, and ends when the server says so.",
+      "A change that is still running is shown with its operation's state when the page read it. Operations follows it until it ends.",
       "Audit has every recorded event; Operations has the changes of one environment.",
     ],
     help: "activity-audit-operations",
@@ -127,7 +128,7 @@ export const PAGES = {
     how: [
       "Filter by day, action, outcome, actor, place, operation or request; without a window it shows the last 30 days.",
       "Audit events are kept for 365 days and copied to locked storage.",
-      "Activity tells the same story in plain words.",
+      "Activity shows the same events of the last 30 days, one line per operation.",
     ],
     help: "activity-audit-operations",
     action: "",
@@ -149,7 +150,7 @@ export const PAGES = {
       "The configuration values this environment gives to your application, such as API keys and passwords.",
     how: [
       `Values stay hidden in lists. Open a secret to reveal its value for ${String(REVEAL_SECONDS)} seconds.`,
-      "Every change makes a new version; older versions stay in the history and can be restored.",
+      `Every new value makes a new version. The last ${String(VERSIONS)} stay in the history and can be restored.`,
       "Your application reads the whole set at start through the CLI. If any part cannot be read, it does not start.",
     ],
     help: "secrets-basics",
@@ -160,7 +161,7 @@ export const PAGES = {
     summary: "One secret: its value on request, its versions and its history.",
     how: [
       `Reveal shows the value for ${String(REVEAL_SECONDS)} seconds, and hides it when you leave the page or the tab.`,
-      "Every reveal is recorded: Activity shows who revealed which secret, and when.",
+      "Every reveal is recorded with the secret's name: Audit shows who revealed which secret, and when.",
       `The last ${String(VERSIONS)} versions are kept. Restoring one writes its value as a new version.`,
     ],
     help: "versions-restore",
@@ -193,7 +194,7 @@ export const PAGES = {
     title: "Operations",
     summary: "Changes the service carried out for this environment, and their state.",
     how: [
-      "Most changes end at once. Those that take longer, or whose end was not seen, are listed here.",
+      "Every change of this environment is listed here, newest first. Most end at once; the page follows one that is still running until it ends.",
       "An uncertain operation is never repeated by the page: an operator checks it and settles it.",
       "Nothing on this page sends a change.",
     ],

@@ -20,9 +20,11 @@ import { openGate } from "@mykey/operations/operator";
 import {
   RESTORE_STEPS,
   RestoreRefused,
+  recheckForOpen,
   restoreToVerifying,
   restoreVerify,
   type Restored,
+  type VerifyDeps,
 } from "@mykey/ops";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { TEST_BUILD } from "../../harness/gate.ts";
@@ -154,25 +156,23 @@ describe("a restore stopped after each step (P-124)", () => {
         (await restored.pool.query<{ n: string }>("SELECT count(*) AS n FROM app.membership"))
           .rows[0]?.n,
       );
-      const report = await restoreVerify(
-        {
-          pool: restored.pool,
-          admin: restored.admin,
-          host: "local",
-          expect: {
-            hostInstanceId: restored.hostInstanceId,
-            backendIncarnation: restored.backendIncarnation,
-            releaseBuild: TEST_BUILD,
-          },
-          origin: { kind: "restore", pairId: world.pair.pairId },
-          schemaRevision: "0018_incarnation",
-          restoreStartedAt,
-          given: { ...restored.given, old_credentials_refused: { state: "ok", observed: "test" } },
-          confirmMembers: members,
-          boundCidrs: { runtime: [], issuer: [], provisioner: [] },
+      const verifyDeps: VerifyDeps = {
+        pool: restored.pool,
+        admin: restored.admin,
+        host: "local",
+        expect: {
+          hostInstanceId: restored.hostInstanceId,
+          backendIncarnation: restored.backendIncarnation,
+          releaseBuild: TEST_BUILD,
         },
-        null,
-      );
+        origin: { kind: "restore" as const, pairId: world.pair.pairId },
+        schemaRevision: "0018_incarnation",
+        restoreStartedAt,
+        given: { ...restored.given, old_credentials_refused: { state: "ok", observed: "test" } },
+        confirmMembers: members,
+        boundCidrs: { runtime: [], issuer: [], provisioner: [] },
+      };
+      const report = await restoreVerify(verifyDeps, null);
       expect(report.checks.filter((c) => c.state !== "ok").map((c) => c.id)).toEqual([
         "journey_owner_enrolled",
         "journey_reveal_digest",
@@ -195,6 +195,22 @@ describe("a restore stopped after each step (P-124)", () => {
       ).rejects.toThrow();
       const next = await generateRoot(sysCallTo(target, restored.rootToken), sourceKey);
       expect(await lookup(target, next)).toBe(200);
+      // Review RR-1: the opening's recheck runs after the next root token exists. Its
+      // accessor, and only it, is the operator's own; any other is still refused.
+      if (target.scratch === null) throw new Error("no scratch OpenBao yet");
+      const nextSelf = (await (
+        await baoFetch(target.scratch.stack, "/v1/auth/token/lookup-self", { token: next })
+      ).json()) as { data: { accessor: string } };
+      const accessorsCheck = async (operatorAccessors?: readonly string[]) =>
+        (
+          await recheckForOpen({
+            ...verifyDeps,
+            ...(operatorAccessors === undefined ? {} : { operatorAccessors }),
+          })
+        ).find((c) => c.id === "machine_accessors_none")?.state;
+      expect(await accessorsCheck()).toBe("failed");
+      expect(await accessorsCheck([nextSelf.data.accessor])).toBe("ok");
+      expect(await accessorsCheck(["not-this-one"])).toBe("failed");
       const home = mkdtempSync(join(tmpdir(), "mykey-restore-custody-"));
       try {
         const sourceAnswer = `${JSON.stringify({ root_token: world.old.rootToken, recovery_keys_base64: [sourceKey] })}\n`;

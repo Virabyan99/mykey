@@ -124,7 +124,7 @@ export function ThreeViews() {
   return (
     <Callout title="Activity, Audit and Operations">
       <ul>
-        <li>Activity: what people and machines did, in plain words.</li>
+        <li>Activity: what people and machines did in the last 30 days, one line per operation.</li>
         <li>Audit: every recorded event and its outcome, for checking.</li>
         <li>Operations: changes the service carried out for one environment, and their state.</li>
       </ul>

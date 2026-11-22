@@ -585,9 +585,13 @@ describe("getting started and connecting", () => {
       await block.getByRole("button", { name: "Copy" }).click();
       await block.getByRole("status").filter({ hasText: "Copied" }).waitFor();
       expect((await read()).replaceAll("\r\n", "\n")).toBe(text);
-      // The token is never filled in; its step switches the echo off.
-      const store = (await page.getByLabel("Store the token", { exact: true }).textContent()) ?? "";
-      expect(store.startsWith("stty -echo\n")).toBe(true);
+      // The token is never filled in; its step switches the echo off, as a line of its
+      // own before the runbook's block (review RR-5), and comes before the token is issued.
+      const store = page.getByLabel("Store the token, part 1", { exact: true });
+      expect(await store.textContent()).toBe("stty -echo");
+      expect(await page.getByLabel("Store the token, part 3", { exact: true }).textContent()).toBe(
+        "stty echo",
+      );
       expect(await page.locator("main").textContent()).not.toMatch(/hv[sbr]\.[A-Za-z0-9_-]{20,}/);
       // The server tab: the runbook for a server, filled in the same way.
       await page.getByRole("button", { name: "A server (systemd or Docker)" }).click();

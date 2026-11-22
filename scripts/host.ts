@@ -2757,6 +2757,16 @@ const RESTORE_STATE_PATH = "/var/lib/mykey/restore-state.json";
  */
 export function deployRestoreRefusal(state: string | null): string | null {
   if (state === null || state.trim() === "") return null;
+  let step: unknown = null;
+  try {
+    step = (JSON.parse(state) as { step?: unknown }).step;
+  } catch {
+    step = null;
+  }
+  // Review RR-3: --open removed the hand-off files, so restore-verify cannot help here.
+  if (step === "opened") {
+    return `deploy refused: a restore of this host opened the gate but its state was not removed (${RESTORE_STATE_PATH}); check the host and remove the file by hand (restore.md, "Steps 8–9")`;
+  }
   return `deploy refused: a restore of this host is not finished (${RESTORE_STATE_PATH} is there); it opens with restore-verify --open`;
 }
 
@@ -3158,10 +3168,13 @@ async function runRestoreVerify(
       if (!command.open) return failed.length === 0 ? 0 : 1;
       // Run 9.7 (R4-2): before the opening, the restored OpenBao's next root token,
       // made with the source's recovery key (the snapshot carries the source's
-      // recovery configuration), and the target's custody copy rewritten with it.
-      // Without it every later pair of this host, ops and deploys would hold a
-      // dead token. Failed checks never get here (openGate refuses them below,
-      // and a failed report has nothing to keep).
+      // recovery configuration). Without it every later pair of this host, ops and
+      // deploys would hold a dead token. Review RR-1: the opening's recheck counts
+      // every accessor, so this one is named to it as the operator's own; the
+      // custody copy is rewritten only once the gate is open, and a refused
+      // opening revokes the new token, so no attempt leaves a live one behind.
+      // A failure here leaves the restore token: --open can be run again.
+      let next: { token: string; accessor: string } | null = null;
       if (failed.length === 0) {
         const source = handoff.source ?? host.name;
         const sourceAnswer = readFileSync(custodyCopyPath(source), "utf8");
@@ -3176,10 +3189,7 @@ async function runRestoreVerify(
         if (!checked.policies.includes("root")) {
           throw new Error("generate-root: the new token does not hold the root policy");
         }
-        const kept = writeCustodyAfterRestore(host.name, sourceAnswer, rootToken, new Date());
-        log.info(
-          `${host.name}: a new root token made with ${source}'s recovery key; custody copy ${kept.copy}${kept.replaced === null ? "" : ` (the one it replaced kept at ${kept.replaced})`}`,
-        );
+        next = { token: rootToken, accessor: checked.accessor };
       }
       const opened = await openGate({
         writer: hostGateWriter(host, address),
@@ -3188,11 +3198,25 @@ async function runRestoreVerify(
         report,
         kind: "restore",
         now: () => new Date(),
-        recheck: () => recheckForOpen(deps),
+        recheck: () =>
+          recheckForOpen({ ...deps, operatorAccessors: next === null ? [] : [next.accessor] }),
       });
       if (!opened.ok) {
+        if (next !== null) await admin.revokeAccessor("", next.accessor);
         log.error(`${host.name}: gate open refused: ${opened.cause}`);
         return 1;
+      }
+      if (next !== null) {
+        const source = handoff.source ?? host.name;
+        const kept = writeCustodyAfterRestore(
+          host.name,
+          readFileSync(custodyCopyPath(source), "utf8"),
+          next.token,
+          new Date(),
+        );
+        log.info(
+          `${host.name}: a new root token made with ${source}'s recovery key; custody copy ${kept.copy}${kept.replaced === null ? "" : ` (the one it replaced kept at ${kept.replaced})`}`,
+        );
       }
       // Run 9.7 (R4-4): the state line says the restore is finished before its
       // token and files go; a line left behind is refused by the next restore.
@@ -3693,14 +3717,16 @@ async function runDeployCommand(
             }
             case "gate_open": {
               // Run 9.7 (R4-7): a restored host opens through restore-verify --open only.
-              const restoreState = await sshExec(
-                host,
-                `if test -e ${RESTORE_STATE_PATH}; then cat ${RESTORE_STATE_PATH}; fi`,
-                remote,
+              // Review RR-3: an answer that cannot be read refuses; it never reads as "no restore".
+              const restoreState = expectSuccess(
+                await sshExec(
+                  host,
+                  `if test -e ${RESTORE_STATE_PATH}; then cat ${RESTORE_STATE_PATH}; fi`,
+                  remote,
+                ),
+                "reading the restore state",
               );
-              const refusal = deployRestoreRefusal(
-                restoreState.code === 0 ? restoreState.stdout : null,
-              );
+              const refusal = deployRestoreRefusal(restoreState.stdout);
               if (refusal !== null) throw new Error(refusal);
               const report = JSON.parse(readFileSync(files.report, "utf8")) as unknown;
               const expect = await binding();

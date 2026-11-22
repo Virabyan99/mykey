@@ -70,7 +70,8 @@ export const GLOSSARY = {
   },
   activity: {
     term: "Activity",
-    definition: "What people and machines did, in plain words, newest first.",
+    definition:
+      "What people and machines did in the last 30 days, newest first: the action, who did it, its target and how it ended.",
     article: "activity-audit-operations",
   },
   "audit-event": {
@@ -92,7 +93,7 @@ export const GLOSSARY = {
   "re-verification": {
     term: "Re-verification",
     definition:
-      "A new code from your authenticator, asked before an export, an issued token or new recovery codes when the last one is older than 10 minutes.",
+      "A new code from your authenticator, asked before an export, an issued token, new recovery codes or a password change when the last one is older than 10 minutes.",
     article: "re-verification",
   },
   "recovery-code": {

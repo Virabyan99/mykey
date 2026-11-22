@@ -3,7 +3,7 @@
 export const CONNECT_STEPS = {
   "local-get": {
     title: "Get the CLI",
-    text: "Download the release and the launch wrapper, then check both files against their sums. Both lines must say OK.",
+    text: "Download the release and the launch wrapper, then check the CLI archive and install.sh against SHA256SUMS. Both lines must say OK. The launch wrapper is fetched by its tag and has no sum.",
   },
   "local-install": {
     title: "Install it",
@@ -21,13 +21,13 @@ export const CONNECT_STEPS = {
     title: "Check the endpoint",
     text: "The first line is the CLI's version; the second is the service's own answer, with no credential.",
   },
-  "local-issue": {
-    title: "Issue a token",
-    text: "Issue a machine credential for this environment under Machine credentials. The token is shown once: copy it then.",
-  },
   "local-store": {
     title: "Store the token",
-    text: "Run the block, paste the token, press Enter, then Ctrl-D. The token goes into a file only you can read, and into no shell history.",
+    text: "Get the terminal ready before you have a token, so that copying a command never replaces the token on your clipboard. Run the first line on its own, then the second: it waits for the token. Leave it waiting and do the next step. The token goes into a file only you can read, and into no shell history.",
+  },
+  "local-issue": {
+    title: "Issue a token",
+    text: "Issue a machine credential for this environment under Machine credentials. The token is shown once: copy it, paste it into the waiting terminal, press Enter, then Ctrl-D. Then run the last line of the step above, which turns the echo back on.",
   },
   "local-start": {
     title: "Start your application",
@@ -39,7 +39,7 @@ export const CONNECT_STEPS = {
   },
   "local-done": {
     title: "Check it worked",
-    text: "Activity lists the machine's read under the credential's name.",
+    text: "Last used on Machine credentials shows the time of the machine's read. Activity lists the read as machine.resolve.",
   },
   "server-get": {
     title: "Get the release",
@@ -59,7 +59,7 @@ export const CONNECT_STEPS = {
   },
   "server-store": {
     title: "Store the token on the host",
-    text: "Issue a token under Machine credentials, then run the block, paste the token, press Enter and Ctrl-D.",
+    text: "Get the terminal ready first, so that copying a command never replaces the token on your clipboard: run the first line on its own, then the second, which waits for the token. Then issue a token under Machine credentials, copy it, paste it into the waiting terminal, press Enter and Ctrl-D, and run the last line.",
   },
   "server-run": {
     title: "Run the container",
@@ -67,7 +67,7 @@ export const CONNECT_STEPS = {
   },
   "server-done": {
     title: "Check it worked",
-    text: "Activity lists the machine's read under the credential's name.",
+    text: "Last used on Machine credentials shows the time of the machine's read. Activity lists the read as machine.resolve.",
   },
 } as const satisfies Record<string, { title: string; text: string }>;
 

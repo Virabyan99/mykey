@@ -196,7 +196,10 @@ function Password() {
   return (
     <section className="card">
       <h2>Password</h2>
-      <p>Changing the password ends every other session of this account.</p>
+      <p>
+        Changing the password needs a recent code from your authenticator and ends every other
+        session of this account. This one stays signed in.
+      </p>
       <form
         method="post"
         onSubmit={(event) => {

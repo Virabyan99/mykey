@@ -192,5 +192,11 @@ describe("a deploy and a restore that is not finished (R4-7)", () => {
     expect(refusal).toMatch(/restore of this host is not finished/);
     expect(refusal).toContain("/var/lib/mykey/restore-state.json");
     expect(refusal).toContain("restore-verify --open");
+    // Review RR-3: a line left after an opening is not sent back to restore-verify,
+    // whose hand-off files --open removed.
+    const left = deployRestoreRefusal(JSON.stringify({ pairId: "p", step: "opened" }));
+    expect(left).toMatch(/opened .*but its state was not removed/);
+    expect(left).not.toContain("restore-verify --open");
+    expect(left).toContain("restore.md");
   });
 });

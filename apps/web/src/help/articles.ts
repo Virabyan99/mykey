@@ -88,8 +88,18 @@ const IMPORT_MIB = String(LIMITS.body.dotenvMaxBytes / 1_048_576);
 
 /** The CLI's exit codes (apps/cli/src/errors.ts); tests/unit/web/help-search.test.ts keeps them equal. */
 export const CLI_EXIT_CODES: readonly { code: number; category: string; meaning: string }[] = [
-  { code: 0, category: "ok", meaning: "The command did what it was asked." },
-  { code: 64, category: "usage", meaning: "The command line is not one the CLI accepts." },
+  {
+    code: 0,
+    category: "ok",
+    meaning:
+      "The command did what it was asked. Once secrets run has started the application, the exit code is the application's own.",
+  },
+  {
+    code: 64,
+    category: "usage",
+    meaning:
+      "The command line or a setting is not one the CLI accepts, the command to start cannot be found, or a secret's name is already set in the environment (without --override).",
+  },
   {
     code: 65,
     category: "malformed",
@@ -201,7 +211,7 @@ export const ARTICLES: readonly Article[] = [
         "Issue a machine credential for the environment, and copy the token.",
         "Store the token with the command shown, typed on standard input into a file only you can read.",
         "Start the application through secrets-launch.sh.",
-        "Check Activity: the machine's read is listed under the credential's name.",
+        "Check Machine credentials: Last used shows the machine's read. Activity lists it as machine.resolve.",
       ),
       note(
         "The pasted token stays on the terminal's screen. Type stty -echo before storing it, and stty echo after, to keep it off the screen.",
@@ -225,7 +235,7 @@ export const ARTICLES: readonly Article[] = [
       list(
         "Values stay hidden in lists. Open a secret and press Reveal to see its value.",
         `A revealed value disappears after ${REVEAL} seconds, when you leave the page, or when you switch tabs.`,
-        "Every change makes a new version. The history shows who changed what, and when.",
+        "Every new value makes a new version. The history shows who wrote each version, and when.",
         "Your application reads the whole set at start through the CLI, never one secret at a time.",
       ),
       screen("secrets", "Go to Secrets"),
@@ -250,7 +260,7 @@ export const ARTICLES: readonly Article[] = [
       list(
         `A file can be at most ${IMPORT_MIB} MiB with at most 1000 entries.`,
         "A preview lasts 15 minutes; after that, choose the file again.",
-        "If an import stops part way, the operation waits: import the same file again to write what is missing.",
+        "If an import stops part way, the operation waits: press Resume on Import and export and choose the same file to write what is missing.",
       ),
       screen("import", "Go to Import and export"),
     ],
@@ -268,7 +278,7 @@ export const ARTICLES: readonly Article[] = [
         `The secrets list shows names, states, versions and times. To see a value, open the secret and press Reveal: the value is shown for ${REVEAL} seconds and is then forgotten by the page.`,
       ),
       p(
-        "Every reveal is recorded, and Activity shows who revealed which secret. The page keeps no value anywhere: not in the browser's storage, not in its history, not in its search.",
+        "Every reveal is recorded, and Audit shows who revealed which secret. The page keeps no value anywhere: not in the browser's storage, not in its history, not in its search.",
       ),
       screen("secrets", "Go to Secrets"),
     ],
@@ -277,7 +287,7 @@ export const ARTICLES: readonly Article[] = [
   {
     id: "versions-restore",
     title: "How do versions and restore work?",
-    summary: `Every change makes a new version. The last ${VERSIONS} are kept, and any of them can be written back as a new version.`,
+    summary: `Every new value makes a new version. The last ${VERSIONS} are kept, and any of them that is not deleted can be written back as a new version.`,
     category: "secrets",
     keywords: [
       "version",
@@ -293,7 +303,7 @@ export const ARTICLES: readonly Article[] = [
     blocks: [
       p("A secret's page lists its versions in History: who made each one, and when."),
       list(
-        "Restore writes the value of an older version as a new version. Nothing is removed.",
+        `Restore writes the value of an older version as a new version. Nothing is deleted, but as with every new version only the last ${VERSIONS} stay in the history.`,
         "Delete makes the current version unreadable, by people and by machines. No older version takes its place.",
         `Undelete makes a deleted version current again, while it is among the last ${VERSIONS} versions.`,
         "Each of these asks you to type the secret's name to confirm.",
@@ -365,7 +375,7 @@ export const ARTICLES: readonly Article[] = [
         "Issue a second machine credential for the same environment, and copy its token.",
         "On the machine, replace the token file in place with the same command you stored it with.",
         "Restart the application through the CLI.",
-        "Check that it started, and that Activity lists a read under the new credential's name.",
+        "Check that it started, and that Last used of the new credential on Machine credentials shows the read.",
         "Revoke the old credential. From then on it is refused (the CLI exits 77).",
       ),
       screen("credentials", "Go to Machine credentials"),
@@ -417,7 +427,7 @@ export const ARTICLES: readonly Article[] = [
       steps(
         "Do not enter the change a second time.",
         "Note the operation's id from Operations.",
-        "Tell your operator. They check the change on the host and settle it; the state then changes by itself.",
+        "Tell your operator. They check the change on the host and settle it; open Operations again to see the settled state.",
       ),
       screen("operations", "Go to Operations"),
     ],
@@ -435,7 +445,7 @@ export const ARTICLES: readonly Article[] = [
         "A project, an environment, a secret or a credential needs review when what the database says and what the secret store holds could not be matched. Nothing on the page can change it until it is settled, so nothing is offered.",
       ),
       p(
-        "The row shows the reason the server gave. Your operator settles it from the host, by the reconciliation runbook.",
+        "A project or an environment in review shows the reason the server gave. Your operator settles it from the host, by the reconciliation runbook.",
       ),
     ],
     related: ["uncertain", "states"],
@@ -444,7 +454,7 @@ export const ARTICLES: readonly Article[] = [
     id: "activity-audit-operations",
     title: "Activity, Audit and Operations: the difference",
     summary:
-      "Activity tells what happened in plain words; Audit lists every recorded event; Operations lists the changes of one environment.",
+      "Activity shows the product's events, one line per operation; Audit lists every recorded event with its details; Operations lists the changes of one environment.",
     category: "activity",
     keywords: [
       "activity",
@@ -460,12 +470,12 @@ export const ARTICLES: readonly Article[] = [
     popular: true,
     blocks: [
       list(
-        "Activity: what people and machines did in the organization, in plain words: who revealed, changed, imported or exported which secret, and each machine read.",
+        "Activity: what people and machines did in the organization in the last 30 days: each change, reveal, import, export and machine read, with who did it, where, and how it ended.",
         "Audit: every recorded event and its outcome, with filters, for checking. Events are kept for 365 days.",
         "Operations: the changes the service carried out for one environment, and their state.",
       ),
       p(
-        "To find who revealed a secret today, open Activity: each reveal is a line with the person and the secret's name.",
+        "To find who revealed a secret today, open Audit and filter by the action secret.reveal: each reveal is a row with the user's id and, in its details, the secret's name.",
       ),
       screen("activity", "Go to Activity"),
       screen("audit", "Go to Audit"),
@@ -545,7 +555,7 @@ export const ARTICLES: readonly Article[] = [
         "If you have no recovery code: ask your operator for a reset link. It works once and expires after 15 minutes. With it you set a new password and a new authenticator.",
       ),
       note(
-        "When the operator issues a reset link, every session of the account ends, and the old authenticator and recovery codes stop working once the reset is completed.",
+        "When the operator issues a reset link, every session of the account ends. After a reset of the authenticator, the old authenticator and every old recovery code stop working.",
       ),
     ],
     related: ["lost-recovery-codes", "authenticator"],
@@ -576,7 +586,7 @@ export const ARTICLES: readonly Article[] = [
     keywords: ["code again", "step-up", "re-verification", "verify", "fresh", "asked again"],
     blocks: [
       p(
-        `Exporting an environment, issuing a machine credential and making new recovery codes each need a code entered within the last ${FRESH_MINUTES} minutes. The page asks for one and then lets you do it again.`,
+        `Exporting an environment, issuing a machine credential, making new recovery codes and changing the password each need a code entered within the last ${FRESH_MINUTES} minutes. A session signed in with a recovery code has none. The page asks for one and then lets you do it again.`,
       ),
     ],
     related: ["authenticator", "export-risks"],
@@ -604,7 +614,7 @@ export const ARTICLES: readonly Article[] = [
     keywords: ["account", "password", "change password", "profile", "security"],
     blocks: [
       list(
-        "Password: change it with the current one. Your other sessions end, and this one asks for a code again.",
+        "Password: change it with the current one and a recent code from your authenticator. Your other sessions end; this one stays signed in.",
         "Recovery codes: replace them when you have used some or think they were seen.",
         "Sessions: end the ones you do not recognise.",
       ),
@@ -770,6 +780,9 @@ export const OPERATOR_RUNBOOKS: readonly { file: string; what: string }[] = [
   { file: "restore.md", what: "Restoring the service from a backup." },
   { file: "consumer-local.md", what: "An application on a developer's machine." },
   { file: "consumer-deploy.md", what: "An application on a server." },
-  { file: "machine-credentials.md", what: "Issuing, rotating and revoking tokens." },
+  {
+    file: "machine-credentials.md",
+    what: "Issuing, listing and revoking tokens, and what their states mean.",
+  },
   { file: "known-limits.md", what: "What the service does not do." },
 ];

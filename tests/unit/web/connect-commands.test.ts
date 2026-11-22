@@ -69,7 +69,9 @@ describe("Connect an application's commands", () => {
       ...blocksOf(LOCAL, 4),
       filled(blocksOf(LOCAL, 5)[0] ?? "", "development"),
       ...blocksOf(LOCAL, 6),
-      `stty -echo\n${blocksOf(LOCAL, 8)[0] ?? ""}\nstty echo`,
+      "stty -echo",
+      blocksOf(LOCAL, 8)[0],
+      "stty echo",
       blocksOf(LOCAL, 9)[0],
     ];
     expect(commands).toEqual(expected);
@@ -87,7 +89,9 @@ describe("Connect an application's commands", () => {
       filled(blocksOf(DEPLOY, 2)[0] ?? "", "production"),
       ...blocksOf(DEPLOY, 3),
       ...blocksOf(DEPLOY, 4),
-      `stty -echo\n${blocksOf(DEPLOY, 5)[0] ?? ""}\nstty echo`,
+      "stty -echo",
+      blocksOf(DEPLOY, 5)[0],
+      "stty echo",
       ...blocksOf(DEPLOY, 6),
     ]);
   });
@@ -109,8 +113,12 @@ describe("Connect an application's commands", () => {
         expect(command).not.toMatch(/SECRETS_TOKEN=|--token\s+\S/);
       }
       const token = steps.find((step) => step.commands.some((c) => c.includes("machine-token")));
-      expect(token?.commands).toEqual([`stty -echo\n${blocksOf(LOCAL, 8)[0] ?? ""}\nstty echo`]);
+      // Review RR-5: three blocks, run one at a time; the middle one is the runbook's.
+      expect(token?.commands).toEqual(["stty -echo", blocksOf(LOCAL, 8)[0], "stty echo"]);
       expect(token?.warning).toMatch(/stays on the screen/);
+      // Review RR-9: the terminal is ready before the token is issued.
+      const ids = steps.map((step) => step.id);
+      expect(ids.indexOf("local-store")).toBe(ids.indexOf("local-issue") - 1);
     }
   });
 
