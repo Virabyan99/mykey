@@ -64,6 +64,7 @@ import {
   writeCustodyAfterRestore,
   type SysCall,
 } from "./host-custody.ts";
+import { FIELD_PULL_COMMAND, parseFieldPull } from "./field-report.ts";
 import { readOpsJobs } from "./ops-jobs.ts";
 import { probeState } from "./probe.ts";
 
@@ -137,7 +138,8 @@ export const USAGE = `usage: node scripts/host.ts <staging|prod> <command> [--pu
   r2-install <audit-archive|pairs|pairs-cleanup>  the S3 credentials of that job's R2 token, on stdin
   backup-init                    backup password and signing key made on the host; trust anchor; AppRole backup
   backup-custody                 copy the backup password and signing key to ~/.mykey/custody/<host>/backup/
-  timers                         install and start the job timers (ops-jobs.json, audit rotation)
+  timers                         install and start the job timers (ops-jobs.json, audit rotation, field day)
+  field-pull                     copy the day records (P-166) to ~/.mykey/field/<host>/; never labels.json
   gate open --report <file>      opens with a verification report (v2; Run 6.7)
   gate close [--verifying]       closes; --verifying lets the verification listener serve
   tunnel verify                  a local port to the API's verification listener (Ctrl-C ends it)
@@ -163,7 +165,8 @@ export type HostCommand = { host: HostName; via: Address } & (
         | "ops-secrets"
         | "backup-init"
         | "backup-custody"
-        | "timers";
+        | "timers"
+        | "field-pull";
     }
   | { command: "status"; json: boolean }
   | { command: "apply"; target: "firewall" | "ssh" }
@@ -417,6 +420,7 @@ export function parseHostArgs(argv: string[]): HostCommand {
     case "backup-init":
     case "backup-custody":
     case "timers":
+    case "field-pull":
       if (positional.length !== 0) throw new Error(USAGE);
       return { ...base, command };
     case "status":
@@ -2165,6 +2169,9 @@ async function main(argv: string[], log: Logger): Promise<number> {
     case "timers":
       await runTimers(host, address, log);
       return 0;
+    case "field-pull":
+      await runFieldPull(host, address, log);
+      return 0;
   }
 }
 
@@ -2360,7 +2367,8 @@ export function jobTimers(): string[] {
     job.unit === null ? [] : [job.unit],
   );
   // Run 6.5 (P-119): the daily pair, run by backup.sh rather than ops-run.sh.
-  return ["mykey-bao-audit-rotate", ...units, "mykey-backup"];
+  // Run 9.6 (P-166): the field day, run by field/field-day.sh.
+  return ["mykey-bao-audit-rotate", ...units, "mykey-backup", "mykey-field-day"];
 }
 
 /** Run 6.5 (P-120): services enabled at boot without a timer. */
@@ -2397,6 +2405,20 @@ async function runTimers(host: HostEntry, address: Address, log: Logger): Promis
     "installing the job timers",
   );
   log.info(`${host.name}: timers enabled: ${units.join(", ")}`);
+}
+
+/** Run 9.6 (P-166): the host's day records, each checked, to ~/.mykey/field/<host>/ (outside the repository). */
+async function runFieldPull(host: HostEntry, address: Address, log: Logger): Promise<void> {
+  const answer = await sshExec(host, FIELD_PULL_COMMAND, { sudo: true, address });
+  const pulled = parseFieldPull(expectSuccess(answer, "reading the field records").stdout);
+  const directory = join(homedir(), ".mykey", "field", host.name);
+  mkdirSync(directory, { recursive: true, mode: 0o700 });
+  for (const { date, record } of pulled) {
+    writeFileSync(join(directory, `${date}.json`), `${JSON.stringify(record, null, 2)}\n`, {
+      mode: 0o600,
+    });
+  }
+  log.info(`${host.name}: ${String(pulled.length)} field record(s) in ${directory}`);
 }
 
 /** Run 6.2 (P-111): the role passwords ops jobs log in with, where ops-run.sh mounts them. */

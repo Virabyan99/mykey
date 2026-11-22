@@ -1,0 +1,10 @@
+[Unit]
+Description=MyKey field record each day at 00:10 UTC (Run 9.6, P-166)
+
+[Timer]
+OnCalendar=*-*-* 00:10:00 UTC
+Persistent=true
+AccuracySec=1min
+
+[Install]
+WantedBy=timers.target
