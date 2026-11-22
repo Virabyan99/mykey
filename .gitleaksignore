@@ -25,3 +25,8 @@ ceeebde38137c10631a3d7b48e6833100de16036:tests/unit/cli/config.test.ts:generic-a
 # place of SECRETS_PROJECT's placeholder, and was committed with the run's corrections; the next
 # commit put the placeholder back. Reviewed false positive.
 aaeab2a78fea7b594227af829c92c0d6c188c76e:docs/runbooks/consumer-local.md:generic-api-key:82
+
+# Session 9, Run 9.6: the field-day test names a synthetic secret name (STRIPE_SECRET_KEY, no
+# value) to prove a day record never holds a name; generic-api-key reads the name as a key.
+# Reviewed false positive.
+aa69922f772cf287311edefe87ddf686244036c5:tests/unit/hosts/field-day.test.ts:generic-api-key:17
