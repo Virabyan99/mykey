@@ -1,0 +1,59 @@
+# Run 9.5 — The baseline comparison (H-05, H-09; P-165)
+
+**Date:** 22 Nov 2026. **Branch:** `session-9`.
+
+**The task:** give one application on one machine its secrets, start it with them, and replace its access once.
+
+**The two ways:**
+
+- **MyKey,** as the owner did it for real in Run 9.2, on production with consumer-1 (the workstation's WSL). That was a first use, not a rehearsal.
+- **Plain OpenBao,** done the usual way: `bao kv put`, a hand-written policy, `bao token create`, a `.env` written from the read value, and the app started from it. It ran as a script of the commands an operator types, in a throwaway container with OpenBao's dev server (the pinned image) and a synthetic value. The script is in the run's workspace, not in Git; its commands are listed below.
+
+**Ruling (ledgered):** MyKey's column comes from Run 9.2's real first use, with its mistakes, rather than from a second, timed staging walk. Its times are the owner's, by the clock of the conversation, so they are approximate.
+
+## Side by side
+
+|                                     | MyKey (Run 9.2, first real use)                                                                                                                                    | Plain OpenBao (baseline)                                                                                                                                           |
+| ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Steps on the machine                | 7 blocks from the connect panel: get and check the CLI, install, name the scope, check the API, store the token, start                                             | About 10 commands: log in, `kv put`, `policy write`, `token create`, read the value, write `.env`, source it, start                                                |
+| Steps in a browser                  | Create project and environment, enter or import the secrets, issue a credential, copy its token once                                                               | None (or the OpenBao UI for the same steps)                                                                                                                        |
+| Wall time                           | About 25 minutes from the first block to the first start, including one failure and its recovery; the rotation about 5 minutes                                     | About 1 second as a script; an operator typing it, with a policy written by hand, takes minutes                                                                    |
+| Mistakes and corrections            | The three-block token step failed and a token went to the shell and the conversation (F-9.2-1). It was revoked unused, and the one-command form worked twice after | None in the script; by hand, the policy's path (`secret/data/…` for KV v2) is the usual first mistake                                                              |
+| Where a value is on disk afterwards | **Nowhere** the leak check looks: 0 of 6 needles in histories, `/tmp`, `~/.config` (token file excluded), argv and environments, journal, `docker inspect`         | **3 files hold the value:** `.env`, the shell history (`kv put … API_KEY=<value>`) and the terminal's scrollback                                                   |
+| Where a token is on disk afterwards | One file, `~/.config/mykey/machine-token`, mode 0600, read only by `secrets-launch.sh`                                                                             | The token helper file `~/.vault-token`, here the **root** token (`bao login`); the app's token was printed to the terminal                                         |
+| What the app gets                   | The complete set or nothing: `secrets run` exits 77 or 69 and starts nothing                                                                                       | Whatever `.env` holds, even if it is stale or partial                                                                                                              |
+| After a lost or exposed token       | Revoke it in the workspace and issue another. The old token exits 77 at once (seen in Run 9.2). No value changes.                                                  | Revoke the token (`bao token revoke`). **But the values are already in `.env` and the history**, so every value the token could read must be changed at its source |
+| After a lost machine                | Revoke its credential; the machine holds no value                                                                                                                  | Every value in its `.env` is out; change them all                                                                                                                  |
+| Audit                               | Each read is a `machine.resolve` row with the credential; the owner sees it in Activity                                                                            | OpenBao's audit device, if one was enabled (the dev server has none)                                                                                               |
+| Running cost                        | Two hosts, a KMS, backups, a probe: the operator's work of Sessions 2 to 8                                                                                         | One OpenBao, its unseal and its backup, by the operator                                                                                                            |
+
+**The baseline's commands**, as typed (the value is synthetic):
+
+```sh
+bao login -no-print root
+bao kv put -mount=secret app/dev API_KEY=<value>
+bao policy write app-dev - <<'POL'
+path "secret/data/app/dev" { capabilities = ["read"] }
+POL
+APP_TOKEN=$(bao token create -policy=app-dev -ttl=720h -field=token)
+printf 'API_KEY=%s\n' "$(BAO_TOKEN=$APP_TOKEN bao kv get -mount=secret -field=API_KEY app/dev)" > .env
+set -a; . ./.env; set +a; <start the app>
+```
+
+The baseline's counts, from the run:
+
+- 3 files hold the value (`.env`, `.bash_history` and the terminal's output);
+- 1 token helper file;
+- the app started.
+
+## What each leaves on disk
+
+- **MyKey:** one token file per machine, and nothing that holds a value. The value lives in the process's environment while it runs (`/proc/<pid>/environ`, readable by the same user), as with any environment variable.
+- **The baseline:** the `.env` (by design), the shell history and the terminal's scrollback hold the value. A root or operator token is left in `~/.vault-token`. Each has to be found and cleaned by hand.
+
+## The plain limits
+
+- **One operator, one task, one machine.** No team and no second application.
+- **The same person** wrote MyKey, ran the baseline and compares them: the agent did both. The owner did MyKey's side and did not do the baseline.
+- **MyKey's column is one real first use, with its mistakes. The baseline's is a script with none.** Neither is a timed study. MyKey's first use was slower and had one serious mistake (a token in a chat), which the product's design then made cheap to recover from.
+- **No market claim.** This says nothing about what other people would choose, or would pay for (H-09 stays a hypothesis).
