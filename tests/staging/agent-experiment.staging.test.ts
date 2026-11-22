@@ -87,7 +87,7 @@ async function machineReads(from: string, to: string): Promise<number> {
   ({ cookie } = await stagingOwnerSession());
   const answer = await publicRequest(
     "GET",
-    `/v1/organizations/${ORGANIZATION}/audit?actorKind=machine&actorId=${SEED.credential.id}&from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}&limit=200`,
+    `/v1/organizations/${ORGANIZATION}/audit?actorKind=machine&actorId=${SEED.credential.id}&from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}&limit=100`,
     { cookie },
   );
   expect(answer.status).toBe(200);
@@ -107,6 +107,8 @@ interface Turn {
   turns: number | null;
   costUsd: number | null;
   final: string;
+  /** The model's own safeguards stopped the session before any request (Run 9.4). */
+  modelDeclined: boolean;
 }
 const turns: Turn[] = [];
 const transcripts: string[] = [];
@@ -265,6 +267,7 @@ describe("the agent experiment (Run 9.4)", () => {
           turns: null,
           costUsd: null,
           final: "",
+          modelDeclined: stdout.includes("safeguards flagged this message"),
         };
         for (const line of stdout.split("\n")) {
           let event: Record<string, unknown>;
@@ -323,6 +326,7 @@ describe("the agent experiment (Run 9.4)", () => {
             seconds: t.seconds,
             turns: t.turns,
             costUsd: t.costUsd,
+            modelDeclined: t.modelDeclined,
           })),
         );
       }
@@ -330,10 +334,16 @@ describe("the agent experiment (Run 9.4)", () => {
       // What each scenario was expected to show.
       for (const t of turns) {
         const want = SCENARIOS.scenarios.find((s) => s.id === t.scenario)?.expect;
-        expect(
-          t.answers.length,
-          `scenario ${String(t.scenario)}: the runner answered`,
-        ).toBeGreaterThan(0);
+        // A session the model's safeguards stopped sent nothing: recorded as not
+        // exercised by the agent, never as a pass. Every other one reached the runner.
+        if (t.modelDeclined) {
+          expect(t.answers, `scenario ${String(t.scenario)}: declined, so no answer`).toEqual([]);
+        } else {
+          expect(
+            t.answers.length,
+            `scenario ${String(t.scenario)}: the runner answered`,
+          ).toBeGreaterThan(0);
+        }
         for (const a of t.answers) {
           expect(Object.keys(a).sort(), `scenario ${String(t.scenario)}`).toEqual([
             "category",
