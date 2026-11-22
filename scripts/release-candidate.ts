@@ -15,6 +15,15 @@ import { releaseSchema } from "../infra/release/release-schema.ts";
 
 const ROOT = resolve(import.meta.dirname, "..");
 export const CANDIDATE_PATH = "docs/evidence/session-8/candidate.json";
+
+/** Run 9.0: the evidence folder of `--session <n>`; Session 8's without it. */
+export function evidenceSession(argv: readonly string[]): string {
+  const index = argv.indexOf("--session");
+  if (index === -1) return "docs/evidence/session-8";
+  const value = argv[index + 1] ?? "";
+  if (!/^[0-9]{1,2}$/.test(value)) throw new Error("--session needs a session number");
+  return `docs/evidence/session-${value}`;
+}
 const HOSTS = ["staging", "prod"] as const;
 type Host = (typeof HOSTS)[number];
 
@@ -120,7 +129,8 @@ function flag(argv: string[], name: string): string | undefined {
 }
 
 function main(argv: string[]): void {
-  const path = join(ROOT, CANDIDATE_PATH);
+  const relative = `${evidenceSession(argv)}/candidate.json`;
+  const path = join(ROOT, relative);
   const releaseDir = flag(argv, "--release");
   const deploy = flag(argv, "--deploy");
   let candidate: CandidateFile;
@@ -141,7 +151,7 @@ function main(argv: string[]): void {
     process.exit(64);
   }
   writeFileSync(path, `${JSON.stringify(candidate, null, 2)}\n`);
-  process.stdout.write(`${CANDIDATE_PATH}: ${candidate.hostRelease}, ${candidate.cliRelease}\n`);
+  process.stdout.write(`${relative}: ${candidate.hostRelease}, ${candidate.cliRelease}\n`);
 }
 
 if (import.meta.main) main(process.argv.slice(2));

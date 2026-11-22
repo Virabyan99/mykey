@@ -24,12 +24,12 @@ import {
   type Overrides,
   type Registry,
 } from "./registry-build.ts";
+import { evidenceSession } from "./release-candidate.ts";
 
 export { GATE_F_IDS };
 
 const ROOT = resolve(import.meta.dirname, "..");
-const SESSION = "docs/evidence/session-8";
-export const MANIFEST_PATH = `${SESSION}/manifest.md`;
+export const MANIFEST_PATH = "docs/evidence/session-8/manifest.md";
 export const NOT_YET_DUE_FRS: readonly string[] = ["FR-1.98", "FR-1.99", "FR-1.100"];
 
 export type ProofKind = "ci" | "staging" | "cloud" | "cli" | "consumers" | "review" | "owner";
@@ -295,6 +295,9 @@ function readJson(path: string): unknown {
 }
 
 function main(argv: string[]): number {
+  // Run 9.0: --session <n> reads and writes that session's folder; Session 8's without it.
+  const SESSION = evidenceSession(argv);
+  const manifestPath = `${SESSION}/manifest.md`;
   const doc04 = readFileSync(
     join(
       ROOT,
@@ -319,7 +322,7 @@ function main(argv: string[]): number {
     for (const problem of manifest.problems) process.stderr.write(`manifest: ${problem}\n`);
     return 1;
   }
-  writeFileSync(join(ROOT, MANIFEST_PATH), manifest.text);
+  writeFileSync(join(ROOT, manifestPath), manifest.text);
   if (argv.includes("--apply")) {
     const overrides = JSON.parse(readFileSync(OVERRIDES_FILE, "utf8")) as Overrides;
     for (const [id, status] of manifest.statuses) {
@@ -329,18 +332,18 @@ function main(argv: string[]): number {
         overrides.statuses.push({
           id,
           status: "PASS",
-          evidence: [MANIFEST_PATH],
+          evidence: [manifestPath],
           note: "The release manifest of Stage 1.",
         });
       } else {
         existing.status = "PASS";
-        if (!existing.evidence.includes(MANIFEST_PATH)) existing.evidence.push(MANIFEST_PATH);
+        if (!existing.evidence.includes(manifestPath)) existing.evidence.push(manifestPath);
       }
     }
     writeFileSync(OVERRIDES_FILE, `${JSON.stringify(overrides, null, 2)}\n`);
   }
   process.stdout.write(
-    `manifest: ${MANIFEST_PATH} written${argv.includes("--apply") ? "; statuses applied" : ""}\n`,
+    `manifest: ${manifestPath} written${argv.includes("--apply") ? "; statuses applied" : ""}\n`,
   );
   return 0;
 }

@@ -121,7 +121,8 @@ describe("the workspace on staging", () => {
       ({ cookie } = await stagingOwnerSession());
 
       // --- a project of its own ---------------------------------------------
-      await heading(page, "Overview").waitFor();
+      // Session 9 (D-70): the overview's heading is "Home".
+      await heading(page, "Home").waitFor();
       await page.getByRole("button", { name: "New project" }).click();
       await page.getByLabel("Project name").fill(project);
       await page.getByRole("button", { name: "Create project" }).click();
