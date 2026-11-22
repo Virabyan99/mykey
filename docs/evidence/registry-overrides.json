@@ -15,25 +15,41 @@
     {
       "id": "PO-24",
       "status": "PASS",
-      "evidence": ["docs/evidence/session-1/run-1.3.md", "docs/evidence/session-8/manifest.md"],
+      "evidence": [
+        "docs/evidence/session-1/run-1.3.md",
+        "docs/evidence/session-8/manifest.md",
+        "docs/evidence/session-9/manifest.md"
+      ],
       "note": "Pins chosen and verified; two clean builds with identical hashes. Generated auth schema and release scans are still to come."
     },
     {
       "id": "FR-1.33",
       "status": "PASS",
-      "evidence": ["docs/evidence/session-1/run-1.8.md", "docs/evidence/session-8/manifest.md"],
+      "evidence": [
+        "docs/evidence/session-1/run-1.8.md",
+        "docs/evidence/session-8/manifest.md",
+        "docs/evidence/session-9/manifest.md"
+      ],
       "note": "Strict parser and canonical writer for format v1, with accepted and rejected fixtures and the rule and line of every rejection. Not yet wired to the import and export routes."
     },
     {
       "id": "FR-1.34",
       "status": "PASS",
-      "evidence": ["docs/evidence/session-1/run-1.8.md", "docs/evidence/session-8/manifest.md"],
+      "evidence": [
+        "docs/evidence/session-1/run-1.8.md",
+        "docs/evidence/session-8/manifest.md",
+        "docs/evidence/session-9/manifest.md"
+      ],
       "note": "Canonical output checked with pinned @next/env and python-dotenv on a 65-case corpus; no value changed without a warning by key name. The export screen that shows the warnings is still to come."
     },
     {
       "id": "FR-1.38",
       "status": "PASS",
-      "evidence": ["docs/evidence/session-1/run-1.8.md", "docs/evidence/session-8/manifest.md"],
+      "evidence": [
+        "docs/evidence/session-1/run-1.8.md",
+        "docs/evidence/session-8/manifest.md",
+        "docs/evidence/session-9/manifest.md"
+      ],
       "note": "Codec level only, and only within the 1 MiB import limit: serialise then parse reproduces names and values exactly in property tests. An environment may hold 8 MiB of values, so a large export is refused on re-import today. The export and re-import of a real environment is still to come."
     },
     {
@@ -43,7 +59,8 @@
         "docs/evidence/session-1/run-1.9.md",
         "docs/evidence/session-1/retention-fixture.json",
         "docs/evidence/session-6/run-6.6.md",
-        "docs/evidence/session-8/manifest.md"
+        "docs/evidence/session-8/manifest.md",
+        "docs/evidence/session-9/manifest.md"
       ],
       "note": "Daily pair, retention by its own unit, oldest-eligible restore: the fixture's oldest pair restored and the fixture cleaned up verified (Run 6.6, cleanup.ts); staging's pairs restore on the workstation (Run 6.5); the 30-day deletion on staging is checkpoint pair-30-day."
     },
@@ -54,7 +71,8 @@
         "docs/evidence/session-1/run-1.9.md",
         "docs/evidence/session-1/retention-fixture.json",
         "docs/evidence/session-6/run-6.6.md",
-        "docs/evidence/session-8/manifest.md"
+        "docs/evidence/session-8/manifest.md",
+        "docs/evidence/session-9/manifest.md"
       ],
       "note": "Real lock aging: probe objects deleted after their 600 s lock by a later run and proven gone; locked ones refused (409, bulk 200 with per-object errors) and reported by applyRetention, not thrown; the fixture's 4-day pairs deleted after their lock and its oldest pair recovered (Run 6.6)."
     },
@@ -64,14 +82,19 @@
       "evidence": [
         "docs/evidence/cost-sheet.md",
         "docs/evidence/session-6/run-6.6.md",
-        "docs/evidence/session-8/manifest.md"
+        "docs/evidence/session-8/manifest.md",
+        "docs/evidence/session-9/manifest.md"
       ],
       "note": "A used staging pair measured (44.3 MB, 6,784 secrets), the audit archive per day, operations per night and per retention run; 32 pairs ≈ 1.42 GB-month. No invoice figure yet (Run 9.x)."
     },
     {
       "id": "PO-3",
       "status": "PASS",
-      "evidence": ["docs/evidence/session-2/run-2.1.md", "docs/evidence/session-8/manifest.md"],
+      "evidence": [
+        "docs/evidence/session-2/run-2.1.md",
+        "docs/evidence/session-8/manifest.md",
+        "docs/evidence/session-9/manifest.md"
+      ],
       "note": "G-BAO: 860-cell authority matrix with real tokens on the local stack; every deny has a matching allow. PASS needs the integrated product."
     },
     {
@@ -80,7 +103,8 @@
       "evidence": [
         "docs/evidence/session-2/run-2.2.md",
         "docs/evidence/session-5/run-5.4.md",
-        "docs/evidence/session-8/manifest.md"
+        "docs/evidence/session-8/manifest.md",
+        "docs/evidence/session-9/manifest.md"
       ],
       "note": "G-BAO: fixed-role orphan issuance by a 60 s issuer on the local stack; overrides refused. Run 5.4: with the product's issuer, the issued token's native scope is its environment's read only (native-scope.md). PASS needs the integrated proof at the gate."
     },
@@ -90,7 +114,8 @@
       "evidence": [
         "docs/evidence/session-2/run-2.3.md",
         "docs/evidence/session-3/run-3.2.md",
-        "docs/evidence/session-8/manifest.md"
+        "docs/evidence/session-8/manifest.md",
+        "docs/evidence/session-9/manifest.md"
       ],
       "note": "G-AUTH: bootstrap-only auth on Better Auth 1.7.19 (local stack); sign-up refused; operator path creates the account. Session 3: Owner bootstrap only through the operator command; repeat-safe; staging owner (product code, real stores; staging)."
     },
@@ -100,7 +125,8 @@
       "evidence": [
         "docs/evidence/session-2/run-2.3.md",
         "docs/evidence/session-3/run-3.4.md",
-        "docs/evidence/session-8/manifest.md"
+        "docs/evidence/session-8/manifest.md",
+        "docs/evidence/session-9/manifest.md"
       ],
       "note": "G-AUTH: protected session and factor storage proven on the local stack. Session 3: Mandatory TOTP, one-use steps, recovery codes, product routes closed to incomplete sessions (product code, real stores)."
     },
@@ -110,7 +136,8 @@
       "evidence": [
         "docs/evidence/session-2/run-2.4.md",
         "docs/evidence/session-4/run-4.6.md",
-        "docs/evidence/session-8/manifest.md"
+        "docs/evidence/session-8/manifest.md",
+        "docs/evidence/session-9/manifest.md"
       ],
       "note": "G-EFFECT: delayed effects, replay and exclusion with real process death and sockets (spike executor, Run 2.4); the product's KV actions under the same faults, at most one backend change each (Run 4.6). Soft delete and undelete: no backend marker, settled under exclusion (D-38). Session 5 effects (issuance, revocation, archive) owed."
     },
@@ -123,31 +150,51 @@
     {
       "id": "FR-1.71",
       "status": "PASS",
-      "evidence": ["docs/evidence/session-2/run-2.5.md", "docs/evidence/session-8/manifest.md"],
+      "evidence": [
+        "docs/evidence/session-2/run-2.5.md",
+        "docs/evidence/session-8/manifest.md",
+        "docs/evidence/session-9/manifest.md"
+      ],
       "note": "Every hop that exists in Session 2 is verified TLS; OpenBao added in Run 2.7."
     },
     {
       "id": "FR-1.72",
       "status": "PASS",
-      "evidence": ["docs/evidence/session-2/run-2.5.md", "docs/evidence/session-8/manifest.md"],
+      "evidence": [
+        "docs/evidence/session-2/run-2.5.md",
+        "docs/evidence/session-8/manifest.md",
+        "docs/evidence/session-9/manifest.md"
+      ],
       "note": "Host boundary on both hosts: default-deny firewall, VPN-only SSH, restricted containers."
     },
     {
       "id": "AC-1.30",
       "status": "PASS",
-      "evidence": ["docs/evidence/session-2/run-2.5.md", "docs/evidence/session-8/manifest.md"],
+      "evidence": [
+        "docs/evidence/session-2/run-2.5.md",
+        "docs/evidence/session-8/manifest.md",
+        "docs/evidence/session-9/manifest.md"
+      ],
       "note": "Public HTTPS with a valid chain, HSTS, TLS 1.2+ only."
     },
     {
       "id": "AC-1.31",
       "status": "PASS",
-      "evidence": ["docs/evidence/session-2/run-2.5.md", "docs/evidence/session-8/manifest.md"],
+      "evidence": [
+        "docs/evidence/session-2/run-2.5.md",
+        "docs/evidence/session-8/manifest.md",
+        "docs/evidence/session-9/manifest.md"
+      ],
       "note": "External exposure is 443/tcp plus the WireGuard port, scanned from outside."
     },
     {
       "id": "PO-11",
       "status": "PASS",
-      "evidence": ["docs/evidence/session-2/run-2.5.md", "docs/evidence/session-8/manifest.md"],
+      "evidence": [
+        "docs/evidence/session-2/run-2.5.md",
+        "docs/evidence/session-8/manifest.md",
+        "docs/evidence/session-9/manifest.md"
+      ],
       "note": "The API runs under Node's permission model, read-only, no capabilities."
     },
     {
@@ -156,7 +203,8 @@
       "evidence": [
         "docs/evidence/session-2/run-2.6.md",
         "docs/evidence/session-6/run-6.4.md",
-        "docs/evidence/session-8/manifest.md"
+        "docs/evidence/session-8/manifest.md",
+        "docs/evidence/session-9/manifest.md"
       ],
       "note": "Off-host alert path on staging with the real Telegram channel (Run 2.6); every Run 6.4 condition delivered and resolved, and a watcher for the Worker itself."
     },
@@ -181,7 +229,11 @@
     {
       "id": "PO-1",
       "status": "PASS",
-      "evidence": ["docs/evidence/session-2/run-2.7.md", "docs/evidence/session-8/manifest.md"],
+      "evidence": [
+        "docs/evidence/session-2/run-2.7.md",
+        "docs/evidence/session-8/manifest.md",
+        "docs/evidence/session-9/manifest.md"
+      ],
       "note": "Seal key never leaves the KMS; certificate key never leaves the host; no unseal key exists."
     },
     {
@@ -190,7 +242,8 @@
       "evidence": [
         "docs/evidence/session-2/run-2.7.md",
         "docs/evidence/session-6/run-6.8.md",
-        "docs/evidence/session-8/manifest.md"
+        "docs/evidence/session-8/manifest.md",
+        "docs/evidence/session-9/manifest.md"
       ],
       "note": "Seal key lost: unrecoverable, proven on disposable instances in the losstest domain."
     },
@@ -200,7 +253,8 @@
       "evidence": [
         "docs/evidence/session-2/run-2.9.md",
         "docs/evidence/session-6/run-6.5.md",
-        "docs/evidence/session-8/manifest.md"
+        "docs/evidence/session-8/manifest.md",
+        "docs/evidence/session-9/manifest.md"
       ],
       "note": "One paired backup of staging restored into new stores (Run 2.9 spike); the product's daily pair on staging made by its unit, restored on the workstation with the custody password (Run 6.5)."
     },
@@ -210,7 +264,8 @@
       "evidence": [
         "docs/evidence/session-2/run-2.9.md",
         "docs/evidence/session-6/run-6.5.md",
-        "docs/evidence/session-8/manifest.md"
+        "docs/evidence/session-8/manifest.md",
+        "docs/evidence/session-9/manifest.md"
       ],
       "note": "The bucket holds ciphertext only (spike); the product's pairs are Restic ciphertext and an eligible.json signed with the host's key, verified against the committed trust anchor (Run 6.5)."
     },
@@ -220,302 +275,499 @@
       "evidence": [
         "docs/evidence/session-2/run-2.9.md",
         "docs/evidence/session-6/run-6.8.md",
-        "docs/evidence/session-8/manifest.md"
+        "docs/evidence/session-8/manifest.md",
+        "docs/evidence/session-9/manifest.md"
       ],
       "note": "Database globals re-created from roles.sql plus applyDatabaseAccess; matrix passes on the restored database (spike)."
     },
     {
       "id": "FR-1.01",
       "status": "PASS",
-      "evidence": ["docs/evidence/session-3/run-3.2.md", "docs/evidence/session-8/manifest.md"],
+      "evidence": [
+        "docs/evidence/session-3/run-3.2.md",
+        "docs/evidence/session-8/manifest.md",
+        "docs/evidence/session-9/manifest.md"
+      ],
       "note": "Owner bootstrap only through the operator command; repeat-safe; staging owner (product code, real stores; staging)."
     },
     {
       "id": "AC-1.01",
       "status": "PASS",
-      "evidence": ["docs/evidence/session-3/run-3.2.md", "docs/evidence/session-8/manifest.md"],
+      "evidence": [
+        "docs/evidence/session-3/run-3.2.md",
+        "docs/evidence/session-8/manifest.md",
+        "docs/evidence/session-9/manifest.md"
+      ],
       "note": "Owner bootstrap only through the operator command; repeat-safe; staging owner (product code, real stores; staging)."
     },
     {
       "id": "FR-1.07",
       "status": "PASS",
-      "evidence": ["docs/evidence/session-3/run-3.3.md", "docs/evidence/session-8/manifest.md"],
+      "evidence": [
+        "docs/evidence/session-3/run-3.3.md",
+        "docs/evidence/session-8/manifest.md",
+        "docs/evidence/session-9/manifest.md"
+      ],
       "note": "Throttling across two API processes on database time (product code, real stores)."
     },
     {
       "id": "AC-1.05",
       "status": "PASS",
-      "evidence": ["docs/evidence/session-3/run-3.3.md", "docs/evidence/session-8/manifest.md"],
+      "evidence": [
+        "docs/evidence/session-3/run-3.3.md",
+        "docs/evidence/session-8/manifest.md",
+        "docs/evidence/session-9/manifest.md"
+      ],
       "note": "Throttling across two API processes on database time (product code, real stores)."
     },
     {
       "id": "FR-1.02",
       "status": "PASS",
-      "evidence": ["docs/evidence/session-3/run-3.4.md", "docs/evidence/session-8/manifest.md"],
+      "evidence": [
+        "docs/evidence/session-3/run-3.4.md",
+        "docs/evidence/session-8/manifest.md",
+        "docs/evidence/session-9/manifest.md"
+      ],
       "note": "Mandatory TOTP, one-use steps, recovery codes, product routes closed to incomplete sessions (product code, real stores)."
     },
     {
       "id": "FR-1.03",
       "status": "PASS",
-      "evidence": ["docs/evidence/session-3/run-3.4.md", "docs/evidence/session-8/manifest.md"],
+      "evidence": [
+        "docs/evidence/session-3/run-3.4.md",
+        "docs/evidence/session-8/manifest.md",
+        "docs/evidence/session-9/manifest.md"
+      ],
       "note": "Mandatory TOTP, one-use steps, recovery codes, product routes closed to incomplete sessions (product code, real stores)."
     },
     {
       "id": "AC-1.02",
       "status": "PASS",
-      "evidence": ["docs/evidence/session-3/run-3.4.md", "docs/evidence/session-8/manifest.md"],
+      "evidence": [
+        "docs/evidence/session-3/run-3.4.md",
+        "docs/evidence/session-8/manifest.md",
+        "docs/evidence/session-9/manifest.md"
+      ],
       "note": "Mandatory TOTP, one-use steps, recovery codes, product routes closed to incomplete sessions (product code, real stores)."
     },
     {
       "id": "FR-1.05",
       "status": "PASS",
-      "evidence": ["docs/evidence/session-3/run-3.5.md", "docs/evidence/session-8/manifest.md"],
+      "evidence": [
+        "docs/evidence/session-3/run-3.5.md",
+        "docs/evidence/session-8/manifest.md",
+        "docs/evidence/session-9/manifest.md"
+      ],
       "note": "One validity decision for sessions, atomic password change, fresh TOTP for the sensitive starts; AC-1.35 for export and issuance on stub handlers (product code, real stores)."
     },
     {
       "id": "FR-1.06",
       "status": "PASS",
-      "evidence": ["docs/evidence/session-3/run-3.5.md", "docs/evidence/session-8/manifest.md"],
+      "evidence": [
+        "docs/evidence/session-3/run-3.5.md",
+        "docs/evidence/session-8/manifest.md",
+        "docs/evidence/session-9/manifest.md"
+      ],
       "note": "One validity decision for sessions, atomic password change, fresh TOTP for the sensitive starts; AC-1.35 for export and issuance on stub handlers (product code, real stores)."
     },
     {
       "id": "FR-1.77",
       "status": "PASS",
-      "evidence": ["docs/evidence/session-3/run-3.5.md", "docs/evidence/session-8/manifest.md"],
+      "evidence": [
+        "docs/evidence/session-3/run-3.5.md",
+        "docs/evidence/session-8/manifest.md",
+        "docs/evidence/session-9/manifest.md"
+      ],
       "note": "One validity decision for sessions, atomic password change, fresh TOTP for the sensitive starts; AC-1.35 for export and issuance on stub handlers (product code, real stores)."
     },
     {
       "id": "AC-1.04",
       "status": "PASS",
-      "evidence": ["docs/evidence/session-3/run-3.5.md", "docs/evidence/session-8/manifest.md"],
+      "evidence": [
+        "docs/evidence/session-3/run-3.5.md",
+        "docs/evidence/session-8/manifest.md",
+        "docs/evidence/session-9/manifest.md"
+      ],
       "note": "One validity decision for sessions, atomic password change, fresh TOTP for the sensitive starts; AC-1.35 for export and issuance on stub handlers (product code, real stores)."
     },
     {
       "id": "AC-1.35",
       "status": "PASS",
-      "evidence": ["docs/evidence/session-3/run-3.5.md", "docs/evidence/session-8/manifest.md"],
+      "evidence": [
+        "docs/evidence/session-3/run-3.5.md",
+        "docs/evidence/session-8/manifest.md",
+        "docs/evidence/session-9/manifest.md"
+      ],
       "note": "One validity decision for sessions, atomic password change, fresh TOTP for the sensitive starts; AC-1.35 for export and issuance on stub handlers (product code, real stores)."
     },
     {
       "id": "FR-1.04",
       "status": "PASS",
-      "evidence": ["docs/evidence/session-3/run-3.6.md", "docs/evidence/session-8/manifest.md"],
+      "evidence": [
+        "docs/evidence/session-3/run-3.6.md",
+        "docs/evidence/session-8/manifest.md",
+        "docs/evidence/session-9/manifest.md"
+      ],
       "note": "Operator-initiated reset for a lost password or factor; one redemption across processes (product code, real stores)."
     },
     {
       "id": "AC-1.03",
       "status": "PASS",
-      "evidence": ["docs/evidence/session-3/run-3.6.md", "docs/evidence/session-8/manifest.md"],
+      "evidence": [
+        "docs/evidence/session-3/run-3.6.md",
+        "docs/evidence/session-8/manifest.md",
+        "docs/evidence/session-9/manifest.md"
+      ],
       "note": "Operator-initiated reset for a lost password or factor; one redemption across processes (product code, real stores)."
     },
     {
       "id": "PO-6",
       "status": "PASS",
-      "evidence": ["docs/evidence/session-3/run-3.6.md", "docs/evidence/session-8/manifest.md"],
+      "evidence": [
+        "docs/evidence/session-3/run-3.6.md",
+        "docs/evidence/session-8/manifest.md",
+        "docs/evidence/session-9/manifest.md"
+      ],
       "note": "Operator-initiated reset for a lost password or factor; one redemption across processes (product code, real stores)."
     },
     {
       "id": "FR-1.09",
       "status": "PASS",
-      "evidence": ["docs/evidence/session-3/run-3.7.md", "docs/evidence/session-8/manifest.md"],
+      "evidence": [
+        "docs/evidence/session-3/run-3.7.md",
+        "docs/evidence/session-8/manifest.md",
+        "docs/evidence/session-9/manifest.md"
+      ],
       "note": "Authorization pipeline from current rows; every matrix cell tested; hidden equals absent; secret, credential and audit routes on stub handlers until their owner runs (product code, real stores)."
     },
     {
       "id": "FR-1.10",
       "status": "PASS",
-      "evidence": ["docs/evidence/session-3/run-3.7.md", "docs/evidence/session-8/manifest.md"],
+      "evidence": [
+        "docs/evidence/session-3/run-3.7.md",
+        "docs/evidence/session-8/manifest.md",
+        "docs/evidence/session-9/manifest.md"
+      ],
       "note": "Authorization pipeline from current rows; every matrix cell tested; hidden equals absent; secret, credential and audit routes on stub handlers until their owner runs (product code, real stores)."
     },
     {
       "id": "FR-1.11",
       "status": "PASS",
-      "evidence": ["docs/evidence/session-3/run-3.7.md", "docs/evidence/session-8/manifest.md"],
+      "evidence": [
+        "docs/evidence/session-3/run-3.7.md",
+        "docs/evidence/session-8/manifest.md",
+        "docs/evidence/session-9/manifest.md"
+      ],
       "note": "Authorization pipeline from current rows; every matrix cell tested; hidden equals absent; secret, credential and audit routes on stub handlers until their owner runs (product code, real stores)."
     },
     {
       "id": "AC-1.08",
       "status": "PASS",
-      "evidence": ["docs/evidence/session-3/run-3.7.md", "docs/evidence/session-8/manifest.md"],
+      "evidence": [
+        "docs/evidence/session-3/run-3.7.md",
+        "docs/evidence/session-8/manifest.md",
+        "docs/evidence/session-9/manifest.md"
+      ],
       "note": "Authorization pipeline from current rows; every matrix cell tested; hidden equals absent; secret, credential and audit routes on stub handlers until their owner runs (product code, real stores)."
     },
     {
       "id": "FR-1.08",
       "status": "PASS",
-      "evidence": ["docs/evidence/session-3/run-3.8.md", "docs/evidence/session-8/manifest.md"],
+      "evidence": [
+        "docs/evidence/session-3/run-3.8.md",
+        "docs/evidence/session-8/manifest.md",
+        "docs/evidence/session-9/manifest.md"
+      ],
       "note": "Durable organization provisioning, provisioner process, drift sweep and review alert; AC-1.09 drill on staging (product code, real stores; staging)."
     },
     {
       "id": "FR-1.12",
       "status": "PASS",
-      "evidence": ["docs/evidence/session-3/run-3.8.md", "docs/evidence/session-8/manifest.md"],
+      "evidence": [
+        "docs/evidence/session-3/run-3.8.md",
+        "docs/evidence/session-8/manifest.md",
+        "docs/evidence/session-9/manifest.md"
+      ],
       "note": "Durable organization provisioning, provisioner process, drift sweep and review alert; AC-1.09 drill on staging (product code, real stores; staging)."
     },
     {
       "id": "FR-1.55",
       "status": "PASS",
-      "evidence": ["docs/evidence/session-3/run-3.8.md", "docs/evidence/session-8/manifest.md"],
+      "evidence": [
+        "docs/evidence/session-3/run-3.8.md",
+        "docs/evidence/session-8/manifest.md",
+        "docs/evidence/session-9/manifest.md"
+      ],
       "note": "Durable organization provisioning, provisioner process, drift sweep and review alert; AC-1.09 drill on staging (product code, real stores; staging)."
     },
     {
       "id": "AC-1.06",
       "status": "PASS",
-      "evidence": ["docs/evidence/session-3/run-3.8.md", "docs/evidence/session-8/manifest.md"],
+      "evidence": [
+        "docs/evidence/session-3/run-3.8.md",
+        "docs/evidence/session-8/manifest.md",
+        "docs/evidence/session-9/manifest.md"
+      ],
       "note": "Durable organization provisioning, provisioner process, drift sweep and review alert; AC-1.09 drill on staging (product code, real stores; staging)."
     },
     {
       "id": "AC-1.09",
       "status": "PASS",
-      "evidence": ["docs/evidence/session-3/run-3.8.md", "docs/evidence/session-8/manifest.md"],
+      "evidence": [
+        "docs/evidence/session-3/run-3.8.md",
+        "docs/evidence/session-8/manifest.md",
+        "docs/evidence/session-9/manifest.md"
+      ],
       "note": "Durable organization provisioning, provisioner process, drift sweep and review alert; AC-1.09 drill on staging (product code, real stores; staging)."
     },
     {
       "id": "PO-4",
       "status": "PASS",
-      "evidence": ["docs/evidence/session-3/run-3.8.md", "docs/evidence/session-8/manifest.md"],
+      "evidence": [
+        "docs/evidence/session-3/run-3.8.md",
+        "docs/evidence/session-8/manifest.md",
+        "docs/evidence/session-9/manifest.md"
+      ],
       "note": "Durable organization provisioning, provisioner process, drift sweep and review alert; AC-1.09 drill on staging (product code, real stores; staging)."
     },
     {
       "id": "FR-1.14",
       "status": "PASS",
-      "evidence": ["docs/evidence/session-3/run-3.9.md", "docs/evidence/session-8/manifest.md"],
+      "evidence": [
+        "docs/evidence/session-3/run-3.9.md",
+        "docs/evidence/session-8/manifest.md",
+        "docs/evidence/session-9/manifest.md"
+      ],
       "note": "Projects and environments as replayable operations, keyset lists, readiness; a pending environment cannot issue credentials is proven at the state gate and again on the real route by Run 5.1 (product code, real stores)."
     },
     {
       "id": "FR-1.15",
       "status": "PASS",
-      "evidence": ["docs/evidence/session-3/run-3.9.md", "docs/evidence/session-8/manifest.md"],
+      "evidence": [
+        "docs/evidence/session-3/run-3.9.md",
+        "docs/evidence/session-8/manifest.md",
+        "docs/evidence/session-9/manifest.md"
+      ],
       "note": "Projects and environments as replayable operations, keyset lists, readiness; a pending environment cannot issue credentials is proven at the state gate and again on the real route by Run 5.1 (product code, real stores)."
     },
     {
       "id": "FR-1.16",
       "status": "PASS",
-      "evidence": ["docs/evidence/session-3/run-3.9.md", "docs/evidence/session-8/manifest.md"],
+      "evidence": [
+        "docs/evidence/session-3/run-3.9.md",
+        "docs/evidence/session-8/manifest.md",
+        "docs/evidence/session-9/manifest.md"
+      ],
       "note": "Projects and environments as replayable operations, keyset lists, readiness; a pending environment cannot issue credentials is proven at the state gate and again on the real route by Run 5.1 (product code, real stores)."
     },
     {
       "id": "FR-1.19",
       "status": "PASS",
-      "evidence": ["docs/evidence/session-3/run-3.9.md", "docs/evidence/session-8/manifest.md"],
+      "evidence": [
+        "docs/evidence/session-3/run-3.9.md",
+        "docs/evidence/session-8/manifest.md",
+        "docs/evidence/session-9/manifest.md"
+      ],
       "note": "Projects and environments as replayable operations, keyset lists, readiness; a pending environment cannot issue credentials is proven at the state gate and again on the real route by Run 5.1 (product code, real stores)."
     },
     {
       "id": "AC-1.10",
       "status": "PASS",
-      "evidence": ["docs/evidence/session-3/run-3.9.md", "docs/evidence/session-8/manifest.md"],
+      "evidence": [
+        "docs/evidence/session-3/run-3.9.md",
+        "docs/evidence/session-8/manifest.md",
+        "docs/evidence/session-9/manifest.md"
+      ],
       "note": "Projects and environments as replayable operations, keyset lists, readiness; a pending environment cannot issue credentials is proven at the state gate and again on the real route by Run 5.1 (product code, real stores)."
     },
     {
       "id": "FR-1.20",
       "status": "PASS",
-      "evidence": ["docs/evidence/session-4/run-4.2.md", "docs/evidence/session-8/manifest.md"],
+      "evidence": [
+        "docs/evidence/session-4/run-4.2.md",
+        "docs/evidence/session-8/manifest.md",
+        "docs/evidence/session-9/manifest.md"
+      ],
       "note": "Values: empty, 64 KiB of multibyte text, CR/LF/tab, four-byte characters stored exactly; oversize, NUL and lone surrogates refused before any effect and never echoed (product code, real stores; staging create)."
     },
     {
       "id": "FR-1.24",
       "status": "PASS",
-      "evidence": ["docs/evidence/session-4/run-4.2.md", "docs/evidence/session-8/manifest.md"],
+      "evidence": [
+        "docs/evidence/session-4/run-4.2.md",
+        "docs/evidence/session-8/manifest.md",
+        "docs/evidence/session-9/manifest.md"
+      ],
       "note": "Create through the six-step protocol: one version carrying the operation id, index, version event, audit intent and success; replay, races on two processes, authorization and state refusals (product code, real stores; staging through the public name)."
     },
     {
       "id": "FR-1.25",
       "status": "PASS",
-      "evidence": ["docs/evidence/session-4/run-4.2.md", "docs/evidence/session-8/manifest.md"],
+      "evidence": [
+        "docs/evidence/session-4/run-4.2.md",
+        "docs/evidence/session-8/manifest.md",
+        "docs/evidence/session-9/manifest.md"
+      ],
       "note": "Update with expected version and state tag: version_conflict with details, backend moved underneath goes to review, capacity 507, admission recheck (product code, real stores; staging through the public name)."
     },
     {
       "id": "AC-1.14",
       "status": "PASS",
-      "evidence": ["docs/evidence/session-4/run-4.2.md", "docs/evidence/session-8/manifest.md"],
+      "evidence": [
+        "docs/evidence/session-4/run-4.2.md",
+        "docs/evidence/session-8/manifest.md",
+        "docs/evidence/session-9/manifest.md"
+      ],
       "note": "Two concurrent updates with one version and tag: exactly one 200 and one 409 version_conflict, one new version and one audited change, twenty rounds on two API processes (local stack)."
     },
     {
       "id": "FR-1.21",
       "status": "PASS",
-      "evidence": ["docs/evidence/session-4/run-4.3.md", "docs/evidence/session-8/manifest.md"],
+      "evidence": [
+        "docs/evidence/session-4/run-4.3.md",
+        "docs/evidence/session-8/manifest.md",
+        "docs/evidence/session-9/manifest.md"
+      ],
       "note": "Metadata from the index: pages under a signed cursor with the metadata generation, bytewise order, literal prefixes, deleted and in-review names with their state; never OpenBao, never a value (product code, real stores)."
     },
     {
       "id": "FR-1.26",
       "status": "PASS",
-      "evidence": ["docs/evidence/session-4/run-4.3.md", "docs/evidence/session-8/manifest.md"],
+      "evidence": [
+        "docs/evidence/session-4/run-4.3.md",
+        "docs/evidence/session-8/manifest.md",
+        "docs/evidence/session-9/manifest.md"
+      ],
       "note": "History: OpenBao metadata joined with version events — who wrote each version and its last delete or undelete, twenty at most, no value; delete/undelete/restore made by the fixture until Run 4.4 adds their routes (product code, real stores)."
     },
     {
       "id": "AC-1.12",
       "status": "PASS",
-      "evidence": ["docs/evidence/session-4/run-4.3.md", "docs/evidence/session-8/manifest.md"],
+      "evidence": [
+        "docs/evidence/session-4/run-4.3.md",
+        "docs/evidence/session-8/manifest.md",
+        "docs/evidence/session-9/manifest.md"
+      ],
       "note": "Boundary names (1 and 128 characters) and values (empty, 65,536 bytes of multibyte text, CR/LF/tab, four-byte characters) are written and read back with equal digests through create and reveal (product code, real stores)."
     },
     {
       "id": "FR-1.27",
       "status": "PASS",
-      "evidence": ["docs/evidence/session-4/run-4.4.md", "docs/evidence/session-8/manifest.md"],
+      "evidence": [
+        "docs/evidence/session-4/run-4.4.md",
+        "docs/evidence/session-8/manifest.md",
+        "docs/evidence/session-9/manifest.md"
+      ],
       "note": "Soft delete of the current version under the protocol: state deleted, new tag, byte count kept, counters reduced; reveal, update and create refused after it; replay, races and a delayed answer (product code, real stores; staging with Run 4.5)."
     },
     {
       "id": "FR-1.28",
       "status": "PASS",
-      "evidence": ["docs/evidence/session-4/run-4.4.md", "docs/evidence/session-8/manifest.md"],
+      "evidence": [
+        "docs/evidence/session-4/run-4.4.md",
+        "docs/evidence/session-8/manifest.md",
+        "docs/evidence/session-9/manifest.md"
+      ],
       "note": "Undelete brings the same version back with a new tag and equal digest; capacity from the kept byte count before any effect (product code, real stores)."
     },
     {
       "id": "FR-1.29",
       "status": "PASS",
-      "evidence": ["docs/evidence/session-4/run-4.4.md", "docs/evidence/session-8/manifest.md"],
+      "evidence": [
+        "docs/evidence/session-4/run-4.4.md",
+        "docs/evidence/session-8/manifest.md",
+        "docs/evidence/session-9/manifest.md"
+      ],
       "note": "Restore writes an older version as a new one with cas = current, also over a deleted current; deleted or trimmed sources are 409; the source value appears in no database row (product code, real stores)."
     },
     {
       "id": "FR-1.32",
       "status": "PASS",
-      "evidence": ["docs/evidence/session-4/run-4.4.md", "docs/evidence/session-8/manifest.md"],
+      "evidence": [
+        "docs/evidence/session-4/run-4.4.md",
+        "docs/evidence/session-8/manifest.md",
+        "docs/evidence/session-9/manifest.md"
+      ],
       "note": "No route and no runtime client method destroys a version or deletes metadata (unit); the runtime policy is denied kv/destroy and metadata deletion on real OpenBao (authority matrix, Run 2.1)."
     },
     {
       "id": "AC-1.15",
       "status": "PASS",
-      "evidence": ["docs/evidence/session-4/run-4.4.md", "docs/evidence/session-8/manifest.md"],
+      "evidence": [
+        "docs/evidence/session-4/run-4.4.md",
+        "docs/evidence/session-8/manifest.md",
+        "docs/evidence/session-9/manifest.md"
+      ],
       "note": "Lifecycle mutations raced across two API processes: delete × delete, delete × update, undelete × restore — exactly one 200 and one 409, exactly one backend change (local stack)."
     },
     {
       "id": "PO-7",
       "status": "PASS",
-      "evidence": ["docs/evidence/session-4/run-4.4.md", "docs/evidence/session-8/manifest.md"],
+      "evidence": [
+        "docs/evidence/session-4/run-4.4.md",
+        "docs/evidence/session-8/manifest.md",
+        "docs/evidence/session-9/manifest.md"
+      ],
       "note": "State tags and cas under the protocol: stale tags change nothing, the backend is checked against the index before any effect, delayed answers become uncertain with the key in review, replays write nothing twice (product code, real stores)."
     },
     {
       "id": "FR-1.30",
       "status": "PASS",
-      "evidence": ["docs/evidence/session-4/run-4.5.md", "docs/evidence/session-8/manifest.md"],
+      "evidence": [
+        "docs/evidence/session-4/run-4.5.md",
+        "docs/evidence/session-8/manifest.md",
+        "docs/evidence/session-9/manifest.md"
+      ],
       "note": "Concurrency with uncertain outcomes: the stale-work sweep moves executing operations to uncertain and accepted ones to rejected, one audit row each under two sweepers; a swept executor can neither finalize nor dispatch; the slot blocks the environment until settled (product code, real stores)."
     },
     {
       "id": "FR-1.31",
       "status": "PASS",
-      "evidence": ["docs/evidence/session-4/run-4.5.md", "docs/evidence/session-8/manifest.md"],
+      "evidence": [
+        "docs/evidence/session-4/run-4.5.md",
+        "docs/evidence/session-8/manifest.md",
+        "docs/evidence/session-9/manifest.md"
+      ],
       "note": "Unknown result: a landed write is reconciled as success without exclusion; a not-landed write is rejected only after executor exclusion; deletes and undeletes always need exclusion; evidence conflicts can be closed as unknown (product code, real stores; staging drill)."
     },
     {
       "id": "FR-1.88",
       "status": "PASS",
-      "evidence": ["docs/evidence/session-4/run-4.5.md", "docs/evidence/session-8/manifest.md"],
+      "evidence": [
+        "docs/evidence/session-4/run-4.5.md",
+        "docs/evidence/session-8/manifest.md",
+        "docs/evidence/session-9/manifest.md"
+      ],
       "note": "Reconciliation: ops operations, reconcile-operation and reconcile-environment; an environment's index rebuilt from OpenBao (300 names within 60 s), a review ended, refused while an operation is unresolved or the lock is held (product code, real stores)."
     },
     {
       "id": "AC-1.16",
       "status": "PASS",
-      "evidence": ["docs/evidence/session-4/run-4.5.md", "docs/evidence/session-8/manifest.md"],
+      "evidence": [
+        "docs/evidence/session-4/run-4.5.md",
+        "docs/evidence/session-8/manifest.md",
+        "docs/evidence/session-9/manifest.md"
+      ],
       "note": "A timeout after a real backend change gives uncertain with its operation id, the key under review and the slot held, an operations_unresolved alert, and a settlement by the operator (local stack; staging drill with OpenBao paused)."
     },
     {
       "id": "AC-1.38",
       "status": "PASS",
-      "evidence": ["docs/evidence/session-4/run-4.6.md", "docs/evidence/session-8/manifest.md"],
+      "evidence": [
+        "docs/evidence/session-4/run-4.6.md",
+        "docs/evidence/session-8/manifest.md",
+        "docs/evidence/session-9/manifest.md"
+      ],
       "note": "Real API processes killed (SIGKILL) at each of the six protocol points for each of the five secret actions: truthful answers and replays at every stage, at most one backend change, the index equal to the backend after settlement (product code, real stores)."
     },
     {
       "id": "FR-1.82",
       "status": "PASS",
-      "evidence": ["docs/evidence/session-4/run-4.6.md", "docs/evidence/session-8/manifest.md"],
+      "evidence": [
+        "docs/evidence/session-4/run-4.6.md",
+        "docs/evidence/session-8/manifest.md",
+        "docs/evidence/session-9/manifest.md"
+      ],
       "note": "Durable operation lifecycle under crashes: accepted rows swept to rejected, executing rows to uncertain, settled by the operator; replays tell the truth at every stage (product code, real stores)."
     },
     {
@@ -527,55 +779,91 @@
     {
       "id": "FR-1.35",
       "status": "PASS",
-      "evidence": ["docs/evidence/session-4/run-4.7.md", "docs/evidence/session-8/manifest.md"],
+      "evidence": [
+        "docs/evidence/session-4/run-4.7.md",
+        "docs/evidence/session-8/manifest.md",
+        "docs/evidence/session-9/manifest.md"
+      ],
       "note": "Import preview: classification under the lock, values compared in memory only, nothing written; stored rows hold names, lines, classifications, versions and tags (product code, real stores)."
     },
     {
       "id": "FR-1.36",
       "status": "PASS",
-      "evidence": ["docs/evidence/session-4/run-4.7.md", "docs/evidence/session-8/manifest.md"],
+      "evidence": [
+        "docs/evidence/session-4/run-4.7.md",
+        "docs/evidence/session-8/manifest.md",
+        "docs/evidence/session-9/manifest.md"
+      ],
       "note": "Import apply and resume entry by entry through the mutation protocol; seven outcomes; partial when not every entry applied; resume never writes an entry twice."
     },
     {
       "id": "AC-1.39",
       "status": "PASS",
-      "evidence": ["docs/evidence/session-4/run-4.7.md", "docs/evidence/session-8/manifest.md"],
+      "evidence": [
+        "docs/evidence/session-4/run-4.7.md",
+        "docs/evidence/session-8/manifest.md",
+        "docs/evidence/session-9/manifest.md"
+      ],
       "note": "Import under faults: an unknown entry stops the import as uncertain and is settled through its child; a process killed between entries, inside an entry or before the finish leaves a truthful parent."
     },
     {
       "id": "PO-17",
       "status": "PASS",
-      "evidence": ["docs/evidence/session-4/run-4.7.md", "docs/evidence/session-8/manifest.md"],
+      "evidence": [
+        "docs/evidence/session-4/run-4.7.md",
+        "docs/evidence/session-8/manifest.md",
+        "docs/evidence/session-9/manifest.md"
+      ],
       "note": "Import is truthfully non-atomic: every entry has one of seven outcomes and a resumed import never applies an entry twice."
     },
     {
       "id": "FR-1.84",
       "status": "PASS",
-      "evidence": ["docs/evidence/session-4/run-4.8.md", "docs/evidence/session-8/manifest.md"],
+      "evidence": [
+        "docs/evidence/session-4/run-4.8.md",
+        "docs/evidence/session-8/manifest.md",
+        "docs/evidence/session-9/manifest.md"
+      ],
       "note": "Complete environment read under the lock: every live value of one generation or nothing; drift, review, slots, size, generation change and audit failure refuse the whole read (product code, real stores)."
     },
     {
       "id": "AC-1.41",
       "status": "PASS",
-      "evidence": ["docs/evidence/session-4/run-4.8.md", "docs/evidence/session-8/manifest.md"],
+      "evidence": [
+        "docs/evidence/session-4/run-4.8.md",
+        "docs/evidence/session-8/manifest.md",
+        "docs/evidence/session-9/manifest.md"
+      ],
       "note": "Race test: four writers on two processes, an import, four readers; every read equals the set of its generation exactly, five runs in a row."
     },
     {
       "id": "PO-19",
       "status": "PASS",
-      "evidence": ["docs/evidence/session-4/run-4.8.md", "docs/evidence/session-8/manifest.md"],
+      "evidence": [
+        "docs/evidence/session-4/run-4.8.md",
+        "docs/evidence/session-8/manifest.md",
+        "docs/evidence/session-9/manifest.md"
+      ],
       "note": "G-RESOLVE, human path; machine resolve is Run 5.1. A read racing multi-key changes returns one generation's set or fails as a whole."
     },
     {
       "id": "FR-1.37",
       "status": "PASS",
-      "evidence": ["docs/evidence/session-4/run-4.9.md", "docs/evidence/session-8/manifest.md"],
+      "evidence": [
+        "docs/evidence/session-4/run-4.9.md",
+        "docs/evidence/session-8/manifest.md",
+        "docs/evidence/session-9/manifest.md"
+      ],
       "note": "Export of an environment as a dotenv attachment: complete read under the lock, secret.export audited before the bytes, exact headers, no compression through the edge; 1,000 names of 7 MiB in at most 19.8 s on staging."
     },
     {
       "id": "AC-1.17",
       "status": "PASS",
-      "evidence": ["docs/evidence/session-4/run-4.9.md", "docs/evidence/session-8/manifest.md"],
+      "evidence": [
+        "docs/evidence/session-4/run-4.9.md",
+        "docs/evidence/session-8/manifest.md",
+        "docs/evidence/session-9/manifest.md"
+      ],
       "note": "Export → import → export is byte-identical with awkward values, on the local stack (12 values incl. 64 KiB) and on staging (20 names)."
     },
     {
@@ -614,7 +902,8 @@
       "evidence": [
         "docs/evidence/session-5/run-5.3.md",
         "docs/evidence/session-5/run-5.4.md",
-        "docs/evidence/session-8/manifest.md"
+        "docs/evidence/session-8/manifest.md",
+        "docs/evidence/session-9/manifest.md"
       ],
       "note": "Archive closes the scope first, revokes and verifies every credential, then says archived; an unfinished archive stays executing and the tick finishes it; transitions through one guarded function; local, fault table and staging (Run 5.4: both tokens refused, both accessors 400 on the host)."
     },
@@ -624,7 +913,8 @@
       "evidence": [
         "docs/evidence/session-5/run-5.3.md",
         "docs/evidence/session-5/run-5.4.md",
-        "docs/evidence/session-8/manifest.md"
+        "docs/evidence/session-8/manifest.md",
+        "docs/evidence/session-9/manifest.md"
       ],
       "note": "Reactivation reads only: machine policy and token role against the digest, names against the index, every credential revoked and each accessor 400; a failure changes nothing (503, rejected); no token comes back; local and staging (Run 5.4: old tokens still 401, a new token resolves)."
     },
@@ -634,7 +924,8 @@
       "evidence": [
         "docs/evidence/session-5/run-5.3.md",
         "docs/evidence/session-5/fault-table.md",
-        "docs/evidence/session-8/manifest.md"
+        "docs/evidence/session-8/manifest.md",
+        "docs/evidence/session-9/manifest.md"
       ],
       "note": "50 rounds of issuance racing an archive (both orders met) leave no usable token; 20 rounds of environment create racing a project archive never leave an active or pending environment under an archived project; three passes in a row."
     },
@@ -647,7 +938,11 @@
     {
       "id": "FR-1.44",
       "status": "PASS",
-      "evidence": ["docs/evidence/session-5/run-5.4.md", "docs/evidence/session-8/manifest.md"],
+      "evidence": [
+        "docs/evidence/session-5/run-5.4.md",
+        "docs/evidence/session-8/manifest.md",
+        "docs/evidence/session-9/manifest.md"
+      ],
       "note": "Machine keys and resolve: bearer authentication by lookup-self with the presented token, the catalog row and the path's own scope; reads made with the token itself; a dead token mid-read is 401 and closes nothing; current values only; local and on staging through the public name."
     },
     {
@@ -656,7 +951,8 @@
       "evidence": [
         "docs/evidence/session-5/run-5.4.md",
         "docs/evidence/session-5/native-scope.md",
-        "docs/evidence/session-8/manifest.md"
+        "docs/evidence/session-8/manifest.md",
+        "docs/evidence/session-9/manifest.md"
       ],
       "note": "The residual asserted as it is: an older undeleted version answers 200 directly in OpenBao with the machine token, no product request returns it; written in machine-credentials.md and D-42."
     },
@@ -666,14 +962,19 @@
       "evidence": [
         "docs/evidence/session-5/run-5.4.md",
         "docs/evidence/session-5/native-scope.md",
-        "docs/evidence/session-8/manifest.md"
+        "docs/evidence/session-8/manifest.md",
+        "docs/evidence/session-9/manifest.md"
       ],
       "note": "A product-issued token used directly against OpenBao: read and list of its own path and lookup-self only; every write, delete, other scope, token create, renew and system path denied with a root control; lookup-self answers in another namespace with the token's own record (finding, nothing readable)."
     },
     {
       "id": "AC-1.19",
       "status": "PASS",
-      "evidence": ["docs/evidence/session-5/run-5.4.md", "docs/evidence/session-8/manifest.md"],
+      "evidence": [
+        "docs/evidence/session-5/run-5.4.md",
+        "docs/evidence/session-8/manifest.md",
+        "docs/evidence/session-9/manifest.md"
+      ],
       "note": "resolve returns exactly the live set of one generation by digest, keys the live names; the reads use the presented token (API with a refused runtime identity still answers 200); selectors refused; on staging the digests equal the owner's export."
     },
     {
@@ -691,7 +992,11 @@
     {
       "id": "FR-1.79",
       "status": "PASS",
-      "evidence": ["docs/evidence/session-5/run-5.5.md", "docs/evidence/session-8/manifest.md"],
+      "evidence": [
+        "docs/evidence/session-5/run-5.5.md",
+        "docs/evidence/session-8/manifest.md",
+        "docs/evidence/session-9/manifest.md"
+      ],
       "note": "HTTP URL, untrusted/other-host/expired certificates, unsafe runtime settings, redirects and another API major each fail with their exit code before any credential is sent; Linux evidence (AC-1.37 on the four runners in Run 5.7)."
     },
     {
@@ -715,13 +1020,21 @@
     {
       "id": "AC-1.20",
       "status": "PASS",
-      "evidence": ["docs/evidence/session-5/run-5.6.md", "docs/evidence/session-8/manifest.md"],
+      "evidence": [
+        "docs/evidence/session-5/run-5.6.md",
+        "docs/evidence/session-8/manifest.md",
+        "docs/evidence/session-9/manifest.md"
+      ],
       "note": "Argument vectors, collisions, stdin, size limits, pre-spawn cancellation and signals without double forwarding on Linux; the Next.js/FastAPI fixtures are Run 5.8 and the four platforms Run 5.7."
     },
     {
       "id": "AC-1.21",
       "status": "PASS",
-      "evidence": ["docs/evidence/session-5/run-5.6.md", "docs/evidence/session-8/manifest.md"],
+      "evidence": [
+        "docs/evidence/session-5/run-5.6.md",
+        "docs/evidence/session-8/manifest.md",
+        "docs/evidence/session-9/manifest.md"
+      ],
       "note": "Export target safety on Linux: existing file, link at the target or in the path, group-writable directory, umask 000 and 277, an incomplete response creates no file, cleanup by identity."
     },
     {
@@ -733,7 +1046,11 @@
     {
       "id": "AC-1.37",
       "status": "PASS",
-      "evidence": ["docs/evidence/session-5/cli-matrix.md", "docs/evidence/session-8/manifest.md"],
+      "evidence": [
+        "docs/evidence/session-5/cli-matrix.md",
+        "docs/evidence/session-8/manifest.md",
+        "docs/evidence/session-9/manifest.md"
+      ],
       "note": "The connection refusals pass from the release on all four targets (run 43857539084)."
     },
     {
@@ -742,14 +1059,19 @@
       "evidence": [
         "docs/evidence/session-5/cli-matrix.md",
         "docs/evidence/session-5/run-5.8.md",
-        "docs/evidence/session-8/manifest.md"
+        "docs/evidence/session-8/manifest.md",
+        "docs/evidence/session-9/manifest.md"
       ],
       "note": "Installer, launcher and the full suite on all four targets from the release (run 43857539084); credential setup and replacement rehearsed against staging (Run 5.8, re-run at the gate)."
     },
     {
       "id": "AGENT-B1",
       "status": "PASS",
-      "evidence": ["docs/evidence/session-5/cli-matrix.md", "docs/evidence/session-8/manifest.md"],
+      "evidence": [
+        "docs/evidence/session-5/cli-matrix.md",
+        "docs/evidence/session-8/manifest.md",
+        "docs/evidence/session-9/manifest.md"
+      ],
       "note": "D-44 decided (the bundle on pinned Node); D-24's nine requirements pass on all four targets (run 43857539084)."
     },
     {
@@ -761,25 +1083,41 @@
     {
       "id": "PO-20",
       "status": "PASS",
-      "evidence": ["docs/evidence/session-5/run-5.8.md", "docs/evidence/session-8/manifest.md"],
+      "evidence": [
+        "docs/evidence/session-5/run-5.8.md",
+        "docs/evidence/session-8/manifest.md",
+        "docs/evidence/session-9/manifest.md"
+      ],
       "note": "Credential setup and replacement (rotation, after a restore) for a workstation and a first deployment, Next.js and FastAPI fixtures, staging; the four-platform part is PO-8 (macOS open)."
     },
     {
       "id": "AC-1.42",
       "status": "PASS",
-      "evidence": ["docs/evidence/session-5/run-5.8.md", "docs/evidence/session-8/manifest.md"],
+      "evidence": [
+        "docs/evidence/session-5/run-5.8.md",
+        "docs/evidence/session-8/manifest.md",
+        "docs/evidence/session-9/manifest.md"
+      ],
       "note": "The synthetic consumer rehearsal of D-03: installation, endpoint check, protected token supply, launch, rotation and the restore replacement against staging."
     },
     {
       "id": "FR-1.52",
       "status": "PASS",
-      "evidence": ["docs/evidence/session-5/run-5.9.md", "docs/evidence/session-8/manifest.md"],
+      "evidence": [
+        "docs/evidence/session-5/run-5.9.md",
+        "docs/evidence/session-8/manifest.md",
+        "docs/evidence/session-9/manifest.md"
+      ],
       "note": "OpenAPI 3.1 from the runtime schemas, served reduced to the handled routes (each reaches a handler); breaking changes against baseline-v1.json fail contracts:check. The auth-route inventory is Session 3's auth:contract:check."
     },
     {
       "id": "FR-1.53",
       "status": "PASS",
-      "evidence": ["docs/evidence/session-5/run-5.9.md", "docs/evidence/session-8/manifest.md"],
+      "evidence": [
+        "docs/evidence/session-5/run-5.9.md",
+        "docs/evidence/session-8/manifest.md",
+        "docs/evidence/session-9/manifest.md"
+      ],
       "note": "OpenBao-shaped aliases, method override, X-Vault-Token and X-Vault-Namespace reach no handler and no OpenBao audit entry; the document lists no token administration."
     },
     {
@@ -788,14 +1126,19 @@
       "evidence": [
         "docs/evidence/session-5/run-5.9.md",
         "docs/evidence/session-5/reference-capture.json",
-        "docs/evidence/session-8/manifest.md"
+        "docs/evidence/session-8/manifest.md",
+        "docs/evidence/session-9/manifest.md"
       ],
       "note": "Document and read-only Scalar for a fully authenticated owner or admin; no execution, telemetry, CDN or third-party request in the captured browser session (D-45; Scalar kept)."
     },
     {
       "id": "AC-1.22",
       "status": "PASS",
-      "evidence": ["docs/evidence/session-5/run-5.9.md", "docs/evidence/session-8/manifest.md"],
+      "evidence": [
+        "docs/evidence/session-5/run-5.9.md",
+        "docs/evidence/session-8/manifest.md",
+        "docs/evidence/session-9/manifest.md"
+      ],
       "note": "OpenAPI matches validation; breaking change detected; the reference requires role and MFA and cannot execute or egress. The web mapping waits for Session 7."
     },
     {
@@ -804,32 +1147,49 @@
       "evidence": [
         "docs/evidence/session-5/run-5.9.md",
         "docs/evidence/session-5/reference-capture.json",
-        "docs/evidence/session-8/manifest.md"
+        "docs/evidence/session-8/manifest.md",
+        "docs/evidence/session-9/manifest.md"
       ],
       "note": "Local Scalar under the page's CSP in Chromium: zero violations, zero third-party attempts; the asset under Node's permission model loads with a covering grant, null when refused. Staging at the gate."
     },
     {
       "id": "FR-1.56",
       "status": "PASS",
-      "evidence": ["docs/evidence/session-6/run-6.1.md", "docs/evidence/session-8/manifest.md"],
+      "evidence": [
+        "docs/evidence/session-6/run-6.1.md",
+        "docs/evidence/session-8/manifest.md",
+        "docs/evidence/session-9/manifest.md"
+      ],
       "note": "Audit coverage is a table checked both ways; one journey leaves a row for every action whose writer exists (PENDING_WRITERS for Runs 6.2-6.9); api rows carry their response's request id."
     },
     {
       "id": "FR-1.58",
       "status": "PASS",
-      "evidence": ["docs/evidence/session-6/run-6.1.md", "docs/evidence/session-8/manifest.md"],
+      "evidence": [
+        "docs/evidence/session-6/run-6.1.md",
+        "docs/evidence/session-8/manifest.md",
+        "docs/evidence/session-9/manifest.md"
+      ],
       "note": "Owners and admins read the tenant trail and current members' account rows; no foreign, global or anonymous row; filters, stable keyset pages, bound cursors; invalid details served empty and logged."
     },
     {
       "id": "FR-1.59",
       "status": "PASS",
-      "evidence": ["docs/evidence/session-6/run-6.1.md", "docs/evidence/session-8/manifest.md"],
+      "evidence": [
+        "docs/evidence/session-6/run-6.1.md",
+        "docs/evidence/session-8/manifest.md",
+        "docs/evidence/session-9/manifest.md"
+      ],
       "note": "The request id is the API's own and is on every audit row of a request; an incoming x-request-id is neither echoed nor logged; activity items carry the operation's current state."
     },
     {
       "id": "FR-1.80",
       "status": "PASS",
-      "evidence": ["docs/evidence/session-6/run-6.1.md", "docs/evidence/session-8/manifest.md"],
+      "evidence": [
+        "docs/evidence/session-6/run-6.1.md",
+        "docs/evidence/session-8/manifest.md",
+        "docs/evidence/session-9/manifest.md"
+      ],
       "note": "Canary sweep over the API, PostgreSQL and OpenBao logs, audit rows and error bodies, with controls; log fields checked by format; no diagnostic flags; core dumps off."
     },
     {
@@ -841,25 +1201,41 @@
     {
       "id": "FR-1.60",
       "status": "PASS",
-      "evidence": ["docs/evidence/session-6/run-6.3.md", "docs/evidence/session-8/manifest.md"],
+      "evidence": [
+        "docs/evidence/session-6/run-6.3.md",
+        "docs/evidence/session-8/manifest.md",
+        "docs/evidence/session-9/manifest.md"
+      ],
       "note": "Rate limits as pipeline steps (source before the body, session, credential, reveal/import/export/issue per person, machine misses per source); 429 with retry-after; a counter that cannot be written is 503; across two processes; locally."
     },
     {
       "id": "FR-1.61",
       "status": "PASS",
-      "evidence": ["docs/evidence/session-6/run-6.3.md", "docs/evidence/session-8/manifest.md"],
+      "evidence": [
+        "docs/evidence/session-6/run-6.3.md",
+        "docs/evidence/session-8/manifest.md",
+        "docs/evidence/session-9/manifest.md"
+      ],
       "note": "Disk pressure: 507 {limit: disk} on expanding mutations, reduction and sign-in continue, no record 503, real exhaustion 503 without value; locally and on staging (limits.staging.test.ts)."
     },
     {
       "id": "AC-1.24",
       "status": "PASS",
-      "evidence": ["docs/evidence/session-6/run-6.3.md", "docs/evidence/session-8/manifest.md"],
+      "evidence": [
+        "docs/evidence/session-6/run-6.3.md",
+        "docs/evidence/session-8/manifest.md",
+        "docs/evidence/session-9/manifest.md"
+      ],
       "note": "Rate, concurrency, large-request and disk limits reject before exhaustion; locally and on staging."
     },
     {
       "id": "FR-1.57",
       "status": "PASS",
-      "evidence": ["docs/evidence/session-6/run-6.4.md", "docs/evidence/session-8/manifest.md"],
+      "evidence": [
+        "docs/evidence/session-6/run-6.4.md",
+        "docs/evidence/session-8/manifest.md",
+        "docs/evidence/session-9/manifest.md"
+      ],
       "note": "OpenBao's audit device is part of readiness: an audited call per 15 s; audit_failing opened, delivered and resolved on staging (alerts.md)."
     },
     {
@@ -877,7 +1253,11 @@
     {
       "id": "FR-1.95",
       "status": "PASS",
-      "evidence": ["docs/evidence/session-6/run-6.4.md", "docs/evidence/session-8/manifest.md"],
+      "evidence": [
+        "docs/evidence/session-6/run-6.4.md",
+        "docs/evidence/session-8/manifest.md",
+        "docs/evidence/session-9/manifest.md"
+      ],
       "note": "The private operator status view (host.ts status), every line with its observation time; no diagnostic route on the API (status.staging.test.ts)."
     },
     {
@@ -889,7 +1269,11 @@
     {
       "id": "AC-1.23",
       "status": "PASS",
-      "evidence": ["docs/evidence/session-6/run-6.4.md", "docs/evidence/session-8/manifest.md"],
+      "evidence": [
+        "docs/evidence/session-6/run-6.4.md",
+        "docs/evidence/session-8/manifest.md",
+        "docs/evidence/session-9/manifest.md"
+      ],
       "note": "Readiness fails on an unwritable audit table or an audited OpenBao call that cannot be audited (readiness.test.ts); the body names no cause."
     },
     {
@@ -901,13 +1285,21 @@
     {
       "id": "AC-1.49",
       "status": "PASS",
-      "evidence": ["docs/evidence/session-6/run-6.4.md", "docs/evidence/session-8/manifest.md"],
+      "evidence": [
+        "docs/evidence/session-6/run-6.4.md",
+        "docs/evidence/session-8/manifest.md",
+        "docs/evidence/session-9/manifest.md"
+      ],
       "note": "The operator status view shows each check with its time and marks a stale or missing one unknown; no secret path, token or address in it."
     },
     {
       "id": "PO-23",
       "status": "PASS",
-      "evidence": ["docs/evidence/session-6/run-6.4.md", "docs/evidence/session-8/manifest.md"],
+      "evidence": [
+        "docs/evidence/session-6/run-6.4.md",
+        "docs/evidence/session-8/manifest.md",
+        "docs/evidence/session-9/manifest.md"
+      ],
       "note": "Who watches the Worker: probe-watch.yml every 15 minutes; proven locally with the probe's cron removed. The scheduled Actions run starts after the merge to main."
     },
     {
@@ -919,7 +1311,11 @@
     {
       "id": "AC-1.27",
       "status": "PASS",
-      "evidence": ["docs/evidence/session-6/run-6.5.md", "docs/evidence/session-8/manifest.md"],
+      "evidence": [
+        "docs/evidence/session-6/run-6.5.md",
+        "docs/evidence/session-8/manifest.md",
+        "docs/evidence/session-9/manifest.md"
+      ],
       "note": "Pairs crossed by an access reduction are ineligible; an eligible pair restores whole (compete 20/20, staging restore on the workstation)."
     },
     {
@@ -967,19 +1363,31 @@
     {
       "id": "FR-1.73",
       "status": "PASS",
-      "evidence": ["docs/evidence/session-6/run-6.9.md", "docs/evidence/session-8/manifest.md"],
+      "evidence": [
+        "docs/evidence/session-6/run-6.9.md",
+        "docs/evidence/session-8/manifest.md",
+        "docs/evidence/session-9/manifest.md"
+      ],
       "note": "A host release is built once on a clean clone: three images with the commit's build id, no npm/npx/corepack, scanned as the archives that ship (history, dependencies, images); release.json and SHA256SUMS only after every scan passes; published as host-vX.Y.Z (D-57)."
     },
     {
       "id": "FR-1.74",
       "status": "PASS",
-      "evidence": ["docs/evidence/session-6/run-6.9.md", "docs/evidence/session-8/manifest.md"],
+      "evidence": [
+        "docs/evidence/session-6/run-6.9.md",
+        "docs/evidence/session-8/manifest.md",
+        "docs/evidence/session-9/manifest.md"
+      ],
       "note": "host.ts deploy promotes a release through the closed gate with the owner's journey and a deploy report, resumes a stopped deploy, and rolls back by deploying the previous release; staging converted to gate v2 and went forward, back and forward again (deploy.staging.test.ts); runbook deploy.md."
     },
     {
       "id": "AC-1.32",
       "status": "PASS",
-      "evidence": ["docs/evidence/session-6/run-6.9.md", "docs/evidence/session-8/manifest.md"],
+      "evidence": [
+        "docs/evidence/session-6/run-6.9.md",
+        "docs/evidence/session-8/manifest.md",
+        "docs/evidence/session-9/manifest.md"
+      ],
       "note": "The release build refuses a failing scan and writes no release.json (host-build.test.ts); the scanners' self-test detects the seeded secret and the seeded vulnerable dependency (Session 1 fixtures); images are scanned as the archives that ship, with no seeded image."
     },
     {
@@ -988,7 +1396,8 @@
       "evidence": [
         "docs/evidence/session-6/run-6.8.md",
         "docs/evidence/session-6/drill.json",
-        "docs/evidence/session-8/manifest.md"
+        "docs/evidence/session-8/manifest.md",
+        "docs/evidence/session-9/manifest.md"
       ],
       "note": "The clean-host drill: the restored host stayed closed + verifying until a report with every check ok opened it; open without a report, with a report older than 30 min and with another incarnation's report were refused (D-56)."
     },
@@ -998,7 +1407,8 @@
       "evidence": [
         "docs/evidence/session-6/run-6.8.md",
         "docs/evidence/session-6/drill.json",
-        "docs/evidence/session-8/manifest.md"
+        "docs/evidence/session-8/manifest.md",
+        "docs/evidence/session-9/manifest.md"
       ],
       "note": "A stale pair: after P the owner reset (password, TOTP, codes, link used), a session signed out, a token revoked, the admin removed, a secret and a token added; on the restored host all nine old credentials answered 401 and the after-P secret is absent (D-56)."
     },
@@ -1008,7 +1418,8 @@
       "evidence": [
         "docs/evidence/session-6/run-6.8.md",
         "docs/evidence/session-6/drill.json",
-        "docs/evidence/session-8/manifest.md"
+        "docs/evidence/session-8/manifest.md",
+        "docs/evidence/session-9/manifest.md"
       ],
       "note": "Recovered on a reinstalled VPS from R2 and the custody set alone (pair by listing, trust anchor, backup password, custody root, KMS certificate under staging's domain) while staging was fenced; restore.md's Before is the full list (D-56)."
     },
@@ -1018,14 +1429,19 @@
       "evidence": [
         "docs/evidence/session-6/run-6.8.md",
         "docs/evidence/session-6/drill.json",
-        "docs/evidence/session-8/manifest.md"
+        "docs/evidence/session-8/manifest.md",
+        "docs/evidence/session-9/manifest.md"
       ],
       "note": "The paired capture P restored on a clean host: signature, digests, Restic check, seal-key check, pg_restore, the snapshot; 50 secrets revealed with their digests; timed (drill.json). A pair taken on the restored host is not proven (no pairs/drill/ bucket)."
     },
     {
       "id": "FR-1.75",
       "status": "PASS",
-      "evidence": ["docs/evidence/session-6/run-6.10.md", "docs/evidence/session-8/manifest.md"],
+      "evidence": [
+        "docs/evidence/session-6/run-6.10.md",
+        "docs/evidence/session-8/manifest.md",
+        "docs/evidence/session-9/manifest.md"
+      ],
       "note": "docs/runbooks/known-limits.md: what the service does not do, each with where it was measured or decided; one runbook section per probe condition (alerts.md)."
     },
     {
@@ -1034,7 +1450,8 @@
       "evidence": [
         "docs/evidence/session-6/run-6.10.md",
         "docs/evidence/session-6/alerts.md",
-        "docs/evidence/session-8/manifest.md"
+        "docs/evidence/session-8/manifest.md",
+        "docs/evidence/session-9/manifest.md"
       ],
       "note": "Every probe condition seen to fire and resolve on staging with a dated delivery line, and a runbook section (Means, Check, Fix, Confirm, a command) kept equal to CONDITIONS by tests/unit/runbooks/alerts.test.ts; links and commands of every runbook checked (P-130)."
     },
@@ -1047,31 +1464,51 @@
     {
       "id": "AC-1.46",
       "status": "PASS",
-      "evidence": ["docs/evidence/session-7/run-7.3.md", "docs/evidence/session-8/manifest.md"],
+      "evidence": [
+        "docs/evidence/session-7/run-7.3.md",
+        "docs/evidence/session-8/manifest.md",
+        "docs/evidence/session-9/manifest.md"
+      ],
       "note": "Active, pending, archived, revoking and review resources shown with counts, times and the actions their state allows; a member is denied and organization B gets the hidden 404. FR-1.94's part is Run 7.8's."
     },
     {
       "id": "FR-1.22",
       "status": "PASS",
-      "evidence": ["docs/evidence/session-7/run-7.4.md", "docs/evidence/session-8/manifest.md"],
+      "evidence": [
+        "docs/evidence/session-7/run-7.4.md",
+        "docs/evidence/session-8/manifest.md",
+        "docs/evidence/session-9/manifest.md"
+      ],
       "note": "Masked until an explicit Reveal; the value is held only by the displaying component and is gone after 30 s, on hide, on a change of address and at sign-out; no secret-bearing route goes through the query cache (D-60). Local browser proof over real OpenBao; a historical version's reveal is Run 7.5's and the storage scan Run 7.10's."
     },
     {
       "id": "FR-1.23",
       "status": "PASS",
-      "evidence": ["docs/evidence/session-7/run-7.4.md", "docs/evidence/session-8/manifest.md"],
+      "evidence": [
+        "docs/evidence/session-7/run-7.4.md",
+        "docs/evidence/session-8/manifest.md",
+        "docs/evidence/session-9/manifest.md"
+      ],
       "note": "Copy is an explicit button; the page then says the clipboard is outside MyKey and the copy cannot be taken back; no value in a notice or an error text."
     },
     {
       "id": "FR-1.91",
       "status": "PASS",
-      "evidence": ["docs/evidence/session-7/run-7.7.md", "docs/evidence/session-8/manifest.md"],
+      "evidence": [
+        "docs/evidence/session-7/run-7.7.md",
+        "docs/evidence/session-8/manifest.md",
+        "docs/evidence/session-9/manifest.md"
+      ],
       "note": "The credentials screen and credentials.summary: name, scope, effective expiry, issuer, state, last use only when known, the seven-day warning as text, the token once through the forgetting holder, the lost-delivery explanation, revocation by typed name and fixed replacement guidance. Local browser proof over real OpenBao; the staging demonstration is the gate's."
     },
     {
       "id": "AC-1.47",
       "status": "PASS",
-      "evidence": ["docs/evidence/session-7/run-7.7.md", "docs/evidence/session-8/manifest.md"],
+      "evidence": [
+        "docs/evidence/session-7/run-7.7.md",
+        "docs/evidence/session-8/manifest.md",
+        "docs/evidence/session-9/manifest.md"
+      ],
       "note": "Every credential state issued through the product and shown; a revocation in the page is followed by machine.keys refusing the token; no token is shown twice. Local proof."
     },
     {
@@ -1089,7 +1526,11 @@
     {
       "id": "AC-1.48",
       "status": "PASS",
-      "evidence": ["docs/evidence/session-7/run-7.8.md", "docs/evidence/session-8/manifest.md"],
+      "evidence": [
+        "docs/evidence/session-7/run-7.8.md",
+        "docs/evidence/session-8/manifest.md",
+        "docs/evidence/session-9/manifest.md"
+      ],
       "note": "A delayed write, an unknown issuance and an interrupted import forced through the fixtures' fault hooks and shown as executing then succeeded, needs review with uncertain, and awaiting input with the way to resume; ids and operator escalation shown, no retry. Local proof; the staging demonstration is the gate's."
     },
     {
@@ -1101,91 +1542,139 @@
     {
       "id": "FR-1.76",
       "status": "PASS",
-      "evidence": ["docs/evidence/session-7/run-7.9.md", "docs/evidence/session-8/manifest.md"],
+      "evidence": [
+        "docs/evidence/session-7/run-7.9.md",
+        "docs/evidence/session-8/manifest.md",
+        "docs/evidence/session-9/manifest.md"
+      ],
       "note": "Every cookie-authenticated change needs this origin on every route and auth path that is not a GET; no GET changes a row; the page and every asset carry the content policy; injected inline and third-party scripts and framing are refused by Chromium. Local proof."
     },
     {
       "id": "FR-1.89",
       "status": "PASS",
-      "evidence": ["docs/evidence/session-7/run-7.9.md", "docs/evidence/session-8/manifest.md"],
+      "evidence": [
+        "docs/evidence/session-7/run-7.9.md",
+        "docs/evidence/session-8/manifest.md",
+        "docs/evidence/session-9/manifest.md"
+      ],
       "note": "Every owner screen is reached from the navigation after a complete sign-in and shows the server's states in the server's words; no placeholder screen is left. Local browser proof."
     },
     {
       "id": "FR-1.93",
       "status": "PASS",
-      "evidence": ["docs/evidence/session-7/run-7.9.md", "docs/evidence/session-8/manifest.md"],
+      "evidence": [
+        "docs/evidence/session-7/run-7.9.md",
+        "docs/evidence/session-8/manifest.md",
+        "docs/evidence/session-9/manifest.md"
+      ],
       "note": "One table maps every code to what happened, the safe next step and the ids; the nine failure classes each show their own words in a real screen, never the code or the server's text; an unknown outcome never invites a second send. Five classes by the server's own answer, four answered by the harness with the contract's envelope."
     },
     {
       "id": "FR-1.96",
       "status": "PASS",
-      "evidence": ["docs/evidence/session-7/run-7.9.md", "docs/evidence/session-8/manifest.md"],
+      "evidence": [
+        "docs/evidence/session-7/run-7.9.md",
+        "docs/evidence/session-8/manifest.md",
+        "docs/evidence/session-9/manifest.md"
+      ],
       "note": "Labels on every control, errors tied to fields, Tab in reading order with a visible focus ring, dialogs that hold and return the focus, typed-name confirmation, words beside every colour, and no sideways movement at 360 pixels. Chromium only; no conformance to a standard is claimed."
     },
     {
       "id": "AC-1.29",
       "status": "PASS",
-      "evidence": ["docs/evidence/session-7/run-7.9.md", "docs/evidence/session-8/manifest.md"],
+      "evidence": [
+        "docs/evidence/session-7/run-7.9.md",
+        "docs/evidence/session-8/manifest.md",
+        "docs/evidence/session-9/manifest.md"
+      ],
       "note": "The page's part: errors read by the envelope's schema; a cut connection or a proxy's page is 'No usable answer came back' and never a claim about the change; hidden and absent read the same. The CLI's and API's parts are Sessions 3 and 5's."
     },
     {
       "id": "AC-1.34",
       "status": "PASS",
-      "evidence": ["docs/evidence/session-7/run-7.9.md", "docs/evidence/session-8/manifest.md"],
+      "evidence": [
+        "docs/evidence/session-7/run-7.9.md",
+        "docs/evidence/session-8/manifest.md",
+        "docs/evidence/session-9/manifest.md"
+      ],
       "note": "Cross-site changes refused on product and auth routes; an inline script, a third-party script and an inline style refused by the browser; framing refused; referrer policy no-referrer. Local proof."
     },
     {
       "id": "AC-1.51",
       "status": "PASS",
-      "evidence": ["docs/evidence/session-7/run-7.9.md", "docs/evidence/session-8/manifest.md"],
+      "evidence": [
+        "docs/evidence/session-7/run-7.9.md",
+        "docs/evidence/session-8/manifest.md",
+        "docs/evidence/session-9/manifest.md"
+      ],
       "note": "The main flow done with the keyboard only; narrow layout, labels, focus placement and return and textual equivalents inspected in Chromium; three defects found and repaired. Contrast not measured."
     },
     {
       "id": "PO-12",
       "status": "PASS",
-      "evidence": ["docs/evidence/session-7/run-7.9.md", "docs/evidence/session-8/manifest.md"],
+      "evidence": [
+        "docs/evidence/session-7/run-7.9.md",
+        "docs/evidence/session-8/manifest.md",
+        "docs/evidence/session-9/manifest.md"
+      ],
       "note": "The browser's content policy on the workspace: headers on the page and every asset, enforced by Chromium (framing and injected scripts refused, no violation from any screen). Local proof; the staging check is the gate's."
     },
     {
       "id": "FR-1.13",
       "status": "PASS",
-      "evidence": ["docs/evidence/session-8/run-8.2.md", "docs/evidence/session-8/manifest.md"],
+      "evidence": [
+        "docs/evidence/session-8/run-8.2.md",
+        "docs/evidence/session-8/manifest.md",
+        "docs/evidence/session-9/manifest.md"
+      ],
       "note": "Two organizations on one stack, each served by its own API process and provisioned by the product's provisioner: A's AppRole pairs log in nowhere but A's namespace, A's machine token is refused on every KV, token and sys path of B's namespace, api_runtime cannot change an identity column of schema app, and staging's grants equal the matrix. PASS comes from the manifest."
     },
     {
       "id": "AC-1.07",
       "status": "PASS",
-      "evidence": ["docs/evidence/session-8/run-8.2.md", "docs/evidence/session-8/manifest.md"],
+      "evidence": [
+        "docs/evidence/session-8/run-8.2.md",
+        "docs/evidence/session-8/manifest.md",
+        "docs/evidence/session-9/manifest.md"
+      ],
       "note": "Every human route with ids answers the other organization's real ids exactly as ids nobody has, on both APIs; selectors naming B change nothing of B and make no request in B's namespace; cursors open only their own listing; A's aggregates do not move when B grows; hidden and absent take the same time. PASS comes from the manifest."
     },
     {
       "id": "AC-1.13",
       "status": "PASS",
-      "evidence": ["docs/evidence/session-8/run-8.4.md", "docs/evidence/session-8/manifest.md"],
+      "evidence": [
+        "docs/evidence/session-8/run-8.4.md",
+        "docs/evidence/session-8/manifest.md",
+        "docs/evidence/session-9/manifest.md"
+      ],
       "note": "After a create, update, import, reveal, historical reveal, export, issuance, resolve, revocation, operator reset, recovery-code regeneration and sign-out on staging, no needle of ten kinds is on any of the host's surfaces, in the audit archive, in a pair captured afterwards, in the operator's views or in the shell histories; every surface has a control. The browser's local half also searches the dump, the logs and OpenBao's audit device. PASS comes from the manifest (the sweep on the candidate)."
     },
     {
       "id": "AC-1.50",
       "status": "PASS",
-      "evidence": ["docs/evidence/session-8/run-8.4.md", "docs/evidence/session-8/manifest.md"],
+      "evidence": [
+        "docs/evidence/session-8/run-8.4.md",
+        "docs/evidence/session-8/manifest.md",
+        "docs/evidence/session-9/manifest.md"
+      ],
       "note": "Synthetic secrets and identifiers are seeded labelled: canary-shaped, upper case, assembled at run time (tests/harness/sweep.ts), with a canary-shaped control that travels as the needles do; the secret scan's rule matches them, and scripts/sweep-ci.ts counts them in CI logs. PASS comes from the manifest."
     },
     {
       "id": "AC-1.45",
       "status": "PASS",
-      "evidence": ["docs/evidence/session-8/manifest.md"],
+      "evidence": ["docs/evidence/session-8/manifest.md", "docs/evidence/session-9/manifest.md"],
       "note": "The release manifest of Stage 1."
     },
     {
       "id": "AC-1.56",
       "status": "PASS",
-      "evidence": ["docs/evidence/session-8/manifest.md"],
+      "evidence": ["docs/evidence/session-8/manifest.md", "docs/evidence/session-9/manifest.md"],
       "note": "The release manifest of Stage 1."
     },
     {
       "id": "AC-1.60",
       "status": "PASS",
-      "evidence": ["docs/evidence/session-8/manifest.md"],
+      "evidence": ["docs/evidence/session-8/manifest.md", "docs/evidence/session-9/manifest.md"],
       "note": "The release manifest of Stage 1."
     }
   ]
