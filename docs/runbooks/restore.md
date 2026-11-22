@@ -6,6 +6,7 @@ A restore **never opens anything by itself**. It ends closed + `verifying`: the 
 
 ## Before
 
+- **The restore code changed in Session 9** (R4-2, R4-3, R4-4, R4-7, R4-10, RR-1, RR-3), and that change is proven only by local tests (D-73). Before production's first restore, run this runbook once on staging's own reinstalled server, unless the restore is an emergency.
 - The target host is installed and its release is loaded, with **the gate closed and the executors stopped**. On a clean host (the drill, Run 6.8), in this order:
 
   ```sh
