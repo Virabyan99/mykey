@@ -47,3 +47,13 @@ The rulings are in the run's ledger and are carried into the session report.
 
 - generate-root runs from `scripts/` (SSH and curl), not as a method of `packages/openbao`: D-69 does not list `packages/`.
 - The fault proof could not be watched red against the old code, because the interface and the harness changed together. The unit tests were watched red, and the fault test's 403 controls show the rerun succeeds only through the kept token.
+
+## Task B — The staging re-drill: deferred (D-73)
+
+The owner deferred Task B on 22 Nov 2026, to finish Session 9 in one day. It is a dated watch item: before 31 Dec 2026, on staging's own reinstalled server, following `restore.md`. It must come before production's first restore unless that restore is an emergency (`restore.md` "Before").
+
+Until it runs:
+
+- the restore changes of Task A are proven only by local fault, integration and unit tests;
+- the host path of generate-root (`hostSysCall` in `scripts/host.ts`) has no test;
+- the manifest's restore ids (AC-1.43, AC-1.44, PO-22) rest on Run 6.8's drill of `host-v0.6.1` code, and their lines say so (`gate-review.md`, F2).

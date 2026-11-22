@@ -58,5 +58,29 @@ The rulings, each with what it costs if wrong, are in the run's ledger and are c
 
 ## Open issues
 
-- Task I has not started: the diff check against D-69, full CI, the fresh review, the claims walk, `host-v0.9.0`, staging, OWN-UX and production closed.
+- Task I is done; it is recorded below.
 - The screenshots (`docs/evidence/session-9/screens/`) are for the reviewer of Task I.
+
+## Task I — The freeze, the review, the claims walk, the releases, OWN-UX (22 Nov 2026)
+
+- **The diff check against D-69** (host-v0.8.1..HEAD). Outside apps/web, docs, tests, scripts, tools and infra/hosts, the diff touches only:
+  - the restore code (apps/ops restore.ts, restore-verify.ts, index.ts), which D-69 allows;
+  - `WEB_ROUTES` in packages/contracts;
+  - the root devDependency axe-core.
+    That is the ledgered ruling.
+- **The release review** (`review-release.md`, one fresh reviewer on `host-v0.9.0`'s candidate):
+  - RR-1 (High: `--open` revoked the only root token before writing custody) was reproduced in `tests/fault/restore/interrupted.test.ts` and fixed in `a323998`;
+  - RR-9 is fixed;
+  - RR-3 is partly fixed;
+  - RR-5's three-block token step later failed in real use (`run-9.2.md`, F-9.2-1);
+  - the rest are carried (the review's Disposition).
+- **The claims walk** (`claims.md`): 263 rows at `6233002`; 36 corrections, applied in `a323998`.
+- **`host-v0.9.0`** (`a3239986ed4f`) was built once and deployed to staging (epoch 331).
+- **OWN-UX** (`task-test.md`):
+  - On `host-v0.9.0` the owner could not find machine credentials, and the test stopped before task 1.
+  - The owner chose "fix now". `b19ca66` put Secrets, Machine credentials and Connect on every environment row, and the sidebar lists an open project's environment sections (browser 108/108).
+  - **`host-v0.9.1`** was built once (`b19ca6671e14`) and deployed to staging through the owner's journey (`--owner-confirmed`, epoch 336, after `tunnel verify --browser` was written for it).
+  - All seven tasks were then found unaided.
+- **Staging on `host-v0.9.1`:** workspace 1/1 after its heading fix, api 12/12, status 3/3, identity 15/15, sweep 10/10. The staging test owner was re-established after the test.
+- **Production:** push, timers and `deploy --stay-closed` of `host-v0.9.1` with the owner's yes. Every status check was `ok` and the gate closed. Run 9.1 opened it.
+- **The candidate:** `docs/evidence/session-9/candidate.json` (`--session 9`), with staging's deploy recorded and four tooling paths.
