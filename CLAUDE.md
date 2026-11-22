@@ -20,19 +20,19 @@ The project is in **Stage 1**, a 14-day plan of nine sessions.
 
 ## Where we stand
 
-_Last updated: 22 Nov 2026, at the end of Session 9 (PR #23, not merged); Gate F waits for the owner's decision._
+_Last updated: 22 Nov 2026, at the end of Session 9 (PR #23, merged). Gate F was decided HARDEN (D-74): Stage 1 stays open._
 
-| Session | Topic                                       | State                                    |
-| ------- | ------------------------------------------- | ---------------------------------------- |
-| 1       | Foundation                                  | **Done** (PASS WITH ISSUES), merged      |
-| 2       | Infrastructure and make-or-break proofs     | **Done** (GO, no fallback), merged       |
-| 3       | Identity, access and resources              | **Done** (PASS WITH ISSUES), merged      |
-| 4       | Operations engine and secret lifecycle      | **Done** (PASS WITH ISSUES), merged      |
-| 5       | Machine access, CLI and API reference       | **Done** (PASS WITH ISSUES), merged      |
-| 6       | Audit, limits, backup, recovery, deployment | **Done** (PASS WITH ISSUES), merged      |
-| 7       | Web workspace                               | **Done** (PASS WITH ISSUES), merged      |
-| 8       | Security review and controlled-use release  | **Done**, Gate R signed (D-67), merged   |
-| 9       | Real use, agent experiment, stage exit      | Runs done; **Gate F open** (`gate-f.md`) |
+| Session | Topic                                       | State                                   |
+| ------- | ------------------------------------------- | --------------------------------------- |
+| 1       | Foundation                                  | **Done** (PASS WITH ISSUES), merged     |
+| 2       | Infrastructure and make-or-break proofs     | **Done** (GO, no fallback), merged      |
+| 3       | Identity, access and resources              | **Done** (PASS WITH ISSUES), merged     |
+| 4       | Operations engine and secret lifecycle      | **Done** (PASS WITH ISSUES), merged     |
+| 5       | Machine access, CLI and API reference       | **Done** (PASS WITH ISSUES), merged     |
+| 6       | Audit, limits, backup, recovery, deployment | **Done** (PASS WITH ISSUES), merged     |
+| 7       | Web workspace                               | **Done** (PASS WITH ISSUES), merged     |
+| 8       | Security review and controlled-use release  | **Done**, Gate R signed (D-67), merged  |
+| 9       | Real use, agent experiment, stage exit      | **Done**, Gate F: HARDEN (D-74), merged |
 
 Each session's detail is in `docs/evidence/session-N/report.md`. Gate R's document is `docs/evidence/session-8/gate-r.md`, Gate F's is `docs/evidence/session-9/gate-f.md`.
 
@@ -43,10 +43,11 @@ Each session's detail is in `docs/evidence/session-N/report.md`. Gate R's docume
   - The real-use clock starts at 22 Nov 2026, 14:27:41 UTC.
 - **The workspace was reworked** (D-70). `host-v0.9.0` failed the owner's first look; `host-v0.9.1` passed the seven tasks (`task-test.md`).
 - **The manifest** (`session-9/manifest.md`, `--session 9`): 144 PASS (33 `earlier`; 29 of them on `host-v0.8.1` staging results, by the owner's focused pass), 9 NOT PROVEN, 7 NOT YET DUE.
+- **Gate F: HARDEN** (D-74), on the owner's word. PR #23 is merged.
 - **The agent experiment** (D-71) is not a pass by the plan's rule:
   - the boundary held in every request the agent sent;
   - the model's safeguards declined scenarios 2, 3 and 10.
-- **The exit dossier** (`exit-dossier.md`) was corrected after the gate review (`gate-review.md`: 2 High, 8 Medium, all applied). The agent recommends HARDEN.
+- **The exit dossier** (`exit-dossier.md`) was corrected after the gate review (`gate-review.md`: 2 High, 8 Medium, all applied).
 - **Open findings:**
   - **F-9.2-1,** the connect panel's three-block token step: it leaked a token on first use, as in Run 8.8. The one-command form is in `known-limits.md`; the panel needs a release.
   - **The restore changes** (R4-*, RR-1) are proven locally only. The re-drill is deferred (D-73), and generate-root's host path (`hostSysCall`) has no test.
@@ -112,13 +113,13 @@ Each session's detail is in `docs/evidence/session-N/report.md`. Gate R's docume
 
 ### Open items
 
-- **Gate F:** the owner's decision (ADVANCE, HARDEN, PIVOT or STOP) and the merge of PR #23. Until it is signed, Stage 1 is not closed (`gate-f.md`).
-- **The hardening list** (the agent's recommendation):
+- **Gate F was decided HARDEN** (D-74, 22 Nov 2026). Stage 1 stays open, and Gate F is decided again at W-2 (20 Dec 2026) on 28 days of use. The next session needs its own plan (three layers); Stage 2 does not start.
+- **The hardening list** (D-74):
   - connect a real application;
   - the panel's token step as one silent command;
   - the restore re-drill, with a test for `hostSysCall`;
   - the credential drill re-aimed (its pause over SSH misses the one-call window);
-  - the reviewers' M1 change (R3-1, D-65), in Stage 2.
+  - outside the list: the reviewers' M1 change (R3-1, D-65), in Stage 2.
 - **Dated:**
   - **Staging's KMS certificates expire on 12 Dec 2026** (staging seal at 10:50 UTC). Replace them by 5 Dec, at least a week before (runbook `kms-and-unseal.md`). The checkpoint `kms-cert-expiry` is due from 12 Dec 09:57 UTC, and `certificate_expiring` opens 10 days before.
   - **Production's seal certificate `prod-seal-1` expires on 21 Dec 2026, 07:48 UTC** (issued 21 Nov 2026). Replace it before then, the same way, with production's names (`production.md`).

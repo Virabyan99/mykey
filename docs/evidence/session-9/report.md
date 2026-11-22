@@ -11,7 +11,7 @@
 - **The manifest** of `host-v0.9.1` gives 144 PASS (33 of them `earlier`, on Session 8's staging results), 9 NOT PROVEN and 7 NOT YET DUE. The full CI run is `gh run 45035863262` at `8be14a5`.
 - **Not done, by the owner's decision:** the staging restore re-drill (D-73), deferred to before 31 Dec 2026.
 - **The gate review** (`gate-review.md`) found two Highs: no application runs, and the manifest's restore lines said "unchanged". It also found eight Mediums. All were applied before Gate F.
-- **Gate F:** `gate-f.md`, waiting for the owner's decision. Until it is signed, Stage 1 is not closed.
+- **Gate F:** `gate-f.md`. The owner decided **HARDEN** and the merge (22 Nov 2026, 21:12 UTC; D-74). Stage 1 stays open on the hardening list, and Gate F is decided again at W-2 (20 Dec 2026).
 
 ## What ran where, once
 
