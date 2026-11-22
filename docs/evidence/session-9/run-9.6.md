@@ -45,3 +45,15 @@ They are in the ledger, and these reach the report:
 - the gate "closed" for a day when the API refused a request at its gate that day;
 - the timer on both hosts;
 - week 1 from `clock.json`.
+
+## Task B — The first report (22 Nov 2026, after Run 9.2)
+
+- `host.ts prod field-pull`: 0 records. The timer was installed on production at 13:4x UTC with Run 9.0's deploy, and each record covers the day before, so the first one (22 Nov, the clock's first day) is written on 23 Nov at 00:10 UTC.
+- `docs/evidence/field/clock.json`: `{ "start": "2026-11-22" }`, the date of consumer-1's first successful read (`run-9.2.md`).
+- `node scripts/field-report.ts prod --week 1` wrote `docs/evidence/field/week-1.md`: "a partial week: 0 of 7 days have a record". The report says so rather than leaving the week out.
+
+## Task C — W-1 and W-2, dated
+
+- **W-1:** the real 30-day ageing of production's backup retention (Doc 10 D-04). It is due **23 to 26 Dec 2026**, 32 to 35 days after production's first eligible pair (21 Nov 2026, 08:00 UTC). The check is Doc 10 §11's. The operator runs it, and the owner reads the result.
+- **W-2:** the 28-day real-use observation (D-05, FR-1.100, AC-1.58). It is due **20 Dec 2026**, 28 days after the clock start of 22 Nov. It holds the four weekly reports, the daily table, incidents, backup ages, the drill's time, costs and the owner's friction notes, all added to the dossier. The operator pulls and builds the reports, and the owner adds costs and friction notes.
+- Both are in CLAUDE.md's "Dated" list and in the dossier's calendar (Run 9.8). The registry's statuses for the ids they cover are set by Run 9.8's manifest. That is where D-05's `WATCH` is applied, so no status here is typed by hand.
