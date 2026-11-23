@@ -1,0 +1,16 @@
+# MyKey Private
+
+> A single-operator secrets service. An application gets its secrets at start from the `secrets` CLI, with no `.env` file. This file is for AI coding agents.
+
+**The rule, before anything else:** an agent never handles a machine token or a secret value. Issuing a credential and storing its token are the human's steps. When you reach one, stop, give the human the exact step from the guide, and wait.
+
+Every link below is a path in the repository. Outside a checkout, put it after `https://raw.githubusercontent.com/Virabyan99/mykey/main/`.
+
+## Guide
+
+- [Connect an application to MyKey](docs/agents/connect-an-application.md): the one document you need. It stands alone.
+
+## Optional
+
+- [What the service does not do](docs/runbooks/known-limits.md)
+- [The Next.js fixture](tests/fixtures/consumers/next-app/) and [the FastAPI fixture](tests/fixtures/consumers/fastapi-app/): two small applications that run on MyKey
