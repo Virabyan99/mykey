@@ -152,10 +152,10 @@ secrets-launch.sh -- sh -c "exec $APP_START"
 - **Next.js** (fixture `tests/fixtures/consumers/next-app/`):
   - the scripts become `secrets-launch.sh -- next dev`, `secrets-launch.sh -- next build` and `secrets-launch.sh -- next start`;
   - `NEXT_PUBLIC_*` values are written into the build, so the **build** runs under MyKey too, and such a value is public by nature;
-  - Next.js loads `.env*` files itself: once the secrets come from MyKey, those files must be gone (`remove-dotenv`), or they still win for development.
+  - Next.js loads `.env*` files itself. A variable MyKey sets wins over the file, but a name that is only in the file is still read from it, so a check can pass while a value still comes from the file: the files must be gone (`remove-dotenv`).
 - **FastAPI** (fixture `tests/fixtures/consumers/fastapi-app/`):
   - start with `secrets-launch.sh -- uvicorn main:app`;
-  - remove a `load_dotenv()` call, and the `env_file` of a pydantic-settings class, or leave them with no file to read.
+  - remove a `load_dotenv()` call, and the `env_file` of a pydantic-settings class, or leave them with no file to read. By default both let a variable already set win over the file, so, as for Next.js, a name only in the file is still read from it.
 - **Any other process:** `secrets-launch.sh -- <command> [arguments]`. The application reads its variables as before.
 
 ## 8. Docker and deployment
