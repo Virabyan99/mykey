@@ -85,10 +85,13 @@ describe("the token step has one source (P-172)", () => {
     expect(STEP).toContain(`*[^${shape ?? ""}]*`);
   });
 
-  it('no runbook, no page text and no help article holds stty, "Ctrl-D", or a cat into machine-token', () => {
+  it('no runbook, no page text and no help article holds stty (outside the one command), "Ctrl-D", or a cat into machine-token', () => {
+    // Review finding 2: the one command keeps the echo off itself, after a trap
+    // that turns it back on; a step of its own that runs stty is what is refused.
+    expect(STEP).toMatch(/^bash -c '[^']*trap "stty echo 2>\/dev\/null" EXIT; stty -echo/);
     const found: string[] = [];
     for (const path of SURFACES) {
-      const text = read(path);
+      const text = read(path).replaceAll(STEP, "");
       for (const pattern of [
         /\bstty\b/,
         /Ctrl-D/,

@@ -50,7 +50,8 @@ while :; do
   while IFS= read -rs -t 1 -n 4096 rest; do more=yes; done
   [ -n "${rest:-}" ] && more=yes
   rest=""
-  if [ -n "$more" ] || [[ "$line" =~ ^[A-Za-z_][A-Za-z0-9_]*= ]]; then
+  # A NAME=value line, not a base64 value ending in = padding (review finding 4).
+  if [ -n "$more" ] || [[ "$line" =~ ^[A-Za-z_][A-Za-z0-9_]*=[^=] ]]; then
     echo "Not taken: one value, not a file. Paste only the value, one at a time."
     line=""
     continue

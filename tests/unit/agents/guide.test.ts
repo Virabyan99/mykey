@@ -244,7 +244,17 @@ describe("the agent guide (D-79)", () => {
           `${name}: ${host}`,
         ).toContain(host);
       }
-      expect(text, name).not.toMatch(/\bstty\b/);
+      // stty only inside the one token command (review finding 2), never as a step of its own.
+      const token = blocksOf(sourceSection("consumer-local.md", "8")).find((b) => b.lang === "sh");
+      expect(text.replaceAll(token?.body ?? "", ""), name).not.toMatch(/\bstty\b/);
     }
+  });
+
+  it("review finding 3: no secrets run line, and no --override: the launcher passes no flag to the CLI", () => {
+    expect(GUIDE).not.toMatch(/--override/);
+    for (const line of shellLines(GUIDE_BLOCKS)) expect(line).not.toMatch(/^secrets run\b/);
+    expect(read("tests/fixtures/consumers/secrets-launch.sh")).toContain(
+      'exec secrets run -- "$@"',
+    );
   });
 });

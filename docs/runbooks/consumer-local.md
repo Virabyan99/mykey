@@ -100,7 +100,7 @@ echo
 
 ## 7. Issue a machine token
 
-The owner issues a token for the environment, with a name and a lifetime: on the workspace's Machine credentials screen, as "Issue" in `docs/runbooks/machine-credentials.md` describes. The token is shown once. Copy it now: the service stores no copy.
+The owner issues a token for the environment, with a name and a lifetime: on the workspace's Machine credentials screen, as "Issue" in `docs/runbooks/machine-credentials.md` describes. The token is shown once, and the service stores no copy. So first run the command of section 8, which waits at its prompt; then issue the token, copy it, and paste it there. Copying the command after the token would replace the token on the clipboard.
 
 ## 8. Store the token
 
@@ -114,7 +114,7 @@ Run the one line below. It runs in `bash`, whatever your shell is.
 <!-- rehearsed: stdin -->
 
 ```sh
-bash -c 'f="$HOME/.config/mykey/machine-token"; IFS= read -rs -p "Paste the token, then press Enter: " t; echo; while IFS= read -rs -t 1 -n 4096 x; do [ -n "$x" ] && t=; done; [ -n "$x" ] && t=; case "$t" in ""|*[^A-Za-z0-9._-]*) echo "Nothing was stored: that was not one token. If a token was shown on the screen, revoke it."; exit 1;; esac; umask 077; mkdir -p "${f%/*}" && printf "%s\n" "$t" > "$f" && chmod 600 "$f" && echo "Token stored."'
+bash -c 'f="$HOME/.config/mykey/machine-token"; d="${f%/*}"; trap "stty echo 2>/dev/null" EXIT; stty -echo 2>/dev/null; t=; while [ -z "$t" ] && IFS= read -rs -p "Paste the token, then press Enter: " t; do echo; done; while IFS= read -rs -t 1 -n 4096 x; do [ -n "$x" ] && t=; done; [ -n "$x" ] && t=; case "$t" in ""|*[^A-Za-z0-9._-]*) echo "Nothing was stored: that was not one token. If a token was shown on the screen, revoke it."; exit 1;; esac; umask 077; if mkdir -p "$d" && chmod 700 "$d" && { [ ! -e "$f" ] || chmod 600 "$f"; } && printf "%s\n" "$t" > "$f" && chmod 600 "$f"; then echo "Token stored."; else echo "Nothing was stored: the file could not be written."; exit 1; fi'
 ```
 
 ## 9. Start the application
@@ -153,7 +153,7 @@ echo
    <!-- rehearsed: stdin -->
 
    ```sh
-   bash -c 'f="$HOME/.config/mykey/machine-token"; IFS= read -rs -p "Paste the token, then press Enter: " t; echo; while IFS= read -rs -t 1 -n 4096 x; do [ -n "$x" ] && t=; done; [ -n "$x" ] && t=; case "$t" in ""|*[^A-Za-z0-9._-]*) echo "Nothing was stored: that was not one token. If a token was shown on the screen, revoke it."; exit 1;; esac; umask 077; mkdir -p "${f%/*}" && printf "%s\n" "$t" > "$f" && chmod 600 "$f" && echo "Token stored."'
+   bash -c 'f="$HOME/.config/mykey/machine-token"; d="${f%/*}"; trap "stty echo 2>/dev/null" EXIT; stty -echo 2>/dev/null; t=; while [ -z "$t" ] && IFS= read -rs -p "Paste the token, then press Enter: " t; do echo; done; while IFS= read -rs -t 1 -n 4096 x; do [ -n "$x" ] && t=; done; [ -n "$x" ] && t=; case "$t" in ""|*[^A-Za-z0-9._-]*) echo "Nothing was stored: that was not one token. If a token was shown on the screen, revoke it."; exit 1;; esac; umask 077; if mkdir -p "$d" && chmod 700 "$d" && { [ ! -e "$f" ] || chmod 600 "$f"; } && printf "%s\n" "$t" > "$f" && chmod 600 "$f"; then echo "Token stored."; else echo "Nothing was stored: the file could not be written."; exit 1; fi'
    ```
 
 3. Stop the application (Ctrl-C in its terminal) and start it again:

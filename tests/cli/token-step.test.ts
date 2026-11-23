@@ -80,8 +80,8 @@ const tokenFile = (home: string): string => join(home, ".config", "mykey", "mach
 async function startStep(t: Terminal): Promise<number> {
   const ready = await t.waitFor(/READY> /);
   t.type(`${TOKEN_STEP}\n`);
-  // The typed line is echoed whole first; its tail is `echo "Token stored."'`.
-  const echoed = await t.waitFor(/Token stored\."'\r?\n/, { from: ready });
+  // The typed line is echoed whole first; its tail is `fi'`.
+  const echoed = await t.waitFor(/; fi'\r?\n/, { from: ready });
   const prompt = await t.waitFor(/press Enter: (?!")/, { from: echoed });
   // The read turns the echo off just after it prints its prompt.
   await sleep(300);
@@ -142,6 +142,49 @@ describe("the token step in a terminal", () => {
     }
   }, 60_000);
 
+  it("review finding 2: a paste of 300 lines arriving in separate writes a few milliseconds apart: no line is shown, nothing is stored, and the outer shell received none", async () => {
+    const home = freshHome();
+    const t = open(BASH, home);
+    const mark = randomBytes(6).toString("hex");
+    const prompt = await startStep(t);
+    for (let i = 0; i < 300; i += 1) {
+      t.type(`L${String(i)}=${mark}${"x".repeat(40)}\n`);
+      await sleep(3);
+    }
+    const done = await t.waitFor(REFUSED, { from: prompt, ms: 20_000 });
+    expect(await variables(t, done, ["L0", "L299"])).toContain("[][]=end");
+    await t.close();
+    expect(existsSync(tokenFile(home))).toBe(false);
+    expect(t.screen()).not.toContain(mark);
+  }, 60_000);
+
+  it("review finding 6: an empty line first: the prompt comes again, and a token then is stored", async () => {
+    const home = freshHome();
+    const t = open(BASH, home);
+    const value = token();
+    const prompt = await startStep(t);
+    t.type("\n");
+    const again = await t.waitFor(/press Enter: (?!")/, { from: prompt });
+    await sleep(300);
+    t.type(`${value}\n`);
+    const done = await t.waitFor(STORED, { from: again });
+    expect(await status(t, done)).toBe(0);
+    await t.close();
+    expect(readFileSync(tokenFile(home), "utf8")).toBe(`${value}\n`);
+  }, 30_000);
+
+  it("review finding 7: an existing directory of mode 0755 ends 0700", async () => {
+    const home = freshHome();
+    mkdirSync(join(home, ".config", "mykey"), { recursive: true, mode: 0o755 });
+    const t = open(BASH, home);
+    const prompt = await startStep(t);
+    t.type(`${token()}\n`);
+    const done = await t.waitFor(STORED, { from: prompt });
+    expect(await status(t, done)).toBe(0);
+    await t.close();
+    expect(statSync(join(home, ".config", "mykey")).mode & 0o777).toBe(0o700);
+  }, 30_000);
+
   it("a token, Enter, and a second Enter: stored", async () => {
     const home = freshHome();
     const t = open(BASH, home);
@@ -183,6 +226,8 @@ describe("the token step in a terminal", () => {
     await t.close();
     expect(code).not.toBe(0);
     expect(STORED.test(t.screen().slice(prompt))).toBe(false);
+    // Review finding 8: one of the two documented outcomes, not the shell's own error alone.
+    expect(t.screen().slice(prompt)).toMatch(/Nothing was stored/);
     expect(t.screen()).not.toContain(value);
   }, 30_000);
 
@@ -231,6 +276,22 @@ describe("the token step in a terminal", () => {
     const code = await status(t, again);
     expect(code).toBe(64);
     expect(await variables(t, again, ["A", "B", "C"])).toContain("[][][]=end");
+    await t.close();
+    expect(t.screen()).not.toContain(mark);
+  }, 30_000);
+
+  it("review finding 4: consumer-leak-check.sh takes a padded base64 value (letters, digits and a trailing ==) as one value", async () => {
+    const home = freshHome();
+    const t = open(BASH, home);
+    const mark = randomBytes(6).toString("hex");
+    const ready = await t.waitFor(/READY> /);
+    t.type(`bash ${LEAK_CHECK}\n`);
+    const prompt = await t.waitFor(/needle 1: /, { from: ready });
+    await sleep(300);
+    t.type(`QUJD${mark}ZGVm==\n`);
+    const next = await t.waitFor(/needle 2: /, { from: prompt, ms: 5_000 });
+    expect(t.screen().slice(prompt, next)).not.toMatch(/not a file/);
+    t.type("\u0003");
     await t.close();
     expect(t.screen()).not.toContain(mark);
   }, 30_000);

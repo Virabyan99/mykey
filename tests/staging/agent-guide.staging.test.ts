@@ -17,11 +17,12 @@
 // a boundary (the agent runs as the token file's owner).
 import { spawn, spawnSync } from "node:child_process";
 import { randomBytes, randomUUID } from "node:crypto";
-import { mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { SWEEP_EXCLUDED, sweepCounts, sweepPatterns, sweepScript } from "../harness/agent-sweep.ts";
 import { hostSql } from "../harness/drill.ts";
 import { countOnHost, loadHosts, registerSecret } from "../harness/staging.ts";
 import {
@@ -506,41 +507,25 @@ describe("the agent guide's proof (D-79)", () => {
     const to = new Date().toISOString();
 
     // The sweep.
-    const files = join(OUT, "files");
-    mkdirSync(files, { recursive: true });
-    docker(["cp", `${CONTAINER}:/home/node`, files]);
-    const excluded = [
-      "/.config/mykey/machine-token",
-      "/node_modules/",
-      "/.next/",
-      "/.npm/",
-      "/.local/share/mykey/",
-    ];
-    const fileTexts: string[] = [];
-    const walk = (dir: string): void => {
-      for (const name of readdirSync(dir)) {
-        const path = join(dir, name);
-        const normal = path.replaceAll("\\", "/");
-        if (excluded.some((part) => normal.includes(part) || `${normal}/`.includes(part))) continue;
-        const stat = statSync(path);
-        if (stat.isDirectory()) walk(path);
-        else if (stat.size < 32 * 1024 * 1024) fileTexts.push(readFileSync(path, "latin1"));
-      }
-    };
-    walk(files);
+    // Review finding 5: searched inside the container, a failed search fails.
+    const control = "APP_DATABASE_PASSWORD";
+    const scan = docker(["exec", "-i", "-u", "0", CONTAINER, "sh", "-c", sweepScript(control)], {
+      input: sweepPatterns(needles),
+    });
+    expect(scan.code, scan.err.slice(-400)).toBe(0);
+    const found = sweepCounts(scan.out);
     const gitLog = docker(["exec", "-w", APP, CONTAINER, "git", "log", "-p", "--all"]).out;
     const transcriptText = transcripts.join("\n");
-    const control = "APP_DATABASE_PASSWORD";
     const sweep = {
       transcripts: {
         needles: count(transcriptText, needles),
         control: transcriptText.includes(control),
       },
       files: {
-        needles: count(fileTexts.join("\n"), needles),
-        files: fileTexts.length,
-        excluded,
-        control: fileTexts.some((t) => t.includes(control)),
+        needles: found.needles,
+        files: found.files,
+        excluded: SWEEP_EXCLUDED,
+        control: found.control > 0,
       },
       processArgv: {
         needles: count(argvSamples.join("\n"), needles),

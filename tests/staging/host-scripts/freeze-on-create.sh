@@ -30,6 +30,10 @@ cleanup() {
 	thaw
 	[ -n "$tail_pid" ] && kill "$tail_pid" 2>/dev/null
 	[ -n "$sleep_pid" ] && kill "$sleep_pid" 2>/dev/null
+	# Review finding 13: a signal between `sleep &` and `sleep_pid=$!` leaves
+	# the sleep unnamed; every job of this script goes.
+	kill $(jobs -p) 2>/dev/null
+	return 0
 }
 trap cleanup EXIT
 trap 'exit 143' TERM INT HUP

@@ -45,7 +45,7 @@ Replace NAMES with the names you found (section 5), never with values.
 <!-- from: consumer-local.md §8 -->
 
 ```sh
-bash -c 'f="$HOME/.config/mykey/machine-token"; IFS= read -rs -p "Paste the token, then press Enter: " t; echo; while IFS= read -rs -t 1 -n 4096 x; do [ -n "$x" ] && t=; done; [ -n "$x" ] && t=; case "$t" in ""|*[^A-Za-z0-9._-]*) echo "Nothing was stored: that was not one token. If a token was shown on the screen, revoke it."; exit 1;; esac; umask 077; mkdir -p "${f%/*}" && printf "%s\n" "$t" > "$f" && chmod 600 "$f" && echo "Token stored."'
+bash -c 'f="$HOME/.config/mykey/machine-token"; d="${f%/*}"; trap "stty echo 2>/dev/null" EXIT; stty -echo 2>/dev/null; t=; while [ -z "$t" ] && IFS= read -rs -p "Paste the token, then press Enter: " t; do echo; done; while IFS= read -rs -t 1 -n 4096 x; do [ -n "$x" ] && t=; done; [ -n "$x" ] && t=; case "$t" in ""|*[^A-Za-z0-9._-]*) echo "Nothing was stored: that was not one token. If a token was shown on the screen, revoke it."; exit 1;; esac; umask 077; if mkdir -p "$d" && chmod 700 "$d" && { [ ! -e "$f" ] || chmod 600 "$f"; } && printf "%s\n" "$t" > "$f" && chmod 600 "$f"; then echo "Token stored."; else echo "Nothing was stored: the file could not be written."; exit 1; fi'
 ```
 
 ### Your step (remove-dotenv)
@@ -136,7 +136,7 @@ The CLI reads `SECRETS_API_URL`, `SECRETS_PROJECT` and `SECRETS_ENVIRONMENT` fro
 5. Start it and check it, names only (section 9).
 6. `remove-dotenv` (the human).
 
-A secret whose name is already set in the shell that starts the application is refused (exit 64): the CLI will not let a secret silently replace a variable. Unset the variable, or ask the human whether the secret should win; then `secrets run --override -- <command>` lets it.
+A secret whose name is already set in the shell that starts the application is refused (exit 64): the CLI will not let a secret silently replace a variable. Unset the variable for the start (`env -u NAME secrets-launch.sh -- <command>`), or ask the human which of the two the application should get. The launcher passes no option to the CLI, and running the CLI directly needs the token, so there is no other way for you.
 
 The start through the launcher, as a block:
 
