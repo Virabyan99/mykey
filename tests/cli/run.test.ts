@@ -22,6 +22,7 @@ import { join } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { startCli, runCli, type StartOptions } from "../harness/cli.ts";
+import { underTerminal } from "./pty.ts";
 import {
   ENV_NAME,
   PROJECT,
@@ -541,33 +542,6 @@ describe("secrets run", () => {
     expect(server.requests.filter((request) => request.path.endsWith("/resolve"))).toHaveLength(2);
   });
 });
-
-/**
- * Python's pty.spawn: the CLI as the session leader of a new pseudo-terminal,
- * the test's stdin copied to it; exits with the CLI's status.
- */
-const PTY_SPAWN = [
-  "import os, pty, sys",
-  "status = pty.spawn(sys.argv[1:])",
-  "sys.exit(os.waitstatus_to_exitcode(status))",
-].join("\n");
-
-/**
- * The CLI's command line run under a pseudo-terminal. Linux: util-linux
- * `script`. macOS: Python's pty module, because BSD `script` needs its own
- * stdin to be a terminal and refuses the test's socket ("tcgetattr/ioctl:
- * Operation not supported on socket", matrix run 43856083484).
- * MYKEY_TEST_PTY=python takes the macOS path on Linux too.
- */
-function underTerminal(cli: string[]): [string, string[]] {
-  const quote = (value: string): string => `'${value.replaceAll("'", "'\\''")}'`;
-  if (process.platform === "darwin" || process.env.MYKEY_TEST_PTY === "python") {
-    return ["python3", ["-c", PTY_SPAWN, ...cli]];
-  }
-  // `exec`: no shell stays between the terminal and the CLI (a waiting sh would
-  // die of the terminal's SIGINT itself).
-  return ["script", ["-qec", `exec ${cli.map(quote).join(" ")}`, "/dev/null"]];
-}
 
 /** The argument lists of every process in a process group: /proc on Linux, ps on macOS. */
 function processGroupArgs(pgid: number): string[] {

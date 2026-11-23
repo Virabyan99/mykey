@@ -4,7 +4,7 @@ How an application on your own Linux or macOS machine gets its secrets from MyKe
 
 Every shell block marked `<!-- rehearsed … -->` in this file is run, in order (a block marked `rehearsed: provided` is replaced by the test's own equivalent, because its values are the reader's), by `tests/consumers/runbook.test.ts` on a clean Linux machine against staging (`pnpm run test:consumers`). If the file and the product drift apart, that test fails.
 
-- **Needs:** Linux (glibc) or macOS on x86_64 or arm64, `sh`, `curl`, `tar`, and `sha256sum` or `shasum`. Windows is not supported (D-43); WSL is Linux. The repository is public, so step 1 needs no GitHub account: `gh` is one way, `curl` the other.
+- **Needs:** Linux (glibc) or macOS on x86_64 or arm64, `sh`, `bash` (for the token step), `curl`, `tar`, and `sha256sum` or `shasum`. Windows is not supported (D-43); WSL is Linux. The repository is public, so step 1 needs no GitHub account: `gh` is one way, `curl` the other.
 - **Variables used below:**
   - `SECRETS_API_URL`, `SECRETS_PROJECT`, `SECRETS_ENVIRONMENT`: the service and the environment to read;
   - `APP_DIR`, `APP_START`: your application's directory and the command that starts it.
@@ -104,14 +104,17 @@ The owner issues a token for the environment, with a name and a lifetime: on the
 
 ## 8. Store the token
 
-Run the block, paste the token, press Enter, then Ctrl-D. The token is typed into `cat`, not into the shell, so it is in no shell history and no command's arguments. The file is readable by you alone.
+Run the one line below. It runs in `bash`, whatever your shell is.
 
-**The pasted token stays on the screen.** Do not copy that terminal into a chat, a ticket or a screenshot. To keep it off the screen, type `stty -echo` before the block and `stty echo` after it. A token that was shown to anyone is revoked and replaced (`machine-credentials.md`).
+- **Paste only when the terminal shows `Paste the token, then press Enter:`.** If it shows anything else, do not paste: fix the command first.
+- Nothing you paste is shown. The token is read by the command, not by your shell, so it is in no shell history and no command's arguments.
+- `Token stored.` means it is in `~/.config/mykey/machine-token`, readable by you alone. Anything that is not one token (a paste of several lines, an empty line) is refused: `Nothing was stored`.
+- A token that was shown to anyone is revoked and replaced (`machine-credentials.md`).
 
 <!-- rehearsed: stdin -->
 
 ```sh
-( umask 077; mkdir -p "$HOME/.config/mykey"; cat > "$HOME/.config/mykey/machine-token" )
+bash -c 'f="$HOME/.config/mykey/machine-token"; IFS= read -rs -p "Paste the token, then press Enter: " t; echo; while IFS= read -rs -t 1 -n 4096 x; do [ -n "$x" ] && t=; done; [ -n "$x" ] && t=; case "$t" in ""|*[^A-Za-z0-9._-]*) echo "Nothing was stored: that was not one token. If a token was shown on the screen, revoke it."; exit 1;; esac; umask 077; mkdir -p "${f%/*}" && printf "%s\n" "$t" > "$f" && chmod 600 "$f" && echo "Token stored."'
 ```
 
 ## 9. Start the application
@@ -145,12 +148,12 @@ echo
 ## Rotate the token
 
 1. Issue a second token (step 7).
-2. Replace the file in place, the same way as before:
+2. Replace the file in place, the same way as before (step 8):
 
    <!-- rehearsed: stdin -->
 
    ```sh
-   ( umask 077; mkdir -p "$HOME/.config/mykey"; cat > "$HOME/.config/mykey/machine-token" )
+   bash -c 'f="$HOME/.config/mykey/machine-token"; IFS= read -rs -p "Paste the token, then press Enter: " t; echo; while IFS= read -rs -t 1 -n 4096 x; do [ -n "$x" ] && t=; done; [ -n "$x" ] && t=; case "$t" in ""|*[^A-Za-z0-9._-]*) echo "Nothing was stored: that was not one token. If a token was shown on the screen, revoke it."; exit 1;; esac; umask 077; mkdir -p "${f%/*}" && printf "%s\n" "$t" > "$f" && chmod 600 "$f" && echo "Token stored."'
    ```
 
 3. Stop the application (Ctrl-C in its terminal) and start it again:
