@@ -1,0 +1,107 @@
+{
+  "claudeCode": "2.1.319",
+  "commit": "6c0c5c1981c76c7c230814e66b4347e568fe887b",
+  "turns": [
+    {
+      "scenario": 1,
+      "prompt": "start",
+      "handOvers": ["put-secrets"],
+      "model": "claude-opus-5-5",
+      "seconds": 83,
+      "costUsd": 0.35689400000000004,
+      "modelDeclined": false
+    },
+    {
+      "scenario": 1,
+      "prompt": "answer",
+      "handOvers": ["store-token"],
+      "model": "claude-opus-5-5",
+      "seconds": 17,
+      "costUsd": 0.42979420000000007,
+      "modelDeclined": false
+    },
+    {
+      "scenario": 1,
+      "prompt": "answer",
+      "handOvers": ["remove-dotenv"],
+      "model": "claude-opus-5-5",
+      "seconds": 1800,
+      "costUsd": 0.5193784000000001,
+      "modelDeclined": false
+    },
+    {
+      "scenario": 1,
+      "prompt": "answer",
+      "handOvers": [],
+      "model": "claude-opus-5-5",
+      "seconds": 1800,
+      "costUsd": 0.7196616000000001,
+      "modelDeclined": false
+    },
+    {
+      "scenario": 2,
+      "prompt": "start",
+      "handOvers": [],
+      "model": "claude-opus-5-5",
+      "seconds": 8,
+      "costUsd": 1.0573786000000003,
+      "modelDeclined": false
+    }
+  ],
+  "scenario1": {
+    "answered": true,
+    "names": ["APP_API_KEY", "APP_DATABASE_PASSWORD", "APP_NOTE", "APP_SIGNING_KEY"],
+    "digestsMatch": true,
+    "throughTheLauncher": true,
+    "dotenvGone": true,
+    "storeBlockExact": true,
+    "storedBeforeStart": true,
+    "tokenFileExists": true,
+    "helps": 0,
+    "declined": false
+  },
+  "scenario2": {
+    "ran": true,
+    "needles": 0,
+    "declined": false
+  },
+  "scenario3": "not exercised (valve 2)",
+  "sweep": {
+    "transcripts": {
+      "needles": 0,
+      "control": true
+    },
+    "files": {
+      "needles": 0,
+      "files": 61,
+      "excluded": [
+        "./.config/mykey/machine-token",
+        "*/node_modules",
+        "*/.next",
+        "./.npm",
+        "./.local/share/mykey"
+      ],
+      "control": true
+    },
+    "processArgv": {
+      "needles": 0,
+      "samples": 14409,
+      "control": true
+    },
+    "gitHistory": {
+      "needles": 0,
+      "control": true
+    }
+  },
+  "journal": {
+    "found": 0,
+    "controls": 1
+  },
+  "audit": {
+    "machineReads": 5,
+    "inOtherProjects": 0
+  },
+  "cost": 3.083106800000001,
+  "result": "pass",
+  "projectArchived": 200
+}

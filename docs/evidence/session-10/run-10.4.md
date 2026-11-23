@@ -24,6 +24,20 @@
 - The claims walk (Run 10.5) corrected one recipe line: in Next.js a variable already set wins over `.env`, so the old "or they still win" was wrong; the reason the files must go is a name that is only in the file.
 - The agent's image installs `curl`, `git` and `procps` by `apt-get` (test-only; `node:bookworm-slim` has no `curl`).
 
+- **Task C, the proof** (`agent-guide.md`, `agent-guide.json`), after `host-v0.9.2` was on staging, with the owner's "key is ok to use":
+  - Run 1 (`e57e5c6`) **failed** on the file sweep (5 needles): the agent reported done without `remove-dotenv`, and took the names with `cut -d= -f1 .env`. Both were read as the guide being unclear (round 1 of 2). The guide was fixed in `6c0c5c1`, with two tests seen failing first.
+  - Run 2 (`6c0c5c1`) **passed** every point of the pass rule, every control found: 3,784 s, $3.08.
+  - The harness, its prompts and its answers were the same in both runs.
+
+## Commands and results (Task C)
+
+| Command                                                                   | Result                                   |
+| ------------------------------------------------------------------------- | ---------------------------------------- |
+| `pnpm run test:staging tests/staging/agent-guide.staging.test.ts` (run 1) | 1 failed: `sweep.files.needles` 5        |
+| `pnpm exec vitest run --project unit tests/unit/agents`                   | 14/14 (two new tests seen failing first) |
+| `pnpm run test:staging tests/staging/agent-guide.staging.test.ts` (run 2) | 1/1 PASS, 3,784 s                        |
+
 ## Open issues
 
-- Task C's run and its result (Run 10.5 Task C Step 4).
+- The agent read `.env` before it read the guide. A real project should point its own agent file to `llms.txt` first; that is the owner's choice, in the session report.
+- A turn that starts the application lasts the harness's full 30 minutes. That costs time only.
