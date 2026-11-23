@@ -4,7 +4,7 @@ How a first consumer application runs in a container on a Linux host with Docker
 
 Every shell block marked `<!-- rehearsed … -->` in this file is run, in order (a block marked `rehearsed: provided` is replaced by the test's own equivalent, because its values are the reader's), by `tests/consumers/runbook.test.ts` against staging, once for each fixture in `tests/fixtures/consumers/`, on a Linux shell with Docker (`pnpm run test:consumers`).
 
-- **Needs:** Linux (glibc) on x86_64 or arm64 with Docker, `sh`, `curl`, `sha256sum`, and `gh` signed in to GitHub with access to the repository.
+- **Needs:** Linux (glibc) on x86_64 or arm64 with Docker, `sh`, `bash` (for the token step), `curl`, `sha256sum`, and `gh` signed in to GitHub with access to the repository.
 - **The application's Dockerfile** ends like the fixtures' (`tests/fixtures/consumers/*/Dockerfile`):
 
   ```Dockerfile
@@ -74,12 +74,15 @@ docker build --quiet -t "$APP_IMAGE" "$APP_DIR"
 
 ## 5. Store the token on the host
 
-Issue a token for the environment ("Issue" in `machine-credentials.md`). Then run the block, paste the token, press Enter and Ctrl-D. The token goes into `cat`, so it is in no shell history and no argument list:
+Run the one line below on the host first, then issue a token for the environment ("Issue" in `machine-credentials.md`).
+
+- **Paste only when the terminal shows `Paste the token, then press Enter:`.** If it shows anything else, do not paste: fix the command first.
+- Nothing you paste is shown, and the token is in no shell history and no argument list. `Token stored.` means it is stored; anything that is not one token is refused.
 
 <!-- rehearsed: stdin -->
 
 ```sh
-( umask 077; mkdir -p "$HOME/.config/mykey"; cat > "$HOME/.config/mykey/machine-token" )
+bash -c 'f="$HOME/.config/mykey/machine-token"; IFS= read -rs -p "Paste the token, then press Enter: " t; echo; while IFS= read -rs -t 1 -n 4096 x; do [ -n "$x" ] && t=; done; [ -n "$x" ] && t=; case "$t" in ""|*[^A-Za-z0-9._-]*) echo "Nothing was stored: that was not one token. If a token was shown on the screen, revoke it."; exit 1;; esac; umask 077; mkdir -p "${f%/*}" && printf "%s\n" "$t" > "$f" && chmod 600 "$f" && echo "Token stored."'
 ```
 
 ## 6. Run the container
@@ -116,12 +119,12 @@ exit 1
 ## Rotate the token
 
 1. Issue a second token.
-2. Replace the file **in place**, the same way. A file mounted into a container is followed by its inode, so the file must be rewritten, not replaced by a new file moved over it:
+2. Replace the file **in place**, the same way (step 5). A file mounted into a container is followed by its inode, so the file must be rewritten, not replaced by a new file moved over it; the command rewrites it:
 
    <!-- rehearsed: stdin -->
 
    ```sh
-   ( umask 077; mkdir -p "$HOME/.config/mykey"; cat > "$HOME/.config/mykey/machine-token" )
+   bash -c 'f="$HOME/.config/mykey/machine-token"; IFS= read -rs -p "Paste the token, then press Enter: " t; echo; while IFS= read -rs -t 1 -n 4096 x; do [ -n "$x" ] && t=; done; [ -n "$x" ] && t=; case "$t" in ""|*[^A-Za-z0-9._-]*) echo "Nothing was stored: that was not one token. If a token was shown on the screen, revoke it."; exit 1;; esac; umask 077; mkdir -p "${f%/*}" && printf "%s\n" "$t" > "$f" && chmod 600 "$f" && echo "Token stored."'
    ```
 
 3. Restart the container, so the CLI reads the new token and the complete set again:

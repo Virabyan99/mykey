@@ -43,7 +43,7 @@ Open the environment's **Connect an application** page (in the sidebar, under th
   - the service is this page's address (on staging `https://mykey-staging.nomikey.com`);
   - the **project's id** is shown with a Copy button in the breadcrumbs and on the project's page (it is also the part of the address after `/p/`);
   - the environment is its name, `development`;
-- store the token on standard input, into a file only you can read. The pasted token stays on the screen, so never copy that terminal into a chat or a screenshot (`stty -echo` keeps it off);
+- store the token with the one command shown, into a file only you can read. Run it first, and paste the token only when the terminal shows `Paste the token, then press Enter:`; nothing pasted is shown;
 - start the application through `secrets-launch.sh`.
 
 Without an application of your own, step 9 has a command that only lists the names it was started with.

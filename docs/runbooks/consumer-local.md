@@ -128,10 +128,10 @@ cd "$APP_DIR"
 secrets-launch.sh -- sh -c "exec $APP_START"
 ```
 
-Without an application, a command that lists the names it was started with, never a value. The environment's secret names appear among the shell's own:
+Without an application, a command that lists the names it was started with, never a value. The environment's secret names appear among the shell's own. It asks `awk` for the names, because a value may hold several lines, and a command that cuts `env`'s lines at `=` would print the later ones:
 
 ```sh
-secrets-launch.sh -- sh -c 'echo "started; these names are set:"; env | cut -d= -f1 | sort'
+secrets-launch.sh -- sh -c 'echo "started; these names are set:"; awk "BEGIN { for (k in ENVIRON) print k }" | sort'
 ```
 
 ## 10. Check

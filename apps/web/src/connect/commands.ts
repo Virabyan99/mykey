@@ -80,16 +80,12 @@ function fillVariables(block: string, fill: Fill): string {
     );
 }
 
-export const TOKEN_WARNING =
-  "stty -echo keeps the pasted token off the screen; stty echo turns the echo back on. Run them as separate lines, not pasted together with the block. Without stty -echo the pasted token stays on the screen: do not copy that terminal into a chat, a ticket or a screenshot.";
-
 /**
- * The token block with the terminal's echo off around it, as three blocks run one
- * at a time, as the runbook says to type them (review RR-5): pasted as one, a shell
- * without bracketed paste would read the last line into the token file. The middle
- * block is the runbook's own.
+ * The token step is the runbook's one command (Run 10.1, F-9.2-1, D-76): it
+ * reads first, silently, so nothing can fail before the paste is taken.
  */
-const quietly = (block: string): string[] => ["stty -echo", block, "stty echo"];
+export const TOKEN_WARNING =
+  "Paste the token only when the terminal shows “Paste the token, then press Enter:”. If it shows anything else, do not paste: a token pasted into the shell goes to its history and the screen. Nothing you paste at the prompt is shown.";
 
 const blocks = (sections: RunbookSection[], n: number): string[] => {
   const found = sections.find((section) => section.number === n);
@@ -134,7 +130,7 @@ export function localSteps(
     // Review RR-9: the terminal waits for the token before the token is issued.
     {
       id: "local-store",
-      commands: quietly(one(blocks(sections, 8), "the token")),
+      commands: [one(blocks(sections, 8), "the token")],
       warning: TOKEN_WARNING,
     },
     { id: "local-issue", commands: [] },
@@ -159,7 +155,7 @@ export function serverSteps(text: string, fill: Fill): ConnectStep[] {
     { id: "server-build", commands: blocks(sections, 4) },
     {
       id: "server-store",
-      commands: quietly(one(blocks(sections, 5), "the token")),
+      commands: [one(blocks(sections, 5), "the token")],
       warning: TOKEN_WARNING,
     },
     { id: "server-run", commands: blocks(sections, 6) },

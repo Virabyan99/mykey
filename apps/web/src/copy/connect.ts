@@ -23,11 +23,11 @@ export const CONNECT_STEPS = {
   },
   "local-store": {
     title: "Store the token",
-    text: "Get the terminal ready before you have a token, so that copying a command never replaces the token on your clipboard. Run the first line on its own, then the second: it waits for the token. Leave it waiting and do the next step. The token goes into a file only you can read, and into no shell history.",
+    text: "Get the terminal ready before you have a token, so that copying a command never replaces the token on your clipboard. Run the one line: it shows a prompt and waits for the token. Leave it waiting and do the next step. The token goes into a file only you can read, and into no shell history.",
   },
   "local-issue": {
     title: "Issue a token",
-    text: "Issue a machine credential for this environment under Machine credentials. The token is shown once: copy it, paste it into the waiting terminal, press Enter, then Ctrl-D. Then run the last line of the step above, which turns the echo back on.",
+    text: "Issue a machine credential for this environment under Machine credentials. The token is shown once: copy it, paste it at the waiting prompt and press Enter. The terminal says “Token stored.”",
   },
   "local-start": {
     title: "Start your application",
@@ -59,7 +59,7 @@ export const CONNECT_STEPS = {
   },
   "server-store": {
     title: "Store the token on the host",
-    text: "Get the terminal ready first, so that copying a command never replaces the token on your clipboard: run the first line on its own, then the second, which waits for the token. Then issue a token under Machine credentials, copy it, paste it into the waiting terminal, press Enter and Ctrl-D, and run the last line.",
+    text: "Get the terminal ready first, so that copying a command never replaces the token on your clipboard: run the one line, which shows a prompt and waits for the token. Then issue a token under Machine credentials, copy it, paste it at the prompt and press Enter. The terminal says “Token stored.”",
   },
   "server-run": {
     title: "Run the container",

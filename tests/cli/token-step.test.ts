@@ -7,6 +7,7 @@
 //
 // The token is assembled at run time and never leaves this process except on
 // the terminal's input.
+import { spawnSync } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -17,20 +18,37 @@ import { terminal, type Terminal } from "./pty.ts";
 
 const RUNBOOK = resolve(import.meta.dirname, "../../docs/runbooks/consumer-local.md");
 
-/** The first `sh` block under the heading "## <n>. …" of consumer-local.md. */
-function blockOf(section: number): string {
+/** The `sh` block number `index` under the heading "## <n>. …" of consumer-local.md. */
+function blockOf(section: number, index = 0): string {
   const text = readFileSync(RUNBOOK, "utf8").replaceAll("\r\n", "\n");
   const start = text.indexOf(`\n## ${String(section)}. `);
   if (start === -1) throw new Error(`consumer-local.md has no section ${String(section)}`);
   const rest = text.slice(start + 1);
   const next = rest.indexOf("\n## ");
   const body = next === -1 ? rest : rest.slice(0, next);
-  const block = /```sh\n([\s\S]*?)\n```/.exec(body);
-  if (block?.[1] === undefined) throw new Error(`section ${String(section)} has no sh block`);
-  return block[1];
+  const block = [...body.matchAll(/```sh\n([\s\S]*?)\n```/g)][index]?.[1];
+  if (block === undefined)
+    throw new Error(`section ${String(section)} has no sh block ${String(index)}`);
+  return block;
 }
 
 const TOKEN_STEP = blockOf(8);
+
+/** A value of two lines, as a PEM key has; its later line holds no `=`. */
+const FIRST_LINE = `first-${randomBytes(6).toString("hex")}`;
+const SECOND_LINE = `second-${randomBytes(6).toString("hex")}`;
+
+/** Runs a names-only command (`sh -c '…'`) with one secret of two lines; answers what it printed. */
+function namesOnly(command: string): string {
+  const script = /^sh -c '(.*)'$/s.exec(command)?.[1];
+  if (script === undefined) throw new Error("not an sh -c command");
+  const result = spawnSync("sh", ["-c", script], {
+    encoding: "utf8",
+    env: { PATH: process.env.PATH ?? "/usr/bin:/bin", MULTI_LINE: `${FIRST_LINE}\n${SECOND_LINE}` },
+  });
+  if (result.status !== 0) throw new Error(`the command failed: ${result.stderr}`);
+  return result.stdout;
+}
 /** Run 9.2's middle block, before Run 10.1. */
 const OLD_STEP =
   '( umask 077; mkdir -p "$HOME/.config/mykey"; cat > "$HOME/.config/mykey/machine-token" )';
@@ -194,6 +212,20 @@ describe("the token step in a terminal", () => {
     expect(readFileSync(tokenFile(home), "utf8")).toBe(`${value}\n`);
     expect(t.screen()).not.toContain(value);
   }, 30_000);
+
+  it("the names-only command with a two-line value prints the name and neither line", () => {
+    const names = (blockOf(9, 1).split("-- ")[1] ?? "").trim();
+    expect(names).toMatch(/^sh -c '/);
+    const printed = namesOnly(names);
+    expect(printed).toContain("MULTI_LINE");
+    expect(printed).not.toContain(FIRST_LINE);
+    expect(printed).not.toContain(SECOND_LINE);
+  });
+
+  it("control: today's env | cut form prints the second line", () => {
+    const printed = namesOnly(`sh -c 'env | cut -d= -f1 | sort'`);
+    expect(printed).toContain(SECOND_LINE);
+  });
 
   it("control: with the old block and stty -echo before it, a failing middle block sends the paste to the outer shell", async () => {
     const home = freshHome();

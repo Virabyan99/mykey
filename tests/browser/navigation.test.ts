@@ -585,13 +585,16 @@ describe("getting started and connecting", () => {
       await block.getByRole("button", { name: "Copy" }).click();
       await block.getByRole("status").filter({ hasText: "Copied" }).waitFor();
       expect((await read()).replaceAll("\r\n", "\n")).toBe(text);
-      // The token is never filled in; its step switches the echo off, as a line of its
-      // own before the runbook's block (review RR-5), and comes before the token is issued.
-      const store = page.getByLabel("Store the token, part 1", { exact: true });
-      expect(await store.textContent()).toBe("stty -echo");
-      expect(await page.getByLabel("Store the token, part 3", { exact: true }).textContent()).toBe(
-        "stty echo",
-      );
+      // The token is never filled in; its step is one block, the runbook's silent
+      // command (Run 10.1, F-9.2-1), and comes before the token is issued.
+      const store = page.getByLabel("Store the token", { exact: true });
+      const storeText = (await store.textContent()) ?? "";
+      expect(storeText).toMatch(/^bash -c '/);
+      expect(await page.getByLabel("Store the token, part 2", { exact: true }).count()).toBe(0);
+      const storeBlock = page.locator(".code-block").filter({ has: store });
+      await storeBlock.getByRole("button", { name: "Copy" }).click();
+      await storeBlock.getByRole("status").filter({ hasText: "Copied" }).waitFor();
+      expect((await read()).replaceAll("\r\n", "\n")).toBe(storeText);
       expect(await page.locator("main").textContent()).not.toMatch(/hv[sbr]\.[A-Za-z0-9_-]{20,}/);
       // The server tab: the runbook for a server, filled in the same way.
       await page.getByRole("button", { name: "A server (systemd or Docker)" }).click();
@@ -614,7 +617,9 @@ describe("getting started and connecting", () => {
       await page.getByLabel(/No application yet/).check();
       await page.getByRole("heading", { name: "Start a command that prints names only" }).waitFor();
       const commands = (await page.locator("main .code-block pre").allTextContents()).join("\n");
-      expect(commands).toContain("env | cut -d= -f1 | sort");
+      // F-10.0-1: names only, also of a value with several lines.
+      expect(commands).toContain('awk "BEGIN { for (k in ENVIRON) print k }" | sort');
+      expect(commands).not.toContain("env | cut");
       expect(commands).not.toContain("APP_");
       expect(await page.locator("main").textContent()).not.toContain("APP_START");
       expect(await session.violations()).toEqual([]);
