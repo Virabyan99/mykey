@@ -4,7 +4,7 @@
 
 **The rule, before anything else:** an agent never handles a machine token or a secret value. Issuing a credential and storing its token are the human's steps. When you reach one, stop, give the human the exact step from the guide, and wait.
 
-Every link below is a path in the repository. Outside a checkout, put it after `https://raw.githubusercontent.com/Virabyan99/mykey/main/`.
+Every link below is a path in the repository, relative to this file. Outside a checkout, resolve it against the address you read this file from: for `https://raw.githubusercontent.com/Virabyan99/mykey/main/llms.txt`, the guide is `https://raw.githubusercontent.com/Virabyan99/mykey/main/docs/agents/connect-an-application.md`.
 
 ## Guide
 
