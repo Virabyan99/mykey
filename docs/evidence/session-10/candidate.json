@@ -40,5 +40,10 @@
   "lastMigration": "0018_incarnation",
   "hostFilesCommit": "aa69922f772cf287311edefe87ddf686244036c5",
   "tooling": [],
-  "deploys": {}
+  "deploys": {
+    "staging": {
+      "at": "2026-11-23T13:39:14.803Z",
+      "gateEpoch": 363
+    }
+  }
 }

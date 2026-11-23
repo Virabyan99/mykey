@@ -34,7 +34,7 @@
 
 ## Task B — The release
 
-- **Built once** in the clean clone `~/mykey-release/src` at `0486f24` (`node infra/release/build.ts --version 0.9.2`). The first build was stopped by Claude Code for low memory after three archives; its partial folder was removed and the build started again, alone, on the owner's word. No host file (`infra/`) changed since `host-v0.9.1`, so no `push` is needed.
+- **Built once** in the clean clone `~/mykey-release/src` at `0486f24` (`node infra/release/build.ts --version 0.9.2`). The first build was stopped by Claude Code for low memory after three archives; its partial folder was removed and the build started again, alone, on the owner's word. No host file (`infra/`) had changed since `host-v0.9.1` at the build; the field-day fix below came after it and travels by `push`, not in the release.
 
   | Image       | Digest                                                                    |
   | ----------- | ------------------------------------------------------------------------- |
@@ -47,7 +47,25 @@
 
 ## Task C — Staging
 
-_Pending._
+| Step                                                                                                | Result                                                                                                                              |
+| --------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| `deploy.staging` with `MYKEY_RELEASE_NEW` = `host-v0.9.2`, `MYKEY_RELEASE_PREVIOUS` = `host-v0.9.1` | PASS (1/1, 771 s); staging serves `0486f24c3b6e`, gate open, epoch 363, written 2026-11-23T13:39:14Z (recorded in `candidate.json`) |
+| `workspace.staging`                                                                                 | PASS (1/1)                                                                                                                          |
+| `api.staging`                                                                                       | PASS (12/12)                                                                                                                        |
+| `status.staging`                                                                                    | PASS (3/3)                                                                                                                          |
+| `sweep.staging`                                                                                     | PASS (10/10)                                                                                                                        |
+
+**`test:consumers` was not completed.** Claude Code stopped its shell for low memory (1.9 GB free) about 5 minutes in; the vitest process and its two clean-machine containers kept running and were then stopped by hand (CLAUDE.md: orphans after a killed job). Its `afterAll` did not run, so staging may keep one synthetic project unarchived and up to three unrevoked machine tokens. They were issued for one hour, and existed only in the stopped process and the removed containers. The rehearsal runs again on the owner's word.
+
+The runs rewrote `session-7/run-7.10-staging.json` and `session-8/run-8.4-sweep.txt`; both were restored.
+
+### A finding: the field day has never written a record (both hosts)
+
+- **Seen:** `host.ts staging status` after the deploy showed `unitsFailed: mykey-field-day.service`, and the probe had `unit_failed` open. Production's probe state shows the same, open since 23 Nov 00:10 UTC, with a reminder to the owner every hour.
+- **Cause:** `field-day.sh` (Run 9.6) runs under `set -euf`. The `-f` turns pathname expansion off, so `chmod 0644 "$work"/*` met a file literally named `*`, and the script stopped before the collector ran. Its first timer run, 23 Nov at 00:10 UTC, was its first run at all: Run 9.6's tests covered the TypeScript parts only. So no day record exists for 22 Nov, the first day of real use.
+- **Fix:** the files are changed with `find … -exec chmod 0644 {} +`, and `set -f` stays. `tests/unit/hosts/noglob.test.ts` refuses a path pattern in any host script that turns globbing off (seen failing on line 65 first). It is a host file, D-69 point 1.
+- **Proven on staging:** `host.ts staging push`; the unit started by hand (`Result=success`); it wrote the record of 2026-11-22, and `host.ts staging field-pull` accepted its shape.
+- **Production:** it needs `prod push`, then the unit's failed state cleared and the record of 22 Nov recomputed by hand (`field-day.sh 2026-11-22`). That changes production, so it waits for the owner's yes. Until then the unit fails again each night; the missing days can be recomputed by hand afterwards for as long as their journal lines and audit rows are still on the host (not checked on production: that would read it).
 
 ## Task D — Production
 
