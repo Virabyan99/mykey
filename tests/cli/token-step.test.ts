@@ -17,6 +17,7 @@ import { describe, expect, it } from "vitest";
 import { terminal, type Terminal } from "./pty.ts";
 
 const RUNBOOK = resolve(import.meta.dirname, "../../docs/runbooks/consumer-local.md");
+const LEAK_CHECK = resolve(import.meta.dirname, "../../scripts/consumer-leak-check.sh");
 
 /** The `sh` block number `index` under the heading "## <n>. …" of consumer-local.md. */
 function blockOf(section: number, index = 0): string {
@@ -211,6 +212,27 @@ describe("the token step in a terminal", () => {
     await t.close();
     expect(readFileSync(tokenFile(home), "utf8")).toBe(`${value}\n`);
     expect(t.screen()).not.toContain(value);
+  }, 30_000);
+
+  it('consumer-leak-check.sh given a pasted three-line block at its value prompt takes none of it as a value, says "one value, not a file", and the outer shell receives nothing', async () => {
+    const home = freshHome();
+    const t = open(BASH, home);
+    const mark = randomBytes(6).toString("hex");
+    const ready = await t.waitFor(/READY> /);
+    t.type(`bash ${LEAK_CHECK}\n`);
+    const prompt = await t.waitFor(/needle 1: /, { from: ready });
+    await sleep(300);
+    t.type(`A=one${mark}\nB=two${mark}\nC=three${mark}\n`);
+    const refused = await t.waitFor(/one value, not a file/, { from: prompt });
+    const again = await t.waitFor(/needle 1: /, { from: refused });
+    await sleep(300);
+    // An empty line ends: no needle was taken, so nothing is searched.
+    t.type("\n");
+    const code = await status(t, again);
+    expect(code).toBe(64);
+    expect(await variables(t, again, ["A", "B", "C"])).toContain("[][][]=end");
+    await t.close();
+    expect(t.screen()).not.toContain(mark);
   }, 30_000);
 
   it("the names-only command with a two-line value prints the name and neither line", () => {

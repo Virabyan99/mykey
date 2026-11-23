@@ -39,9 +39,22 @@ done
 [ -r "$token_file" ] && IFS= read -r line <"$token_file" && [ -n "$line" ] && needles+=("$line")
 
 echo "Paste each value and press Enter. Nothing shows. An empty line ends."
+echo "Paste one value at a time, not a file or a block of NAME=value lines."
 while :; do
   IFS= read -rs -p "needle $((${#needles[@]} + 1)): " line || break
   echo
+  # Run 10.1 (F-9.2-2): a paste of several lines arrives at once. Every line
+  # that follows within a second is swallowed here, so none reaches the shell
+  # after the script, and the paste is refused whole.
+  more=""
+  while IFS= read -rs -t 1 -n 4096 rest; do more=yes; done
+  [ -n "${rest:-}" ] && more=yes
+  rest=""
+  if [ -n "$more" ] || [[ "$line" =~ ^[A-Za-z_][A-Za-z0-9_]*= ]]; then
+    echo "Not taken: one value, not a file. Paste only the value, one at a time."
+    line=""
+    continue
+  fi
   [ -z "$line" ] && break
   needles+=("$line")
   [ "${#needles[@]}" -ge 8 ] && break
