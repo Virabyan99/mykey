@@ -257,4 +257,25 @@ describe("the agent guide (D-79)", () => {
       'exec secrets run -- "$@"',
     );
   });
+
+  // Run 10.4 Task C, the proof's first run: the agent reported the running
+  // application as the end and never sent remove-dotenv (the values stayed in
+  // `.env`), and it took the names with `cut -d= -f1 .env`, which opens the file
+  // and prints the later lines of a value that spans several lines.
+  it("proof finding 1: the work ends with remove-dotenv answered, not when the application runs", () => {
+    const section6 = /## 6\. [^\n]*\n([\s\S]*?)\n## 7\./.exec(GUIDE)?.[1] ?? "";
+    expect(section6).toMatch(
+      /You are not done when the application runs\. Send `remove-dotenv` as soon as the check passes/,
+    );
+    expect(GUIDE).toMatch(
+      /Report the work as done only after the human has answered `remove-dotenv`/,
+    );
+  });
+
+  it("proof finding 2: the names never come from a file that holds values, by any command", () => {
+    const never = /## 13\. Never\n([\s\S]*?)(\n## |$)/.exec(GUIDE)?.[1] ?? "";
+    expect(never).toMatch(/cut -d= -f1 \.env, awk … \.env, sed … \.env/);
+    const section5 = /## 5\. [^\n]*\n([\s\S]*?)\n## 6\./.exec(GUIDE)?.[1] ?? "";
+    expect(section5).toMatch(/not even for its names/);
+  });
 });

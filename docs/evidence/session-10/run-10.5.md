@@ -55,7 +55,9 @@
 | `status.staging`                                                                                    | PASS (3/3)                                                                                                                          |
 | `sweep.staging`                                                                                     | PASS (10/10)                                                                                                                        |
 
-**`test:consumers` was not completed.** Claude Code stopped its shell for low memory (1.9 GB free) about 5 minutes in; the vitest process and its two clean-machine containers kept running and were then stopped by hand (CLAUDE.md: orphans after a killed job). Its `afterAll` did not run, so staging may keep one synthetic project unarchived and up to three unrevoked machine tokens. They were issued for one hour, and existed only in the stopped process and the removed containers. The rehearsal runs again on the owner's word.
+**`test:consumers`, first attempt, not completed.** Claude Code stopped its shell for low memory (1.9 GB free) about 5 minutes in; the vitest process and its two clean-machine containers kept running and were then stopped by hand (CLAUDE.md: orphans after a killed job). Its `afterAll` did not run, so staging may keep one synthetic project unarchived and up to three unrevoked machine tokens. They were issued for one hour, and existed only in the stopped process and the removed containers. The rehearsal ran again on the owner's word, after WSL was shut down and VS Code restarted (about 4.5 GB free).
+
+**`test:consumers`, second attempt: PASS** (2 files, 7/7, 781 s), against `host-v0.9.2`, both runbooks with the v2 token block. Its searches: no token in the tree or in anything captured (10 tokens searched, every control found); its project archived (200).
 
 The runs rewrote `session-7/run-7.10-staging.json` and `session-8/run-8.4-sweep.txt`; both were restored.
 

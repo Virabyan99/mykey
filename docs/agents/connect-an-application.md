@@ -30,6 +30,8 @@ This guide is for an AI coding agent working in an application's repository on a
 | Delete the `.env` files                        | **the human** (`remove-dotenv`) |
 | Rotate or replace the token                    | **the human** (`replace-token`) |
 
+Report the work as done only after the human has answered `remove-dotenv`. A running application with its `.env` files still in place is not done: the values are still in those files.
+
 **The hand-over.** When you reach a human step, stop. Write one message that begins with `Your step (<id>):`, then the step's text below, exactly, and nothing you have not been told. Then wait. Continue only when the human answers that it is done. Never do the step yourself, and never ask the human to paste a token or a value to you.
 
 ### Your step (put-secrets)
@@ -123,7 +125,7 @@ The CLI reads `SECRETS_API_URL`, `SECRETS_PROJECT` and `SECRETS_ENVIRONMENT` fro
 ## 5. Find the names without reading values
 
 - Read `.env.example`, `.env.sample` or the README, and search the code for `process.env.`, `os.environ`, `os.getenv`, `getenv(` and the settings class.
-- **Never open `.env`, `.env.local` or any other file that holds values.** List their paths only (`ls -a`), to name them in `remove-dotenv`.
+- **Never open `.env`, `.env.local` or any other file that holds values, not even for its names.** A command that takes the names from such a file (`cut`, `awk`, `sed`, `grep`) still reads every value, and prints the later lines of a value that spans several. List their paths only (`ls -a`), to name them in `remove-dotenv`.
 - If the names cannot be found that way, ask the human for the names.
 - A secret's name is upper case, letters, digits and `_`, starting with a letter, and never starts with `SECRETS_`. A name the application reads that does not fit stays a plain setting, outside MyKey.
 
@@ -134,7 +136,7 @@ The CLI reads `SECRETS_API_URL`, `SECRETS_PROJECT` and `SECRETS_ENVIRONMENT` fro
 3. Remove what loads a `.env` file, or leave it with no file to load (the recipes below).
 4. `store-token` (the human). Ask for it before the first start: without the token file the launcher refuses with exit 78.
 5. Start it and check it, names only (section 9).
-6. `remove-dotenv` (the human).
+6. `remove-dotenv` (the human). You are not done when the application runs. Send `remove-dotenv` as soon as the check passes, and wait for the answer.
 
 A secret whose name is already set in the shell that starts the application is refused (exit 64): the CLI will not let a secret silently replace a variable. Unset the variable for the start (`env -u NAME secrets-launch.sh -- <command>`), or ask the human which of the two the application should get. The launcher passes no option to the CLI, and running the CLI directly needs the token, so there is no other way for you.
 
@@ -256,6 +258,7 @@ printenv, env, set, echo $NAME             # under secrets-launch.sh or secrets 
 cat /proc/<pid>/environ                    # a running process's values and its token
 secrets export                             # writes every value to a file
 cat .env, grep … .env, open .env           # reads values
+cut -d= -f1 .env, awk … .env, sed … .env   # reads values, even when it prints only names
 SECRETS_MACHINE_TOKEN=… on a command line  # a token in arguments and history
 docker inspect of a container's environment, docker build --build-arg with a token
 git add of any file that holds a value or a token
