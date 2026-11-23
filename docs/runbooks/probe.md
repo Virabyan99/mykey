@@ -45,7 +45,8 @@ When the host is brought into service, remove the flag (or set it to `true`) and
 ```sh
 node scripts/probe.ts state staging     # the probe's view: last heartbeat, open conditions, last 20 alerts
 node scripts/probe.ts deploy            # after a change in workers/probe/
-node scripts/probe.ts secrets           # new heartbeat and read tokens; reinstalls the host files and timers
+node scripts/probe.ts secrets           # new heartbeat and read tokens for BOTH hosts; reinstalls the host files and timers (then PROBE_READ_TOKEN again)
+node scripts/probe.ts secrets --host staging   # one host's existing heartbeat token again, after a reinstall: no new token, no Worker secret, no other host
 node scripts/probe.ts alert-test staging   # sends `MyKey staging: test_alert` through the Worker's sink and logs it
 node scripts/host.ts staging status     # the private status view (runbook operator-status.md)
 ```

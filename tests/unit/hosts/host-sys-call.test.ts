@@ -19,10 +19,10 @@ interface Call {
 
 function fakeExec(answer: { code: number; stdout: string }): { exec: HostExec; calls: Call[] } {
   const calls: Call[] = [];
-  const exec = ((_host: HostEntry, command: string, options: Parameters<HostExec>[2]) => {
+  const exec = (_host: HostEntry, command: string, options: Parameters<HostExec>[2]) => {
     calls.push({ command, options });
     return Promise.resolve({ code: answer.code, stdout: answer.stdout, stderr: "" });
-  }) as unknown as HostExec;
+  };
   return { exec, calls };
 }
 

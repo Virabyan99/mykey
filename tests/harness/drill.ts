@@ -14,7 +14,17 @@ import { expectSuccess, loadHosts, registerSecret, sshExec, type HostEntry } fro
 
 const ROOT = resolve(import.meta.dirname, "..", "..");
 export const DRILL_DIR = join(homedir(), ".mykey", "drill");
-const STATE_FILE = join(DRILL_DIR, "state.json");
+
+/**
+ * Run 10.2 (D-77): MYKEY_DRILL_TARGET=staging is the re-drill of staging onto
+ * its own reinstalled server, with a state file of its own; else Run 6.8's.
+ */
+export function drillStateFile(): string {
+  return join(
+    DRILL_DIR,
+    process.env.MYKEY_DRILL_TARGET === "staging" ? "redrill-state.json" : "state.json",
+  );
+}
 
 export interface StepTiming {
   name: string;
@@ -30,15 +40,15 @@ export interface DrillState {
 }
 
 export function readState(): DrillState {
-  if (!existsSync(STATE_FILE)) return { done: [], steps: [], data: {} };
-  const state = JSON.parse(readFileSync(STATE_FILE, "utf8")) as DrillState;
+  if (!existsSync(drillStateFile())) return { done: [], steps: [], data: {} };
+  const state = JSON.parse(readFileSync(drillStateFile(), "utf8")) as DrillState;
   for (const value of secretsOf(state.data)) registerSecret(value);
   return state;
 }
 
 export function writeState(state: DrillState): void {
   mkdirSync(DRILL_DIR, { recursive: true, mode: 0o700 });
-  writeFileSync(STATE_FILE, JSON.stringify(state, null, 2), { mode: 0o600 });
+  writeFileSync(drillStateFile(), JSON.stringify(state, null, 2), { mode: 0o600 });
 }
 
 /** Values under keys named token, cookie or password are registered for redaction. */
@@ -77,6 +87,28 @@ export async function step(
 export function fence(on: boolean): void {
   if (on) process.env.MYKEY_FENCED_HOSTS = "staging";
   else delete process.env.MYKEY_FENCED_HOSTS;
+}
+
+/**
+ * The host a drill restores onto: staging itself for the re-drill
+ * (MYKEY_DRILL_TARGET=staging, R4-10's case), else Run 6.8's `drill` host.
+ */
+export function drillTarget(): HostEntry {
+  return process.env.MYKEY_DRILL_TARGET === "staging" ? loadHosts().staging : drillHost();
+}
+
+/** A restore's own root token lasts this long from step 4 (RR-2, known-limits.md). */
+export const RESTORE_WINDOW_MINUTES = 120;
+
+/** The minutes left of the restore's window, from `state.data.step4At`; null before step 4. */
+export function restoreClock(
+  state: DrillState,
+  now: Date = new Date(),
+): { step4At: string | null; minutesLeft: number | null } {
+  const step4At = typeof state.data.step4At === "string" ? state.data.step4At : null;
+  if (step4At === null) return { step4At: null, minutesLeft: null };
+  const elapsed = (now.getTime() - new Date(step4At).getTime()) / 60_000;
+  return { step4At, minutesLeft: Math.floor(RESTORE_WINDOW_MINUTES - elapsed) };
 }
 
 export function drillHost(): HostEntry {
