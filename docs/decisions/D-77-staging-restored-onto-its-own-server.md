@@ -43,5 +43,6 @@ The restore code changed in Session 9 (R4-2, R4-3, R4-4, R4-7, R4-10, RR-1, RR-3
 - AC-1.43, AC-1.44 and PO-22 can name this drill at the gate (Run 10.7).
 - The window's margin is 44 minutes at 163 environments. At about 16 s per environment, about 330 active environments fill it (`known-limits.md`).
 - A restore's report does not show whether the provisioner can work. None of its 20 checks reads the provisioner's credential, and the drill's own "after" checks create no environment. Run 10.6 found the defect only through the staging files that create one (`backup`, `machine`, `cli`, `sweep`). A check for it is a candidate for a later session.
+- Staging's 16 member-less spike organizations of Session 2, marked for review by the restore, were retired on the owner's answer. The organizations are `failed` and their 28 environments `archived`, so staging's `reviewOpen` is 0 again (`run-10.6.md`).
 - `host.ts` has no command that puts the signing key back from custody. Run 10.6 used a one-off script.
 - The owner deletes `staging-seal-2` in the console, and `drill-seal-1` if it is still listed.

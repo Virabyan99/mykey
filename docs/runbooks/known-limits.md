@@ -126,7 +126,7 @@ FR-1.75 (P-130). This is an honest list: each line names what the service does n
 - **Two workers may repeat a change, by design.** The provisioner retries an unclear OpenBao answer and takes over an operation whose heartbeat is 60 s old, and the archive tick drives an archive again; each compares before it acts (D-32, D-35, D-41; Run 8.5, R2-2).
 - **A provisioner that lost its claim can still close the operation.** Its end step does not check the claim, so with two provisioners at once (a host runs one) a stale one could mark a finished environment for review (Run 8.5, R2-8).
 - **"No effect" after `--executors-excluded yes` is the operator's word.** The command does not check that `quiesce` or an OpenBao restart happened after the dispatch (Run 8.5, R2-11; `reconciliation.md`).
-- **The staging credential drill places its fault by chance.** It catches an issuance in flight only sometimes and tries up to ten times; `tests/fault/credentials/issuance.test.ts` places the same fault exactly (Session 6, accepted in D-66).
+- **The staging credential drill depends on a trigger on the host.** A transient unit freezes OpenBao at the token create's audit record (D-78), and Run 10.6 caught the issuance on its first attempt. The trigger needs cgroup v2 with Docker's systemd driver and OpenBao's audit file; without them the drill stops at its first step. `tests/fault/credentials/issuance.test.ts` still places the same fault exactly on CI (Session 6; Run 10.6).
 
 ## The hosts and the network
 

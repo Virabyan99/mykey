@@ -102,7 +102,7 @@ The figure "lost to open" (931 minutes) includes the night and the owner's reins
 | ----------- | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `api`       | PASS (12) |                                                                                                                                                                                                                                                                                |
 | `status`    | PASS (3)  |                                                                                                                                                                                                                                                                                |
-| `identity`  | 14 of 15  | The first run lost the VPN; the second, its database tunnel during the canary sweep. The third passed the sweep. Its clean-up expects `reviewOpen` 0, and the host has 44: the 16 spike organizations and 28 environments the restore marked for review (below).               |
+| `identity`  | PASS (15) | The first run lost the VPN; the second, its database tunnel during the canary sweep. The third passed the sweep, and its clean-up found `reviewOpen` 44 (the spike organizations, below). After they were retired, the fourth passed.                                          |
 | `workspace` | PASS (1)  | The test was stale. Home lists the first 100 projects by id, and staging's organization now holds 157. The new project appeared on Home in about six runs in ten. The test now goes the way Home's note points, to the project's own page, when the project is not among them. |
 | `backup`    | PASS (6)  | It named `staging-seal-2`. Staging's seal names are now one constant pair in `tests/harness/staging.ts`.                                                                                                                                                                       |
 | `machine`   | PASS (1)  | After the provisioner fix (below).                                                                                                                                                                                                                                             |
@@ -122,11 +122,32 @@ In the first pass, `backup`, `machine`, `cli` and `sweep` all stopped at "enviro
 - **Not proven:** a second real restore with the fix.
 - **Why the drill missed it:** the report's checks do not cover it, and the drill's "after" checks create no environment (D-77).
 
-### Open: the 16 spike organizations
+### The 16 spike organizations, retired (the owner's answer)
 
 The restore marked Session 2's 16 member-less spike organizations and their 28 environments `needs_review` (`namespace_missing`), as Run 6.8 did on its drill host. Before the reinstall they were `active`.
 
-- `reviewOpen` is now 44, so the probe's `review_open` stays open on staging.
-- The credential drill and `identity`'s clean-up both expect 0.
+- With them, `reviewOpen` was 44, so the probe's `review_open` stayed open on staging. The credential drill and `identity`'s clean-up both expect 0.
+- D-56 had left these organizations to the owner, and the permission check refused the change until the owner was asked. **The owner chose to retire them.**
+- The organizations are now `failed` and their environments `archived` (origin `self`). Only the rows the drill marked were changed: `namespace_missing`, no member. They stay in the database. `reviewOpen` is 0.
 
-Ending their review is a change to staging's data, and D-56 left these organizations to the owner. It is asked, not done.
+## Task D — The credential drill, re-aimed (D-78)
+
+Run on the restored staging, with nothing else running there.
+
+- **Step 1, the order.** One issuance, with the trigger armed and a hold of 0 s:
+  - the answer was 201, and the trigger matched;
+  - the match came 616 ms after the request was sent and 114 ms before the 201. The match is on the host's clock and the answer on the workstation's; staging's chrony offset was 0.03 ms;
+  - it froze 1.2 ms after matching.
+
+  As expected, the request record comes before the answer. The issuance was revoked. Its project (`s10-order-…`) stays, as projects cannot be deleted.
+
+- **Step 2, the drill.** PASS (1 test). **Caught on attempt 1 of 5:**
+  - `503 outcome_unknown`, the trigger's reaction 0.98 ms, the credential `needs_review`;
+  - the next issuance for that environment refused with `409 state_conflict`;
+  - `operations_unresolved` delivered at 15:05:33Z, 21 s after the send;
+  - quiesce at 15:06:40Z, then `reconcile-credentials --executors-excluded yes` (`issuances-settled 1`), then resume and the gate open again at 15:10:06Z;
+  - the alert cleared at 15:10:10Z (`credential-drill.json`).
+- **Step 3:** D-78, and `known-limits.md`'s line rewritten.
+- **Step 4** (nothing caught) did not arise.
+
+The four ids AC-1.18, AC-1.40, AC-1.57 and PO-18 can name this file at Run 10.7's manifest.
