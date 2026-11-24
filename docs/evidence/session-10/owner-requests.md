@@ -38,4 +38,6 @@ Written at the session start (23 Nov 2026). No value appears in this file. Seven
 
 ## The gate's message (24 Nov 2026)
 
-Asked: **"merge", yes or no.** The answer is recorded here with its date. Gate F is not asked: it is decided at W-2.
+Asked: **"merge", yes or no.** The answer is recorded here with its date.
+
+**Answer, 25 Nov 2026:** "merge it". PR #24 merged into `main` by a merge commit. Gate F is not asked: it is decided at W-2.
