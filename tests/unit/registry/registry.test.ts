@@ -142,11 +142,15 @@ describe("evidence registry", () => {
   });
 
   it("claims PASS only with the release manifest among its evidence, and backs every other claim with a file that exists", () => {
-    // Run 8.7: the manifest of Session 8 set the first PASS statuses.
+    // Run 8.7: the manifest of Session 8 set the first PASS statuses; Run 10.7: a
+    // later session's manifest sets PASS too.
     const passed = registry.items.filter((item) => item.status === "PASS");
     expect(passed.length).toBeGreaterThan(0);
     for (const item of passed) {
-      expect(item.evidence, item.id).toContain("docs/evidence/session-8/manifest.md");
+      expect(
+        item.evidence.some((path) => /^docs\/evidence\/session-\d+\/manifest\.md$/.test(path)),
+        item.id,
+      ).toBe(true);
     }
     const claimed = registry.items.filter((item) => item.status !== "OPEN");
     expect(claimed.map((item) => item.id)).toContain("PO-24");
@@ -182,7 +186,7 @@ describe("evidence:verify", () => {
     expect(tamper((copy) => (copy.items[0]!.ownerRun = "12.1")).join("\n")).toMatch(/12\.1/);
     const spike = registry.items.findIndex((item) => item.status === "SPIKE_PASS");
     expect(tamper((copy) => (copy.items[spike]!.status = "PASS")).join("\n")).toMatch(
-      /PASS needs docs\/evidence\/session-8\/manifest\.md/,
+      /PASS needs a release manifest/,
     );
     expect(
       tamper((copy) => {
@@ -256,7 +260,27 @@ describe("evidence:verify", () => {
       try {
         expect(passOf("AC-1.01", [MANIFEST], dir)).toEqual([]);
         expect(passOf("AC-1.01", ["docs/evidence/session-8/other.md"], dir).join("\n")).toMatch(
-          /AC-1\.01: PASS needs docs\/evidence\/session-8\/manifest\.md among its evidence/,
+          /AC-1\.01: PASS needs a release manifest \(docs\/evidence\/session-<n>\/manifest\.md\) among its evidence/,
+        );
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    });
+
+    // Run 10.7: the release manifest of a later session (`--session <n>`) makes PASS too;
+    // a file of the same session that is not its manifest still does not.
+    it("PASS is allowed with a later session's release manifest, and refused with another file", () => {
+      const dir = withManifest([]);
+      try {
+        mkdirSync(join(dir, "docs/evidence/session-10"), { recursive: true });
+        writeFileSync(
+          join(dir, "docs/evidence/session-10/manifest.md"),
+          "- AC-1.18 PASS — staging: tests/staging/credential-drill.staging.test.ts\n",
+        );
+        writeFileSync(join(dir, "docs/evidence/session-10/report.md"), "- AC-1.18 PASS\n");
+        expect(passOf("AC-1.18", ["docs/evidence/session-10/manifest.md"], dir)).toEqual([]);
+        expect(passOf("AC-1.18", ["docs/evidence/session-10/report.md"], dir).join("\n")).toMatch(
+          /AC-1\.18: PASS needs a release manifest/,
         );
       } finally {
         rmSync(dir, { recursive: true, force: true });

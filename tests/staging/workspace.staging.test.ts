@@ -126,19 +126,41 @@ describe("the workspace on staging", () => {
       await page.getByRole("button", { name: "New project" }).click();
       await page.getByLabel("Project name").fill(project);
       await page.getByRole("button", { name: "Create project" }).click();
+      await page
+        .getByRole("status")
+        .filter({ hasText: `The project ${project} is created` })
+        .waitFor();
       // Home lists the first 100 projects by id (LIMITS.listing.maxLimit), and
       // staging's organization holds more (projects cannot be deleted). Run 10.6:
-      // when Home says so and the new one is not among them, go the way the note
-      // points, to the project's own page.
-      const region = page.getByRole("region", { name: project });
-      const cut = page.getByRole("status").filter({ hasText: "Only the first" });
-      await region.or(cut).first().waitFor();
-      const onHome = await region.isVisible();
-      const projects = await publicRequest("GET", `${organization}/projects?limit=100`, { cookie });
-      expect(projects.status).toBe(200);
-      const all = (json(projects).projects ?? []) as { id: string; name: string }[];
-      projectId = all.find((row) => row.name === project)?.id ?? "";
+      // the project is found through every page of the list; Home must show it
+      // when its id is in the first page, and say the list is cut when it is not.
+      let onHome = true;
+      for (let cursor: string | null = null, first = true; ; first = false) {
+        const page100: PublicAnswer = await publicRequest(
+          "GET",
+          `${organization}/projects?limit=100${cursor === null ? "" : `&cursor=${encodeURIComponent(cursor)}`}`,
+          { cookie },
+        );
+        expect(page100.status).toBe(200);
+        const rows = (json(page100).projects ?? []) as { id: string; name: string }[];
+        const own = rows.find((row) => row.name === project);
+        if (own !== undefined) {
+          projectId = own.id;
+          onHome = first;
+          break;
+        }
+        cursor = (json(page100).nextCursor as string | null | undefined) ?? null;
+        if (cursor === null) break;
+      }
       expect(projectId, "the server has the project").toMatch(/^[0-9a-f-]{36}$/);
+      record("project on Home", onHome);
+      const region = page.getByRole("region", { name: project });
+      if (onHome) {
+        await region.waitFor();
+      } else {
+        await page.getByRole("status").filter({ hasText: "Only the first" }).waitFor();
+        expect(await region.count(), "a project past the first 100 is not on Home").toBe(0);
+      }
       const projectPath = `${organization}/projects/${projectId}`;
       // The real provisioner makes its first environment.
       let environmentId = "";
@@ -167,7 +189,6 @@ describe("the workspace on staging", () => {
         await page.getByRole("table", { name: "Environments" }).waitFor();
       }
       const environments = onHome ? region : page.getByRole("table", { name: "Environments" });
-      record("project on Home", onHome);
       await environments
         .getByRole("link", { name: ENVIRONMENT, exact: true })
         .click({ timeout: 90_000 });

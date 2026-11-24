@@ -351,6 +351,11 @@ describe("certificate replacement", () => {
     );
   }, 300_000);
 
+  // Review (Run 10.6): after the replacement, only the short branch can run, and it
+  // claims only that the current certificate unseals after a restart. It records
+  // which branch ran. The deleted-certificate half was proven at the replacement
+  // it names (staging-seal-1 → -2, 12 Nov 2026, docs/evidence/session-2/unseal-staging.txt); seal-2 → seal-3 came
+  // with a reinstall that took seal-2's key, so it had no such half.
   it("a deleted certificate cannot unseal; a reissued one can", async () => {
     const onSecond =
       expectSuccess(
@@ -380,8 +385,21 @@ describe("certificate replacement", () => {
       );
       await expectNewProcess(before);
       await waitUnsealedAndReadable(120);
+      record(
+        `certificate replacement: already done; the current certificate ${STAGING_SEAL_CERT} unseals after a restart (the deleted-certificate half not run)`,
+      );
       return;
     }
+
+    // The long branch needs the previous key on the host: without it okms fails
+    // for that reason alone, which would pass for "deleted in the console".
+    expectSuccess(
+      await sshExec(staging.host, `test -s ${KMS_DIR}/${STAGING_SEAL_CERT_PREVIOUS}.key`, {
+        sudo: true,
+        secretOutput: true,
+      }),
+      `the previous key ${STAGING_SEAL_CERT_PREVIOUS} is on the host`,
+    );
 
     // The owner deleted the previous certificate in the console: the KMS refuses it.
     const old = await sshExec(

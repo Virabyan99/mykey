@@ -39,7 +39,16 @@
   },
   "lastMigration": "0018_incarnation",
   "hostFilesCommit": "aa69922f772cf287311edefe87ddf686244036c5",
-  "tooling": [],
+  "tooling": [
+    {
+      "path": "infra/hosts/field/field-day.sh",
+      "note": "The field day's chmod under set -f (427ddfb, Run 10.5): a host file, put on both hosts by host.ts push; not in any release image."
+    },
+    {
+      "path": "scripts/host-restore.ts",
+      "note": "The restore's delivery gives a clean server's provisioner its organization id (Run 10.6, D-77): the operator tool on the workstation; not in any release image."
+    }
+  ],
   "deploys": {
     "staging": {
       "at": "2026-11-23T13:39:14.803Z",

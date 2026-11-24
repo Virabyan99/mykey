@@ -436,14 +436,23 @@ describe("the staging restore re-drill onto its own server (D-73)", () => {
             [H, "restore", "--source", H, "--newest", "--organization", ORG],
             { timeoutMs: 2 * HOUR },
           );
-          expect(output).toContain(
-            `pair ${data(state, "pairId") as string} restored; closed + verifying`,
-          );
+          // Run 10.6 (review): the pair the restore took is recorded from its own
+          // output, and the step is done whatever pair it was: a rerun is refused
+          // once the database holds organizations. Whether it was P is asserted
+          // after the step.
+          const restored = /pair ([0-9a-f-]{36}) restored; closed \+ verifying/.exec(output);
+          const captured = /"captureStartedAt":"([^"]+)"/.exec(output);
+          expect(restored, "the restore printed no restored pair").not.toBeNull();
+          state.data.restoredPairId = restored?.[1];
+          state.data.restoredPairCapturedAt = captured?.[1];
+          writeState(state);
         },
         { timed: true },
       );
       clock("after steps 1–7");
       expect(await gate()).toMatchObject({ state: "closed", phase: "verifying" });
+      const state = readState();
+      expect(data(state, "restoredPairId"), "--newest took P").toBe(data(state, "pairId"));
     },
     2 * HOUR,
   );
@@ -810,7 +819,7 @@ describe("the staging restore re-drill onto its own server (D-73)", () => {
           release: RELEASE?.split(/[\\/]/).at(-1),
           pairId: state.data.pairId,
           pairCapturedAt: state.data.pairCapturedAt,
-          // Run 10.6: the pair the restore took, when it was not P (recorded by hand).
+          // Run 10.6: the pair the restore took (C2 records it from its output).
           restoredPairId: state.data.restoredPairId ?? state.data.pairId,
           restoredPairCapturedAt: state.data.restoredPairCapturedAt ?? state.data.pairCapturedAt,
           lostAt,

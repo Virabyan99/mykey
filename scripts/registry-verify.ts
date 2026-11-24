@@ -17,8 +17,13 @@ const ROOT = resolve(import.meta.dirname, "..");
 const STATUSES = ["OPEN", "SPIKE_PASS", "PASS", "FAIL", "WATCH", "CUT"];
 
 const DECISIONS = "docs/decisions/";
-/** The release manifest of Session 8 (Run 8.7): the only evidence that makes an item PASS. */
+/** The release manifest of Session 8 (Run 8.7), the first that made an item PASS. */
 export const RELEASE_MANIFEST = "docs/evidence/session-8/manifest.md";
+/**
+ * Run 10.7: a release manifest of any session (`release-manifest.ts --session <n>`)
+ * is the only evidence that makes an item PASS.
+ */
+export const RELEASE_MANIFEST_PATTERN = /^docs\/evidence\/session-\d+\/manifest\.md$/;
 const EVIDENCE_ROOTS = ["docs/evidence/", DECISIONS];
 
 /** Whether one line of the text names exactly this id (not a longer one) together with the status. */
@@ -64,8 +69,10 @@ export function registryProblems(registry: Registry, root: string = ROOT): strin
     if (item.status === "PASS") {
       if (GATE_F_IDS.includes(item.id)) {
         problems.push(`${item.id}: a Gate F item is never PASS in Stage 1's release`);
-      } else if (!item.evidence.includes(RELEASE_MANIFEST)) {
-        problems.push(`${item.id}: PASS needs ${RELEASE_MANIFEST} among its evidence`);
+      } else if (!item.evidence.some((path) => RELEASE_MANIFEST_PATTERN.test(path))) {
+        problems.push(
+          `${item.id}: PASS needs a release manifest (docs/evidence/session-<n>/manifest.md) among its evidence`,
+        );
       }
     }
     if (item.status !== "OPEN" && item.evidence.length === 0) {
