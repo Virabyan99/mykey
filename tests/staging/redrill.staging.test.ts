@@ -69,6 +69,28 @@ const host = drillTarget();
 const STAGING = `https://${loadHosts().staging.hostname}`;
 const SECRETS = 30;
 const HOUR = 3_600_000;
+/** Staging's OpenBao and KMS settings (kms-and-unseal.md), for host.env on the reinstalled server. */
+const STAGING_OPENBAO_ENV: readonly (readonly [string, string])[] = [
+  ["MYKEY_KMS_HOST", "us-east-vin.okms.ovh.us"],
+  ["MYKEY_KMS_SEAL_KEY_ID", "5ec11f05-091a-460b-a7e6-f1064a6ece0e"],
+  ["MYKEY_OPENBAO", "1"],
+  ["MYKEY_BAO_URL", "https://openbao:8200"],
+];
+/** The pinned upstream images of the host's Compose file (postgres, openbao, traefik). */
+const UPSTREAM_IMAGES = (["postgres", "openbao", "traefik"] as const).map((name) => {
+  const pin = (
+    JSON.parse(
+      readFileSync(
+        join(import.meta.dirname, "..", "..", "infra", "dependencies.lock.json"),
+        "utf8",
+      ),
+    ) as {
+      images: Record<string, { image: string; digest: string }>;
+    }
+  ).images[name];
+  if (pin === undefined) throw new Error(`no pin for ${name}`);
+  return `${pin.image}@${pin.digest}`;
+});
 /** Run 6.8: reconcile-credentials took about 19 s per environment. */
 const RECONCILE_SECONDS = 19;
 
@@ -314,6 +336,10 @@ describe("the staging restore re-drill onto its own server (D-73)", () => {
       await step("B4-lost", async (state) => {
         await hostTsOk([H, "gate", "close"]);
         await hostTsOk([H, "quiesce"], { timeoutMs: 600_000 });
+        // Run 10.6: a lost host makes no more pairs. quiesce stops the executors,
+        // not the timers, and the 03:00 pair of the next night became the newest.
+        const stopped = await sshExec(host, "systemctl stop mykey-backup.timer", { sudo: true });
+        expect(stopped.code, stopped.stderr).toBe(0);
         state.data.lostAt = new Date().toISOString();
       });
       if (PHASE === "lost") {
@@ -334,6 +360,9 @@ describe("the staging restore re-drill onto its own server (D-73)", () => {
         async (state) => {
           await hostTsOk([H, "push"], { timeoutMs: 600_000 });
           await hostTsOk([H, "kms-install", OKMS_TAR]);
+          // Run 10.6: a reinstalled server's host.env has none of OpenBao's settings
+          // (production.md §2 sets them; restore.md's "Before" did not say so).
+          for (const [key, value] of STAGING_OPENBAO_ENV) await hostTsOk([H, "env", key, value]);
           await hostTsOk([
             H,
             "kms-cert",
@@ -344,28 +373,13 @@ describe("the staging restore re-drill onto its own server (D-73)", () => {
           await hostTsOk([H, "deploy", "--release", RELEASE ?? "", "--install-only"], {
             timeoutMs: 2 * HOUR,
           });
-          await hostTsOk(
-            [
-              H,
-              "maint",
-              "10",
-              "--",
-              "docker",
-              "compose",
-              "--env-file",
-              "/etc/mykey/host.env",
-              "-f",
-              "/opt/mykey/compose/host.compose.yml",
-              "-p",
-              "mykey",
-              "pull",
-              "--quiet",
-              "postgres",
-              "openbao",
-              "edge",
-            ],
-            { timeoutMs: 900_000 },
-          );
+          // Run 10.6: by digest, not `compose pull`. Compose interpolates host.env,
+          // which has no MYKEY_BASE_URL before the first `up` (production.md §1).
+          for (const image of UPSTREAM_IMAGES) {
+            await hostTsOk([H, "maint", "10", "--", "docker", "pull", "-q", image], {
+              timeoutMs: 900_000,
+            });
+          }
           await hostTsOk(
             [
               H,
@@ -412,6 +426,9 @@ describe("the staging restore re-drill onto its own server (D-73)", () => {
       await step(
         "C2-restore",
         async (state) => {
+          // Run 10.6: never on a server whose install did not finish (the first
+          // restore run started the clock after C1 had failed).
+          expect(state.done, "C1-install is not done").toContain("C1-install");
           // The clock starts no later than the command: step 4 comes inside it.
           state.data.step4At = new Date().toISOString();
           writeState(state);
@@ -793,6 +810,9 @@ describe("the staging restore re-drill onto its own server (D-73)", () => {
           release: RELEASE?.split(/[\\/]/).at(-1),
           pairId: state.data.pairId,
           pairCapturedAt: state.data.pairCapturedAt,
+          // Run 10.6: the pair the restore took, when it was not P (recorded by hand).
+          restoredPairId: state.data.restoredPairId ?? state.data.pairId,
+          restoredPairCapturedAt: state.data.restoredPairCapturedAt ?? state.data.pairCapturedAt,
           lostAt,
           step4At,
           gateOpenedAt,

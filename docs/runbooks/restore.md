@@ -12,9 +12,13 @@ A restore **never opens anything by itself**. It ends closed + `verifying`: the 
   ```sh
   MSYS_NO_PATHCONV=1 node scripts/host.ts <host> bootstrap        # then apply firewall|ssh + confirm, the VPN peer
   MSYS_NO_PATHCONV=1 node scripts/host.ts <host> kms-install <okms-cli-linux-x86_64.tar.gz>   # the pinned okms (the restore checks the pair's seal key with it)
+  MSYS_NO_PATHCONV=1 node scripts/host.ts <host> env MYKEY_KMS_HOST <region>.okms.ovh.us   # a reinstalled server's host.env has none of the four (Run 10.6)
+  MSYS_NO_PATHCONV=1 node scripts/host.ts <host> env MYKEY_KMS_SEAL_KEY_ID <the pair's seal key id>
+  MSYS_NO_PATHCONV=1 node scripts/host.ts <host> env MYKEY_OPENBAO 1
+  MSYS_NO_PATHCONV=1 node scripts/host.ts <host> env MYKEY_BAO_URL https://openbao:8200
   MSYS_NO_PATHCONV=1 node scripts/host.ts <host> kms-csr | kms-cert | kms-use   # kms-and-unseal.md: a certificate under the source's KMS domain
   MSYS_NO_PATHCONV=1 node scripts/host.ts <host> deploy --release <dir> --install-only
-  MSYS_NO_PATHCONV=1 node scripts/host.ts <host> maint 10 -- docker compose --env-file /etc/mykey/host.env -f /opt/mykey/compose/host.compose.yml -p mykey pull --quiet postgres openbao edge   # upstream images, by digest
+  MSYS_NO_PATHCONV=1 node scripts/host.ts <host> maint 10 -- docker pull -q <image>@<digest>   # postgres, openbao/openbao and traefik, each by its digest in infra/dependencies.lock.json; not `compose pull`, which needs host.env's MYKEY_BASE_URL (written by the first `up`)
   MSYS_NO_PATHCONV=1 node scripts/host.ts <host> maint 5 -- docker pull -q restic/restic@sha256:136600b6ff6843d61d355f7f71f460a166429f35de6fd11b568fece3c9a4d510   # backup.sh's restic
   MSYS_NO_PATHCONV=1 node scripts/host.ts <host> up
   MSYS_NO_PATHCONV=1 node scripts/host.ts <host> bao-init         # the host's own root token: the restore's step 4 needs it (on the lost host's own name: written beside its copy, dated)
@@ -96,6 +100,25 @@ MSYS_NO_PATHCONV=1 node scripts/host.ts <host> restore-verify --confirm-members 
   Check that `/var/lib/mykey/restore-state.json` is gone. A restore refuses a host where a finished one is left, and so does a deploy, which opens no host whose restore is not finished. Copy the new custody copy to the password manager, in place of the one it replaced.
 
 After opening: every person signs in after an `mfa` reset (`reset-account --kind mfa`), every machine needs a new token, and every `uncertain` operation needs review (`reconciliation.md`). The authenticators and recovery codes in the pair are never trusted (rule 9): a `password` reset is refused (`restored_factor`) while a person's active authenticator is older than the restore, and becomes possible again once they have enrolled anew.
+
+## After, on the host's own server
+
+A host restored onto its own reinstalled server (Run 10.6, staging onto staging) is open but makes no pairs yet. Its disk lost the signing key and the R2 tokens, and the restore brings back only the backup password. In this order:
+
+1. The signing key from custody (below).
+2. Then:
+
+```sh
+MSYS_NO_PATHCONV=1 node scripts/host.ts <host> backup-init                 # keeps the key it finds; a new secret id for the root AppRole backup
+MSYS_NO_PATHCONV=1 node scripts/host.ts <host> backup-custody              # "already holds" for both files: custody and host agree
+MSYS_NO_PATHCONV=1 node scripts/host.ts <host> r2-install pairs            # and pairs-cleanup, audit-archive
+MSYS_NO_PATHCONV=1 node scripts/host.ts <host> push
+MSYS_NO_PATHCONV=1 node scripts/host.ts <host> timers
+```
+
+- **The signing key comes back from custody, not new.** A pair names no signing key id, and a host has one trust anchor, `infra/hosts/backup/trust/<host>-k1.pub`. A new key would make every earlier pair of the host unverifiable. So before `backup-init`, install `~/.mykey/custody/<host>/backup/signing-key` at `/etc/mykey/secrets/backup/signing-key` (owner 1000, mode 0400), on stdin, after checking that its public half equals the committed anchor. `host.ts` has no command for it yet; Run 10.6 used a one-off script through `sshExec` with `secretOutput` and the key on stdin. `backup-init` then finds the key and writes the same anchor. A new key id is needed only when the key itself is lost or exposed, and needs a change to the restore's trust lookup first.
+- **The first pair by hand:** `systemctl start mykey-backup.service` on the host, until the pair is `eligible` (`backup.md`).
+- **A host declared lost in a drill keeps its timers** unless they are stopped: `quiesce` stops the executors only. Run 10.6's staging made a pair at 03:00 after it was declared lost, and `--newest` restored that one. The drill now stops `mykey-backup.timer` when it declares the host lost.
 
 ## Production
 

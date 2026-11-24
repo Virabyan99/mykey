@@ -126,8 +126,14 @@ describe("the workspace on staging", () => {
       await page.getByRole("button", { name: "New project" }).click();
       await page.getByLabel("Project name").fill(project);
       await page.getByRole("button", { name: "Create project" }).click();
+      // Home lists the first 100 projects by id (LIMITS.listing.maxLimit), and
+      // staging's organization holds more (projects cannot be deleted). Run 10.6:
+      // when Home says so and the new one is not among them, go the way the note
+      // points, to the project's own page.
       const region = page.getByRole("region", { name: project });
-      await region.waitFor();
+      const cut = page.getByRole("status").filter({ hasText: "Only the first" });
+      await region.or(cut).first().waitFor();
+      const onHome = await region.isVisible();
       const projects = await publicRequest("GET", `${organization}/projects?limit=100`, { cookie });
       expect(projects.status).toBe(200);
       const all = (json(projects).projects ?? []) as { id: string; name: string }[];
@@ -156,7 +162,15 @@ describe("the workspace on staging", () => {
 
       // --- a secret, written and revealed -----------------------------------
       // The overview learns by its own schedule that the environment is active.
-      await region.getByRole("link", { name: ENVIRONMENT, exact: true }).click({ timeout: 90_000 });
+      if (!onHome) {
+        await page.goto(`${STAGING_ORIGIN}/o/${ORGANIZATION}/p/${projectId}`);
+        await page.getByRole("table", { name: "Environments" }).waitFor();
+      }
+      const environments = onHome ? region : page.getByRole("table", { name: "Environments" });
+      record("project on Home", onHome);
+      await environments
+        .getByRole("link", { name: ENVIRONMENT, exact: true })
+        .click({ timeout: 90_000 });
       await heading(page, "Secrets").waitFor();
       await page.getByRole("button", { name: "New secret" }).click();
       await page.getByLabel("Name", { exact: true }).fill(name);

@@ -27,6 +27,13 @@ export * from "@mykey/ops/remote";
 // --------------------------------------------- a script run once on the host
 
 /**
+ * Staging's seal certificates (kms-and-unseal.md): the one OpenBao unseals with,
+ * and the one it replaced. Run 10.6 moved them on (the reinstall took seal-2's key).
+ */
+export const STAGING_SEAL_CERT = "staging-seal-3";
+export const STAGING_SEAL_CERT_PREVIOUS = "staging-seal-2";
+
+/**
  * Run 10.3 (P-176, D-78): a test script sent to the host for one run, never a
  * host file. It is written under /run (a tmpfs), started with systemd-run as a
  * transient unit that systemd stops at `runtimeMaxSec`, whose `stopPost` runs
