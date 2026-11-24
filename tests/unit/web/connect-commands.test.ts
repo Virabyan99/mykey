@@ -1,8 +1,8 @@
 // Run 9.0 Task E (P-160, P-161, the walkthrough's findings): "Connect an
 // application" shows the runbooks' own commands, with the page's origin, the
 // project's id and the environment's name filled in and nothing else changed.
-// It never holds a token: the token step is the runbook's stdin block, with
-// the terminal's echo switched off around it.
+// It never holds a token: the token step is the runbook's one silent command
+// (Run 10.1, D-76), shown as one block.
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import {
@@ -69,9 +69,7 @@ describe("Connect an application's commands", () => {
       ...blocksOf(LOCAL, 4),
       filled(blocksOf(LOCAL, 5)[0] ?? "", "development"),
       ...blocksOf(LOCAL, 6),
-      "stty -echo",
       blocksOf(LOCAL, 8)[0],
-      "stty echo",
       blocksOf(LOCAL, 9)[0],
     ];
     expect(commands).toEqual(expected);
@@ -89,9 +87,7 @@ describe("Connect an application's commands", () => {
       filled(blocksOf(DEPLOY, 2)[0] ?? "", "production"),
       ...blocksOf(DEPLOY, 3),
       ...blocksOf(DEPLOY, 4),
-      "stty -echo",
       blocksOf(DEPLOY, 5)[0],
-      "stty echo",
       ...blocksOf(DEPLOY, 6),
     ]);
   });
@@ -103,9 +99,13 @@ describe("Connect an application's commands", () => {
     expect(commands).toContain(blocksOf(LOCAL, 9)[1]);
     expect(commands).not.toContain(blocksOf(LOCAL, 9)[0]);
     expect(commands.join("\n")).not.toContain("APP_START");
+    // F-10.0-1: names only, also of a value with several lines.
+    const names = blocksOf(LOCAL, 9)[1] ?? "";
+    expect(names).toContain("ENVIRON");
+    expect(names).not.toContain("cut");
   });
 
-  it("no command holds a token, and the token step is the stdin block with stty -echo", () => {
+  it("no command holds a token, and the token step is the runbook's one silent command", () => {
     for (const application of [true, false]) {
       const steps = localSteps(LOCAL, FILL, { application });
       for (const command of steps.flatMap((step) => step.commands)) {
@@ -113,9 +113,11 @@ describe("Connect an application's commands", () => {
         expect(command).not.toMatch(/SECRETS_TOKEN=|--token\s+\S/);
       }
       const token = steps.find((step) => step.commands.some((c) => c.includes("machine-token")));
-      // Review RR-5: three blocks, run one at a time; the middle one is the runbook's.
-      expect(token?.commands).toEqual(["stty -echo", blocksOf(LOCAL, 8)[0], "stty echo"]);
-      expect(token?.warning).toMatch(/stays on the screen/);
+      // Run 10.1 (F-9.2-1): one block, the runbook's, which reads before anything can fail.
+      expect(token?.commands).toEqual([blocksOf(LOCAL, 8)[0]]);
+      expect(token?.commands[0]).toMatch(/^bash -c '/);
+      expect(token?.warning).toMatch(/only when the terminal shows/);
+      expect(token?.warning).not.toMatch(/stty/);
       // Review RR-9: the terminal is ready before the token is issued.
       const ids = steps.map((step) => step.id);
       expect(ids.indexOf("local-store")).toBe(ids.indexOf("local-issue") - 1);

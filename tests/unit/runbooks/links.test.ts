@@ -5,8 +5,16 @@ import { dirname, join, resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
 const ROOT = resolve(import.meta.dirname, "../../..");
-const RUNBOOKS = join(ROOT, "docs/runbooks");
-const files = readdirSync(RUNBOOKS).filter((name) => name.endsWith(".md"));
+// Run 10.4 (D-79): the agent guide and llms.txt follow the same rules.
+const files = [
+  ...readdirSync(join(ROOT, "docs/runbooks"))
+    .filter((name) => name.endsWith(".md"))
+    .map((name) => `docs/runbooks/${name}`),
+  ...readdirSync(join(ROOT, "docs/agents"))
+    .filter((name) => name.endsWith(".md"))
+    .map((name) => `docs/agents/${name}`),
+  "llms.txt",
+];
 
 /** A path with a placeholder, a glob or a brace list names no one file. */
 const concrete = (path: string): boolean => !/[<>*{}|$]|\.\.\./.test(path);
@@ -15,11 +23,11 @@ describe("runbook links and paths (P-130)", () => {
   it("every relative link resolves", () => {
     const missing: string[] = [];
     for (const name of files) {
-      const text = readFileSync(join(RUNBOOKS, name), "utf8");
+      const text = readFileSync(join(ROOT, name), "utf8");
       for (const match of text.matchAll(/\]\(([^)\s]+)\)/g)) {
         const target = (match[1] ?? "").split("#")[0] ?? "";
         if (target === "" || /^[a-z]+:/.test(target)) continue;
-        if (!existsSync(resolve(RUNBOOKS, target))) missing.push(`${name}: ${target}`);
+        if (!existsSync(resolve(ROOT, dirname(name), target))) missing.push(`${name}: ${target}`);
       }
     }
     expect(missing).toEqual([]);
@@ -28,7 +36,7 @@ describe("runbook links and paths (P-130)", () => {
   it("every repository path named in backticks exists", () => {
     const missing: string[] = [];
     for (const name of files) {
-      const text = readFileSync(join(RUNBOOKS, name), "utf8");
+      const text = readFileSync(join(ROOT, name), "utf8");
       for (const match of text.matchAll(
         /`((?:docs|infra|scripts|tests|apps|packages|workers)\/[^`\s]+)`/g,
       )) {

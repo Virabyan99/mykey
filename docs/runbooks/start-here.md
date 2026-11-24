@@ -2,6 +2,8 @@
 
 One page in the order the owner meets the service, from a reset link to an application that starts with its secrets and no `.env` file. Each step names the screen or the runbook that holds the detail. Use synthetic values only until Gate R is signed.
 
+Working with an AI coding agent? Give it the repository's [`llms.txt`](../../llms.txt): it leads to one guide, which keeps the token and every value with you.
+
 On staging the address is `https://mykey-staging.nomikey.com`. On production the first account is made by the operator's bootstrap (`operator-accounts.md`, "Bootstrap of the owner"), and you enrol the authenticator after your first sign-in, through the operator's private link (`production.md`, "The first opening"), not on a reset page. Everything after step 2 is the same.
 
 ## 1. The link
@@ -43,7 +45,7 @@ Open the environment's **Connect an application** page (in the sidebar, under th
   - the service is this page's address (on staging `https://mykey-staging.nomikey.com`);
   - the **project's id** is shown with a Copy button in the breadcrumbs and on the project's page (it is also the part of the address after `/p/`);
   - the environment is its name, `development`;
-- store the token on standard input, into a file only you can read. The pasted token stays on the screen, so never copy that terminal into a chat or a screenshot (`stty -echo` keeps it off);
+- store the token with the one command shown, into a file only you can read. Run it first, and paste the token only when the terminal shows `Paste the token, then press Enter:`; nothing pasted is shown;
 - start the application through `secrets-launch.sh`.
 
 Without an application of your own, step 9 has a command that only lists the names it was started with.

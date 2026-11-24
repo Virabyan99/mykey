@@ -20,6 +20,18 @@ The same request again (same key and body):
 - after it succeeded → `409 credential_not_replayable` with `{ credentialId, state }`: never the token;
 - after a definite failure → that failure again.
 
+## Store a token
+
+On the machine, run this one line **before** you issue the token, then paste the token at its prompt (Run 10.1, D-76). It runs in `bash`, whatever your shell is, and writes `~/.config/mykey/machine-token` (mode 0600) in place:
+
+```sh
+bash -c 'f="$HOME/.config/mykey/machine-token"; d="${f%/*}"; trap "stty echo 2>/dev/null" EXIT; stty -echo 2>/dev/null; t=; while [ -z "$t" ] && IFS= read -rs -p "Paste the token, then press Enter: " t; do echo; done; while IFS= read -rs -t 1 -n 4096 x; do [ -n "$x" ] && t=; done; [ -n "$x" ] && t=; case "$t" in ""|*[^A-Za-z0-9._-]*) echo "Nothing was stored: that was not one token. If a token was shown on the screen, revoke it."; exit 1;; esac; umask 077; if mkdir -p "$d" && chmod 700 "$d" && { [ ! -e "$f" ] || chmod 600 "$f"; } && printf "%s\n" "$t" > "$f" && chmod 600 "$f"; then echo "Token stored."; else echo "Nothing was stored: the file could not be written."; exit 1; fi'
+```
+
+- **Paste only when the terminal shows `Paste the token, then press Enter:`.** If it shows anything else, do not paste: a paste that reaches the shell goes to its history and the screen.
+- Nothing pasted is shown. `Token stored.` means it is stored. A paste of several lines, an empty line, or anything with a character a token never has is refused: `Nothing was stored`, exit 1.
+- `consumer-local.md` §8 is this command's source; `tests/unit/runbooks/token-step.test.ts` keeps every copy equal to it.
+
 ## Inventory
 
 `GET …/credentials` lists the environment's credentials, newest first: id, name, state, expiry, issued at, last use (when known). Never a token or an accessor.

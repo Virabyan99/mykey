@@ -22,6 +22,28 @@
 CVE-2026-76844 exp:2026-12-14 # HIGH
 CVE-2026-85091 exp:2026-12-14 # HIGH
 
+# postgres 18.6 — debian krb5 libraries (libgssapi-krb5-2, libk5crypto3, libkrb5-3, libkrb5support0 1.21.3-5+deb13u1)
+# Reviewed 2026-11-23 in Run 10.5: new upstream findings (the scan turned red overnight).
+# Debian has the fix (1.21.3-5+deb13u2); the official postgres image has not been rebuilt with it.
+# Exposed: nothing reachable. PostgreSQL loads the GSSAPI library, but no pg_hba line on any host
+# or in dev uses gss, sspi or hostgssenc (only scram-sha-256 and reject), so no Kerberos exchange
+# happens. Most entries are in the KDC and kadmind, which the image does not ship or run.
+# Moving the pin is a runtime image change after Gate R (D-69): an owner question, not done here.
+CVE-2026-107364 exp:2026-12-14 # HIGH
+CVE-2026-112315 exp:2026-12-14 # HIGH
+CVE-2026-112316 exp:2026-12-14 # HIGH
+CVE-2026-112317 exp:2026-12-14 # HIGH
+CVE-2026-112318 exp:2026-12-14 # HIGH
+CVE-2026-112319 exp:2026-12-14 # HIGH
+CVE-2026-112320 exp:2026-12-14 # HIGH
+CVE-2026-112321 exp:2026-12-14 # HIGH
+CVE-2026-112322 exp:2026-12-14 # HIGH
+CVE-2026-112323 exp:2026-12-14 # HIGH
+CVE-2026-118380 exp:2026-12-14 # HIGH
+CVE-2026-119079 exp:2026-12-14 # HIGH
+CVE-2026-71199 exp:2026-12-14 # HIGH
+CVE-2026-71200 exp:2026-12-14 # HIGH
+
 # postgres 18.6 — usr/local/bin/gosu
 # gosu only drops privileges at container start: it opens no socket and reads no untrusted input. Fixed when the official image rebuilds gosu.
 # stdlib v1.24.6

@@ -24,6 +24,77 @@ import type { Stack } from "./stack.ts";
 
 export * from "@mykey/ops/remote";
 
+// --------------------------------------------- a script run once on the host
+
+/**
+ * Staging's seal certificates (kms-and-unseal.md): the one OpenBao unseals with,
+ * and the one it replaced. Run 10.6 moved them on (the reinstall took seal-2's key).
+ */
+export const STAGING_SEAL_CERT = "staging-seal-3";
+export const STAGING_SEAL_CERT_PREVIOUS = "staging-seal-2";
+
+/**
+ * Run 10.3 (P-176, D-78): a test script sent to the host for one run, never a
+ * host file. It is written under /run (a tmpfs), started with systemd-run as a
+ * transient unit that systemd stops at `runtimeMaxSec`, whose `stopPost` runs
+ * however it ends, and which removes the script. Its output is read from the
+ * journal. `setenv` values are not secret.
+ */
+export async function hostUnit(
+  host: HostEntry,
+  name: string,
+  script: string,
+  args: string[],
+  limits: { runtimeMaxSec: number; stopPost: string; setenv?: Record<string, string> },
+): Promise<{ waitFor(line: RegExp, ms: number): Promise<void>; report(): Promise<string> }> {
+  if (!/^mykey-test-[a-z0-9-]+$/.test(name))
+    throw new Error(`hostUnit: ${name} is not a test unit`);
+  // systemd reads the command line itself: one double-quoted -c argument, no `$`.
+  if (/["$\\]/.test(limits.stopPost)) throw new Error('hostUnit: stopPost holds " $ or \\');
+  const path = `/run/${name}.sh`;
+  const q = (value: string): string => `'${value.replaceAll("'", "'\\''")}'`;
+  expectSuccess(
+    await sshExec(host, `install -m 0700 -o root -g root /dev/stdin ${path}`, {
+      sudo: true,
+      stdin: script,
+    }),
+    `${name}: the script`,
+  );
+  const started = Date.now();
+  const setenv = Object.entries(limits.setenv ?? {}).map(([k, v]) => `--setenv=${k}=${q(v)}`);
+  const run = [
+    "systemd-run",
+    `--unit=${name}`,
+    "--collect",
+    "--quiet",
+    `--property=RuntimeMaxSec=${String(limits.runtimeMaxSec)}`,
+    `--property=${q(`ExecStopPost=/bin/sh -c "${limits.stopPost}; rm -f ${path}"`)}`,
+    ...setenv,
+    "/bin/bash",
+    path,
+    ...args.map(q),
+  ].join(" ");
+  expectSuccess(await sshExec(host, run, { sudo: true, timeoutMs: 60_000 }), `${name}: start`);
+  const since = new Date(started - 5_000).toISOString().replace("T", " ").slice(0, 19);
+  const report = async (): Promise<string> =>
+    (
+      await sshExec(host, `journalctl -u ${name} -o cat --no-pager --since ${q(`${since} UTC`)}`, {
+        sudo: true,
+        timeoutMs: 60_000,
+      })
+    ).stdout;
+  return {
+    report,
+    waitFor: async (line, ms) => {
+      for (const deadline = Date.now() + ms; ;) {
+        if (line.test(await report())) return;
+        if (Date.now() > deadline) throw new Error(`${name}: never printed ${String(line)}`);
+        await sleep(500);
+      }
+    },
+  };
+}
+
 // ------------------------------------------------------ the gate and the limits
 
 /**

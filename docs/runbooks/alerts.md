@@ -92,7 +92,7 @@ The host reported the KMS unreachable for 3 minutes. A running OpenBao keeps ser
 
 ```sh
 MSYS_NO_PATHCONV=1 node scripts/host.ts <host> status          # kmsReachable
-MSYS_NO_PATHCONV=1 node scripts/host.ts <host> kms staging-seal-2 -- kmip locate --details
+MSYS_NO_PATHCONV=1 node scripts/host.ts <host> kms staging-seal-3 -- kmip locate --details
 ```
 
 On the host: `sudo /opt/mykey/hosts/firewall/mykey-egress.sh counts` (set `kms`).

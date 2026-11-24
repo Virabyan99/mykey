@@ -25,8 +25,8 @@ At start without the KMS, OpenBao waits on the KMIP connection (about 130 s when
 
 ```sh
 node scripts/host.ts staging status                         # sealed, sealType, kmsReachable
-node scripts/host.ts staging kms staging-seal-2 -- kmip locate --details
-node scripts/host.ts staging kms staging-seal-2 -- kmip attributes get <key id>
+node scripts/host.ts staging kms staging-seal-3 -- kmip locate --details
+node scripts/host.ts staging kms staging-seal-3 -- kmip attributes get <key id>
 ```
 
 `okms` (OVHcloud's CLI, release 0.6.0, pinned by SHA-256 in `infra/dependencies.lock.json`) runs on the host through `infra/hosts/kms/okms.sh`, as uid 100, with one named certificate; it prints identifiers and states only.
@@ -45,7 +45,7 @@ A host that restores a pair needs a certificate under the **source's** KMS domai
 
 **Longer certificates:** none. `okms x509 sign --validity` signs a CSR with a domain key acting as our own CA; it does not issue the KMS's access certificates. Those come from the OKMS service, whose console offers 30 days only (checked in Run 6.4 with okms 0.6.0).
 
-Certificates from the console are valid for **30 days** (the only choice offered on 12 Nov 2026). **`staging-seal-2`, the current one, expires on 12 Dec 2026, 10:50 UTC** (`staging-seal-1` was replaced and deleted on 12 Nov 2026); OpenBao keeps running after that but cannot unseal again. Replace it at least a week before.
+Certificates from the console are valid for **30 days** (the only choice offered on 12 Nov 2026). **`staging-seal-3`, the current one, expires on 24 Dec 2026, 10:28:57 UTC** (issued 24 Nov 2026 for staging's reinstalled server, Run 10.6; `staging-seal-2`'s key went with the old disk, and `staging-seal-1` was deleted on 12 Nov 2026); OpenBao keeps running after that but cannot unseal again. Replace it at least a week before.
 
 1. `node scripts/host.ts staging kms-csr staging-seal-<n>` — a new key on the host; prints the CSR only.
 2. Owner, console: `mykey-staging-kms` → Access certificates → Generate, **provide the CSR**, identity `mykey-staging-seal` only (never root), download; save as `~/.mykey/kms/staging-seal-<n>.crt`.

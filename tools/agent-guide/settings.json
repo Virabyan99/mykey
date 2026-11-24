@@ -1,0 +1,7 @@
+{
+  "apiKeyHelper": "cat /run/secrets/anthropic-api-key",
+  "permissions": {
+    "allow": ["Bash", "Read", "Edit", "Write", "Glob", "Grep", "WebFetch"],
+    "deny": ["WebSearch", "NotebookEdit", "Task", "Agent"]
+  }
+}

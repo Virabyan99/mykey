@@ -46,6 +46,7 @@ import {
   registerSecret,
   shQuote,
   sshExec,
+  STAGING_SEAL_CERT,
 } from "../harness/staging.ts";
 import { publicRequest, stagingOwnerSession, type PublicAnswer } from "../harness/staging-owner.ts";
 import { kmsKeyState, kmsKeyStateCommand } from "../../scripts/host.ts";
@@ -387,7 +388,7 @@ describe("keyReadable on staging's KMS", () => {
 
   it("answers false for the destroyed loss-test key of Run 2.7 and true for staging's seal key", async () => {
     expect(await keyReadable(LOSSTEST_DESTROYED, probeWith("losstest-ops"))).toBe(false);
-    expect(await keyReadable(STAGING_SEAL, probeWith("staging-seal-2"))).toBe(true);
+    expect(await keyReadable(STAGING_SEAL, probeWith(STAGING_SEAL_CERT))).toBe(true);
     writeFileSync(
       "docs/evidence/session-6/run-6.6-key-readable.json",
       `${JSON.stringify({ observedAt: new Date().toISOString(), keyReadable: { [LOSSTEST_DESTROYED]: false, [STAGING_SEAL]: true } }, null, 2)}

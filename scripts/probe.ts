@@ -3,6 +3,8 @@
 //
 //   node scripts/probe.ts deploy          D1 database + migration, modules, cron, custom domain
 //   node scripts/probe.ts secrets         new heartbeat and read tokens: Worker secrets, host files, heartbeat timer
+//   node scripts/probe.ts secrets --host <staging|prod>   that host's existing heartbeat again, after a
+//                                         reinstall: no new token, no Worker secret, no other host
 //   node scripts/probe.ts state <host>    the probe's view of a host (read token)
 //
 // Prints names, ids and statuses only; tokens travel in request bodies and on
@@ -321,6 +323,68 @@ async function putSecret(
   say(`worker secret: ${name}`);
 }
 
+export interface HeartbeatPlan {
+  host: "staging" | "prod";
+  /** The heartbeat's curl configuration; it holds the token and goes on stdin only. */
+  curlConfig: string;
+  /** [install the configuration from stdin, install and start the units]. */
+  commands: string[];
+}
+
+function heartbeatPlan(host: "staging" | "prod", token: string, probeHost: string): HeartbeatPlan {
+  return {
+    host,
+    curlConfig: `url = "https://${probeHost}/v1/heartbeat/${host}"\nheader = "Authorization: Bearer ${token}"\n`,
+    commands: [
+      [
+        "install -d -m 0700 -o root -g root /etc/mykey/secrets/heartbeat",
+        "install -m 0600 -o root -g root /dev/stdin /etc/mykey/secrets/heartbeat/curl.conf",
+      ].join(" && "),
+      [
+        "install -m 0644 /opt/mykey/hosts/systemd/mykey-heartbeat.service /opt/mykey/hosts/systemd/mykey-heartbeat.timer /etc/systemd/system/",
+        "systemctl daemon-reload",
+        "/opt/mykey/hosts/firewall/mykey-egress.sh refresh >/dev/null",
+        "systemctl enable --now mykey-heartbeat.timer",
+        "systemctl start mykey-heartbeat.service",
+      ].join(" && "),
+    ],
+  };
+}
+
+/**
+ * Run 10.2 (D-77): one host's heartbeat from the token already on the
+ * workstation, as after a reinstall. It makes no token and names no other host.
+ */
+export function heartbeatInstallPlan(
+  host: "staging" | "prod",
+  home: string = homedir(),
+): HeartbeatPlan {
+  const file = join(home, ".mykey", "secrets", "probe", `heartbeat-${host}`);
+  if (!existsSync(file)) {
+    throw new Error(`no heartbeat token for ${host} on this workstation (${file}): run secrets`);
+  }
+  const token = readFileSync(file, "utf8").trim();
+  if (token === "") throw new Error(`no heartbeat token for ${host}: ${file} is empty`);
+  registerSecret(token);
+  const probeHost = workerConfig().routes[0]?.pattern;
+  if (probeHost === undefined) throw new Error("no probe host name");
+  return heartbeatPlan(host, token, probeHost);
+}
+
+async function installHeartbeat(plan: HeartbeatPlan): Promise<void> {
+  const host = loadHosts()[plan.host];
+  const [install, units] = plan.commands;
+  expectSuccess(
+    await sshExec(host, install ?? "", { sudo: true, stdin: plan.curlConfig, secretOutput: true }),
+    `${host.name}: heartbeat config`,
+  );
+  expectSuccess(
+    await sshExec(host, units ?? "", { sudo: true, timeoutMs: 60_000 }),
+    `${host.name}: heartbeat timer`,
+  );
+  say(`${host.name}: heartbeat installed and sent`);
+}
+
 async function secrets(): Promise<void> {
   const config = workerConfig();
   const { accountId } = await zoneAndAccount();
@@ -335,30 +399,10 @@ async function secrets(): Promise<void> {
   await putSecret(accountId, config.name, "READ_TOKEN", localSecret("read-token", true));
   await putSecret(accountId, config.name, "TELEGRAM_BOT_TOKEN", read("alerts/telegram-bot-token"));
   await putSecret(accountId, config.name, "TELEGRAM_CHAT_ID", read("alerts/telegram-chat-id"));
-  for (const host of [hosts.staging, hosts.prod]) {
-    const token = localSecret(`heartbeat-${host.name}`, true);
-    await putSecret(accountId, config.name, `HEARTBEAT_TOKEN_${host.name.toUpperCase()}`, token);
-    const curlConfig = `url = "https://${probeHost}/v1/heartbeat/${host.name}"\nheader = "Authorization: Bearer ${token}"\n`;
-    const install = [
-      "install -d -m 0700 -o root -g root /etc/mykey/secrets/heartbeat",
-      "install -m 0600 -o root -g root /dev/stdin /etc/mykey/secrets/heartbeat/curl.conf",
-    ].join(" && ");
-    expectSuccess(
-      await sshExec(host, install, { sudo: true, stdin: curlConfig, secretOutput: true }),
-      `${host.name}: heartbeat config`,
-    );
-    const units = [
-      "install -m 0644 /opt/mykey/hosts/systemd/mykey-heartbeat.service /opt/mykey/hosts/systemd/mykey-heartbeat.timer /etc/systemd/system/",
-      "systemctl daemon-reload",
-      "/opt/mykey/hosts/firewall/mykey-egress.sh refresh >/dev/null",
-      "systemctl enable --now mykey-heartbeat.timer",
-      "systemctl start mykey-heartbeat.service",
-    ].join(" && ");
-    expectSuccess(
-      await sshExec(host, units, { sudo: true, timeoutMs: 60_000 }),
-      `${host.name}: heartbeat timer`,
-    );
-    say(`${host.name}: heartbeat installed and sent`);
+  for (const name of ["staging", "prod"] as const) {
+    const token = localSecret(`heartbeat-${hosts[name].name}`, true);
+    await putSecret(accountId, config.name, `HEARTBEAT_TOKEN_${name.toUpperCase()}`, token);
+    await installHeartbeat(heartbeatPlan(name, token, probeHost));
   }
 }
 
@@ -481,7 +525,11 @@ if (import.meta.main) {
   try {
     if (command === "deploy") await deploy(workerConfig(), { cron: argument !== "--no-cron" });
     else if (command === "alert-test" && argument !== undefined) await alertTest(argument);
-    else if (command === "secrets") await secrets();
+    else if (command === "secrets" && argument === "--host") {
+      const host = process.argv[4];
+      if (host !== "staging" && host !== "prod") throw new Error("secrets --host <staging|prod>");
+      await installHeartbeat(heartbeatInstallPlan(host));
+    } else if (command === "secrets" && argument === undefined) await secrets();
     else if (command === "state" && argument !== undefined) await state(argument);
     else if (command === "sinktest")
       await sinkTest(argument, process.argv.slice(4).includes("--outside"));
@@ -489,7 +537,7 @@ if (import.meta.main) {
     else if (command === "drill-host-dns") await drillHostDns(argument);
     else {
       warn(
-        "usage: node scripts/probe.ts deploy [--no-cron] | secrets | state <host> | alert-test <host> | sinktest up|rows|down [--outside] | drill-dns up|down | drill-host-dns up|down",
+        "usage: node scripts/probe.ts deploy [--no-cron] | secrets [--host staging|prod] | state <host> | alert-test <host> | sinktest up|rows|down [--outside] | drill-dns up|down | drill-host-dns up|down",
       );
       process.exitCode = 2;
     }

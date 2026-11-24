@@ -90,6 +90,20 @@ describe("the host restore target (P-124)", () => {
     await target.close();
   });
 
+  it("the provisioner's credential goes beside the organization id too (Run 10.6: a clean host's provisioner deferred every job)", async () => {
+    const { io, ran } = fakeIo(null);
+    const target = await hostRestoreTarget(io, pair);
+    await target.deliver(`org-${ORG}`, "provisioner", { roleId: "role-p", secretId: "secret-p" });
+    const installs = ran.filter((r) => r.command.includes("/dev/stdin"));
+    expect(installs.map((r) => r.command.split(" ").at(-1))).toEqual([
+      "/etc/mykey/secrets/provisioner/organization-id",
+      "/etc/mykey/secrets/provisioner/provisioner-role-id",
+      "/etc/mykey/secrets/provisioner/provisioner-secret-id",
+    ]);
+    expect(installs.map((r) => r.stdin)).toEqual([ORG, "role-p", "secret-p"]);
+    await target.close();
+  });
+
   it("the state line round-trips on the host", async () => {
     const { io } = fakeIo(null);
     const target = await hostRestoreTarget(io, pair);

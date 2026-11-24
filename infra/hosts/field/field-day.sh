@@ -62,7 +62,8 @@ COMMIT;
 SQL
 cp /etc/mykey/gate/capacity.json "$work/capacity.json" 2>/dev/null || :
 chmod 0755 "$work"
-chmod 0644 "$work"/*
+# Not "$work"/*: set -f turns globbing off (Run 10.5, tests/unit/hosts/noglob.test.ts).
+find "$work" -type f -exec chmod 0644 {} +
 
 docker run --rm --network none --read-only --cap-drop ALL --security-opt no-new-privileges \
 	--user 0:0 --entrypoint node \

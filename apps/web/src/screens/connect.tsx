@@ -30,7 +30,9 @@ function CodeBlock(props: { text: string; label: string }) {
   };
   return (
     <div className="code-block">
-      <pre aria-label={props.label}>
+      {/* The one-line token command scrolls sideways: the block takes the focus,
+          so the keyboard can scroll it (axe: scrollable-region-focusable). */}
+      <pre aria-label={props.label} tabIndex={0}>
         <code>{props.text}</code>
       </pre>
       <div className="code-actions">

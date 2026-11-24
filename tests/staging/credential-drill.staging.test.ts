@@ -3,9 +3,9 @@
 // staging owner, in a project of its own. The journey (issue → inventory →
 // replay → revoke, and the search for the token) is credentials.staging.test.ts.
 //
-// Five issuances (Run 6.3: five a minute per person), aimed at the measured
-// moment the OpenBao container's 8 s pause lands, each attempt in a fresh
-// minute; one caught after its marker answers 503 outcome_unknown. Then: the
+// Up to five attempts of one issuance each (Run 10.3, D-78), each in a fresh
+// minute: a trigger on the host freezes OpenBao at the create's audit record,
+// so the issuance answers 503 outcome_unknown. Then: the
 // probe raises operations_unresolved; quiesce; ops reconcile-credentials
 // --executors-excluded yes; resume; a redeploy of the running release opens the
 // v2 gate with a report; a new issuance for that environment → 201, revoked;
@@ -15,12 +15,13 @@
 // any case). The token never leaves this process except on stdin.
 import { spawnSync } from "node:child_process";
 import { randomBytes, randomUUID } from "node:crypto";
-import { writeFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
 import { setTimeout as sleep } from "node:timers/promises";
 import { beforeAll, describe, expect, it } from "vitest";
 import {
   expectSuccess,
   hostStatus,
+  hostUnit,
   loadHosts,
   nextMinute,
   registerSecret,
@@ -39,7 +40,8 @@ let projectPath: string;
 const environments: { id: string; path: string }[] = [];
 const issued = new Map<string, string>(); // credentialId → environment path
 const evidence: Record<string, unknown> = {};
-const EVIDENCE = "docs/evidence/session-5/run-5.2-drill-staging.json";
+/** Run 10.3: this session's file, so Session 5's evidence is no longer rewritten. */
+const EVIDENCE = "docs/evidence/session-10/credential-drill.json";
 const record = (key: string, value: unknown): void => {
   evidence[key] = value;
   writeFileSync(EVIDENCE, `${JSON.stringify(evidence, null, 2)}\n`);
@@ -130,14 +132,39 @@ async function waitUntil<T>(
   }
 }
 
-const pauseOpenBao = async (paused: boolean): Promise<void> => {
-  expectSuccess(
-    await sshExec(host, `docker ${paused ? "pause" : "unpause"} ${OPENBAO}`, {
-      sudo: true,
-      timeoutMs: 60_000,
-    }),
-    paused ? "docker pause" : "docker unpause",
-  );
+/**
+ * Run 10.3 (D-78): where the trigger reads and writes on the host. The audit
+ * device's file through its volume, and OpenBao's own cgroup.freeze (cgroup v2,
+ * Docker's systemd driver). The file refuses to start without both.
+ */
+async function triggerPaths(): Promise<{ audit: string; freeze: string }> {
+  const answer = expectSuccess(
+    await sshExec(
+      host,
+      [
+        `id=$(docker inspect -f '{{.Id}}' ${OPENBAO})`,
+        `src=$(docker inspect -f '{{range .Mounts}}{{if eq .Destination "/openbao/audit"}}{{.Source}}{{end}}{{end}}' ${OPENBAO})`,
+        'f="/sys/fs/cgroup/system.slice/docker-$id.scope/cgroup.freeze"',
+        'test -w "$f" && test -f "$src/audit.log" && printf "%s\\n%s\\n" "$src/audit.log" "$f"',
+      ].join("; "),
+      { sudo: true, timeoutMs: 60_000 },
+    ),
+    "the trigger's paths",
+  ).stdout.trim();
+  const [audit, freeze] = answer.split("\n");
+  if (audit === undefined || freeze === undefined) throw new Error("the trigger's paths: none");
+  return { audit, freeze };
+}
+
+/** Thaws OpenBao, whatever the trigger did. */
+const thaw = async (freeze: string): Promise<void> => {
+  await sshExec(host, `echo 0 > ${freeze}`, { sudo: true, timeoutMs: 60_000 });
+};
+
+const TRIGGER = readFileSync("tests/staging/host-scripts/freeze-on-create.sh", "utf8");
+const microseconds = (report: string, word: string): number | null => {
+  const found = new RegExp(`^${word} (\\d+)$`, "m").exec(report)?.[1];
+  return found === undefined ? null : Number(found);
 };
 
 async function environmentActive(environmentId: string): Promise<void> {
@@ -172,51 +199,55 @@ beforeAll(async () => {
 
 describe("the credential drill on staging", () => {
   it("an issuance left unknown raises operations_unresolved and is settled by quiesce → reconcile-credentials → resume", async () => {
-    let paused = false;
+    let freezeFile: string | null = null;
     let quiesced = false;
     const caught = new Map<string, string>(); // environment id → operation id
     try {
-      // 1. Five issuances, 250 ms apart, across the moment OpenBao is paused,
-      //    until one is unknown. Run 6.3 allows five issuances a minute per
-      //    person, so each attempt starts in a fresh minute and spends five.
-      //    An issuance logs in before its marker: one sent into a paused
-      //    OpenBao fails before the marker, so the pause must land mid-flight.
+      // 1. Run 10.3 (D-78): one issuance per attempt, its fault placed on the
+      //    host. The trigger follows OpenBao's audit device and freezes
+      //    OpenBao at the request record of this environment's token create,
+      //    which OpenBao writes before it handles the request: the create is
+      //    received and unanswered, and the API gives up at its deadline with
+      //    outcome_unknown. A pause sent over SSH lands 2.5 to 3.4 s late and
+      //    missed that one-call window 20 times in 20 (Session 8).
+      const paths = await triggerPaths();
+      freezeFile = paths.freeze;
       let attempts = 0;
-      // The pause lands over SSH, more than a second after it is sent (the
-      // gate's run: all 25 shots fired within the first second finished first).
-      // Each attempt measures that delay and the next aims its five shots at it:
-      // four in the last 600 ms before it and one just after.
-      let landsAfterMs = 1500;
-      for (let attempt = 1; attempt <= 10 && caught.size === 0; attempt += 1) {
+      for (let attempt = 1; attempt <= 5 && caught.size === 0; attempt += 1) {
         attempts = attempt;
         await nextMinute();
         ({ cookie } = await stagingOwnerSession());
-        const answers: Record<string, number> = {};
-        const sentAt = Date.now();
-        const pausing = pauseOpenBao(true).then(() => {
-          landsAfterMs = Date.now() - sentAt;
-          return now();
+        const environment = environments[(attempt - 1) % environments.length]!;
+        const unit = await hostUnit(
+          host,
+          `mykey-test-freeze-${String(attempt)}-${randomBytes(3).toString("hex")}`,
+          TRIGGER,
+          [environment.id, "8", "30"],
+          {
+            runtimeMaxSec: 60,
+            stopPost: `echo 0 > ${paths.freeze}`,
+            setenv: { AUDIT_LOG: paths.audit, FREEZE_FILE: paths.freeze },
+          },
+        );
+        await unit.waitFor(/^armed \d+$/m, 30_000);
+        const sentAt = now();
+        const { answer } = await issue(environment.path, 60);
+        const code = errorOf(answer).code;
+        const operationId = errorOf(answer).operationId;
+        if (code === "outcome_unknown" && operationId !== undefined) {
+          caught.set(environment.id, operationId);
+        }
+        await sleep(10_000);
+        const report = await unit.report();
+        const matched = microseconds(report, "matched");
+        const frozen = microseconds(report, "frozen");
+        record(`attempt${String(attempt)}`, {
+          sentAt,
+          answer: answer.status === 201 ? "201" : `${String(answer.status)} ${code ?? ""}`,
+          matched: matched !== null,
+          reactionMs: matched === null || frozen === null ? null : (frozen - matched) / 1000,
         });
-        const aim = landsAfterMs;
-        const shots = [-600, -450, -300, -150, 100].map(async (offset, i) => {
-          await sleep(Math.max(0, aim + offset));
-          const environment = environments[i % environments.length]!;
-          const { answer } = await issue(environment.path, 60);
-          const code = errorOf(answer).code;
-          const label = answer.status === 201 ? "201" : `${answer.status} ${code ?? ""}`;
-          answers[label] = (answers[label] ?? 0) + 1;
-          const operationId = errorOf(answer).operationId;
-          if (code === "outcome_unknown" && operationId !== undefined) {
-            if (!caught.has(environment.id)) caught.set(environment.id, operationId);
-          }
-        });
-        const pausedAt = await pausing;
-        paused = true;
-        await sleep(8000);
-        await pauseOpenBao(false);
-        paused = false;
-        await Promise.all(shots);
-        record(`attempt${String(attempt)}`, { pausedAt, aimMs: aim, answers });
+        await thaw(paths.freeze);
         await revokeAll();
       }
       record("caught", { attempts, operations: Object.fromEntries(caught) });
@@ -305,7 +336,7 @@ describe("the credential drill on staging", () => {
       expect(status.reviewOpen).toBe(0);
       expect(status.gate).toBe("open");
     } finally {
-      if (paused) await pauseOpenBao(false).catch(() => undefined);
+      if (freezeFile !== null) await thaw(freezeFile).catch(() => undefined);
       if (
         caught.size > 0 &&
         !quiesced &&

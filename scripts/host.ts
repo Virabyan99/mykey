@@ -2779,8 +2779,15 @@ export function deployRestoreRefusal(state: string | null): string | null {
  * header is the first line on stdin, kept in a 0600 file only while curl
  * runs; a body (the recovery key) follows it on stdin. The answer (the
  * one-time password, the encoded token) comes back redacted.
+ * Run 10.2: exported, with `exec` injected, for tests/unit/hosts/host-sys-call.test.ts.
  */
-function hostSysCall(host: HostEntry, address: Address, token: string): SysCall {
+export type HostExec = typeof sshExec;
+export function hostSysCall(
+  host: HostEntry,
+  address: Address,
+  token: string,
+  exec: HostExec = sshExec,
+): SysCall {
   const { address: ip, port } = REMOTE.openbao;
   return async (method, path, body) => {
     const curl = [
@@ -2793,7 +2800,7 @@ function hostSysCall(host: HostEntry, address: Address, token: string): SysCall 
       .filter((part) => part !== "")
       .join(" ");
     const command = `umask 077 && h=$(mktemp) && IFS= read -r line && printf '%s\\n' "$line" > "$h" && ${curl}; rc=$?; rm -f "$h"; exit $rc`;
-    const answer = await sshExec(host, command, {
+    const answer = await exec(host, command, {
       sudo: true,
       address,
       secretOutput: true,

@@ -1,0 +1,182 @@
+{
+  "target": "staging onto its own reinstalled server (R4-10)",
+  "release": "host-v0.9.2",
+  "pairId": "ffe8d17c-0567-4b48-b3b5-4641c7b2a98a",
+  "pairCapturedAt": "2026-11-23T20:29:10.696Z",
+  "restoredPairId": "2994bad4-f09e-419a-b468-cfb8bb34e998",
+  "restoredPairCapturedAt": "2026-11-24T03:00:07.571Z",
+  "restoredPairNote": "Not P: staging was closed and quiesced at lostAt, but its backup timer still ran at 03:00 on 24 Nov, so --newest took that pair. The restore (C2, 184 s, closed + verifying) is recorded in run-10.6.md from its log; the check that REDRILL_AFTER_P is absent failed because this pair holds it. B4 now stops the backup timer.",
+  "lostAt": "2026-11-23T20:31:20.733Z",
+  "step4At": "2026-11-24T10:46:41.457Z",
+  "gateOpenedAt": "2026-11-24T12:02:19.127Z",
+  "steps": [
+    {
+      "name": "C1-install",
+      "startedAt": "2026-11-24T10:40:51.103Z",
+      "seconds": 350.4
+    },
+    {
+      "name": "C3-owner",
+      "startedAt": "2026-11-24T10:50:01.682Z",
+      "seconds": 2694.5
+    },
+    {
+      "name": "C4-report",
+      "startedAt": "2026-11-24T11:51:26.508Z",
+      "seconds": 310.7
+    },
+    {
+      "name": "C9-open",
+      "startedAt": "2026-11-24T11:56:37.236Z",
+      "seconds": 366.6
+    }
+  ],
+  "estimate": {
+    "environments": 189,
+    "minutes": 90
+  },
+  "minutesLostToOpen": 931,
+  "minutesStep4ToOpen": 75.6,
+  "windowMinutes": 120,
+  "reconcile": {
+    "environments": 163,
+    "exits": {
+      "0": 163
+    },
+    "seconds": 2672
+  },
+  "markedForReview": {
+    "organizations": 16,
+    "environments": 28
+  },
+  "report": {
+    "sha256": "6e17cc3e7931744c10cf1b6705d07a4e92ad2e70b2a095f521aa4829e24090f1",
+    "checks": [
+      {
+        "id": "pair_signature",
+        "state": "ok"
+      },
+      {
+        "id": "pair_digests",
+        "state": "ok"
+      },
+      {
+        "id": "schema_revision",
+        "state": "ok"
+      },
+      {
+        "id": "openbao_readable",
+        "state": "ok"
+      },
+      {
+        "id": "sessions_none",
+        "state": "ok"
+      },
+      {
+        "id": "accounts_recovery_pending",
+        "state": "ok"
+      },
+      {
+        "id": "reset_tokens_none",
+        "state": "ok"
+      },
+      {
+        "id": "machine_accessors_none",
+        "state": "ok"
+      },
+      {
+        "id": "credentials_all_revoked",
+        "state": "ok"
+      },
+      {
+        "id": "approle_secret_ids_rotated",
+        "state": "ok"
+      },
+      {
+        "id": "root_tokens_revoked",
+        "state": "ok"
+      },
+      {
+        "id": "control_row_idle",
+        "state": "ok"
+      },
+      {
+        "id": "incarnation_three_places",
+        "state": "ok"
+      },
+      {
+        "id": "operations_none_executing",
+        "state": "ok"
+      },
+      {
+        "id": "catalog_matches_backend",
+        "state": "ok"
+      },
+      {
+        "id": "members_confirmed",
+        "state": "ok"
+      },
+      {
+        "id": "journey_owner_enrolled",
+        "state": "ok"
+      },
+      {
+        "id": "journey_reveal_digest",
+        "state": "ok"
+      },
+      {
+        "id": "journey_mutation_refused",
+        "state": "ok"
+      },
+      {
+        "id": "old_credentials_refused",
+        "state": "ok"
+      }
+    ]
+  },
+  "negative": [
+    {
+      "name": "gate open without a report",
+      "refused": true,
+      "cause": "host.ts: gate open: this host needs --report <file> (a verification report)"
+    },
+    {
+      "name": "a report older than 30 minutes",
+      "refused": true,
+      "cause": "staging: gate open refused: a restore report opens the gate only through restore-verify --open"
+    },
+    {
+      "name": "the report of another incarnation",
+      "refused": true,
+      "cause": "staging: gate open refused: a restore report opens the gate only through restore-verify --open"
+    },
+    {
+      "name": "the public listener before the opening",
+      "refused": true,
+      "cause": "HTTP 503"
+    }
+  ],
+  "oldCredentials": {
+    "token_live_at_P": 401,
+    "token_revoked_after_P": 401,
+    "token_issued_after_P": 401,
+    "owner_session_at_P": 401,
+    "admin_session_at_P": 401,
+    "admin_password_at_P": 401,
+    "owner_password_at_P": 401
+  },
+  "fixes": {
+    "r4_2_newRootToken": true,
+    "r4_2_sameRecoveryKey": true,
+    "r4_4_stateFileGone": true,
+    "r4_10_datedCopies": 2
+  },
+  "secrets": {
+    "count": 30,
+    "revealedWithDigest": 30
+  },
+  "members": {
+    "confirmed": 1
+  },
+  "run68": "docs/evidence/session-6/drill.json"
+}

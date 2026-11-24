@@ -208,13 +208,13 @@ export const ARTICLES: readonly Article[] = [
       steps(
         "Open the environment, then Connect an application. Its commands hold this page's address, the project's id and the environment's name.",
         "Download the CLI and check its sums, then install it. The installer checks the CLI and the Node runtime it downloads against pinned sums, and needs no root.",
-        "Issue a machine credential for the environment, and copy the token.",
-        "Store the token with the command shown, typed on standard input into a file only you can read.",
+        "Run the one command shown to store the token. It waits at a prompt, and reads the token silently into a file only you can read.",
+        "Issue a machine credential for the environment, copy the token, and paste it at the waiting prompt.",
         "Start the application through secrets-launch.sh.",
         "Check Machine credentials: Last used shows the machine's read. Activity lists it as machine.resolve.",
       ),
       note(
-        "The pasted token stays on the terminal's screen. Type stty -echo before storing it, and stty echo after, to keep it off the screen.",
+        "Paste the token only when the terminal shows “Paste the token, then press Enter:”. A token pasted into the shell goes to its history and the screen; revoke it and issue a new one.",
         "warning",
       ),
       screen("connect", "Go to Connect an application"),

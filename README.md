@@ -4,6 +4,8 @@ A single-operator secrets service: OpenBao holds secret values, PostgreSQL holds
 
 This repository is in Stage 1. The specification lives in `docs/doc_01` … `docs/doc_10`; the session plans are in `docs/plans/`.
 
+Working with an AI coding agent? Give it [`llms.txt`](llms.txt): it leads to one guide, [`docs/agents/connect-an-application.md`](docs/agents/connect-an-application.md).
+
 ## Prerequisites
 
 - Node.js — the exact version in `.node-version`
