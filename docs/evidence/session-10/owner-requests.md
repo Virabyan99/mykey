@@ -21,3 +21,21 @@ Written at the session start (23 Nov 2026). No value appears in this file. Seven
 
 - **The block:** production's journey (about 10 minutes of yours, inside about 20), then staging's reinstall: about 15 minutes in the console, the `ubuntu` password in a terminal, the tunnel restart, and the new certificate (about 5 minutes).
 - **The sign-off:** about 10 minutes of reading, after the gate; and the deletion of the two old certificates in the console.
+
+## The answers given in the session
+
+| Date        | Question                                       | Answer                                         |
+| ----------- | ---------------------------------------------- | ---------------------------------------------- |
+| 23 Nov 2026 | 1, production on `host-v0.9.2`                 | "lets do it"; then "i allow production deploy" |
+| 23 Nov 2026 | 2, staging reinstalled and restored            | "we can do it as well"                         |
+| 23 Nov 2026 | 5, the API key                                 | "key is ok to use"                             |
+| 23 Nov 2026 | (not numbered) the field-day fix on production | "push the fix"                                 |
+| 24 Nov 2026 | (Run 10.6) the 16 spike organizations          | "Retire them"                                  |
+| —           | 3, no token-store command in the CLI           | not answered: the ruling P-171 stands          |
+| —           | 4, the shape of the days                       | not answered: it ran as a day and a morning    |
+| —           | 6, the coding agent for the real project       | not answered: only Claude Code is proven       |
+| —           | 7, the sitting                                 | the sittings took place on 23 and 24 Nov       |
+
+## The gate's message (24 Nov 2026)
+
+Asked: **"merge", yes or no.** The answer is recorded here with its date. Gate F is not asked: it is decided at W-2.
