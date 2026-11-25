@@ -5,9 +5,10 @@
 // a deployment, or a claim the product does not make.
 import { readFileSync, readdirSync } from "node:fs";
 import { join, relative, resolve } from "node:path";
-import { WEB_ROUTES } from "@mykey/contracts";
+import { AUTOMATION_RIGHTS, LIMITS, WEB_ROUTES } from "@mykey/contracts";
 import {
   ACTIONS,
+  CREDENTIAL_COPY,
   ALLOWED_DENIALS,
   ARTICLES,
   CATEGORIES,
@@ -59,6 +60,7 @@ const everyText = (): string[] => [
   ...stringsOf(CLI_EXIT_CODES),
   ...stringsOf(OPERATOR_RUNBOOKS),
   ...stringsOf(CONNECT_STEPS),
+  ...stringsOf(CREDENTIAL_COPY),
   TOKEN_WARNING,
 ];
 
@@ -171,6 +173,32 @@ describe("the copy catalogue", () => {
     );
     expect(lintText(`?token=${"x".repeat(43)}`).map((p) => p.rule)).toContain("a reset token");
     expect(lintText("see consumer-local.md and secrets.reveal on mykey.example")).toEqual([]);
+  });
+
+  // Session 11 (Run 11.6): the two kinds of machine credential and the automation credential.
+  it("both kinds of machine credential and every right of an automation credential have a label and one sentence, and the numbers are the contract's", () => {
+    expect(Object.keys(CREDENTIAL_COPY.kinds).sort()).toEqual(["runtime", "token"]);
+    expect(Object.keys(CREDENTIAL_COPY.rights).sort()).toEqual([...AUTOMATION_RIGHTS].sort());
+    for (const entry of [
+      ...Object.values(CREDENTIAL_COPY.kinds),
+      ...Object.values(CREDENTIAL_COPY.rights),
+    ]) {
+      expect(entry.label.trim()).not.toBe("");
+      expect(entry.text).toMatch(/^[A-Z].*\.$/);
+    }
+    const days = (seconds: number): string => String(Math.floor(seconds / 86_400));
+    expect(CREDENTIAL_COPY.kinds.token.label).toContain(
+      `${days(LIMITS.machineToken.maxTtlSeconds)}-day`,
+    );
+    expect(CREDENTIAL_COPY.runtime.how).toContain(
+      `${String(LIMITS.runtimeCredential.exchangeTtlSeconds / 60)} minutes`,
+    );
+    expect(PAGES.automation.how.join(" ")).toContain(
+      `${days(LIMITS.automationCredential.maxTtlSeconds)} days`,
+    );
+    expect(PAGES.credentials.how.join(" ")).toContain(
+      `${days(LIMITS.runtimeCredential.maxTtlSeconds)} days`,
+    );
   });
 
   it("every article id named by pages.ts exists, and every article is reachable from /help", () => {

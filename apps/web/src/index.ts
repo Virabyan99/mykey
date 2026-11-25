@@ -38,5 +38,6 @@ export { searchHelp, stem, words, type HelpHit } from "./help/search.ts";
 export { localSteps, runbookSections, serverSteps, type ConnectStep } from "./connect/commands.ts";
 export { matchEntries, paletteEntries, type PaletteEntry } from "./palette/sources.ts";
 export { CONNECT_STEPS } from "./copy/connect.ts";
+export { CREDENTIAL_COPY } from "./copy/credentials.ts";
 export { TOKEN_WARNING } from "./connect/commands.ts";
 export { CONSUMER_DEPLOY, CONSUMER_LOCAL } from "./connect/runbooks.ts";

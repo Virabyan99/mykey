@@ -90,6 +90,7 @@ describe("the help centre", () => {
       ["connect", webPath("connect", at)],
       ["activity", webPath("activity", { org })],
       ["audit", webPath("audit", { org })],
+      ["automation", webPath("automation", { org })],
       ["account", webPath("account")],
       ["help", webPath("help")],
     ];

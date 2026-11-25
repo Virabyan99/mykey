@@ -42,6 +42,39 @@ describe("the page claims no more than the product does", () => {
     ).toHaveLength(2);
   });
 
+  // Session 11 (Run 11.6, D-82): what the page says of the two new credentials.
+  it("automation: it reads no value itself, and the page says what a runtime credential it issues can read", () => {
+    const text = [
+      textOf("apps/web/src/copy/credentials.ts"),
+      textOf("apps/web/src/copy/pages.ts"),
+      textOf("apps/web/src/copy/actions.ts"),
+      textOf("apps/web/src/help/articles.ts"),
+    ].join(" ");
+    // The false wordings: a holder of the right can reach values in two steps (D-82).
+    expect(text).not.toMatch(/automation (credential )?can never reach a value/i);
+    expect(text).not.toContain("cannot lead to a value");
+    expect(text).toContain("No route lets it read, change or delete a secret");
+    expect(text).toContain("A runtime credential it issues reads the values of its environment");
+  });
+
+  it("automation: revoking stops the credential and leaves what it made working", () => {
+    const text = textOf("apps/web/src/copy/actions.ts");
+    expect(text).not.toContain("revokes the runtime credentials it issued");
+    expect(text).toContain(
+      "The projects its chain manages, their secrets and every runtime credential it issued keep working",
+    );
+  });
+
+  it("runtime: the secret is kept as a keyed digest, and a revoked credential's last token is refused by MyKey at once", () => {
+    const copy = textOf("apps/web/src/copy/credentials.ts");
+    expect(copy).not.toContain("MyKey keeps no copy");
+    expect(copy).toContain("MyKey keeps a keyed digest of it, never the secret");
+    const actions = textOf("apps/web/src/copy/actions.ts");
+    expect(actions).not.toContain("is destroyed at once");
+    expect(actions).toContain("MyKey refuses it and every short-lived token made from it");
+    expect(actions).toContain("the secret store can still accept such a token");
+  });
+
   it("known limits (on the Help screen): the archive lock is beyond every host token, not beyond the owner", () => {
     const text = textOf("docs/runbooks/known-limits.md");
     expect(text).not.toContain("even by the owner");

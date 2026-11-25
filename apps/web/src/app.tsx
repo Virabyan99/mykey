@@ -11,6 +11,7 @@ import { navigate, usePath } from "./router.tsx";
 import { Account } from "./screens/account.tsx";
 import { Activity } from "./screens/activity.tsx";
 import { Audit } from "./screens/audit.tsx";
+import { Automation } from "./screens/automation.tsx";
 import { Enroll } from "./screens/enroll.tsx";
 import { Credentials } from "./screens/credentials.tsx";
 import { ArticlePage } from "./help/Article.tsx";
@@ -37,6 +38,7 @@ function screenOf(route: { id: string; params: Record<string, string> }): ReactN
   if (route.id === "project") return <Project />;
   if (route.id === "activity") return <Activity />;
   if (route.id === "audit") return <Audit />;
+  if (route.id === "automation") return <Automation />;
   if (route.id === "credentials") return <Credentials />;
   if (route.id === "operations") return <Operations />;
   if (route.id === "help") return <HelpCenter />;

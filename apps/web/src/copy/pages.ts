@@ -20,6 +20,10 @@ const REVEAL_SECONDS = LIMITS.reveal.displayMaxSeconds;
 const VERSIONS = LIMITS.secret.versionsKept;
 const TOKEN_DAYS = Math.floor(LIMITS.machineToken.maxTtlSeconds / 86_400);
 const CODES = LIMITS.recovery.codeCount;
+const RUNTIME_DAYS = Math.floor(LIMITS.runtimeCredential.maxTtlSeconds / 86_400);
+const EXCHANGE_MINUTES = LIMITS.runtimeCredential.exchangeTtlSeconds / 60;
+const AUTOMATION_DAYS = Math.floor(LIMITS.automationCredential.maxTtlSeconds / 86_400);
+const AUTOMATION_DEFAULT_DAYS = Math.floor(LIMITS.automationCredential.defaultTtlSeconds / 86_400);
 
 export const PAGES = {
   home: {
@@ -133,6 +137,20 @@ export const PAGES = {
     help: "activity-audit-operations",
     action: "",
   },
+  automation: {
+    title: "Automation",
+    summary:
+      "Credentials that let a script create projects, secrets and runtime credentials, with no way to read a value themselves.",
+    how: [
+      "An automation credential acts only in projects its chain created. Every other project answers it as if it did not exist.",
+      `It lasts 1 to ${String(AUTOMATION_DAYS)} days, ${String(AUTOMATION_DEFAULT_DAYS)} unless you say otherwise, and works only from the networks you name.`,
+      "The secret is shown once. MyKey keeps a keyed digest of it, never the secret.",
+      "Revoking stops that credential only: its projects, their secrets and the runtime credentials it issued keep working.",
+      "A credential issued to replace another manages the same projects: that is how one is rotated, and how a script gets its projects back after a restore.",
+    ],
+    help: "automation",
+    action: "Issue a credential for the script that sets up your tenants.",
+  },
   project: {
     title: "Project",
     summary: "One project and its environments: add, rename, archive and reactivate.",
@@ -180,12 +198,13 @@ export const PAGES = {
   },
   credentials: {
     title: "Machine credentials",
-    summary: "Tokens that let one machine read this environment's secrets, and nothing else.",
+    summary: "Credentials that let one machine read this environment's secrets, and nothing else.",
     how: [
       "A token is shown once, when it is issued. MyKey keeps no copy.",
       "A token cannot be renewed. To replace one, issue a new token, switch the machine to it, then revoke the old one.",
       "Revoking is final: the machine's next start is refused.",
       `A token lasts at most ${String(TOKEN_DAYS)} days.`,
+      `A runtime credential is for a server that starts by itself: for up to ${String(RUNTIME_DAYS)} days, its client secret is exchanged at each start for a token of ${String(EXCHANGE_MINUTES)} minutes.`,
     ],
     help: "machine-credentials",
     action: "Issue a credential for the machine that runs your application.",

@@ -24,6 +24,8 @@ export const WEB_ROUTES: readonly WebRoute[] = Object.freeze([
   { id: "overview", pattern: O },
   { id: "activity", pattern: `${O}/activity` },
   { id: "audit", pattern: `${O}/audit` },
+  // Session 11 (Run 11.6): the automation credentials of the organization.
+  { id: "automation", pattern: `${O}/automation` },
   { id: "project", pattern: `${O}/p/:project` },
   { id: "secrets", pattern: E },
   { id: "secret", pattern: `${E}/s/:name` },

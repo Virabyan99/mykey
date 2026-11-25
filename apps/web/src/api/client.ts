@@ -10,6 +10,8 @@ import {
   errorEnvelopeSchema,
   type ActivityListBody,
   type AuditListBody,
+  type AutomationCredentialsListBody,
+  type AutomationIssuedBody,
   type EnvironmentsBody,
   type ImportPreviewBody,
   type MetricsBody,
@@ -22,6 +24,7 @@ import {
   type OverviewBody,
   type ProjectsBody,
   type RouteDef,
+  type RuntimeIssuedBody,
   type SecretsHistoryBody,
   type SecretsListBody,
   type SecretsRevealBody,
@@ -51,6 +54,8 @@ export interface Bodies {
   "credentials.list": CredentialsListBody;
   "credentials.revoke": OperationResponse;
   "credentials.summary": CredentialsSummaryBody;
+  "automation_credentials.list": AutomationCredentialsListBody;
+  "automation_credentials.revoke": OperationResponse;
   "operations.list": OperationsListBody;
   "operations.get": OperationResponse;
   "metrics.get": MetricsBody;
@@ -73,6 +78,8 @@ export interface SecretBodies {
   "import.apply": OperationResponse;
   "import.resume": OperationResponse;
   "credentials.issue": CredentialIssuedBody;
+  "runtime_credentials.issue": RuntimeIssuedBody;
+  "automation_credentials.issue": AutomationIssuedBody;
 }
 export type SecretRouteId = Extract<keyof SecretBodies, SecretBearing>;
 

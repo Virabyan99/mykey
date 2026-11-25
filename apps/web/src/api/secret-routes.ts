@@ -13,6 +13,9 @@ export const SECRET_BEARING = Object.freeze([
   "import.resume",
   "export.create",
   "credentials.issue",
+  // Session 11 (Run 11.6): a client secret, and an automation credential's secret.
+  "runtime_credentials.issue",
+  "automation_credentials.issue",
   "auth.reset.complete",
   "/v1/auth/totp/enroll",
   "/v1/auth/totp/activate",

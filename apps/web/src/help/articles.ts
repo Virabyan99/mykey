@@ -41,6 +41,7 @@ export type ScreenId =
   | "connect"
   | "activity"
   | "audit"
+  | "automation"
   | "account"
   | "help";
 
@@ -83,6 +84,9 @@ const REVEAL = String(LIMITS.reveal.displayMaxSeconds);
 const VERSIONS = String(LIMITS.secret.versionsKept);
 const TOKEN_DAYS = String(Math.floor(LIMITS.machineToken.maxTtlSeconds / 86_400));
 const CODES = String(LIMITS.recovery.codeCount);
+const RUNTIME_DAYS = String(Math.floor(LIMITS.runtimeCredential.maxTtlSeconds / 86_400));
+const EXCHANGE_MINUTES = String(LIMITS.runtimeCredential.exchangeTtlSeconds / 60);
+const AUTOMATION_DAYS = String(Math.floor(LIMITS.automationCredential.maxTtlSeconds / 86_400));
 const FRESH_MINUTES = String(LIMITS.session.freshTotpSeconds / 60);
 const IMPORT_MIB = String(LIMITS.body.dotenvMaxBytes / 1_048_576);
 
@@ -357,10 +361,46 @@ export const ARTICLES: readonly Article[] = [
         `A token lasts at most ${TOKEN_DAYS} days and cannot be renewed. Home lists those that expire within 7 days.`,
         "Issuing needs a recent code from your authenticator.",
         "Last used is the last time the service saw the token, to the minute. Not known means there is no record of a use, not that there was none.",
+        `A runtime credential is the other kind, for a server that must start by itself: for up to ${RUNTIME_DAYS} days its client secret is exchanged at each start for a token of ${EXCHANGE_MINUTES} minutes. It is stored the same way as a token and needs the CLI from version 0.2.0.`,
       ),
       screen("credentials", "Go to Machine credentials"),
     ],
-    related: ["rotate-token", "revoke-credential", "connect-app"],
+    related: ["rotate-token", "revoke-credential", "connect-app", "automation"],
+  },
+  {
+    id: "automation",
+    title: "Automation credentials",
+    summary:
+      "A credential for a script that creates projects, secrets and runtime credentials, and reads no value itself.",
+    category: "credentials",
+    keywords: [
+      "automation",
+      "script",
+      "provision",
+      "tenant",
+      "api",
+      "rights",
+      "replaces",
+      "runtime",
+      "network",
+    ],
+    blocks: [
+      list(
+        "It acts only in projects its chain created. Every other project answers it as if it did not exist.",
+        "Its rights are chosen when it is issued: create projects and environments, create secrets, manage runtime credentials. No route lets it read, change or delete a secret.",
+        "With the right to manage runtime credentials it can issue one, and a runtime credential it issues reads the values of its environment. Give that right only to a script that sets up servers.",
+        `It lasts 1 to ${AUTOMATION_DAYS} days and works only from the networks you name when you issue it.`,
+        "The secret is shown once. MyKey keeps a keyed digest of it, never the secret.",
+      ),
+      p(
+        "Revoking it stops that credential only. The projects its chain manages, their secrets and every runtime credential it issued keep working.",
+      ),
+      p(
+        "To rotate it, or to give a script its projects back after a restore, issue a credential that replaces it: the new one manages the same projects. Then revoke the old one.",
+      ),
+      screen("automation", "Go to Automation"),
+    ],
+    related: ["machine-credentials", "revoke-credential"],
   },
   {
     id: "rotate-token",

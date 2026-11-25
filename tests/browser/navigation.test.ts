@@ -54,7 +54,7 @@ async function withClipboard(session: WebSession): Promise<() => Promise<string>
 }
 
 describe("the frame", () => {
-  it("a first visit as ownerA lands on Home, and the sidebar names Home, Projects, Activity, Audit, Help centre, Account", async () => {
+  it("a first visit as ownerA lands on Home, and the sidebar names Home, Projects, Activity, Audit, Automation, Help centre, Account", async () => {
     const session = await web.signedIn("ownerA");
     const { page } = session;
     try {
@@ -62,7 +62,7 @@ describe("the frame", () => {
       await page.waitForURL(`${web.origin}${webPath("overview", { org: at().org })}`);
       await heading(page, "Home").waitFor();
       const nav = sidebar(page);
-      for (const name of ["Home", "Activity", "Audit", "Help centre", "Account"]) {
+      for (const name of ["Home", "Activity", "Audit", "Automation", "Help centre", "Account"]) {
         await nav.getByRole("link", { name, exact: true }).waitFor();
       }
       await nav.getByText("Projects", { exact: true }).waitFor();
@@ -205,6 +205,7 @@ describe("the frame", () => {
       ["connect", webPath("connect", at()), "Connect an application"],
       ["the activity", webPath("activity", { org }), "Activity"],
       ["the audit", webPath("audit", { org }), "Audit"],
+      ["automation", webPath("automation", { org }), "Automation"],
       ["the account", webPath("account"), "Account"],
       ["the help centre", webPath("help"), "Help centre"],
       ["an article", webPath("help-article", { article: "project-id" }), ""],
@@ -340,6 +341,7 @@ describe("the page contract", () => {
       ["connect", webPath("connect", at())],
       ["activity", webPath("activity", { org })],
       ["audit", webPath("audit", { org })],
+      ["automation", webPath("automation", { org })],
       ["account", webPath("account")],
       ["help", webPath("help")],
     ];

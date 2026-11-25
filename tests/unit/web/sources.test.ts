@@ -121,6 +121,9 @@ describe("the secret-bearing routes", () => {
         "import.resume",
         "export.create",
         "credentials.issue",
+        // Session 11 (Run 11.6): the client secret and the automation secret.
+        "runtime_credentials.issue",
+        "automation_credentials.issue",
         "auth.reset.complete",
         "/v1/auth/totp/enroll",
         "/v1/auth/totp/activate",

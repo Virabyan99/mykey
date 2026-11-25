@@ -242,6 +242,16 @@ function Sidebar(props: {
               >
                 Audit
               </Item>
+              {/* Session 11: owners and admins issue automation credentials; nobody else can list them. */}
+              {manages ? (
+                <Item
+                  to={webPath("automation", { org: org.id })}
+                  icon="terminal"
+                  current={current === "automation"}
+                >
+                  Automation
+                </Item>
+              ) : null}
             </ul>
           </div>
         )}

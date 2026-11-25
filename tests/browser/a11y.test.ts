@@ -58,7 +58,7 @@ describe("the workspace's accessibility", () => {
     }
   });
 
-  it("axe finds no serious or critical violation on: Home, a project, secrets, a secret, credentials, activity, audit, operations, account, help, an article, connect", async () => {
+  it("axe finds no serious or critical violation on: Home, a project, secrets, a secret, credentials, activity, audit, operations, account, help, an article, connect, automation and its issue form", async () => {
     const { a } = web.tenants;
     const org = a.organizationId;
     const at = { org, project: a.project1, env: a.env1a };
@@ -75,6 +75,7 @@ describe("the workspace's accessibility", () => {
       ["help", webPath("help")],
       ["an article", webPath("help-article", { article: "secrets-basics" })],
       ["connect", webPath("connect", at)],
+      ["automation", webPath("automation", { org })],
     ];
     const session = await web.signedIn("ownerA");
     try {
@@ -87,6 +88,12 @@ describe("the workspace's accessibility", () => {
         const violations = await serious(session.page);
         if (violations.length > 0) found[screen] = violations;
       }
+      // Session 11 (Run 11.6): the last screen is Automation. Its form has a group of
+      // checkboxes, a text area and a selector, so it is checked open as well.
+      await session.page.getByRole("button", { name: "New automation credential" }).click();
+      await session.page.getByRole("heading", { name: "New automation credential" }).waitFor();
+      const form = await serious(session.page);
+      if (form.length > 0) found["the automation form"] = form;
       expect(found).toEqual({});
       expect(await session.violations()).toEqual([]);
     } finally {
