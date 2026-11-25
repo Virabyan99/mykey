@@ -63,5 +63,21 @@
         "withinSpec": false
       }
     }
+  },
+  "automation": {
+    "run": "11.5",
+    "date": "2026-11-26",
+    "source": "tests/integration/automation/provisioning.test.ts, run alone; the script is tests/fixtures/automation/tenant-provisioner.ts",
+    "provisionOneTenant": {
+      "shape": "one automation credential with every right; a project, an environment, 25 synthetic secrets of 46 bytes, one runtime credential; the real provisioner builds the environment",
+      "projectMs": 60,
+      "environmentMs": 54,
+      "untilTheEnvironmentIsReadyMs": 1992,
+      "twentyFiveSecretsMs": 4133,
+      "oneSecretMsAbout": 165,
+      "runtimeCredentialMs": 37,
+      "totalMs": 6276,
+      "requestsPerChange": 1
+    }
   }
 }

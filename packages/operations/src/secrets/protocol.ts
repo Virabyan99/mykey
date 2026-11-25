@@ -8,7 +8,7 @@
 // left executing or made uncertain, the key goes to review and the slot stays.
 import { randomBytes, randomUUID } from "node:crypto";
 import { AuditUnavailable, appendAudit, type AuditAction } from "@mykey/audit";
-import { LIMITS, type ErrorCode, type OperationId, type UserId } from "@mykey/contracts";
+import { LIMITS, type ErrorCode, type OperationId } from "@mykey/contracts";
 import {
   applyCounters,
   claimDispatch,
@@ -34,6 +34,7 @@ import {
 } from "@mykey/db";
 import { secretPath, type BaoFailure, type OpenBaoClient } from "@mykey/openbao";
 import type pg from "pg";
+import type { Actor } from "../actor.ts";
 import { intentFingerprint, sameIntent, type HmacRing, type Intent } from "../replay.ts";
 import type { RuntimeBao } from "../runtime.ts";
 import { Busy, inTransaction, isLockTimeout, withEnvironmentLock, type Locked } from "./lock.ts";
@@ -69,7 +70,8 @@ export interface SecretRequest {
   action: SecretAction;
   routeId: string;
   scope: EnvironmentScope;
-  userId: UserId;
+  /** Who asks: a person, or an automation credential as a machine actor (Session 11, P-191). */
+  actor: Actor;
   name: string;
   value?: string;
   expected?: { version: number; stateTag: string };
@@ -167,7 +169,7 @@ function audit(
 ): Promise<string> {
   return appendAudit(db, {
     action: AUDIT_ACTION[request.action],
-    actor: { kind: "user", id: request.userId },
+    actor: request.actor,
     source: "api",
     organizationId: request.scope.organizationId,
     target: { kind: "environment", id: request.scope.environmentId },
@@ -451,8 +453,8 @@ async function underLock(
   const operationId = randomUUID() as OperationId;
   const stepId = randomUUID();
   const key = {
-    principalKind: "user" as const,
-    principalId: request.userId,
+    principalKind: request.actor.kind,
+    principalId: request.actor.id,
     action: request.routeId,
     target: environmentIdOf(request),
     idempotencyKey: request.idempotencyKey,
@@ -729,8 +731,8 @@ async function afterMarker(
       name: request.name,
       version,
       operationId,
-      actorKind: "user",
-      actorId: request.userId,
+      actorKind: request.actor.kind,
+      actorId: request.actor.id,
       action: AUDIT_ACTION[request.action],
     });
     await tx.query(

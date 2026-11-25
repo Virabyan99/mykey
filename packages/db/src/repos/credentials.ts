@@ -297,7 +297,13 @@ export async function findCredentialByOperation(
 export async function listCredentials(
   db: Queryable,
   scope: EnvironmentScope,
-  page: { anchor: string | null; after: string | null; limit: number },
+  page: {
+    anchor: string | null;
+    after: string | null;
+    limit: number;
+    /** Session 11: only this kind (an automation caller sees runtime credentials only). */
+    kind?: CredentialKind;
+  },
 ): Promise<(CredentialRow & { sortKey: string })[]> {
   const [afterMicros, afterId] = page.after === null ? [null, null] : page.after.split("|");
   const result = await db.query<StoredCredential & { sort_key: string }>(
@@ -311,6 +317,7 @@ export async function listCredentials(
         AND ($4::bigint IS NULL
              OR (o.created_at, c.id) < ('epoch'::timestamptz + $4::bigint * interval '1 microsecond',
                                         $5::uuid))
+        AND ($7::text IS NULL OR c.kind = $7::text)
       ORDER BY o.created_at DESC, c.id DESC
       LIMIT $6`,
     [
@@ -320,6 +327,7 @@ export async function listCredentials(
       afterMicros ?? null,
       afterId ?? null,
       page.limit,
+      page.kind ?? null,
     ],
   );
   return result.rows.map((stored) => ({ ...toRow(stored), sortKey: stored.sort_key }));

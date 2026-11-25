@@ -6,9 +6,14 @@
 // route without one is absent and ends in the terminal answer.
 import { randomUUID } from "node:crypto";
 import { handledRouteIds } from "@mykey/api";
-import { ROUTES, type RouteDef } from "@mykey/contracts";
+import { AUTOMATION_RIGHTS, ROUTES, type RouteDef } from "@mykey/contracts";
 import { validate } from "@scalar/openapi-parser";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import {
+  automationCall,
+  issueAutomationFor,
+  type IssuedAutomation,
+} from "../../harness/automation.ts";
 import {
   createCredentialsFixture,
   issueFor,
@@ -26,11 +31,22 @@ let token: string;
 let clientSecret: string;
 let credentialId: string;
 let operationId: string;
+/** Run 11.5: an automation credential whose chain manages env1a's project, and an operation it made. */
+let automation: IssuedAutomation;
+let automationOperationId: string;
 
 beforeAll(async () => {
   f = await createCredentialsFixture();
   ({ token, credentialId, operationId } = await issueFor(f, "env1a", { ttlSeconds: 600 }));
   ({ clientSecret } = await issueRuntimeFor(f, "env1a"));
+  automation = await issueAutomationFor(f, { rights: AUTOMATION_RIGHTS });
+  const made = await automationCall(f, "automation.projects.create", { secret: automation.secret });
+  expect(made.status, made.code).toBe(201);
+  automationOperationId = made.body.operationId as string;
+  await f.api.superuser.query("UPDATE app.project SET managed_by = $2 WHERE id = $1", [
+    f.env("env1a").projectId,
+    automation.ownerId,
+  ]);
 }, 600_000);
 
 afterAll(async () => {
@@ -152,13 +168,6 @@ const BODIES: Record<string, unknown> = {
   "automation_credentials.revoke": { confirmed: true },
 };
 
-/**
- * Session 11 (Run 11.2): the class this build cannot authenticate. A route of
- * it is never listed and never reaches the handler's door; Run 11.5 gives it
- * its requests here. (Run 11.3: the exchange is sent with a client secret.)
- */
-const unauthenticatedClass = (route: RouteDef): boolean => route.auth === "automation";
-
 describe("what the document lists is what the build answers", () => {
   it("every listed operation reaches a handler of this build; every contract route without one ends in the terminal answer", async () => {
     const listed = new Set(operationsOf(await servedDocument()).map((op) => op.id));
@@ -193,6 +202,17 @@ describe("what the document lists is what the build answers", () => {
           await machineFetch({ port: f.api.port, ca }, route.method, concrete(route), {
             token: clientSecret,
           });
+        } else if (route.auth === "automation") {
+          // Run 11.5: with an automation credential, in the project its chain manages.
+          await automationCall(f, route.id, {
+            secret: automation.secret,
+            ids: {
+              project: env.projectId,
+              env: env.environmentId,
+              credential: credentialId,
+              operation: automationOperationId,
+            },
+          });
         } else if (route.auth === "human" || route.auth === "human_fresh_totp") {
           await f.send(route.method, concrete(route), {
             user: "ownerA",
@@ -211,16 +231,12 @@ describe("what the document lists is what the build answers", () => {
         seen[route.id] =
           reached.find((entry) => entry.routeId === route.id)?.handled ?? "not reached";
       }
-      const expected = Object.fromEntries(
-        ROUTES.map((route) => [
-          route.id,
-          unauthenticatedClass(route) ? "not reached" : listed.has(route.id),
-        ]),
-      );
+      const expected = Object.fromEntries(ROUTES.map((route) => [route.id, listed.has(route.id)]));
       expect(seen).toEqual(expected);
-      expect(ROUTES.filter((route) => unauthenticatedClass(route) && listed.has(route.id))).toEqual(
-        [],
-      );
+      // Session 11: the ten automation routes are served, so they are listed.
+      expect(
+        ROUTES.filter((route) => route.auth === "automation" && !listed.has(route.id)),
+      ).toEqual([]);
     } finally {
       f.setBeforeHandler(null);
     }

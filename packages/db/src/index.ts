@@ -46,6 +46,7 @@ export {
   recomputeCounters,
   listIndex,
   listMetadata,
+  listMetadataPage,
   versionEvents,
   type VersionEvent,
   lockIndexRow,

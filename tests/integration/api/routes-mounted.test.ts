@@ -62,6 +62,17 @@ const HANDLED = new Set([
   "automation_credentials.list",
   "automation_credentials.issue",
   "automation_credentials.revoke",
+  // Run 11.5 Task C: the ten routes of the automation class.
+  "automation.projects.list",
+  "automation.projects.create",
+  "automation.projects.get",
+  "automation.environments.create",
+  "automation.secrets.list",
+  "automation.secrets.create",
+  "automation.runtime_credentials.list",
+  "automation.runtime_credentials.issue",
+  "automation.runtime_credentials.revoke",
+  "automation.operations.get",
 ]);
 
 /** A valid body for every contract route that takes one. */

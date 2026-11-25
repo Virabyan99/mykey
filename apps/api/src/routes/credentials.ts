@@ -3,7 +3,7 @@
 // record, the one create and its proof; the token leaves only in the 201 this
 // handler builds. The inventory reads the catalog only and never shows an
 // accessor or a token.
-import { LIMITS, credentialIdSchema, type OperationId } from "@mykey/contracts";
+import { LIMITS, credentialIdSchema, type CredentialId, type OperationId } from "@mykey/contracts";
 import {
   AuditReadTimeout,
   credentialKindOf,
@@ -28,9 +28,16 @@ import {
   type RuntimeCredentialDeps,
 } from "@mykey/operations";
 import { readCursor, signCursor } from "../pipeline/cursor.ts";
-import { ApiError, type ApiContext, type AppDeps, type Handler } from "../pipeline/context.ts";
+import {
+  ApiError,
+  type ApiContext,
+  type AppDeps,
+  type Handler,
+  type HandlerResult,
+} from "../pipeline/context.ts";
+import { actorOf, intentOfCaller } from "../pipeline/caller.ts";
 import { intentOf } from "../pipeline/route.ts";
-import { recheckOf } from "./secrets.ts";
+import { recheckFor, recheckOf } from "./secrets.ts";
 
 /** The protocol's dependencies; a process without the issuer identity answers 503. */
 export function credentialDeps(deps: AppDeps): CredentialDeps {
@@ -178,10 +185,11 @@ export const credentialsIssueHandler: Handler = async (ctx, deps) => {
  * `credential_not_replayable` (the pipeline, or the transaction for a race).
  */
 export const runtimeCredentialsIssueHandler: Handler = async (ctx, deps) => {
-  const principal = ctx.principal;
+  // A person, or an automation credential (Run 11.5): then `issuedBy` is that credential.
+  const actor = actorOf(ctx);
   const scope = ctx.scope as EnvironmentScope | null;
   const key = ctx.idempotencyKey;
-  if (principal === null || scope === null || key === null) {
+  if (actor === null || scope === null || key === null) {
     throw new ApiError("dependency_unavailable");
   }
   const body = ctx.body as { name: string; ttlSeconds: number; cidrs: string[] };
@@ -190,14 +198,14 @@ export const runtimeCredentialsIssueHandler: Handler = async (ctx, deps) => {
   const outcome = await issueRuntimeCredential(runtimeCredentialDeps(deps), {
     routeId: ctx.route.id,
     scope,
-    actor: { kind: "user", id: principal.userId },
+    actor,
     name: body.name,
     ttlSeconds: body.ttlSeconds,
     cidrs: body.cidrs,
     idempotencyKey: key,
-    intent: intentOf(ctx.route, ctx.params, principal, ctx.body),
+    intent: intentOfCaller(ctx, actor),
     requestId: ctx.requestId,
-    recheck: recheckOf(ctx, principal.userId, scope),
+    recheck: recheckFor(ctx, scope),
   });
   switch (outcome.kind) {
     case "issued":
@@ -226,6 +234,44 @@ export const runtimeCredentialsIssueHandler: Handler = async (ctx, deps) => {
 };
 
 /**
+ * A runtime credential's revocation (Session 11, P-189), by a person or by an
+ * automation credential: one transaction, nothing in the backend.
+ */
+export async function revokeRuntime(
+  ctx: ApiContext,
+  deps: AppDeps,
+  scope: EnvironmentScope,
+  credentialId: CredentialId,
+): Promise<HandlerResult> {
+  const actor = actorOf(ctx);
+  const key = ctx.idempotencyKey;
+  if (actor === null || key === null) throw new ApiError("dependency_unavailable");
+  const revoked = await revokeRuntimeCredential(runtimeCredentialDeps(deps), {
+    routeId: ctx.route.id,
+    scope,
+    actor,
+    credentialId,
+    idempotencyKey: key,
+    intent: intentOfCaller(ctx, actor),
+    requestId: ctx.requestId,
+    recheck: recheckFor(ctx, scope),
+  });
+  switch (revoked.kind) {
+    case "revoked":
+      return { status: 200, body: operationResponse(revoked.operation) };
+    case "replay": {
+      const answer = replayAnswer(ctx.route, revoked.operation);
+      if (!("error" in answer)) return answer;
+      throw new ApiError(answer.error, "replay", undefined, {
+        ...(answer.operationId === undefined ? {} : { operationId: answer.operationId }),
+      });
+    }
+    case "refused":
+      throw new ApiError(revoked.code);
+  }
+}
+
+/**
  * credentials.revoke (Run 5.2, P-89): denied first, revoked only when the
  * backend proved it. A runtime credential (Session 11, P-189) has nothing in
  * the backend: it is revoked in one transaction, with OpenBao reachable or not.
@@ -243,29 +289,7 @@ export const credentialsRevokeHandler: Handler = async (ctx, deps) => {
   // The row's kind chooses the protocol; a kind never changes, and each
   // protocol refuses the other's rows under its own lock.
   if ((await credentialKindOf(deps.pool, scope, credentialId.data)) === "runtime") {
-    const revoked = await revokeRuntimeCredential(runtimeCredentialDeps(deps), {
-      routeId: ctx.route.id,
-      scope,
-      actor: { kind: "user", id: principal.userId },
-      credentialId: credentialId.data,
-      idempotencyKey: key,
-      intent: intentOf(ctx.route, ctx.params, principal, ctx.body),
-      requestId: ctx.requestId,
-      recheck: recheckOf(ctx, principal.userId, scope),
-    });
-    switch (revoked.kind) {
-      case "revoked":
-        return { status: 200, body: operationResponse(revoked.operation) };
-      case "replay": {
-        const answer = replayAnswer(ctx.route, revoked.operation);
-        if (!("error" in answer)) return answer;
-        throw new ApiError(answer.error, "replay", undefined, {
-          ...(answer.operationId === undefined ? {} : { operationId: answer.operationId }),
-        });
-      }
-      case "refused":
-        throw new ApiError(revoked.code);
-    }
+    return revokeRuntime(ctx, deps, scope, credentialId.data);
   }
   const outcome = await revokeCredential(credentialDeps(deps), {
     routeId: ctx.route.id,
@@ -325,7 +349,13 @@ export const credentialsListHandler: Handler = async (ctx, deps) => {
     after = read.lastKey;
   }
   const limit = Math.min(query.limit, LIMITS.listing.maxLimit);
-  const rows = await listCredentials(deps.pool, scope, { anchor, after, limit: limit + 1 });
+  const rows = await listCredentials(deps.pool, scope, {
+    anchor,
+    after,
+    limit: limit + 1,
+    // An automation caller (Run 11.5) manages runtime credentials: a 30-day token is not shown to it.
+    ...(ctx.automation === null ? {} : { kind: "runtime" as const }),
+  });
   const page = rows.slice(0, limit);
   const last = page.at(-1);
   const pageAnchor = anchor ?? page[0]?.sortKey.split("|")[0] ?? null;

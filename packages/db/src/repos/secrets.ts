@@ -142,9 +142,22 @@ export interface MetadataRow {
  * `secret.create` row of the name's version events, and null when there is
  * none (never a guess from the row's own time). No value is in either table.
  */
-export async function listMetadata(
+export function listMetadata(
   db: Queryable,
   scope: EnvironmentScope,
+): Promise<{ rows: MetadataRow[]; generation: bigint }> {
+  return listMetadataPage(db, scope, { prefix: null, after: null, limit: null });
+}
+
+/**
+ * automation.secrets.list (Session 11, Run 11.5): the same rows as a page.
+ * `prefix` and `after` are compared bytewise, as secrets.list compares them;
+ * a null limit is every row.
+ */
+export async function listMetadataPage(
+  db: Queryable,
+  scope: EnvironmentScope,
+  page: { prefix: string | null; after: string | null; limit: number | null },
 ): Promise<{ rows: MetadataRow[]; generation: bigint }> {
   const result = await db.query<{
     generation: string;
@@ -155,19 +168,25 @@ export async function listMetadata(
     created_at: Date | null;
   }>(
     `SELECT e.metadata_generation::text AS generation, i.name, i.state, i.current_version,
-            i.last_changed_at, c.created_at
+            i.last_changed_at, i.created_at
        FROM app.environment e
-       LEFT JOIN app.secret_index i
-         ON i.organization_id = e.organization_id AND i.environment_id = e.id
        LEFT JOIN LATERAL (
-         SELECT min(v.occurred_at) AS created_at
-           FROM app.secret_version_event v
-          WHERE v.organization_id = i.organization_id AND v.environment_id = i.environment_id
-            AND v.name = i.name AND v.action = 'secret.create'
-       ) c ON true
+         SELECT s.name, s.state, s.current_version, s.last_changed_at,
+                (SELECT min(v.occurred_at)
+                   FROM app.secret_version_event v
+                  WHERE v.organization_id = s.organization_id
+                    AND v.environment_id = s.environment_id
+                    AND v.name = s.name AND v.action = 'secret.create') AS created_at
+           FROM app.secret_index s
+          WHERE s.organization_id = e.organization_id AND s.environment_id = e.id
+            AND ($3::text IS NULL OR starts_with(s.name, $3::text))
+            AND ($4::text IS NULL OR s.name COLLATE "C" > $4::text COLLATE "C")
+          ORDER BY s.name COLLATE "C"
+          LIMIT $5
+       ) i ON true
       WHERE e.organization_id = $1 AND e.id = $2
       ORDER BY i.name COLLATE "C"`,
-    [scope.organizationId, scope.environmentId],
+    [scope.organizationId, scope.environmentId, page.prefix, page.after, page.limit],
   );
   const first = result.rows[0];
   if (first === undefined) throw new Error("environment not found");
@@ -188,7 +207,8 @@ export async function listMetadata(
 export interface VersionEvent {
   version: number;
   action: string;
-  actorKind: "user" | "operator" | "system" | "unknown";
+  /** `machine` (Session 11): an automation credential wrote the version. */
+  actorKind: "user" | "operator" | "system" | "unknown" | "machine";
   actorId: string | null;
   operationId: OperationId | null;
   occurredAt: Date;
@@ -307,7 +327,7 @@ export async function recordVersionEvent(
     name: string;
     version: number;
     operationId: OperationId | null;
-    actorKind: "user" | "operator" | "system" | "unknown";
+    actorKind: VersionEvent["actorKind"];
     actorId: string | null;
     action: string;
   },

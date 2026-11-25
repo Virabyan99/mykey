@@ -3,7 +3,7 @@
 // the cursor of the same route in the other organization, and (where the route
 // has filters) its own cursor under another filter.
 import { randomUUID } from "node:crypto";
-import { ROUTES, type RouteDef } from "@mykey/contracts";
+import { AUTOMATION_RIGHTS, ROUTES, type RouteDef } from "@mykey/contracts";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { fill, idsOf } from "./answers.ts";
 import { createIsolationFixture, type IsolationFixture, type Side } from "./fixture.ts";
@@ -27,18 +27,28 @@ const LISTS: Record<string, { filter: string | null; otherFilter?: string }> = {
   "activity.list": { filter: "projectId=PROJECT", otherFilter: "409 listing_changed" },
   // Session 11 (Run 11.5 Task A).
   "automation_credentials.list": { filter: null },
+  // Session 11 (Run 11.5 Task C): sent with the side's automation credential.
+  "automation.projects.list": { filter: null },
+  "automation.secrets.list": { filter: "prefix=ISO", otherFilter: "400 malformed_request" },
+  "automation.runtime_credentials.list": { filter: null },
 };
 
-/**
- * Session 11 (Run 11.2): list routes of the contract that have no handler in
- * this build. Run 11.5 gives each its handler and moves it into LISTS; this
- * list must then be empty.
- */
-const OWED = [
-  "automation.projects.list",
-  "automation.runtime_credentials.list",
-  "automation.secrets.list",
-];
+/** Session 11 (Run 11.2 to 11.5): list routes without a handler. Empty since Run 11.5. */
+const OWED: readonly string[] = [];
+
+/** Each side's automation credential: the bearer of its automation lists. Never printed. */
+const automationSecrets: Partial<Record<Side["name"], string>> = {};
+
+/** A list request as its caller sends it: a session, or an automation credential. */
+function send(side: Side, id: string, query: string): Promise<Response> {
+  return side.request(
+    "GET",
+    pathOf(side, id, query),
+    id.startsWith("automation.")
+      ? { headers: { authorization: `Bearer ${automationSecrets[side.name] ?? ""}` } }
+      : { cookie: side.owner },
+  );
+}
 
 const route = (id: string): RouteDef => {
   const found = ROUTES.find((candidate) => candidate.id === id);
@@ -77,19 +87,37 @@ async function more(side: Side, label: string): Promise<void> {
       body: { name: `second-${label}` },
     }),
   );
+  // Two runtime credentials: automation's list of them has a second page.
+  for (const name of ["one", "two"]) {
+    answers.push(
+      await side.request("POST", `${env}/runtime-credentials`, {
+        cookie: side.owner,
+        headers: { "idempotency-key": randomUUID() },
+        body: { name: `runtime-${name}-${label}` },
+      }),
+    );
+  }
   // Two automation credentials: their list has a second page at limit=1.
   for (const name of ["first", "second"]) {
-    answers.push(
-      await side.request(
-        "POST",
-        `/v1/organizations/${side.organizationId}/automation-credentials`,
-        {
-          cookie: side.owner,
-          headers: { "idempotency-key": randomUUID() },
-          body: { name: `${name}-${label}`, rights: ["projects.create"], cidrs: ["127.0.0.0/8"] },
-        },
-      ),
+    const issued = await side.request(
+      "POST",
+      `/v1/organizations/${side.organizationId}/automation-credentials`,
+      {
+        cookie: side.owner,
+        headers: { "idempotency-key": randomUUID() },
+        body: { name: `${name}-${label}`, rights: AUTOMATION_RIGHTS, cidrs: ["127.0.0.0/8"] },
+      },
     );
+    expect(issued.status, `seeding ${label}`).toBe(201);
+    const body = (await issued.json()) as { secret: string; credential: { ownerId: string } };
+    if (name === "first") {
+      // Its chain manages the side's projects (two: its list has a second page).
+      automationSecrets[side.name] = body.secret;
+      await fx.f.api.superuser.query(
+        "UPDATE app.project SET managed_by = $2 WHERE organization_id = $1",
+        [side.organizationId, body.credential.ownerId],
+      );
+    }
   }
   for (const answer of answers) {
     expect(answer.status, `seeding ${label}`).toBeLessThan(300);
@@ -104,7 +132,7 @@ function pathOf(side: Side, id: string, query: string): string {
 
 async function cursorOf(side: Side, id: string, filter: string | null): Promise<string> {
   const query = filter === null ? "limit=1" : `limit=1&${filter}`;
-  const answer = await side.request("GET", pathOf(side, id, query), { cookie: side.owner });
+  const answer = await send(side, id, query);
   const body = (await answer.json()) as { nextCursor?: string | null };
   expect(answer.status, `${side.name} ${id}`).toBe(200);
   if (typeof body.nextCursor !== "string") throw new Error(`${side.name} ${id}: no second page`);
@@ -144,17 +172,13 @@ describe("a cursor opens only its own listing", () => {
     }
     const wrong: string[] = [];
     const ask = async (id: string, query: string, expected: string, label: string) => {
-      const answer = await a.request("GET", pathOf(a, id, query), { cookie: a.owner });
+      const answer = await send(a, id, query);
       const seen = await codeOf(answer);
       if (seen !== expected) wrong.push(`${id} with ${label}: ${seen}, expected ${expected}`);
     };
     for (const [id, { filter, otherFilter }] of Object.entries(LISTS)) {
       // Control: its own cursor opens the next page.
-      const own = await a.request(
-        "GET",
-        pathOf(a, id, `limit=1&cursor=${encodeURIComponent(ownCursors[id] ?? "")}`),
-        { cookie: a.owner },
-      );
+      const own = await send(a, id, `limit=1&cursor=${encodeURIComponent(ownCursors[id] ?? "")}`);
       expect(own.status, `${id} with its own cursor`).toBe(200);
       await own.arrayBuffer();
       for (const other of Object.keys(LISTS)) {
