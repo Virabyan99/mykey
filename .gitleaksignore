@@ -30,3 +30,8 @@ aaeab2a78fea7b594227af829c92c0d6c188c76e:docs/runbooks/consumer-local.md:generic
 # value) to prove a day record never holds a name; generic-api-key reads the name as a key.
 # Reviewed false positive.
 aa69922f772cf287311edefe87ddf686244036c5:tests/unit/hosts/field-day.test.ts:generic-api-key:17
+
+# Session 11, Run 11.4: the exchange's unit test held a literal of a token's shape, "s." followed
+# by the base64 of the text "synthetic-token", written by the test's author; no OpenBao ever
+# issued it. The next commit assembles it at run time. Reviewed false positive.
+603fe272c3708f5b4eec29b2f47ec13f6802184f:tests/unit/cli/validate.test.ts:generic-api-key:123

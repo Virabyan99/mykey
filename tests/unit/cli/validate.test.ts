@@ -120,7 +120,8 @@ describe("validateKeys", () => {
 describe("validateExchange", () => {
   const exchangeBody = {
     apiMajor: API_MAJOR,
-    token: "s.c3ludGhldGljLXRva2Vu",
+    // Assembled at run time: a literal of a token's shape reads as a key to the secret scan.
+    token: `s.${Buffer.from("synthetic-token").toString("base64url")}`,
     expiresAt: "2026-11-26T00:15:00.000Z",
     projectId: ENVIRONMENT,
     environmentName: "dev",
