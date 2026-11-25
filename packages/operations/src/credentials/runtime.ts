@@ -34,7 +34,7 @@ import {
 import type pg from "pg";
 import type { Actor } from "../actor.ts";
 import { intentFingerprint, sameIntent, type HmacRing, type Intent } from "../replay.ts";
-import { mintSecret, verifierOf } from "./secret.ts";
+import { mintSecret, runtimeBinding, verifierOf } from "./secret.ts";
 
 export interface RuntimeCredentialDeps {
   pool: pg.Pool;
@@ -151,7 +151,12 @@ export async function issueRuntimeCredential(
   const credentialId = randomUUID() as CredentialId;
   // The one place the secret exists besides the answer.
   const clientSecret = mintSecret(RUNTIME_SECRET_PREFIX, credentialId);
-  const verifier = verifierOf(deps.verifierRing, clientSecret);
+  // Bound to its environment and its networks (D-81): a row changed later does not verify.
+  const verifier = verifierOf(
+    deps.verifierRing,
+    clientSecret,
+    runtimeBinding(scope, request.cidrs),
+  );
   try {
     return await withTransaction(deps.pool, async (tx) => {
       const replay = await admit(tx, deps, request, operationId, { credentialId });

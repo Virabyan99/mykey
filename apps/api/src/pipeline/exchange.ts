@@ -24,7 +24,7 @@ import {
   type RouteDef,
 } from "@mykey/contracts";
 import type { EnvironmentScope } from "@mykey/db";
-import { sourceAllowed, verifierOf, verifies } from "@mykey/operations";
+import { runtimeBinding, sourceAllowed, verifierOf, verifies } from "@mykey/operations";
 import { now } from "../log.ts";
 import { ApiError, type AppDeps } from "./context.ts";
 import { MISSED_LOOKUP, bearerOf, denyMachine, parentCode, touch } from "./machine.ts";
@@ -90,10 +90,16 @@ export async function authenticateExchange(
   const row = found.rows[0];
   if (row === undefined) {
     // The same work as for a row that exists: an id is not learned from the time.
-    verifierOf(ring, text);
+    verifierOf(ring, text, []);
     throw unattributable("catalog");
   }
-  if (!verifies(ring, { digest: row.verifier, keyId: row.verifier_key_id }, text)) {
+  // The verifier was made over the row's environment and networks as issued
+  // (D-81): a row that was moved or freed of its networks is nobody's.
+  const bound = runtimeBinding(
+    { organizationId, projectId: row.project_id, environmentId: row.environment_id },
+    row.bound_cidrs,
+  );
+  if (!verifies(ring, { digest: row.verifier, keyId: row.verifier_key_id }, text, bound)) {
     throw unattributable("catalog");
   }
 

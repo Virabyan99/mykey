@@ -78,6 +78,7 @@ export {
   mintSecret,
   parseCidrs,
   sourceAllowed,
+  runtimeBinding,
   verifierOf,
   verifies,
   type StoredVerifier,

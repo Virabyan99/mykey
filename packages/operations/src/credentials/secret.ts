@@ -1,8 +1,15 @@
 // The two secrets of Session 11 and the addresses they are bound to (P-185,
 // D-81). A secret is 32 random bytes, presented as `<prefix>.<id>.<base64url>`.
-// PostgreSQL holds only HMAC-SHA-256(key, label + presented) with the id of
-// the key: 256 random bits cannot be found from it. The presented string is a
-// local of whoever mints or checks it; nothing here logs or stores it.
+// PostgreSQL holds only HMAC-SHA-256(key, label + presented + what the
+// credential is bound to) with the id of the key: 256 random bits cannot be
+// found from it. The presented string is a local of whoever mints or checks
+// it; nothing here logs or stores it.
+//
+// Run 11.3 Task D (D-81): the verifier is made over the credential's binding
+// too (its kind, organization, project, environment and networks). The key is
+// in no database, so whoever can only write the database cannot point a
+// credential at another environment or free it of its networks: the changed
+// row no longer verifies. State and times are plain columns and are not bound.
 import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 import net from "node:net";
 import type { PresentedPrefix } from "@mykey/contracts";
@@ -21,22 +28,45 @@ export function mintSecret(prefix: PresentedPrefix, id: string): string {
   return `${prefix}.${id}.${randomBytes(32).toString("base64url")}`;
 }
 
-function digestOf(key: Uint8Array, presented: string): Buffer {
-  return createHmac("sha256", Buffer.from(key)).update(`${LABEL}${presented}`, "utf8").digest();
+/** The binding is encoded as a JSON list, never joined: two lists cannot read as one. */
+function digestOf(key: Uint8Array, presented: string, bound: readonly string[]): Buffer {
+  return createHmac("sha256", Buffer.from(key))
+    .update(`${LABEL}${presented}\n${JSON.stringify(bound)}`, "utf8")
+    .digest();
 }
 
-/** What is stored for a presented secret: its verifier under the ring's current key. */
-export function verifierOf(ring: HmacRing, presented: string): StoredVerifier {
+/** What a runtime credential is bound to: where it reads, and from which networks it may be used. */
+export function runtimeBinding(
+  scope: { organizationId: string; projectId: string; environmentId: string },
+  cidrs: readonly string[],
+): string[] {
+  return ["runtime", scope.organizationId, scope.projectId, scope.environmentId, ...cidrs];
+}
+
+/** What is stored for a presented secret and its binding: the verifier under the ring's current key. */
+export function verifierOf(
+  ring: HmacRing,
+  presented: string,
+  bound: readonly string[],
+): StoredVerifier {
   const key = ring.keys[ring.current];
   if (key === undefined) throw new Error("the verifier ring has no current key");
-  return { digest: digestOf(key, presented), keyId: ring.current };
+  return { digest: digestOf(key, presented, bound), keyId: ring.current };
 }
 
-/** Whether `presented` is the secret `stored` was made from. False for an unknown key id. */
-export function verifies(ring: HmacRing, stored: StoredVerifier, presented: string): boolean {
+/**
+ * Whether `presented` is the secret `stored` was made from, for this binding
+ * (read from the row as it is now). False for an unknown key id.
+ */
+export function verifies(
+  ring: HmacRing,
+  stored: StoredVerifier,
+  presented: string,
+  bound: readonly string[],
+): boolean {
   const key = ring.keys[stored.keyId];
   if (key === undefined) return false;
-  const digest = digestOf(key, presented);
+  const digest = digestOf(key, presented, bound);
   return digest.length === stored.digest.length && timingSafeEqual(digest, stored.digest);
 }
 

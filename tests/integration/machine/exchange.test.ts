@@ -616,4 +616,78 @@ describe("an exchange changes no product state (P-187)", () => {
     );
     expect(left).toEqual([]);
   });
+
+  // Run 11.3 Task D (D-81): the verifier is made over the secret and what the
+  // credential is bound to, with a key PostgreSQL never holds. Whoever can
+  // write the database and holds one client secret cannot point it elsewhere.
+  it("a row a writer of the database alone moved to another environment, or freed of its networks, is refused: 401, no token, no audit row; as issued it is exchanged again", async () => {
+    const credential = await issueRuntimeFor(f, "env1a", { cidrs: [NETWORK] });
+    const row = (
+      await q().query<{ project_id: string; environment_id: string; bound_cidrs: string[] }>(
+        "SELECT project_id, environment_id, bound_cidrs FROM app.machine_credential WHERE id = $1",
+        [credential.credentialId],
+      )
+    ).rows[0]!;
+    const set = (projectId: string, environmentId: string, cidrs: string[]) =>
+      q().query(
+        `UPDATE app.machine_credential SET project_id = $2, environment_id = $3, bound_cidrs = $4
+          WHERE id = $1`,
+        [credential.credentialId, projectId, environmentId, cidrs],
+      );
+    const tokensOf = async (): Promise<number> => {
+      let count = 0;
+      for (const env of ["env1a", "env1b", "env2a"] as const) {
+        count += (await machineAccessors(f, f.env(env).environmentId)).filter(
+          (token) => token.meta?.credential_id === credential.credentialId,
+        ).length;
+      }
+      return count;
+    };
+    const first = await exchangeCall(f, { secret: credential.clientSecret, from: INSIDE });
+    expect(first.status, first.code ?? "").toBe(200);
+    expect(await tokensOf()).toBe(1);
+
+    const changes: [string, string, string, string[], string][] = [
+      [
+        "another environment of its project",
+        row.project_id,
+        f.env("env1b").environmentId,
+        [NETWORK],
+        INSIDE,
+      ],
+      [
+        "an environment of another project",
+        f.env("env2a").projectId,
+        f.env("env2a").environmentId,
+        [NETWORK],
+        INSIDE,
+      ],
+      ["no networks", row.project_id, row.environment_id, [], OUTSIDE],
+      [
+        "a wider network",
+        row.project_id,
+        row.environment_id,
+        ["0.0.0.0/1", "128.0.0.0/1"],
+        OUTSIDE,
+      ],
+    ];
+    try {
+      for (const [label, projectId, environmentId, cidrs, from] of changes) {
+        await set(projectId, environmentId, cidrs);
+        const answer = await exchangeCall(f, { secret: credential.clientSecret, from });
+        expect([answer.status, answer.code], label).toEqual([401, "unauthenticated"]);
+        expect("token" in answer.body, label).toBe(false);
+        expect(
+          (await auditOf(answer)).map((entry) => entry.action),
+          label,
+        ).toEqual([]);
+      }
+    } finally {
+      await set(row.project_id, row.environment_id, row.bound_cidrs);
+    }
+    // Nothing was minted for a changed row.
+    expect(await tokensOf()).toBe(1);
+    const again = await exchangeCall(f, { secret: credential.clientSecret, from: INSIDE });
+    expect(again.status, again.code ?? "").toBe(200);
+  });
 });
