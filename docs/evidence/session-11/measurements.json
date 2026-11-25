@@ -54,6 +54,13 @@
         "startedRound2": 10,
         "twoRoundsMs": 19638,
         "slowestStartMs": 10001
+      },
+      "inARunOfNineteenFiles": {
+        "startedRound1": 10,
+        "startedRound2": 10,
+        "twoRoundsMs": 22020,
+        "slowestStartMs": 11261,
+        "withinSpec": false
       }
     }
   }
