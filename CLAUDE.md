@@ -135,6 +135,7 @@ Each session's detail is in `docs/evidence/session-N/report.md`. Gate R's docume
   - **The checkpoint `kms-cert-expiry`** is due from 12 Dec 09:57 UTC. Its instance `expiry` (`losstest-1day`) was put back on the reinstalled server, so it keeps its subject.
   - **Production's seal certificate `prod-seal-1` expires on 21 Dec 2026, 07:48 UTC** (issued 21 Nov 2026). Replace it before then, the same way, with production's names (`production.md`).
   - `.trivyignore.images` expires on 14 Dec 2026.
+  - **The next session moves the postgres pin** (owner, 25 Nov 2026): CVE-2026-124851 (zstd) and the zlib and krb5 entries are fixed in Debian, not yet in the pinned image. It is a runtime image change (D-69): a new host release, staging, then production with the owner's journey.
   - The checkpoint `pair-30-day` is due from 17 Dec 2026 19:00 UTC, before the 05:00 retention of 18 Dec.
   - **consumer-1's token** expires by about 22 Dec 2026: rotate it around 20 Dec, with the one-command form.
   - **W-2,** the 28-day report: 20 Dec 2026 (D-05, D-72). **W-1,** retention ageing: 23 to 26 Dec 2026.
@@ -317,7 +318,7 @@ Scripts in `scripts/` and `infra/` are TypeScript run directly by Node (type str
   - Runners cost nothing (the repository is public).
 - **Watch CI after every push** (`gh run list --branch <branch>`). Session 3 was red for its whole length unnoticed.
 - **Linux CI sees file ownership; Windows Docker hides it.** Test containers that write into a bind mount run as the caller (`tests/harness/restic.ts`).
-- **The image scan** covers the pinned upstream images and the API image. It is green only through `.trivyignore.images`: 53 reviewed upstream CVEs with no fix possible in this repository, all expiring on 14 Dec 2026.
+- **The image scan** covers the pinned upstream images and the API image. It is green only through `.trivyignore.images`: reviewed upstream CVEs with no fix possible in this repository without moving an image pin, all expiring on 14 Dec 2026.
   - A new upstream CVE can turn it red overnight. Review it, add an entry that gives the reason, and name what is exposed.
 - **The secret scan** must see the whole history and at least one commit. A scanner that crashes or scans nothing fails the `scans` self-test. Reviewed false positives go into `.gitleaksignore` by fingerprint, with the reason above them.
 - **GitGuardian** flags `-e PGPASSWORD postgres` in `tests/harness/stack.ts` (incident 39994924). It is a false positive that only the owner can dismiss, and it is not a required check.
