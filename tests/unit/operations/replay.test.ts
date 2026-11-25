@@ -184,8 +184,25 @@ describe("replayAnswer", () => {
       });
     });
 
+    // Session 11: an issuance of a runtime credential shows its client secret once, too.
+    const SHOWN_ONCE = [
+      "credentials.issue",
+      "runtime_credentials.issue",
+      "automation.runtime_credentials.issue",
+    ];
+
+    it("the two issuances of a runtime credential answer credential_not_replayable as well", () => {
+      for (const id of SHOWN_ONCE) {
+        const route = ROUTES.find((r) => r.id === id)!;
+        expect(route.idempotent, id).toBe(true);
+        expect(replayAnswer(route, row({ action: id, result: { credentialId: "c" } })), id).toEqual(
+          { error: "credential_not_replayable", operationId: row({}).id },
+        );
+      }
+    });
+
     it("every other route's succeeded row is unchanged", () => {
-      for (const route of ROUTES.filter((r) => r.idempotent && r.id !== "credentials.issue")) {
+      for (const route of ROUTES.filter((r) => r.idempotent && !SHOWN_ONCE.includes(r.id))) {
         expect("status" in replayAnswer(route, row({})), route.id).toBe(true);
       }
     });

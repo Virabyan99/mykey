@@ -139,6 +139,64 @@ export async function insertIssuing(
   return result.rowCount === 1 ? "inserted" : "blocked";
 }
 
+/**
+ * A runtime credential (Session 11, P-186): `active` from its first moment,
+ * with the verifier of its client secret and no accessor. The expiry is set on
+ * database time. It is no unresolved issuance: the partial index does not see it.
+ */
+export async function insertRuntimeCredential(
+  tx: pg.PoolClient,
+  scope: EnvironmentScope,
+  c: {
+    id: CredentialId;
+    name: string;
+    operationId: OperationId;
+    ttlSeconds: number;
+    issuedBy: string;
+    issuedByKind: "user" | "machine";
+    verifier: Buffer;
+    verifierKeyId: string;
+    cidrs: readonly string[];
+  },
+): Promise<void> {
+  await tx.query(
+    `INSERT INTO app.machine_credential
+       (id, organization_id, project_id, environment_id, name, issuance_operation_id,
+        requested_expires_at, effective_expires_at, state, issued_by, kind, verifier,
+        verifier_key_id, bound_cidrs, issued_by_kind)
+     VALUES ($1, $2, $3, $4, $5, $6, now() + make_interval(secs => $7),
+             now() + make_interval(secs => $7), 'active', $8, 'runtime', $9, $10, $11::text[], $12)`,
+    [
+      c.id,
+      scope.organizationId,
+      scope.projectId,
+      scope.environmentId,
+      c.name,
+      c.operationId,
+      c.ttlSeconds,
+      c.issuedBy,
+      c.verifier,
+      c.verifierKeyId,
+      [...c.cidrs],
+      c.issuedByKind,
+    ],
+  );
+}
+
+/** The kind of a credential of the environment; null when the environment has no such row. */
+export async function credentialKindOf(
+  db: Queryable,
+  scope: EnvironmentScope,
+  id: CredentialId,
+): Promise<CredentialKind | null> {
+  const result = await db.query<{ kind: CredentialKind }>(
+    `SELECT kind FROM app.machine_credential
+      WHERE organization_id = $1 AND environment_id = $2 AND id = $3`,
+    [scope.organizationId, scope.environmentId, id],
+  );
+  return result.rows[0]?.kind ?? null;
+}
+
 /** The unresolved issuance of the environment, if any. */
 export async function blockingIssuance(
   db: Queryable,
@@ -229,8 +287,9 @@ export async function findCredentialByOperation(
 }
 
 /**
- * The inventory of one environment, newest issuance first (P-86). A row that
- * is `revoked` with no accessor was never a token and is not listed. Paged as
+ * The inventory of one environment, newest issuance first (P-86). A token row
+ * that is `revoked` with no accessor was never a token and is not listed; a
+ * runtime row never has an accessor and is always listed. Paged as
  * listOperations: `anchor` (microseconds since the epoch of the first page's
  * first issuance) bounds every later page; `after` is the previous page's
  * last sort key "<micros>|<id>".
@@ -246,7 +305,7 @@ export async function listCredentials(
             (extract(epoch FROM o.created_at) * 1000000)::bigint::text || '|' || c.id AS sort_key
        FROM app.machine_credential c JOIN app.operation o ON o.id = c.issuance_operation_id
       WHERE c.organization_id = $1 AND c.environment_id = $2
-        AND NOT (c.state = 'revoked' AND c.accessor IS NULL)
+        AND NOT (c.kind = 'token' AND c.state = 'revoked' AND c.accessor IS NULL)
         AND ($3::bigint IS NULL
              OR o.created_at <= 'epoch'::timestamptz + $3::bigint * interval '1 microsecond')
         AND ($4::bigint IS NULL

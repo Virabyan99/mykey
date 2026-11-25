@@ -216,6 +216,12 @@ export async function createSecretsFixture(
     rateLimits?: "product";
     /** Run 7.3: the built workspace the in-process API serves (the browser project). */
     webDirectory?: string;
+    /**
+     * Run 11.3: the edge hop the in-process API trusts (Doc 06 §9). With the
+     * loopback address, a test's `X-Forwarded-For` is the request's source,
+     * as the edge's is on a host; without the header the source is the peer.
+     */
+    trustedProxy?: string;
   } = {},
 ): Promise<SecretsFixture> {
   const directory = mkdtempSync(join(tmpdir(), "mykey-secrets-"));
@@ -242,7 +248,14 @@ export async function createSecretsFixture(
         },
         importBudgetMs: () => importBudget ?? undefined,
         ...(opts.rateLimits === undefined ? {} : { rateLimits: opts.rateLimits }),
-        ...(opts.webDirectory === undefined ? {} : { config: { webDirectory: opts.webDirectory } }),
+        ...(opts.webDirectory === undefined && opts.trustedProxy === undefined
+          ? {}
+          : {
+              config: {
+                ...(opts.webDirectory === undefined ? {} : { webDirectory: opts.webDirectory }),
+                ...(opts.trustedProxy === undefined ? {} : { trustedProxy: opts.trustedProxy }),
+              },
+            }),
         routes: [{ def: TEST_READ_ROUTE, handler: testReadHandler() }, ...(opts.routes ?? [])],
       };
     },

@@ -55,6 +55,24 @@ export {
   type IssueRequest,
 } from "./credentials/issue.ts";
 export { revokeCredential, type RevokeOutcome, type RevokeRequest } from "./credentials/revoke.ts";
+export type { Actor } from "./actor.ts";
+export {
+  issueRuntimeCredential,
+  revokeRuntimeCredential,
+  type RuntimeCredentialDeps,
+  type RuntimeIssueOutcome,
+  type RuntimeIssueRequest,
+  type RuntimeRevokeOutcome,
+  type RuntimeRevokeRequest,
+} from "./credentials/runtime.ts";
+export {
+  mintSecret,
+  parseCidrs,
+  sourceAllowed,
+  verifierOf,
+  verifies,
+  type StoredVerifier,
+} from "./credentials/secret.ts";
 export {
   ARCHIVE_FAULT_POINTS,
   beginArchive,

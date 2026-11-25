@@ -80,14 +80,29 @@ export async function archiveScope(
   };
 }
 
-/** Every active or expired credential of the environment → revoking. Answers how many moved. */
-export async function closeCredentials(tx: Queryable, scope: EnvironmentScope): Promise<number> {
-  const result = await tx.query(
-    `UPDATE app.machine_credential SET state = 'revoking'
-      WHERE organization_id = $1 AND environment_id = $2 AND state IN ('active', 'expired')`,
+/**
+ * Every active or expired credential of the environment is closed. A token
+ * goes to `revoking`: OpenBao must still prove it gone. A runtime credential
+ * (Session 11) holds nothing in OpenBao and is `revoked` here, in PostgreSQL
+ * alone. Answers how many moved, by where they went.
+ */
+export async function closeCredentials(
+  tx: Queryable,
+  scope: EnvironmentScope,
+): Promise<{ revoking: number; revoked: number }> {
+  const runtime = await tx.query(
+    `UPDATE app.machine_credential SET state = 'revoked'
+      WHERE organization_id = $1 AND environment_id = $2 AND state IN ('active', 'expired')
+        AND kind = 'runtime'`,
     [scope.organizationId, scope.environmentId],
   );
-  return result.rowCount ?? 0;
+  const tokens = await tx.query(
+    `UPDATE app.machine_credential SET state = 'revoking'
+      WHERE organization_id = $1 AND environment_id = $2 AND state IN ('active', 'expired')
+        AND kind = 'token'`,
+    [scope.organizationId, scope.environmentId],
+  );
+  return { revoking: tokens.rowCount ?? 0, revoked: runtime.rowCount ?? 0 };
 }
 
 /** What still keeps an archive from finishing in one environment. */

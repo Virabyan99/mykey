@@ -36,6 +36,15 @@ export type CredentialsFixture = SecretsFixture & {
     credentialId: string,
     opts?: { user?: FixtureUser; key?: string; to?: "first" | "second"; body?: unknown },
   ): Promise<Answer>;
+  /**
+   * POST runtime-credentials (Session 11) with a fresh session and a new key.
+   * `path` issues in another environment than a named one (a place made by a test).
+   */
+  issueRuntime(
+    env: EnvName,
+    body?: Record<string, unknown>,
+    opts?: { user?: FixtureUser; key?: string; fresh?: boolean; path?: string },
+  ): Promise<Answer>;
   admin: OpenBaoAdmin;
 };
 
@@ -51,6 +60,8 @@ export async function createCredentialsFixture(
     rateLimits?: "product";
     /** Run 7.3: the built workspace the in-process API serves. */
     webDirectory?: string;
+    /** Run 11.3: the edge hop the in-process API trusts (secrets-fixture.ts). */
+    trustedProxy?: string;
   } = {},
 ): Promise<CredentialsFixture> {
   const base = await createSecretsFixture({
@@ -62,6 +73,7 @@ export async function createCredentialsFixture(
     ...(opts.runtime === undefined ? {} : { runtime: opts.runtime }),
     ...(opts.rateLimits === undefined ? {} : { rateLimits: opts.rateLimits }),
     ...(opts.webDirectory === undefined ? {} : { webDirectory: opts.webDirectory }),
+    ...(opts.trustedProxy === undefined ? {} : { trustedProxy: opts.trustedProxy }),
   });
   const admin = new OpenBaoAdmin(base.stack.bao, base.stack.bao.rootToken);
   const freshen = async (): Promise<void> => {
@@ -80,6 +92,18 @@ export async function createCredentialsFixture(
         key: init.key ?? randomUUID(),
         ...(init.user === undefined ? {} : { user: init.user }),
         ...(init.to === undefined ? {} : { to: init.to }),
+      });
+    },
+    async issueRuntime(
+      env: EnvName,
+      body: Record<string, unknown> = {},
+      init: { user?: FixtureUser; key?: string; fresh?: boolean; path?: string } = {},
+    ): Promise<Answer> {
+      if (init.fresh !== false) await freshen();
+      return base.send("POST", `${init.path ?? base.env(env).path}/runtime-credentials`, {
+        body: { name: "server", ...body },
+        key: init.key ?? randomUUID(),
+        ...(init.user === undefined ? {} : { user: init.user }),
       });
     },
     async issue(
@@ -111,6 +135,28 @@ export async function issueFor(
     credentialId: credential.credentialId,
     token: answer.body.token as string,
     operationId: answer.body.operationId as string,
+  };
+}
+
+/**
+ * Issues one runtime credential through the route; fails unless 201. The
+ * client secret leaves only in the return value (rule 2): a failing assertion
+ * on it prints booleans and lengths.
+ */
+export async function issueRuntimeFor(
+  fixture: CredentialsFixture,
+  env: EnvName,
+  body: Record<string, unknown> = {},
+  opts: { path?: string } = {},
+): Promise<{ credentialId: string; clientSecret: string; operationId: string; requestId: string }> {
+  const answer = await fixture.issueRuntime(env, body, opts);
+  expect(answer.status, `issue runtime: ${answer.code ?? ""}`).toBe(201);
+  const credential = answer.body.credential as { credentialId: string };
+  return {
+    credentialId: credential.credentialId,
+    clientSecret: answer.body.clientSecret as string,
+    operationId: answer.body.operationId as string,
+    requestId: answer.headers.get("x-request-id") ?? "",
   };
 }
 
@@ -164,9 +210,11 @@ export async function expectCatalogMatchesBackend(
   fixture: SecretsFixture,
   environmentId: string,
 ): Promise<void> {
+  // Session 11: a runtime row holds no token of its own, so it names none here.
   const rows = await fixture.api.superuser.query<{ accessor: string }>(
     `SELECT accessor FROM app.machine_credential
-      WHERE environment_id = $1 AND state = 'active' AND effective_expires_at > now()`,
+      WHERE environment_id = $1 AND state = 'active' AND effective_expires_at > now()
+        AND kind = 'token'`,
     [environmentId],
   );
   const catalog = rows.rows.map((row) => row.accessor).sort();

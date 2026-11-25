@@ -53,6 +53,8 @@ export const ROUTE_CLASS_LIMIT: Readonly<Record<string, { scope: RateScope; perM
     "import.resume": { scope: "rl:import", perMinute: PRODUCT_LIMITS["rl:import"] },
     "export.create": { scope: "rl:export", perMinute: PRODUCT_LIMITS["rl:export"] },
     "credentials.issue": { scope: "rl:issue", perMinute: PRODUCT_LIMITS["rl:issue"] },
+    // Session 11: both issuances a person can make share the one limit.
+    "runtime_credentials.issue": { scope: "rl:issue", perMinute: PRODUCT_LIMITS["rl:issue"] },
   };
 
 /**

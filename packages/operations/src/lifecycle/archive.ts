@@ -251,15 +251,18 @@ export async function beginArchive(
           if (env.state === "active") await begin("environment", env.id, "project");
         }
       }
-      for (const scope of scopes) await closeCredentials(tx, scope);
-      // What this archive revokes: every credential of the scope that is now revoking.
+      // Session 11: a runtime credential is revoked here, in this transaction; it
+      // holds nothing in OpenBao, so the drive has nothing to prove for it.
+      let revokedHere = 0;
+      for (const scope of scopes) revokedHere += (await closeCredentials(tx, scope)).revoked;
+      // What this archive revokes: those, and every credential of the scope that is now revoking.
       const revoking = await tx.query<{ count: number }>(
         `SELECT count(*)::int AS count FROM app.machine_credential
           WHERE organization_id = $1 AND project_id = $2
             AND ($3::uuid IS NULL OR environment_id = $3) AND state = 'revoking'`,
         [request.organizationId, request.projectId, request.environmentId ?? null],
       );
-      const closed = revoking.rows[0]?.count ?? 0;
+      const closed = (revoking.rows[0]?.count ?? 0) + revokedHere;
       await tx.query(
         "UPDATE app.operation SET expected = $2::jsonb, dispatched_at = now() WHERE id = $1",
         [operationId, JSON.stringify({ closed, environments: scopes.length })],
@@ -328,7 +331,8 @@ export async function driveArchive(
             // P-118: one transaction, so the invalidation that lets it pass a capture covers both writes.
             await inTransaction(locked.client, async (tx) => {
               await invalidateCapture(tx, "archive");
-              const closedNow = await closeCredentials(tx, environment);
+              const moved = await closeCredentials(tx, environment);
+              const closedNow = moved.revoking + moved.revoked;
               if (closedNow > 0) {
                 await tx.query(
                   `UPDATE app.operation

@@ -113,6 +113,8 @@ export {
   findCredentialByAccessor,
   findCredentialByOperation,
   insertIssuing,
+  insertRuntimeCredential,
+  credentialKindOf,
   listCredentials,
   lockCredential,
   moveCredential,

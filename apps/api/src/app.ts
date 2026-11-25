@@ -27,6 +27,7 @@ import {
   credentialsIssueHandler,
   credentialsListHandler,
   credentialsRevokeHandler,
+  runtimeCredentialsIssueHandler,
   credentialsSummaryHandler,
 } from "./routes/credentials.ts";
 import { exportCreateHandler } from "./routes/export.ts";
@@ -148,6 +149,7 @@ function handlers(
     "credentials.list": credentialsListHandler,
     "credentials.issue": credentialsIssueHandler,
     "credentials.revoke": credentialsRevokeHandler,
+    "runtime_credentials.issue": runtimeCredentialsIssueHandler,
     "credentials.summary": credentialsSummaryHandler,
     "projects.archive": archiveHandler,
     "environments.archive": archiveHandler,
