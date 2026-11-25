@@ -90,8 +90,8 @@ function pathOf(route: RouteDef): string {
 
 /** The classes whose credential is a bearer: a browser session cannot send their requests. */
 const BEARER: ReadonlySet<string> = new Set(["machine", "machine_exchange", "automation"]);
-/** Session 11 (Run 11.2): a session GET with no handler in this build (404); Run 11.5 empties this. */
-const NO_HANDLER: ReadonlySet<string> = new Set(["automation_credentials.list"]);
+/** Session 11 (Run 11.2): a session GET with no handler in this build (404). Empty since Run 11.5. */
+const NO_HANDLER: ReadonlySet<string> = new Set<string>();
 
 const gets = (): RouteDef[] =>
   ROUTES.filter((route) => route.method === "GET" && !BEARER.has(route.auth));

@@ -29,6 +29,9 @@ const CLASS_ROUTES = [
   "import.resume",
   "export.create",
   "credentials.issue",
+  // Session 11: every issuance of a person shares the one limit.
+  "runtime_credentials.issue",
+  "automation_credentials.issue",
 ];
 const EXEMPT_ROUTES = ["credentials.revoke", "projects.archive", "environments.archive"];
 
@@ -241,7 +244,11 @@ describe("route classes", () => {
     [["secrets.reveal"], "rl:reveal", 30],
     [["import.preview", "import.apply", "import.resume"], "rl:import", 5],
     [["export.create"], "rl:export", 5],
-    [["credentials.issue"], "rl:issue", 5],
+    [
+      ["credentials.issue", "runtime_credentials.issue", "automation_credentials.issue"],
+      "rl:issue",
+      5,
+    ],
   ];
   for (const [routes, scope, limit] of cases) {
     it(`${routes.join(", ")}: ${String(limit)} served, the next is 429 (${scope}); a new window serves again`, async () => {

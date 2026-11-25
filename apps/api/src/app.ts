@@ -30,6 +30,11 @@ import {
   runtimeCredentialsIssueHandler,
   credentialsSummaryHandler,
 } from "./routes/credentials.ts";
+import {
+  automationCredentialsIssueHandler,
+  automationCredentialsListHandler,
+  automationCredentialsRevokeHandler,
+} from "./routes/automation-credentials.ts";
 import { exportCreateHandler } from "./routes/export.ts";
 import { archiveHandler, reactivateHandler } from "./routes/lifecycle.ts";
 import {
@@ -156,6 +161,9 @@ function handlers(
     "credentials.revoke": credentialsRevokeHandler,
     "runtime_credentials.issue": runtimeCredentialsIssueHandler,
     "credentials.summary": credentialsSummaryHandler,
+    "automation_credentials.list": automationCredentialsListHandler,
+    "automation_credentials.issue": automationCredentialsIssueHandler,
+    "automation_credentials.revoke": automationCredentialsRevokeHandler,
     "projects.archive": archiveHandler,
     "environments.archive": archiveHandler,
     "projects.reactivate": reactivateHandler,

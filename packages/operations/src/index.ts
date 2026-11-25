@@ -66,6 +66,14 @@ export {
   type ExchangeRequest,
 } from "./credentials/exchange.ts";
 export {
+  issueAutomationCredential,
+  revokeAutomationCredential,
+  type AutomationIssueOutcome,
+  type AutomationIssueRequest,
+  type AutomationRevokeOutcome,
+  type AutomationRevokeRequest,
+} from "./credentials/automation.ts";
+export {
   issueRuntimeCredential,
   revokeRuntimeCredential,
   type RuntimeCredentialDeps,
@@ -75,6 +83,7 @@ export {
   type RuntimeRevokeRequest,
 } from "./credentials/runtime.ts";
 export {
+  automationBinding,
   mintSecret,
   parseCidrs,
   sourceAllowed,

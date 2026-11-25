@@ -55,7 +55,7 @@ describe("the table (P-113)", () => {
     expect([scopeLimit("rl:exchange"), scopeLimit("rl:automation")]).toEqual([10, 120]);
   });
 
-  it("route classes: reveal 30, the three import routes share one 5, export 5, both issuances of a person share one 5", () => {
+  it("route classes: reveal 30, the three import routes share one 5, export 5, the three issuances of a person share one 5", () => {
     expect(ROUTE_CLASS_LIMIT).toEqual({
       "secrets.reveal": { scope: "rl:reveal", perMinute: 30 },
       "import.preview": { scope: "rl:import", perMinute: 5 },
@@ -64,6 +64,7 @@ describe("the table (P-113)", () => {
       "export.create": { scope: "rl:export", perMinute: 5 },
       "credentials.issue": { scope: "rl:issue", perMinute: 5 },
       "runtime_credentials.issue": { scope: "rl:issue", perMinute: 5 },
+      "automation_credentials.issue": { scope: "rl:issue", perMinute: 5 },
     });
     const ids = new Set(ROUTES.map((route) => route.id));
     for (const id of [...Object.keys(ROUTE_CLASS_LIMIT), ...SESSION_EXEMPT]) {

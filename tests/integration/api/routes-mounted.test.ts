@@ -58,6 +58,10 @@ const HANDLED = new Set([
   "runtime_credentials.issue",
   "machine.exchange",
   "machine.metadata",
+  // Run 11.5 Task A: the owner's three routes for automation credentials.
+  "automation_credentials.list",
+  "automation_credentials.issue",
+  "automation_credentials.revoke",
 ]);
 
 /** A valid body for every contract route that takes one. */

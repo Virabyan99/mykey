@@ -7,6 +7,7 @@ import { LIMITS, credentialIdSchema, type OperationId } from "@mykey/contracts";
 import {
   AuditReadTimeout,
   credentialKindOf,
+  findAutomationCredentialByOperation,
   findCredentialByOperation,
   listCredentials,
   readCredentialsSummary,
@@ -93,14 +94,26 @@ export function credentialView(row: CredentialRow) {
 /**
  * The details of `credential_not_replayable` (P-88): the credential the
  * replayed issuance made and its state now. Absent when the row is not found.
+ * Session 11: the issuance may be an automation credential's.
  */
 export async function notReplayable(db: Queryable, operationId: OperationId): Promise<ApiError> {
   const credential = await findCredentialByOperation(db, operationId);
+  let details: { credentialId: string; state: string } | null =
+    credential === null
+      ? null
+      : { credentialId: credential.id, state: credentialView(credential).state };
+  if (details === null) {
+    const automation = await findAutomationCredentialByOperation(db, operationId);
+    if (automation !== null) {
+      details = {
+        credentialId: automation.id,
+        state: automation.state === "active" && automation.expired ? "expired" : automation.state,
+      };
+    }
+  }
   return new ApiError("credential_not_replayable", "replay", undefined, {
     operationId,
-    ...(credential === null
-      ? {}
-      : { details: { credentialId: credential.id, state: credentialView(credential).state } }),
+    ...(details === null ? {} : { details }),
   });
 }
 

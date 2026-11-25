@@ -25,6 +25,8 @@ const LISTS: Record<string, { filter: string | null; otherFilter?: string }> = {
   "operations.list": { filter: "state=unfinished", otherFilter: "400 malformed_request" },
   "audit.list": { filter: "outcome=success", otherFilter: "409 listing_changed" },
   "activity.list": { filter: "projectId=PROJECT", otherFilter: "409 listing_changed" },
+  // Session 11 (Run 11.5 Task A).
+  "automation_credentials.list": { filter: null },
 };
 
 /**
@@ -36,7 +38,6 @@ const OWED = [
   "automation.projects.list",
   "automation.runtime_credentials.list",
   "automation.secrets.list",
-  "automation_credentials.list",
 ];
 
 const route = (id: string): RouteDef => {
@@ -76,6 +77,20 @@ async function more(side: Side, label: string): Promise<void> {
       body: { name: `second-${label}` },
     }),
   );
+  // Two automation credentials: their list has a second page at limit=1.
+  for (const name of ["first", "second"]) {
+    answers.push(
+      await side.request(
+        "POST",
+        `/v1/organizations/${side.organizationId}/automation-credentials`,
+        {
+          cookie: side.owner,
+          headers: { "idempotency-key": randomUUID() },
+          body: { name: `${name}-${label}`, rights: ["projects.create"], cidrs: ["127.0.0.0/8"] },
+        },
+      ),
+    );
+  }
   for (const answer of answers) {
     expect(answer.status, `seeding ${label}`).toBeLessThan(300);
     await answer.arrayBuffer();

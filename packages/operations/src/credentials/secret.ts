@@ -43,6 +43,20 @@ export function runtimeBinding(
   return ["runtime", scope.organizationId, scope.projectId, scope.environmentId, ...cidrs];
 }
 
+/**
+ * What an automation credential is bound to (D-82): its organization, its
+ * chain (and so the projects it manages), its rights and the networks it may
+ * be used from. `rights` in the contract's order.
+ */
+export function automationBinding(
+  organizationId: string,
+  ownerId: string,
+  rights: readonly string[],
+  cidrs: readonly string[],
+): string[] {
+  return ["automation", organizationId, ownerId, rights.join(","), ...cidrs];
+}
+
 /** What is stored for a presented secret and its binding: the verifier under the ring's current key. */
 export function verifierOf(
   ring: HmacRing,

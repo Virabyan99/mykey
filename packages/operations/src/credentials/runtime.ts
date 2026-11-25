@@ -13,8 +13,11 @@ import {
   LIMITS,
   RUNTIME_SECRET_PREFIX,
   type CredentialId,
+  type EnvironmentId,
   type ErrorCode,
   type OperationId,
+  type OrganizationId,
+  type ProjectId,
 } from "@mykey/contracts";
 import {
   completeOperation,
@@ -83,7 +86,7 @@ export type RuntimeRevokeOutcome =
   | Refused;
 
 /** A refusal thrown out of the transaction, so that it rolls back. */
-class Refusal extends Error {
+export class Refusal extends Error {
   readonly code: ErrorCode;
 
   constructor(code: ErrorCode) {
@@ -94,7 +97,7 @@ class Refusal extends Error {
 }
 
 /** What a failed transaction answers; anything else is rethrown. */
-function refusalOf(error: unknown): Refused {
+export function refusalOf(error: unknown): { kind: "refused"; code: ErrorCode } {
   if (error instanceof Refusal) return { kind: "refused", code: error.code };
   if (error instanceof AuditUnavailable) return { kind: "refused", code: "audit_unavailable" };
   // P-118: the capture barrier refused a statement; nothing committed.
@@ -102,11 +105,29 @@ function refusalOf(error: unknown): Refused {
   throw error;
 }
 
+/** What an operation of one transaction is admitted with (the runtime and the automation pair). */
+export interface Admission {
+  routeId: string;
+  actor: Actor;
+  idempotencyKey: string;
+  intent: Intent;
+  /** Runs in the transaction: null when the caller may still do this (authority and states). */
+  recheck: (tx: pg.PoolClient) => Promise<ErrorCode | null>;
+}
+
+/** Where the operation belongs; its key's target is the deepest id. */
+export interface Place {
+  organizationId: OrganizationId;
+  projectId?: ProjectId;
+  environmentId?: EnvironmentId;
+}
+
 /** The operation by its key: inserted, or the one already there (a replay or a conflict). */
-async function admit(
+export async function admit(
   tx: pg.PoolClient,
   deps: RuntimeCredentialDeps,
-  request: Common,
+  request: Admission,
+  place: Place,
   operationId: OperationId,
   expected: Record<string, unknown>,
 ): Promise<OperationRow | null> {
@@ -114,16 +135,16 @@ async function admit(
     principalKind: request.actor.kind,
     principalId: request.actor.id,
     action: request.routeId,
-    target: request.scope.environmentId,
+    target: place.environmentId ?? place.projectId ?? place.organizationId,
     idempotencyKey: request.idempotencyKey,
   };
   const { digest, keyId } = intentFingerprint(deps.ring, request.intent);
   const inserted = await insertOperation(tx, {
     ...key,
     id: operationId,
-    organizationId: request.scope.organizationId,
-    projectId: request.scope.projectId,
-    environmentId: request.scope.environmentId,
+    organizationId: place.organizationId,
+    ...(place.projectId === undefined ? {} : { projectId: place.projectId }),
+    ...(place.environmentId === undefined ? {} : { environmentId: place.environmentId }),
     expected,
     state: "executing",
     fingerprint: digest,
@@ -159,7 +180,7 @@ export async function issueRuntimeCredential(
   );
   try {
     return await withTransaction(deps.pool, async (tx) => {
-      const replay = await admit(tx, deps, request, operationId, { credentialId });
+      const replay = await admit(tx, deps, request, scope, operationId, { credentialId });
       if (replay !== null) return { kind: "replay", operation: replay } as const;
       const ready = await tx.query<{ kv_ready: boolean }>(
         "SELECT kv_ready FROM app.environment WHERE organization_id = $1 AND id = $2",
@@ -225,7 +246,7 @@ export async function revokeRuntimeCredential(
     return await withTransaction(deps.pool, async (tx) => {
       // P-118: a revocation reduces access; while a pair is captured it records that and proceeds.
       await invalidateCapture(tx, "credential_revoke");
-      const replay = await admit(tx, deps, request, operationId, { credentialId });
+      const replay = await admit(tx, deps, request, scope, operationId, { credentialId });
       if (replay !== null) return { kind: "replay", operation: replay } as const;
       const row = await lockCredential(tx, scope, credentialId, "update");
       // A token credential is never closed here: it has a token in OpenBao to prove gone.

@@ -161,6 +161,8 @@ const SHOWN_ONCE: ReadonlySet<string> = new Set([
   "credentials.issue",
   "runtime_credentials.issue",
   "automation.runtime_credentials.issue",
+  // Run 11.5: nor does an automation credential's issuance show its secret again.
+  "automation_credentials.issue",
 ]);
 
 /**

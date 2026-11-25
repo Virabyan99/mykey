@@ -43,6 +43,7 @@ beforeAll(async () => {
         route.id === "export.create" ||
         route.id.startsWith("credentials.") ||
         route.id.startsWith("runtime_credentials.") ||
+        route.id.startsWith("automation_credentials.") ||
         route.id.endsWith(".archive") ||
         route.id.endsWith(".reactivate"),
     ).map((route) => route.id),

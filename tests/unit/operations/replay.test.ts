@@ -184,14 +184,16 @@ describe("replayAnswer", () => {
       });
     });
 
-    // Session 11: an issuance of a runtime credential shows its client secret once, too.
+    // Session 11: an issuance of a runtime credential shows its client secret once, too,
+    // and an automation credential's its secret.
     const SHOWN_ONCE = [
       "credentials.issue",
       "runtime_credentials.issue",
       "automation.runtime_credentials.issue",
+      "automation_credentials.issue",
     ];
 
-    it("the two issuances of a runtime credential answer credential_not_replayable as well", () => {
+    it("the two issuances of a runtime credential and the automation credential's answer credential_not_replayable as well", () => {
       for (const id of SHOWN_ONCE) {
         const route = ROUTES.find((r) => r.id === id)!;
         expect(route.idempotent, id).toBe(true);
