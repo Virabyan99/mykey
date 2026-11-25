@@ -33,7 +33,13 @@ const CLASS_ROUTES = [
   "runtime_credentials.issue",
   "automation_credentials.issue",
 ];
-const EXEMPT_ROUTES = ["credentials.revoke", "projects.archive", "environments.archive"];
+// Session 11 (review L2): revoking an automation credential reduces exposure too.
+const EXEMPT_ROUTES = [
+  "credentials.revoke",
+  "automation_credentials.revoke",
+  "projects.archive",
+  "environments.archive",
+];
 
 beforeAll(async () => {
   keysDirectory = mkdtempSync(join(tmpdir(), "mykey-rate-keys-"));

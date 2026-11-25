@@ -155,6 +155,26 @@ describe("known-limits.md holds Session 11's nine lines (Run 11.7)", () => {
   });
 });
 
+describe("known-limits.md holds the review's lines (Run 11.8)", () => {
+  it.each([
+    "A dead credential is refused as a miss of its source.",
+    "A script's own revocation of a runtime credential counts against its 120 requests a minute.",
+    "Nothing bounds what one automation credential makes except its 120 requests a minute.",
+    "`machine.metadata` writes no audit row.",
+    "A project name that exists outside a chain answers `409 already_exists` to that chain's credential.",
+    "An IPv4-mapped IPv6 network is accepted at issue and was never tried.",
+    "A request that reaches the API with more than one forwarded address is read as the edge's own address.",
+  ])("%s", (line) => {
+    expect(LIMITS_DOC).toContain(line);
+  });
+
+  it("limits.md says the miss rule holds a dead credential too, and which revocations skip the session limit", () => {
+    const limits = read("docs/runbooks/limits.md");
+    expect(limits).toContain("revoked, expired or called from outside its networks");
+    expect(limits).toContain("not counted on the two credential revocations and the archives");
+  });
+});
+
 describe("no document shows a secret of the new shapes (Run 11.7)", () => {
   it("no runbook, guide, llms.txt or README holds an mkrc or mkac secret, or a bearer value", () => {
     const files = [

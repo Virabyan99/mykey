@@ -243,6 +243,69 @@ describe("the exchange (rl:machine-miss 30, rl:exchange 10)", () => {
     await nextWindow();
     expect((await exchangeCall(f, { secret: one.clientSecret })).status).toBe(200);
   }, 180_000);
+
+  // Review M1 (Run 11.8). The secret of a revoked credential, or one presented
+  // from outside its networks, still verifies: it was neither a miss of its
+  // source nor a request of its credential, and each refusal wrote an audit row.
+  it("a revoked credential's secret and one from outside its networks are misses of their source: the 31st answers 429 and writes no audit row, as a made-up secret does", async () => {
+    const dead = await issueRuntimeFor(f, "env1a");
+    const elsewhere = await issueRuntimeFor(f, "env1a", { cidrs: ["192.0.2.0/24"] });
+    await f.api.superuser.query(
+      "UPDATE app.machine_credential SET state = 'revoked' WHERE id = $1",
+      [dead.credentialId],
+    );
+    const denials = async (): Promise<number> => {
+      const rows = await f.api.superuser.query<{ n: number }>(
+        `SELECT count(*)::int AS n FROM audit.event
+          WHERE action = 'access.denied' AND actor_kind = 'machine' AND actor_id = ANY($1)`,
+        [[dead.credentialId, elsewhere.credentialId]],
+      );
+      return rows.rows[0]?.n ?? -1;
+    };
+    for (let i = 0; i < 30; i += 1) {
+      const secret = i % 2 === 0 ? dead.clientSecret : elsewhere.clientSecret;
+      const answer = await exchangeCall(f, { secret });
+      expect([answer.status, answer.code], `refusal ${String(i + 1)}`).toEqual([
+        401,
+        "unauthenticated",
+      ]);
+    }
+    expect(await denials()).toBe(30);
+    for (const secret of [dead.clientSecret, elsewhere.clientSecret, stranger()]) {
+      const refused = await exchangeCall(f, { secret });
+      expect([refused.status, refused.code]).toEqual([429, "rate_limited"]);
+    }
+    expect(await denials()).toBe(30);
+    // The control: in the next window it is refused as itself again, with its row.
+    await nextWindow();
+    const again = await exchangeCall(f, { secret: dead.clientSecret });
+    expect([again.status, again.code]).toEqual([401, "unauthenticated"]);
+    expect(await denials()).toBe(31);
+  }, 180_000);
+
+  it("a token of an exchange whose credential was revoked is a miss of its source too: the 31st request answers 429", async () => {
+    const credential = await issueRuntimeFor(f, "env1a");
+    const exchanged = await exchangeCall(f, { secret: credential.clientSecret });
+    expect(exchanged.status, exchanged.code ?? "").toBe(200);
+    const token = exchanged.body.token as string;
+    expect((await machineCall(f, "keys", { token })).status).toBe(200);
+    await f.api.superuser.query(
+      "UPDATE app.machine_credential SET state = 'revoked' WHERE id = $1",
+      [credential.credentialId],
+    );
+    for (let i = 0; i < 30; i += 1) {
+      const answer = await machineCall(f, "keys", { token });
+      expect([answer.status, answer.code], `refusal ${String(i + 1)}`).toEqual([
+        401,
+        "unauthenticated",
+      ]);
+    }
+    const refused = await machineCall(f, "keys", { token });
+    expect([refused.status, refused.code]).toEqual([429, "rate_limited"]);
+    // The control: another credential's token is served in the next window.
+    await nextWindow();
+    expect((await machineCall(f, "keys", { token: a.token })).status).toBe(200);
+  }, 180_000);
 });
 
 // Session 11 (Run 11.5, P-194): an automation credential has its own 120
@@ -313,6 +376,51 @@ describe("automation (rl:automation 120, rl:machine-miss 30)", () => {
         ids,
       });
       expect([served.status, served.code]).toEqual([404, "not_found"]);
+    } finally {
+      await clearAutomation(f);
+    }
+  }, 180_000);
+
+  // Review M1 (Run 11.8): the same for an automation credential.
+  it("a revoked automation credential's secret is a miss of its source: the 31st request answers 429 and writes no audit row", async () => {
+    const dead = await issueAutomationFor(f, { name: "dead" });
+    try {
+      await f.api.superuser.query(
+        "UPDATE app.automation_credential SET state = 'revoked', revoked_at = now() WHERE id = $1",
+        [dead.credentialId],
+      );
+      const denials = async (): Promise<number> => {
+        const rows = await f.api.superuser.query<{ n: number }>(
+          `SELECT count(*)::int AS n FROM audit.event
+            WHERE action = 'access.denied' AND actor_kind = 'machine' AND actor_id = $1`,
+          [dead.credentialId],
+        );
+        return rows.rows[0]?.n ?? -1;
+      };
+      const ids = { project: f.env("env1a").projectId };
+      for (let i = 0; i < 30; i += 1) {
+        const answer = await automationCall(f, "automation.projects.get", {
+          secret: dead.secret,
+          ids,
+        });
+        expect([answer.status, answer.code], `refusal ${String(i + 1)}`).toEqual([
+          401,
+          "unauthenticated",
+        ]);
+      }
+      expect(await denials()).toBe(30);
+      const refused = await automationCall(f, "automation.projects.get", {
+        secret: dead.secret,
+        ids,
+      });
+      expect([refused.status, refused.code]).toEqual([429, "rate_limited"]);
+      expect(await denials()).toBe(30);
+      await nextWindow();
+      const again = await automationCall(f, "automation.projects.get", {
+        secret: dead.secret,
+        ids,
+      });
+      expect([again.status, again.code]).toEqual([401, "unauthenticated"]);
     } finally {
       await clearAutomation(f);
     }

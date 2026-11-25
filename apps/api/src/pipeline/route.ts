@@ -126,7 +126,17 @@ export async function rateStep(
  * of unattributable tokens is refused before OpenBao is asked; a refusal that
  * cost a lookup is counted after it. Session 11: a client secret nobody can
  * attribute is such a miss too, and is refused before the database is read.
+ *
+ * Review M1 (Run 11.8): so is a credential that is revoked, expired or called
+ * from outside its networks. Its secret still verifies, so without this it was
+ * neither a miss nor a request of its credential: every refusal cost a read
+ * and an audit row, held only by the source limit, and 31 requests told a
+ * once-real secret from a made-up one.
  */
+const countsAsMiss = (error: ApiError): boolean =>
+  error.code === "unauthenticated" &&
+  (error.reason === MISSED_LOOKUP || error.reason === "state" || error.reason === "source");
+
 async function underMissLimit<T>(
   deps: AppDeps,
   requestId: string,
@@ -143,7 +153,7 @@ async function underMissLimit<T>(
   try {
     return await authenticate();
   } catch (error) {
-    if (error instanceof ApiError && error.reason === MISSED_LOOKUP) {
+    if (error instanceof ApiError && countsAsMiss(error)) {
       // Counted; this request still answers 401 (the next one meets the check above).
       await deps.limiter.hit("rl:machine-miss", source).catch((counted: unknown) => {
         if (!(counted instanceof ApiError && counted.code === "rate_limited")) throw counted;

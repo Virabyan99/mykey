@@ -74,6 +74,7 @@ describe("the table (P-113)", () => {
 
   it("only revocation and archive skip the session limit", () => {
     expect([...SESSION_EXEMPT].sort()).toEqual([
+      "automation_credentials.revoke",
       "credentials.revoke",
       "environments.archive",
       "projects.archive",

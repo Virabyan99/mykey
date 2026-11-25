@@ -71,6 +71,8 @@ export const ROUTE_CLASS_LIMIT: Readonly<Record<string, { scope: RateScope; perM
  */
 export const SESSION_EXEMPT: ReadonlySet<string> = new Set([
   "credentials.revoke",
+  // Session 11 (review L2): an automation credential is revoked on a route of its own.
+  "automation_credentials.revoke",
   "projects.archive",
   "environments.archive",
 ]);

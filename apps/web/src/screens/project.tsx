@@ -57,8 +57,9 @@ function ManagedBy(props: { org: string; userId: string; chain: string; manages:
   return (
     <p>
       {CREDENTIAL_COPY.automation.managed}
-      {name === null ? "" : `: ${name}`}. A script made this project and can add environments,
-      secrets and runtime credentials to it. You keep every right over it.
+      {name === null ? "" : `: ${name}`}. A script made this project. A credential of its chain can
+      add environments, new secrets and runtime credentials to it, as far as its rights go. You keep
+      every right over it.
     </p>
   );
 }

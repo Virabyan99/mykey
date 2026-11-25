@@ -557,6 +557,61 @@ describe("the check is made again inside the change (FR-1.10)", () => {
     expect(control.status, control.code).toBe(201);
   });
 
+  // Review L1 (Run 11.8): the recheck locks the credential's row. A revocation
+  // that holds the row and has not answered yet is waited for, so no change
+  // commits after a revocation that answered.
+  it("a revocation that holds the row while the change rechecks is waited for: the change answers 401 only after it, and nothing is written", async () => {
+    const doomed = await issueAutomationFor(f, {
+      name: "doomed-late",
+      rights: AUTOMATION_RIGHTS,
+      replaces: auto.credentialId,
+    });
+    // A use just now: the pipeline's once-a-minute last-use write will not touch the row.
+    const used = await automationCall(f, "automation.projects.list", { secret: doomed.secret });
+    expect(used.status).toBe(200);
+    const name = `HELD_${randomUUID().slice(0, 8).toUpperCase()}`;
+    const revoking = await q().connect();
+    let settled = false;
+    try {
+      await revoking.query("BEGIN");
+      await revoking.query("SELECT id FROM app.automation_credential WHERE id = $1 FOR UPDATE", [
+        doomed.credentialId,
+      ]);
+      await revoking.query(
+        "UPDATE app.automation_credential SET state = 'revoked', revoked_at = now() WHERE id = $1",
+        [doomed.credentialId],
+      );
+      const change = automationCall(f, "automation.secrets.create", {
+        secret: doomed.secret,
+        ids: ids(),
+        body: { name, value: "synthetic" },
+      }).then((answer) => {
+        settled = true;
+        return answer;
+      });
+      await new Promise((resolve) => setTimeout(resolve, 1500));
+      expect(settled, "the change answered while the revocation held the row").toBe(false);
+      await revoking.query("COMMIT");
+      const answer = await change;
+      expect([answer.status, answer.code]).toEqual([401, "unauthenticated"]);
+    } finally {
+      await revoking.query("ROLLBACK").catch(() => undefined);
+      revoking.release();
+    }
+    const rows = await q().query(
+      "SELECT 1 FROM app.secret_index WHERE environment_id = $1 AND name = $2",
+      [made.environmentId, name],
+    );
+    expect(rows.rowCount).toBe(0);
+    // The control: the chain's live credential writes the same name at once.
+    const control = await automationCall(f, "automation.secrets.create", {
+      secret: auto.secret,
+      ids: ids(),
+      body: { name, value: "synthetic" },
+    });
+    expect(control.status, control.code).toBe(201);
+  });
+
   it("a project the chain stopped managing after the pipeline looked: 404 from the environment, the project and the credential routes, and nothing is made", async () => {
     const cases: [string, Record<string, unknown>][] = [
       ["automation.environments.create", { name: `e${randomUUID().slice(0, 8)}` }],
@@ -660,6 +715,10 @@ describe("the record", () => {
     expect(needles.filter((needle) => lines.includes(needle)).length).toBe(0);
     expect(lines).not.toContain("mkac.");
     expect(lines).not.toContain("mkrc.");
-    expect(lines.includes(made.projectId) || lines.length > 0).toBe(true);
+    // The control (review L7): the log is the one that saw this chain's requests.
+    const seen = await automationCall(f, "automation.projects.list", { secret: auto.secret });
+    const requestId = seen.headers.get("x-request-id") ?? "";
+    expect(requestId.length).toBeGreaterThan(0);
+    expect(f.api.logs.map((line) => JSON.stringify(line)).join("\n")).toContain(requestId);
   });
 });

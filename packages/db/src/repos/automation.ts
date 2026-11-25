@@ -295,7 +295,15 @@ export async function findAutomationForAuth(
   };
 }
 
-/** The credential as it is now, for the admission recheck: its state, expiry, chain and rights. */
+/**
+ * The credential as it is now, for the admission recheck: its state, expiry,
+ * chain and rights, with the row locked FOR KEY SHARE until the change ends
+ * (review L1, Run 11.8). A revocation locks the row FOR UPDATE: it waits for a
+ * change that already looked, and a change waits for a revocation that holds
+ * the row and then reads `revoked`. So no change commits after a revocation
+ * that answered. The once-a-minute last-use write is a plain update of another
+ * column, which this lock does not hold up.
+ */
 export async function automationCredentialNow(
   db: Queryable,
   organizationId: string,
@@ -306,10 +314,22 @@ export async function automationCredentialNow(
   ownerId: string;
   rights: AutomationRight[];
 } | null> {
-  const row = await findAutomationForAuth(db, organizationId, id);
-  return row === null
+  const result = await db.query<{
+    owner_id: string;
+    rights: AutomationRight[];
+    state: "active" | "revoked";
+    live: boolean;
+  }>(
+    `SELECT owner_id, rights, state, expires_at > now() AS live
+       FROM app.automation_credential
+      WHERE organization_id = $1 AND id = $2
+        FOR KEY SHARE`,
+    [organizationId, id],
+  );
+  const row = result.rows[0];
+  return row === undefined
     ? null
-    : { state: row.state, live: row.live, ownerId: row.ownerId, rights: row.rights };
+    : { state: row.state, live: row.live, ownerId: row.owner_id, rights: row.rights };
 }
 
 /** At most once a minute per credential. */
