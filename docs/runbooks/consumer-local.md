@@ -102,6 +102,8 @@ echo
 
 The owner issues a token for the environment, with a name and a lifetime: on the workspace's Machine credentials screen, as "Issue" in `docs/runbooks/machine-credentials.md` describes. The token is shown once, and the service stores no copy. So first run the command of section 8, which waits at its prompt; then issue the token, copy it, and paste it there. Copying the command after the token would replace the token on the clipboard.
 
+A server that must start by itself for longer than 30 days takes a runtime credential instead ("Runtime credentials" in `machine-credentials.md`). The owner chooses that kind on the same screen, and its client secret is stored by the same command of section 8.
+
 ## 8. Store the token
 
 Run the one line below. It runs in `bash`, whatever your shell is.

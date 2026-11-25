@@ -43,6 +43,11 @@ const LOCAL = read("docs/runbooks/consumer-local.md");
 const DEPLOY = read("docs/runbooks/consumer-deploy.md");
 const CREDENTIALS = read("docs/runbooks/machine-credentials.md");
 const STEP = shBlocks(section(LOCAL, "## 8. Store the token"))[0] ?? "";
+// Session 11 (Run 11.7): automation.md stores an automation secret with the
+// same command, its file and words changed. tests/unit/runbooks/automation.test.ts
+// proves that block to be this one under five replacements.
+const AUTOMATION_STEP =
+  shBlocks(section(read("docs/runbooks/automation.md"), "## Store it"))[0] ?? "";
 
 const tokenBlocks = (text: string): string[] =>
   shBlocks(text).filter((block) => block.includes("machine-token"));
@@ -89,9 +94,12 @@ describe("the token step has one source (P-172)", () => {
     // Review finding 2: the one command keeps the echo off itself, after a trap
     // that turns it back on; a step of its own that runs stty is what is refused.
     expect(STEP).toMatch(/^bash -c '[^']*trap "stty echo 2>\/dev\/null" EXIT; stty -echo/);
+    expect(AUTOMATION_STEP).toMatch(
+      /^bash -c '[^']*trap "stty echo 2>\/dev\/null" EXIT; stty -echo/,
+    );
     const found: string[] = [];
     for (const path of SURFACES) {
-      const text = read(path).replaceAll(STEP, "");
+      const text = read(path).replaceAll(STEP, "").replaceAll(AUTOMATION_STEP, "");
       for (const pattern of [
         /\bstty\b/,
         /Ctrl-D/,

@@ -38,7 +38,7 @@ These are not in Doc 06 §11. The numbers are `LIMITS.runtimeCredential`, `LIMIT
 
 - Both kinds are marked "expiring soon" 7 days before their expiry, as a 30-day token is.
 - **The exchange's limits are enforced since Run 11.3:** 10 exchanges a minute for each runtime credential, and the miss rule for a client secret nobody can attribute. A bearer that is not of the client secret's shape costs no read and is not counted.
-- **The automation credential's limit is enforced from Run 11.5.** Until then every route of that class answers `404`.
+- **The automation credential's limit is enforced since Run 11.5:** 120 requests a minute for each credential. `automation.md` says what a client does with a `429`.
 
 ## Concurrency
 

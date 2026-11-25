@@ -76,6 +76,7 @@ The owner's path, in order:
 | 3    | Issue a machine credential, store its token with the one command, rotate it, revoke it     | [`machine-credentials.md`](docs/runbooks/machine-credentials.md) |
 | 4    | Connect an application on your own machine (Linux, macOS or WSL)                           | [`consumer-local.md`](docs/runbooks/consumer-local.md)           |
 | 5    | Run it in a container on a server                                                          | [`consumer-deploy.md`](docs/runbooks/consumer-deploy.md)         |
+| —    | Let a script create projects, secrets and runtime credentials                              | [`automation.md`](docs/runbooks/automation.md)                   |
 | —    | The dotenv format that import and export use                                               | [`dotenv-format-v1.md`](docs/runbooks/dotenv-format-v1.md)       |
 | —    | What the service does not do                                                               | [`known-limits.md`](docs/runbooks/known-limits.md)               |
 

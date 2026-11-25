@@ -4,6 +4,17 @@ How a machine token is issued, listed and revoked, what the in-between states me
 
 A machine credential is one OpenBao token of the role `machine-env-<environmentId>`: it reads its environment's current values and nothing else. PostgreSQL keeps the record (name, state, expiry, the token's accessor). **The token itself is stored nowhere**, not even encrypted: it is shown once, in the answer to the issuance.
 
+## Two kinds
+
+A machine credential is one of two kinds (Session 11, D-81). Both read the complete current secret set of one environment and nothing else, and both are stored on the consumer by the same command ("Store a token").
+
+| Kind                 | Choose it for                                                              | Lives                                  | What the consumer holds                                            | Needs                     |
+| -------------------- | -------------------------------------------------------------------------- | -------------------------------------- | ------------------------------------------------------------------ | ------------------------- |
+| A 30-day token       | a workstation, or a job that a person restarts and can give a new token    | at most 30 days, which is the default  | the token itself, an OpenBao token                                 | any CLI release           |
+| A runtime credential | a server that must start by itself for longer than a month, with nobody by | at most 365 days, which is the default | a client secret; each start exchanges it for a token of 15 minutes | the CLI from `cli-v0.2.0` |
+
+"Issue" to "Unknown issuance" below are about the 30-day token. "Runtime credentials" says what differs for the other kind. "Archive and reactivate", "What a machine token can read" and "Never" hold for both.
+
 Paths below are under `/v1/organizations/<org>/projects/<project>/environments/<environment>`. Only the owner and admins may use them.
 
 ## Issue
@@ -31,6 +42,7 @@ bash -c 'f="$HOME/.config/mykey/machine-token"; d="${f%/*}"; trap "stty echo 2>/
 - **Paste only when the terminal shows `Paste the token, then press Enter:`.** If it shows anything else, do not paste: a paste that reaches the shell goes to its history and the screen.
 - Nothing pasted is shown. `Token stored.` means it is stored. A paste of several lines, an empty line, or anything with a character a token never has is refused: `Nothing was stored`, exit 1.
 - `consumer-local.md` §8 is this command's source; `tests/unit/runbooks/token-step.test.ts` keeps every copy equal to it.
+- A runtime credential's client secret is stored by this same command, into the same file. The CLI tells the two kinds apart.
 
 ## Inventory
 
@@ -86,6 +98,27 @@ MSYS_NO_PATHCONV=1 node scripts/host.ts <host> ops reconcile-credentials --envir
 
 The command prints ids and counts only, never an accessor or a token, and writes one audit row `operator.reconcile_credentials` per run. The AppRole login tokens of the namespace are listed by OpenBao too; they carry no machine policy and are left alone.
 
+## Runtime credentials
+
+A runtime credential is a row of PostgreSQL and nothing in OpenBao: no token exists until a consumer asks for one. Its client secret is `mkrc.<credential id>.<secret>`. MyKey keeps a keyed digest made over the secret, the environment and the bound networks, and never the secret.
+
+- **Issue:** in the workspace, **New credential** on Machine credentials, with the kind "A runtime credential". By the API it is `POST …/runtime-credentials` with `{ "name", "ttlSeconds"?, "cidrs"? }`, an `Idempotency-Key` and a fresh second factor.
+  - `ttlSeconds` is at most 365 days; absent: the maximum. `cidrs` is at most 8 networks; with none, the client secret works from any network.
+  - `201` `{ operationId, credential, clientSecret }` with `cache-control: no-store`. The client secret is never shown again: the same request again answers `409 credential_not_replayable`.
+  - There is no unknown issuance. The row, the operation and the audit row are one transaction, and OpenBao is not asked.
+- **Store:** with the command of "Store a token", into the same file. It needs the CLI from `cli-v0.2.0`: an older CLI presents the client secret as a token and is refused (`known-limits.md`).
+- **The exchange:** at each start the CLI sends the client secret to `POST /v1/machine/exchange`. The service checks the secret, the credential's state and expiry, its networks and its environment. It answers with a token of 15 minutes that cannot be renewed and reads that one environment. The CLI reads the set with it and keeps neither. Each exchange writes an audit row `machine.exchange`. A credential allows 10 exchanges a minute (`429 rate_limited` beyond that).
+- **Inventory:** the same list, `GET …/credentials`, with each row's `kind`, its bound networks and who issued it: a person or an automation credential. A runtime credential is only ever `active`, `expired` or `revoked`.
+- **Revoke:** the same route as a token's. It is one transaction, with nothing to prove in OpenBao.
+  - **In the product,** the next exchange is `401`, and every token the credential was exchanged for is refused at once (`401` on both machine routes).
+  - **In OpenBao,** nothing is revoked, because no accessor is stored. OpenBao keeps accepting such a token until it expires, at most 15 minutes later. It was measured with 899 of its 900 seconds left (Run 11.3). OpenBao is reachable only from the host's private network.
+- **Archive, restore, reconcile:**
+  - an archive revokes it in the archive's own transaction;
+  - a restore revokes it with every other credential;
+  - `reconcile-credentials` leaves the token of an exchange alone while its credential is active, and revokes it as unrecorded afterwards.
+- **Rotate:** issue a new one, store it on the server, restart, check, then revoke the old one. The inventory warns 7 days before the expiry.
+- **By a script:** an automation credential with the right `runtime_credentials.manage` issues, lists and revokes the runtime credentials of the projects its chain manages (`automation.md`).
+
 ## Archive and reactivate
 
 An archive of an environment or a project (`POST …/archive` with `{"confirmed": true}`) is the revocation of every machine token of its scope. Rules in D-41.
@@ -123,6 +156,6 @@ The machine policy grants OpenBao's native KV read on the environment's path. In
 
 ## Never
 
-- Paste a token into a ticket, a log, a chat or a commit. If one leaks, revoke it at once.
+- Paste a token or a client secret into a ticket, a log, a chat or a commit. If one leaks, revoke its credential at once.
 - Edit `app.machine_credential` by hand, or revoke a token with the root token without running `reconcile-credentials` afterwards.
 - Give `--executors-excluded yes` without `quiesce`.

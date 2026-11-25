@@ -196,6 +196,13 @@ docker run -d --name "$APP_NAME" --restart unless-stopped \
 
 - **Not rehearsed:** systemd units, CI pipelines and other platforms. Tell the human so before you build one.
 
+### A server that runs longer than 30 days
+
+- A 30-day token has to be replaced by a person every month. For a server that must start by itself, the human can issue a **runtime credential** instead: the other kind on the Machine credentials screen. It lives at most 365 days.
+- For you nothing changes. It is the human's `store-token` step, with the same command and the same file. You never hold a client secret, as you never hold a token.
+- At each start the CLI exchanges the client secret for a token of 15 minutes and reads the set with it. This needs the CLI of section 4; an older one is refused with 77.
+- The exit codes are the same. A revoked or expired runtime credential answers 77 at the next start, and that is `replace-token`.
+
 ## 9. Check it works, names only
 
 - Without the application, a command that prints only the names it was started with:
@@ -243,7 +250,7 @@ The launcher and the CLI exit with one of these codes and print one line; the ap
 
 - A secret's name is at most 128 characters, matching the rule of section 5; names starting with `SECRETS_` are reserved.
 - An environment holds at most 1,000 names and 8 MiB of values; one value is at most 65,536 bytes.
-- A machine token lives at most 30 days, as chosen at issue.
+- A machine token lives at most 30 days, as chosen at issue. A runtime credential lives at most 365 days.
 - An import of a `.env` file is at most 1 MiB.
 - The set is read once, at start. Linux and macOS only (WSL on Windows).
 - The token file is readable by the human's user and by root; while the application runs, the token is also in the environment of the `secrets` process. MyKey replaces the `.env` files; it does not remove the need to protect this one credential.
