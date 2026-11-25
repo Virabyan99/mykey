@@ -319,7 +319,7 @@ describe("the whole restore, locally (P-124)", () => {
         releaseBuild: TEST_BUILD,
       },
       origin: { kind: "restore", pairId: world.pair.pairId },
-      schemaRevision: "0018_incarnation",
+      schemaRevision: "0019_automation_and_runtime",
       restoreStartedAt,
       given: {
         ...restored.given,
@@ -460,7 +460,7 @@ describe("the whole restore, locally (P-124)", () => {
       host: "local",
       captureStartedAt: begun.captureStartedAt.toISOString(),
       boundary: begun.boundary,
-      schemaRevision: "0018_incarnation",
+      schemaRevision: "0019_automation_and_runtime",
       releaseBuild: "000000000000",
       keyRefs: { backupPassword: "local/1" },
       artifacts: [],

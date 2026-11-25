@@ -27,6 +27,18 @@ const LISTS: Record<string, { filter: string | null; otherFilter?: string }> = {
   "activity.list": { filter: "projectId=PROJECT", otherFilter: "409 listing_changed" },
 };
 
+/**
+ * Session 11 (Run 11.2): list routes of the contract that have no handler in
+ * this build. Run 11.5 gives each its handler and moves it into LISTS; this
+ * list must then be empty.
+ */
+const OWED = [
+  "automation.projects.list",
+  "automation.runtime_credentials.list",
+  "automation.secrets.list",
+  "automation_credentials.list",
+];
+
 const route = (id: string): RouteDef => {
   const found = ROUTES.find((candidate) => candidate.id === id);
   if (found === undefined) throw new Error(`no route ${id}`);
@@ -104,7 +116,7 @@ describe("a cursor opens only its own listing", () => {
     const listed = ROUTES.filter(
       (r) => r.method === "GET" && r.id.endsWith(".list") && r.id !== "organizations.list",
     ).map((r) => r.id);
-    expect(listed.sort()).toEqual(Object.keys(LISTS).sort());
+    expect(listed.sort()).toEqual([...Object.keys(LISTS), ...OWED].sort());
   });
 
   it("every list route of ROUTES refuses a cursor of every other list route, of the same route in the other organization, and of the same route with another filter", async () => {

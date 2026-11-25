@@ -120,7 +120,7 @@ export async function localRestoreTarget(
       executingOperations: 0,
       heldEffectSlots: 0,
     },
-    schemaRevision: "0018_incarnation",
+    schemaRevision: "0019_automation_and_runtime",
     releaseBuild: "000000000000",
     artifacts: (Object.keys(files) as ArtifactName[]).map((name) => {
       const bytes = readFileSync(files[name]);

@@ -38,7 +38,14 @@ export interface CredentialRow {
   expired: boolean;
   /** Expires within LIMITS.machineToken.expiryWarningSeconds, in the statement. */
   expiringSoon: boolean;
+  /** Session 11 (P-186): `runtime` rows hold a verifier and never an accessor. */
+  kind: CredentialKind;
+  /** `machine`: `issuedBy` is an automation credential's id, not a user's. */
+  issuedByKind: "user" | "machine";
+  boundCidrs: string[];
 }
+
+export type CredentialKind = "token" | "runtime";
 
 interface StoredCredential {
   id: CredentialId;
@@ -56,6 +63,9 @@ interface StoredCredential {
   last_used_at: Date | null;
   expired: boolean;
   expiring_soon: boolean;
+  kind: CredentialKind;
+  issued_by_kind: "user" | "machine";
+  bound_cidrs: string[];
 }
 
 const WARNING = String(LIMITS.machineToken.expiryWarningSeconds);
@@ -63,7 +73,7 @@ const WARNING = String(LIMITS.machineToken.expiryWarningSeconds);
 /** The columns of a row as read; `c` is app.machine_credential, `o` its issuance operation. */
 const COLUMNS = `c.id, c.organization_id, c.project_id, c.environment_id, c.name,
   c.issuance_operation_id, c.accessor, c.requested_expires_at, c.effective_expires_at, c.state,
-  c.issued_by, c.last_used_at,
+  c.issued_by, c.last_used_at, c.kind, c.issued_by_kind, c.bound_cidrs,
   CASE WHEN o.state = 'succeeded' THEN o.completed_at END AS issued_at,
   coalesce(c.effective_expires_at <= now(), false) AS expired,
   coalesce(c.effective_expires_at > now()
@@ -88,6 +98,9 @@ function toRow(stored: StoredCredential): CredentialRow {
     lastUsedAt: stored.last_used_at,
     expired: stored.expired,
     expiringSoon: stored.expiring_soon,
+    kind: stored.kind,
+    issuedByKind: stored.issued_by_kind,
+    boundCidrs: stored.bound_cidrs,
   };
 }
 

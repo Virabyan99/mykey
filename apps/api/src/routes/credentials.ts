@@ -59,6 +59,10 @@ export function credentialView(row: CredentialRow) {
     expiresAt: row.effectiveExpiresAt === null ? null : row.effectiveExpiresAt.toISOString(),
     expiringSoon: row.expiringSoon,
     lastUsedAt: row.lastUsedAt === null ? null : row.lastUsedAt.toISOString(),
+    // Session 11: the row's own columns; a 30-day token reads token, user, none.
+    kind: row.kind,
+    issuedByKind: row.issuedByKind === "machine" ? ("automation" as const) : ("user" as const),
+    boundCidrs: row.boundCidrs,
   };
 }
 

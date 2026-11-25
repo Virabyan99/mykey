@@ -206,8 +206,16 @@ describe("the missing writers (Task A)", () => {
   });
 });
 
-/** Actions whose writer arrives in a later run of Session 6; Run 6.9 left this list empty. */
-const PENDING_WRITERS: readonly AuditAction[] = [];
+/**
+ * Actions whose writer arrives in a later run. Run 6.9 left this list empty.
+ * Session 11 (Run 11.2) names three in the contract commit: Run 11.3 writes
+ * the first, Run 11.5 the other two, and the list is empty again after it.
+ */
+const PENDING_WRITERS: readonly AuditAction[] = [
+  "machine.exchange",
+  "automation_credential.issue",
+  "automation_credential.revoke",
+];
 
 /**
  * Writers this journey does not run (a capture, a restore, a deploy need a
@@ -227,8 +235,13 @@ const WRITTEN_ELSEWHERE: Partial<Record<AuditAction, string>> = {
 };
 
 describe("writers of Session 6 (Run 6.9)", () => {
-  it("no action is pending a writer, and each written elsewhere is asserted by the file that names it", () => {
-    expect(PENDING_WRITERS).toEqual([]);
+  it("only Session 11's three actions are pending a writer, and each written elsewhere is asserted by the file that names it", () => {
+    // Run 11.5 must make this `[]` again.
+    expect(PENDING_WRITERS).toEqual([
+      "machine.exchange",
+      "automation_credential.issue",
+      "automation_credential.revoke",
+    ]);
     const root = join(import.meta.dirname, "..", "..", "..");
     for (const [action, file] of Object.entries(WRITTEN_ELSEWHERE)) {
       // Named in quotes: a string in the code or a literal in its SQL.

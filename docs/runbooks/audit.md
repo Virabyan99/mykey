@@ -77,6 +77,22 @@ Requests refused before a principal is known (401, malformed requests, origin, q
 - `openapi.get`: nothing — serves the API reference; documentation, not a product action
 - `machine.keys`: `machine.keys`, `system.drift_detected`, `access.denied`
 - `machine.resolve`: `machine.resolve`, `system.drift_detected`, `access.denied`
+- `machine.metadata`: `access.denied`
+- `machine.exchange`: `machine.exchange`, `access.denied`
+- `runtime_credentials.issue`: `credential.issue`, `access.denied`
+- `automation_credentials.list`: `access.denied`
+- `automation_credentials.issue`: `automation_credential.issue`, `access.denied`
+- `automation_credentials.revoke`: `automation_credential.revoke`, `access.denied`
+- `automation.projects.list`: `access.denied`
+- `automation.projects.create`: `project.create`, `access.denied`
+- `automation.projects.get`: `access.denied`
+- `automation.environments.create`: `environment.create`, `access.denied`
+- `automation.secrets.list`: `access.denied`
+- `automation.secrets.create`: `secret.create`, `system.drift_detected`, `access.denied`
+- `automation.runtime_credentials.list`: `access.denied`
+- `automation.runtime_credentials.issue`: `credential.issue`, `access.denied`
+- `automation.runtime_credentials.revoke`: `credential.revoke`, `access.denied`
+- `automation.operations.get`: `access.denied`
 
 ### Paths of the auth module
 

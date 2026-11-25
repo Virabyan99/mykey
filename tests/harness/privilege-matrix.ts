@@ -79,10 +79,28 @@ export const TABLES: Record<string, Expected> = {
     provisionerColumns: ["state", "config_digest", "provisioning_operation_id", "review_reason"],
   },
   "app.membership": { api: [S], provisioner: [] },
+  // Session 11 (migration 0019): the API revokes and records a use; everything
+  // an issuance writes, the verifier first of all, is never changed.
+  "app.automation_credential": {
+    api: [S, I],
+    provisioner: [],
+    apiNoColumns: [
+      "owner_id",
+      "name",
+      "rights",
+      "bound_cidrs",
+      "verifier",
+      "verifier_key_id",
+      "expires_at",
+      "issued_by",
+      "issuance_operation_id",
+    ],
+  },
   "app.project": {
     api: [S, I],
     // Run 5.3 (migration 0014): state and archive columns only through app.lifecycle_transition.
-    apiNoColumns: ["review_reason", "state", "archive_operation_id"],
+    // Session 11 (migration 0019): who manages a project is written at insert only.
+    apiNoColumns: ["review_reason", "state", "archive_operation_id", "managed_by"],
     provisioner: [S],
     provisionerColumns: ["state", "review_reason"],
   },
@@ -106,7 +124,19 @@ export const TABLES: Record<string, Expected> = {
   "app.machine_credential": {
     api: [S, I],
     provisioner: [],
-    apiNoColumns: ["name", "issuance_operation_id", "requested_expires_at", "issued_by"],
+    // Session 11 (migration 0019): a runtime credential's kind, verifier, bound
+    // addresses and issuer's kind are written at insert only.
+    apiNoColumns: [
+      "name",
+      "issuance_operation_id",
+      "requested_expires_at",
+      "issued_by",
+      "kind",
+      "verifier",
+      "verifier_key_id",
+      "bound_cidrs",
+      "issued_by_kind",
+    ],
   },
   "app.operation": {
     api: [S, I],

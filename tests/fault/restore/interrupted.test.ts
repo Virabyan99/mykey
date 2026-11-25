@@ -166,7 +166,7 @@ describe("a restore stopped after each step (P-124)", () => {
           releaseBuild: TEST_BUILD,
         },
         origin: { kind: "restore" as const, pairId: world.pair.pairId },
-        schemaRevision: "0018_incarnation",
+        schemaRevision: "0019_automation_and_runtime",
         restoreStartedAt,
         given: { ...restored.given, old_credentials_refused: { state: "ok", observed: "test" } },
         confirmMembers: members,

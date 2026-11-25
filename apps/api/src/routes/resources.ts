@@ -264,6 +264,7 @@ export const projectsListHandler: Handler = async (ctx, deps) => {
         state: row.state,
         reviewReason: row.reviewReason,
         createdAt: row.createdAt.toISOString(),
+        managedBy: row.managedBy,
       })),
       nextCursor: nextCursor(ctx, deps, scopeText, rows, limit, start.generation),
     },

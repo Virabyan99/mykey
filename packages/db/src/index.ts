@@ -104,6 +104,7 @@ export {
   renameProject,
   resourceGeneration,
   type EnvironmentRow,
+  type ListedProject,
   type ProjectRow,
 } from "./repos/resources.ts";
 export {
@@ -116,6 +117,7 @@ export {
   lockCredential,
   moveCredential,
   touchLastUsed,
+  type CredentialKind,
   type CredentialRow,
   type CredentialState,
 } from "./repos/credentials.ts";

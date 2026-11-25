@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { cpSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
@@ -156,6 +156,92 @@ describe("migrate", () => {
     rmSync(join(dir, "0000_first.sql"));
     await expect(migrate(db.targets.migration_owner, { dir })).rejects.toThrow(/missing/);
     expect(await history(db)).toHaveLength(2);
+  });
+
+  // Session 11: migration 0019 meets rows written before it.
+  it("migration 0019 applies to a database that holds 30-day credentials, and every one of them reads kind token, issued_by_kind user, no CIDR", async () => {
+    const latest = "0019_automation_and_runtime.sql";
+    expect(migrationFiles).toContain(latest);
+    const before = mkdtempSync(join(tmpdir(), "mykey-migrations-"));
+    directories.push(before);
+    const earlier = migrationFiles.filter((name) => name < latest);
+    for (const name of earlier) cpSync(join(migrationsDir, name), join(before, name));
+
+    const db = await emptyDatabase();
+    expect((await migrate(db.targets.migration_owner, { dir: before })).applied).toEqual(earlier);
+
+    const pool = db.pool("superuser");
+    const [organization, project, environment] = [randomUUID(), randomUUID(), randomUUID()];
+    await run(
+      pool,
+      "INSERT INTO app.organization (id, namespace, state) VALUES ($1, 'org-m', 'active')",
+      [organization],
+    );
+    await run(
+      pool,
+      "INSERT INTO app.project (id, organization_id, name, state) VALUES ($1, $2, 'shop', 'active')",
+      [project, organization],
+    );
+    await run(
+      pool,
+      "INSERT INTO app.environment (id, organization_id, project_id, name, state) VALUES ($1, $2, $3, 'production', 'active')",
+      [environment, organization, project],
+    );
+    // One issued token with its accessor, one revoked, and one issuance that has none yet.
+    for (const [state, accessor] of [
+      ["active", "accessor-1"],
+      ["revoked", "accessor-2"],
+      ["issuing", null],
+    ] as const) {
+      await run(
+        pool,
+        `INSERT INTO app.machine_credential
+           (id, organization_id, project_id, environment_id, name, issuance_operation_id,
+            requested_expires_at, state, issued_by, accessor)
+         VALUES (gen_random_uuid(), $1, $2, $3, 'ci', gen_random_uuid(), now() + interval '30 days',
+                 $4, gen_random_uuid(), $5)`,
+        [organization, project, environment, state, accessor],
+      );
+    }
+    await run(
+      pool,
+      `INSERT INTO app.secret_version_event
+         (id, organization_id, environment_id, name, version, actor_kind, action, occurred_at)
+       VALUES (gen_random_uuid(), $1, $2, 'API_KEY', 1, 'user', 'created', now())`,
+      [organization, environment],
+    );
+
+    expect(await migrate(db.targets.migration_owner)).toEqual({
+      applied: migrationFiles.filter((name) => name >= latest),
+      alreadyApplied: earlier,
+    });
+    const credentials = await run(
+      pool,
+      `SELECT state, accessor, kind, issued_by_kind, bound_cidrs, verifier, verifier_key_id
+         FROM app.machine_credential ORDER BY state`,
+    );
+    expect(credentials).toEqual(
+      [
+        ["active", "accessor-1"],
+        ["issuing", null],
+        ["revoked", "accessor-2"],
+      ].map(([state, accessor]) => ({
+        state,
+        accessor,
+        kind: "token",
+        issued_by_kind: "user",
+        bound_cidrs: [],
+        verifier: null,
+        verifier_key_id: null,
+      })),
+    );
+    expect(await run(pool, "SELECT managed_by FROM app.project")).toEqual([{ managed_by: null }]);
+    expect(await run(pool, "SELECT actor_kind FROM app.secret_version_event")).toEqual([
+      { actor_kind: "user" },
+    ]);
+    expect(await run(pool, "SELECT count(*)::int AS n FROM app.automation_credential")).toEqual([
+      { n: 0 },
+    ]);
   });
 
   it("schema matches Drizzle: generating again produces no change", () => {

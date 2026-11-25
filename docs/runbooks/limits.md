@@ -22,6 +22,23 @@ Windows are 60 seconds, cut from the epoch on database time, shared by every API
 - **A counter that cannot be written** (the database refuses, is full or is gone) makes every request `503 dependency_unavailable`. No limit is skipped.
 - **Clearing a counter by hand** is never needed: a window ends by itself within 60 s. `ops reset-account` clears an account's sign-in locks (runbook `operator-accounts.md`).
 
+## Runtime and automation credentials (Session 11, D-83)
+
+These are not in Doc 06 §11. The numbers are `LIMITS.runtimeCredential`, `LIMITS.automationCredential` and two entries of `LIMITS.rate`.
+
+| Limit                                      | Value                                                                             | Caller sees                               |
+| ------------------------------------------ | --------------------------------------------------------------------------------- | ----------------------------------------- |
+| A runtime credential's lifetime            | at most 365 days, which is the default                                            | `422 validation_failed` for a longer one  |
+| The token one exchange gives               | 15 minutes, never renewed                                                         | the token's `expiresAt`                   |
+| An automation credential's lifetime        | 1 hour to 365 days, 7 days by default                                             | `422 validation_failed` outside the range |
+| Source networks a credential is bound to   | at most 8; an automation credential at least 1                                    | `422 validation_failed`                   |
+| Exchanges of one runtime credential        | 10 a minute                                                                       | `429 rate_limited`, `retry-after`         |
+| Requests of one automation credential      | 120 a minute                                                                      | `429 rate_limited`, `retry-after`         |
+| Secrets nobody can attribute (either kind) | 30 a minute per source, shared with the row "Machine tokens nobody can attribute" | `429`                                     |
+
+- Both kinds are marked "expiring soon" 7 days before their expiry, as a 30-day token is.
+- **The two rate limits and the miss rule are enforced from the runs that give these routes a handler** (Runs 11.3 and 11.5). Until then every route of the two new classes answers `404`.
+
 ## Concurrency
 
 | Limit                                                                           | Where                                                                     | Caller sees                                              | Operator sees                                                                    |

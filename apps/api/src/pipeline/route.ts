@@ -303,6 +303,11 @@ async function run(
       );
     const early = LARGE_ROUTES.has(route.id);
     let raw = early || route.id === "health.get" ? undefined : await readRaw();
+    // Session 11 (Run 11.2): the contract names two classes this build cannot
+    // authenticate yet. A route of them is the terminal 404 for every caller,
+    // before a header, a query or a state is looked at; no handler of such a
+    // route can be reached. Runs 11.3 and 11.5 put their authentication here.
+    if (route.auth === "machine_exchange" || route.auth === "automation") throw new NoHandler();
     const headers = c.req.raw.headers;
     const human = route.auth === "human" || route.auth === "human_fresh_totp";
     // One kind of credential per request, refused before any database read.

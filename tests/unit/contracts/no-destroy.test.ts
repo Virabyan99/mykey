@@ -10,8 +10,17 @@ import { describe, expect, it } from "vitest";
 
 describe("no destruction interface (FR-1.32)", () => {
   it("no route destroys, purges or deletes metadata", () => {
-    const offending = ROUTES.filter((route) =>
-      /destroy|purge|metadata|erase|wipe/i.test(`${route.id} ${route.path}`),
+    // Session 11: `machine.metadata` reads each name's version and times from the
+    // index. It carries the word and is the one exception, by id, and only as a
+    // GET that takes no body and no query: a read cannot destroy.
+    const reads = ROUTES.filter((route) => route.id === "machine.metadata");
+    expect(reads.map((route) => [route.method, route.request.body, route.request.query])).toEqual([
+      ["GET", undefined, undefined],
+    ]);
+    const offending = ROUTES.filter(
+      (route) =>
+        route.id !== "machine.metadata" &&
+        /destroy|purge|metadata|erase|wipe/i.test(`${route.id} ${route.path}`),
     ).map((route) => route.id);
     expect(offending).toEqual([]);
     // Control: the soft delete is there.

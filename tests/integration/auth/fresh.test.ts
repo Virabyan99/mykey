@@ -32,7 +32,14 @@ beforeAll(async () => {
   // issuer identity (Runs 4.9, 5.1, 5.2).
   api = await startTestApi({
     stubs: true,
-    stubRoutes: ["export.create", "credentials.issue", "credentials.revoke"],
+    stubRoutes: [
+      "export.create",
+      "credentials.issue",
+      "credentials.revoke",
+      // Session 11: the two issuances of the new credentials.
+      "runtime_credentials.issue",
+      "automation_credentials.issue",
+    ],
     config: { trustedProxy: "127.0.0.1" },
   });
   owner = await enrollOwner(api, await seedOwner(api), { source: "198.51.100.251" });
@@ -51,6 +58,12 @@ const FRESH = ROUTES.filter((route) => route.auth === "human_fresh_totp");
 const BODIES: Record<string, unknown> = {
   "export.create": { confirmed: true },
   "credentials.issue": { name: "c" },
+  "runtime_credentials.issue": { name: "c" },
+  "automation_credentials.issue": {
+    name: "c",
+    rights: ["projects.create"],
+    cidrs: ["192.0.2.0/24"],
+  },
 };
 
 function start(routeId: string, cookie: string): Promise<Response> {
@@ -71,7 +84,8 @@ async function ageVerification(sessionId: string, seconds: number): Promise<void
 }
 
 describe("fresh verification on the sensitive starts", () => {
-  it("the fresh class and the two auth routes are exactly the four sensitive starts of FR-1.77", () => {
+  // Session 11 (D-80; Doc 10 §4.1 rule 6): the two issuances of the new credentials join them.
+  it("the fresh class and the two auth routes are the four sensitive starts of FR-1.77 and the two new issuances", () => {
     expect(
       [
         ...FRESH.map((route) => route.id),
@@ -82,8 +96,10 @@ describe("fresh verification on the sensitive starts", () => {
       [
         "auth.change_password",
         "auth.recovery_regenerate",
+        "automation_credentials.issue",
         "credentials.issue",
         "export.create",
+        "runtime_credentials.issue",
       ].sort(),
     );
   });

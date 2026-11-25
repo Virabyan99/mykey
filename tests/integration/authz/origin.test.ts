@@ -91,8 +91,12 @@ describe("the Origin check", () => {
   it("covers every non-GET human, fresh and reset route and every POST auth route", () => {
     const names = targets().map((target) => target.name);
     // Run 7.9: said without naming the kinds, so that a new kind of route cannot stay outside.
+    // Session 11 (D-15's amendment): the two new classes present a bearer, as a
+    // machine route does. A browser never attaches one by itself, so the Origin
+    // rule has nothing to protect there; they are outside by decision.
+    const bearer = new Set(["machine", "machine_exchange", "automation"]);
     expect(names).toEqual([
-      ...ROUTES.filter((route) => route.method !== "GET" && route.auth !== "machine").map(
+      ...ROUTES.filter((route) => route.method !== "GET" && !bearer.has(route.auth)).map(
         (route) => route.id,
       ),
       ...servedAuthRoutes()

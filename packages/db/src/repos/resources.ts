@@ -187,14 +187,20 @@ export interface EnvironmentRow extends ProjectRow {
   kvReady: boolean;
 }
 
+/** A project as a list shows it. Session 11 (P-193): `managedBy` is a chain's first credential, or null. */
+export interface ListedProject extends ProjectRow {
+  managedBy: string | null;
+}
+
 export async function listProjects(
   db: Queryable,
   scope: OrgScope,
   visible: "all" | readonly string[],
   page: { afterId: string | null; limit: number },
-): Promise<ProjectRow[]> {
-  const result = await db.query<ProjectRow>(
-    `SELECT id, name, state, review_reason AS "reviewReason", created_at AS "createdAt"
+): Promise<ListedProject[]> {
+  const result = await db.query<ListedProject>(
+    `SELECT id, name, state, review_reason AS "reviewReason", created_at AS "createdAt",
+            managed_by AS "managedBy"
        FROM app.project
       WHERE organization_id = $1
         AND ($2::uuid[] IS NULL OR id = ANY ($2::uuid[]))

@@ -14,7 +14,7 @@ import {
   type CredentialsFixture,
 } from "../../harness/credentials-fixture.ts";
 import { archive, newProject } from "../../harness/lifecycle-fixture.ts";
-import { pathIn, requestOf } from "../authz/requests.ts";
+import { pathIn, requestOf, unauthenticatedClass } from "../authz/requests.ts";
 
 let f: CredentialsFixture;
 
@@ -55,6 +55,8 @@ async function everyExpandingRoute(): Promise<Map<string, { status: number; body
   const answers = new Map<string, { status: number; body: string }>();
   for (const def of ROUTES.filter((candidate) => EXPANDING_ROUTES.has(candidate.id))) {
     if (def.auth === "reset_flow") continue; // answered below, without a session
+    // Session 11 (Run 11.2): Run 11.5 gives these a bearer and then they are 507 here.
+    if (unauthenticatedClass(def)) continue;
     const request = requestOf(def);
     const response = await f.api.request(def.method, pathIn(def, ids()), { ...request, cookie });
     answers.set(def.id, { status: response.status, body: await response.text() });
@@ -79,7 +81,17 @@ describe("low", () => {
     f.api.setCapacity("low");
     const before = await footprint();
     const answers = await everyExpandingRoute();
-    expect(answers.size).toBe(EXPANDING_ROUTES.size);
+    // Session 11 (Run 11.2): the four expanding automation routes cannot be
+    // authenticated in this build. They answer 404 and write nothing.
+    const unauthenticated = ROUTES.filter(
+      (candidate) => EXPANDING_ROUTES.has(candidate.id) && unauthenticatedClass(candidate),
+    );
+    expect(unauthenticated).toHaveLength(4);
+    for (const def of unauthenticated) {
+      const response = await f.api.request(def.method, pathIn(def, ids()), requestOf(def));
+      expect(response.status, def.id).toBe(404);
+    }
+    expect(answers.size).toBe(EXPANDING_ROUTES.size - unauthenticated.length);
     for (const [id, answer] of answers) {
       expect(answer.status, `${id}: ${answer.body}`).toBe(507);
       const error = (JSON.parse(answer.body) as { error: { code: string; details?: unknown } })

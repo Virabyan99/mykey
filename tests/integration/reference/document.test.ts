@@ -138,7 +138,23 @@ const BODIES: Record<string, unknown> = {
   "credentials.issue": { name: "c" },
   "credentials.revoke": { confirmed: true },
   "auth.reset.complete": { token: "A".repeat(43), newPassword: "a-long-new-password" },
+  // Session 11: the human routes of the new credentials.
+  "runtime_credentials.issue": { name: "c" },
+  "automation_credentials.issue": {
+    name: "c",
+    rights: ["projects.create"],
+    cidrs: ["192.0.2.0/24"],
+  },
+  "automation_credentials.revoke": { confirmed: true },
 };
+
+/**
+ * Session 11 (Run 11.2): the two classes this build cannot authenticate. A
+ * route of them is never listed and never reaches the handler's door; Runs
+ * 11.3 and 11.5 give them their requests here.
+ */
+const unauthenticatedClass = (route: RouteDef): boolean =>
+  route.auth === "machine_exchange" || route.auth === "automation";
 
 describe("what the document lists is what the build answers", () => {
   it("every listed operation reaches a handler of this build; every contract route without one ends in the terminal answer", async () => {
@@ -188,8 +204,16 @@ describe("what the document lists is what the build answers", () => {
         seen[route.id] =
           reached.find((entry) => entry.routeId === route.id)?.handled ?? "not reached";
       }
-      const expected = Object.fromEntries(ROUTES.map((route) => [route.id, listed.has(route.id)]));
+      const expected = Object.fromEntries(
+        ROUTES.map((route) => [
+          route.id,
+          unauthenticatedClass(route) ? "not reached" : listed.has(route.id),
+        ]),
+      );
       expect(seen).toEqual(expected);
+      expect(ROUTES.filter((route) => unauthenticatedClass(route) && listed.has(route.id))).toEqual(
+        [],
+      );
     } finally {
       f.setBeforeHandler(null);
     }

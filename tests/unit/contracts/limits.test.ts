@@ -46,6 +46,9 @@ describe("LIMITS", () => {
         authDelaySeconds: 900,
         machineMissesPerSourcePerMinute: 30,
         credentialIssuePerMinute: 5,
+        // Not in Doc 06 §11 (D-83, Session 11).
+        exchangePerCredentialPerMinute: 10,
+        perAutomationCredentialPerMinute: 120,
       },
       concurrency: { httpPerProcess: 64, largePerProcess: 2, apiProcesses: 2, provisionerJobs: 2 },
       db: { apiPool: 20, provisionerPool: 6, opsPool: 4, maxConnections: 100 },
@@ -62,6 +65,20 @@ describe("LIMITS", () => {
         maxTtlSeconds: 2592000,
         expiryWarningSeconds: 604800,
         issuerSessionSeconds: 60,
+      },
+      // Not in Doc 06 §11 (D-83, Session 11): a year at most, a 15-minute token per exchange.
+      runtimeCredential: {
+        defaultTtlSeconds: 31536000,
+        maxTtlSeconds: 31536000,
+        exchangeTtlSeconds: 900,
+        maxCidrs: 8,
+      },
+      // Not in Doc 06 §11 (D-83, Session 11): an hour to a year, a week by default.
+      automationCredential: {
+        minTtlSeconds: 3600,
+        defaultTtlSeconds: 604800,
+        maxTtlSeconds: 31536000,
+        maxCidrs: 8,
       },
       disk: {
         minFreeBytesPercent: 15,

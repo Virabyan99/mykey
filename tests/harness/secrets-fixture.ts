@@ -560,6 +560,7 @@ export const TEST_READ_ROUTE: RouteDef = Object.freeze({
   ],
   action: "secrets.read",
   scope: "environment",
+  right: null,
 });
 
 /** The handler of TEST_READ_ROUTE, inside its own large-request gate of two. */

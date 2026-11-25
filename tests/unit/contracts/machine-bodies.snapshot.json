@@ -1,0 +1,133 @@
+{
+  "machine.keys": {
+    "method": "GET",
+    "path": "/v1/machine/projects/:project/environments/:envName/keys",
+    "auth": "machine",
+    "errors": [
+      "malformed_request",
+      "rate_limited",
+      "busy",
+      "quarantined",
+      "mixed_authentication",
+      "unauthenticated",
+      "action_denied",
+      "forbidden_selector",
+      "dependency_unavailable",
+      "not_found",
+      "environment_changed",
+      "key_under_review",
+      "audit_unavailable",
+      "backend_sealed",
+      "backend_inconsistent"
+    ],
+    "body": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "apiMajor": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        },
+        "environmentId": {
+          "type": "string",
+          "format": "uuid",
+          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+        },
+        "generation": {
+          "type": "string",
+          "maxLength": 20,
+          "pattern": "^(0|[1-9][0-9]*)$"
+        },
+        "count": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "names": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "complete": {
+          "type": "boolean",
+          "const": true
+        }
+      },
+      "required": ["apiMajor", "environmentId", "generation", "count", "names", "complete"],
+      "additionalProperties": false
+    }
+  },
+  "machine.resolve": {
+    "method": "POST",
+    "path": "/v1/machine/projects/:project/environments/:envName/resolve",
+    "auth": "machine",
+    "errors": [
+      "malformed_request",
+      "rate_limited",
+      "busy",
+      "quarantined",
+      "mixed_authentication",
+      "unauthenticated",
+      "action_denied",
+      "forbidden_selector",
+      "dependency_unavailable",
+      "not_found",
+      "environment_changed",
+      "capacity_exceeded",
+      "key_under_review",
+      "audit_unavailable",
+      "backend_sealed",
+      "backend_inconsistent"
+    ],
+    "body": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "apiMajor": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        },
+        "environmentId": {
+          "type": "string",
+          "format": "uuid",
+          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+        },
+        "generation": {
+          "type": "string",
+          "maxLength": 20,
+          "pattern": "^(0|[1-9][0-9]*)$"
+        },
+        "count": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "entries": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "value": {
+                "type": "string"
+              }
+            },
+            "required": ["name", "value"],
+            "additionalProperties": false
+          }
+        },
+        "complete": {
+          "type": "boolean",
+          "const": true
+        }
+      },
+      "required": ["apiMajor", "environmentId", "generation", "count", "entries", "complete"],
+      "additionalProperties": false
+    }
+  }
+}

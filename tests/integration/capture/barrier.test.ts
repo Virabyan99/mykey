@@ -18,7 +18,7 @@ import {
 } from "../../harness/credentials-fixture.ts";
 import { accessorAnswer, archive, newProject } from "../../harness/lifecycle-fixture.ts";
 import { machineCall } from "../../harness/machine.ts";
-import { pathIn, requestOf } from "../authz/requests.ts";
+import { pathIn, requestOf, unauthenticatedClass } from "../authz/requests.ts";
 
 let f: CredentialsFixture;
 
@@ -217,6 +217,8 @@ async function everyClosedRoute(): Promise<Map<string, { status: number; body: s
     (candidate) => EXPANDING_ROUTES.has(candidate.id) || candidate.id === "session.activity",
   )) {
     if (def.auth === "reset_flow") continue;
+    // Session 11 (Run 11.2): closed in another way until Run 11.5 (their own test below).
+    if (unauthenticatedClass(def)) continue;
     const request = requestOf(def);
     const response = await f.api.request(def.method, pathIn(def, ids()), { ...request, cookie });
     answers.set(def.id, { status: response.status, body: await response.text() });
@@ -249,12 +251,36 @@ describe("the API while a pair is captured", () => {
       await setMode(mode);
       const before = await footprint();
       const answers = await everyClosedRoute();
-      expect(answers.size).toBe(EXPANDING_ROUTES.size + 2);
+      // Session 11 (Run 11.2): the expanding automation routes are not in the walk.
+      const unauthenticated = ROUTES.filter(
+        (candidate) => EXPANDING_ROUTES.has(candidate.id) && unauthenticatedClass(candidate),
+      );
+      expect(unauthenticated.map((candidate) => candidate.id)).toEqual([
+        "automation.projects.create",
+        "automation.environments.create",
+        "automation.secrets.create",
+        "automation.runtime_credentials.issue",
+      ]);
+      expect(answers.size).toBe(EXPANDING_ROUTES.size + 2 - unauthenticated.length);
       for (const [id, answer] of answers) {
         expect(answer.status, `${id}: ${answer.body}`).toBe(503);
         expect((JSON.parse(answer.body) as { error: { code: string } }).error.code, id).toBe(
           "busy",
         );
+      }
+      expect(await footprint()).toEqual(before);
+    }, 300_000);
+
+    // Session 11 (Run 11.2). Run 11.5 gives these routes a bearer and then they answer 503 busy here.
+    it(`${mode}: a route this build cannot authenticate writes nothing and reaches no store`, async () => {
+      await setMode(mode);
+      const before = await footprint();
+      for (const def of ROUTES.filter(unauthenticatedClass)) {
+        const response = await f.api.request(def.method, pathIn(def, ids()), {
+          ...requestOf(def),
+          cookie: await f.tenants.cookie("ownerA"),
+        });
+        expect(response.status, def.id).toBe(404);
       }
       expect(await footprint()).toEqual(before);
     }, 300_000);

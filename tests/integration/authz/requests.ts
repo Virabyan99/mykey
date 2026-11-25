@@ -27,7 +27,30 @@ export const VALID_BODIES: Record<string, unknown> = {
   "credentials.issue": { name: "c" },
   "credentials.revoke": { confirmed: true },
   "auth.reset.complete": { token: "A".repeat(43), newPassword: "a-long-new-password" },
+  // Session 11.
+  "runtime_credentials.issue": { name: "c" },
+  "automation_credentials.issue": {
+    name: "c",
+    rights: ["projects.create"],
+    cidrs: ["192.0.2.0/24"],
+  },
+  "automation_credentials.revoke": { confirmed: true },
+  "automation.projects.create": { name: "New project" },
+  "automation.environments.create": { name: "staging" },
+  "automation.secrets.create": { name: "A", value: "" },
+  "automation.runtime_credentials.issue": { name: "c" },
+  "automation.runtime_credentials.revoke": { confirmed: true },
 };
+
+/**
+ * Session 11 (Run 11.2): the two classes this build cannot authenticate yet.
+ * A route of them answers the terminal 404 to every caller, whatever it sends;
+ * a suite that walks the route table gives them that expectation, or leaves
+ * them to the runs that authenticate them (11.3, 11.5).
+ */
+export function unauthenticatedClass(route: RouteDef): boolean {
+  return route.auth === "machine_exchange" || route.auth === "automation";
+}
 
 /** A raw dotenv body for the import routes. */
 export const DOTENV_ROUTES = new Set(["import.preview", "import.apply", "import.resume"]);

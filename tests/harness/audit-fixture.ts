@@ -81,6 +81,19 @@ export const DETAILS_OF: Readonly<Record<AuditAction, AuditDetails>> = {
   "operator.restore_invalidate": { sessions: 0, accounts: 0, credentials: 0, namespaces: 0 },
   "operator.restore_verify": { checks: 1, failed: 0 },
   "operator.deploy": { build: "45b5c1f3cc3a" },
+  // Session 11.
+  "machine.exchange": { credentialId: ID, ttlSeconds: 900 },
+  "automation_credential.issue": {
+    credentialId: ID,
+    ownerId: ID,
+    nameLength: 4,
+    ttlSeconds: 3600,
+    cidrCount: 1,
+    projectsCreate: true,
+    keysCreate: false,
+    runtimeCredentialsManage: false,
+  },
+  "automation_credential.revoke": { credentialId: ID },
 };
 
 export interface Placement {

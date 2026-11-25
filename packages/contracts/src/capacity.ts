@@ -64,6 +64,13 @@ export const EXPANDING_ROUTES: ReadonlySet<string> = new Set([
   "import.apply",
   "import.resume",
   "credentials.issue",
+  // Session 11: each of these stores a new row.
+  "runtime_credentials.issue",
+  "automation_credentials.issue",
+  "automation.projects.create",
+  "automation.environments.create",
+  "automation.secrets.create",
+  "automation.runtime_credentials.issue",
   "auth.reset.complete",
   "POST /v1/auth/change-password",
   "POST /v1/auth/totp/enroll",
@@ -80,6 +87,9 @@ export const REDUCING_ROUTES: ReadonlySet<string> = new Set([
   "projects.archive",
   "environments.archive",
   "credentials.revoke",
+  // Session 11.
+  "automation_credentials.revoke",
+  "automation.runtime_credentials.revoke",
   "POST /v1/auth/sign-in/email",
   "POST /v1/auth/sign-out",
   "POST /v1/auth/sessions/revoke",
@@ -102,6 +112,12 @@ export const CAPTURE_OPEN_ROUTES: ReadonlySet<string> = new Set([
   "projects.archive",
   "environments.archive",
   "credentials.revoke",
+  // Session 11: a server that restarts at 03:00 UTC must still get its token
+  // (the exchange reads and audits, as machine.resolve does); and the two
+  // revocations reduce access.
+  "machine.exchange",
+  "automation_credentials.revoke",
+  "automation.runtime_credentials.revoke",
   "POST /v1/auth/sign-out",
   "POST /v1/auth/sessions/revoke",
   "POST /v1/auth/revoke-sessions",
