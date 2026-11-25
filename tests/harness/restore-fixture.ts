@@ -13,8 +13,10 @@ import { expect } from "vitest";
 import {
   createCredentialsFixture,
   issueFor,
+  issueRuntimeFor,
   type CredentialsFixture,
 } from "./credentials-fixture.ts";
+import { exchangeCall } from "./machine.ts";
 import {
   pairRestorer,
   takePair,
@@ -29,6 +31,11 @@ import { baoFetch } from "./stack.ts";
 export interface OldWorld {
   /** Machine tokens issued before the capture, by the state their row was left in. */
   tokens: { credentialId: string; token: string; state: string }[];
+  /**
+   * Session 11 (Run 11.3): a runtime credential active at the capture (env2a),
+   * its client secret and a token it had exchanged, alive at the capture.
+   */
+  runtime: { credentialId: string; clientSecret: string; token: string };
   /** Reset tokens (the fragment's value) of two accounts. */
   resetTokens: { used: string; unused: string };
   /** The stack's root token: the lost host's. */
@@ -66,6 +73,17 @@ export async function createLostWorld(): Promise<LostWorld> {
       const issued = await issueFor(f, env, { name: `lost-${String(i)}` });
       tokens.push({ ...issued, state: states[i] ?? "active" });
     }
+    // Session 11: a runtime credential and one token of it, before any row is left mid-way.
+    const issuedRuntime = await issueRuntimeFor(f, "env2a", { name: "lost-runtime" });
+    const exchanged = await exchangeCall(f, { secret: issuedRuntime.clientSecret });
+    if (exchanged.status !== 200) {
+      throw new Error(`the lost world's exchange: HTTP ${String(exchanged.status)}`);
+    }
+    const runtime: OldWorld["runtime"] = {
+      credentialId: issuedRuntime.credentialId,
+      clientSecret: issuedRuntime.clientSecret,
+      token: exchanged.body.token as string,
+    };
     for (const [i, env] of envs.entries()) {
       const { credentialId, state } = tokens[i] ?? { credentialId: "", state: "active" };
       if (state === "revoked") {
@@ -149,6 +167,7 @@ export async function createLostWorld(): Promise<LostWorld> {
       pair,
       old: {
         tokens,
+        runtime,
         resetTokens: { used, unused },
         rootToken: f.stack.bao.rootToken,
         secret: { name: "LOST_WORLD_SECRET", value: secretValue },

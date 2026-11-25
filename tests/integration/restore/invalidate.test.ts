@@ -110,7 +110,20 @@ describe("restoreInvalidate (P-124)", () => {
     };
     expect(expected.sessions).toBeGreaterThanOrEqual(3);
     expect(expected.resetTokens).toBe(2);
-    expect(expected.credentials).toBe(5);
+    // Five of the six 30-day rows (one was revoked before the capture) and the runtime credential.
+    expect(expected.credentials).toBe(6);
+    expect(
+      (
+        await db.query<{ kind: string; state: string }>(
+          "SELECT kind, state FROM app.machine_credential WHERE id = $1",
+          [world.old.runtime.credentialId],
+        )
+      ).rows,
+    ).toEqual([{ kind: "runtime", state: "active" }]);
+    // The token it had exchanged came back with the snapshot, alive.
+    expect(
+      await status(bao, "/v1/auth/token/lookup-self", world.old.runtime.token, namespace),
+    ).toBe(200);
     expect(expected.operationsClosed).toBeGreaterThanOrEqual(1);
     const epochs = await db.query<{ user_id: string; auth_epoch: string }>(
       "SELECT user_id, auth_epoch FROM auth.account_state WHERE state <> 'disabled'",
@@ -161,6 +174,19 @@ describe("restoreInvalidate (P-124)", () => {
     for (const old of world.old.tokens) {
       expect(await status(bao, "/v1/auth/token/lookup-self", old.token, namespace)).toBe(403);
     }
+    // Session 11 (Run 11.3): the runtime credential is revoked as every row is (by
+    // class, not by kind), and the token it had exchanged is gone with every accessor.
+    expect(
+      (
+        await db.query<{ kind: string; state: string }>(
+          "SELECT kind, state FROM app.machine_credential WHERE id = $1",
+          [world.old.runtime.credentialId],
+        )
+      ).rows,
+    ).toEqual([{ kind: "runtime", state: "revoked" }]);
+    expect(
+      await status(bao, "/v1/auth/token/lookup-self", world.old.runtime.token, namespace),
+    ).toBe(403);
     expect(await status(bao, "/v1/auth/token/lookup-self", world.old.rootToken)).toBe(403);
     // The AppRoles: new secret ids delivered; the lost host's no longer log in.
     for (const name of ["runtime", "issuer", "provisioner"] as AppRoleName[]) {

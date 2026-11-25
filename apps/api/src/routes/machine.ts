@@ -11,6 +11,7 @@ import { lockParents } from "@mykey/db";
 import {
   exchangeRuntimeCredential,
   readEnvironment,
+  readEnvironmentMetadata,
   readEnvironmentNames,
   type EnvironmentReadRequest,
 } from "@mykey/operations";
@@ -94,6 +95,49 @@ export const machineKeysHandler: Handler = async (ctx, deps) => {
       generation: outcome.generation.toString(),
       count: outcome.names.length,
       names: outcome.names,
+      complete: true,
+    },
+  };
+};
+
+/**
+ * machine.metadata (Session 11, Run 11.3): every live name with its version
+ * and its two times, for either kind of machine credential. PostgreSQL's
+ * answer alone: the token's lookup at authentication is the only request
+ * OpenBao gets, and there is no audit row, as for a person's list of names.
+ * The per-credential slot is taken as for machine.keys (P-114).
+ */
+export const machineMetadataHandler: Handler = async (ctx, deps) => {
+  const machine = ctx.machine;
+  // The runtime identity is not needed: this read never asks OpenBao.
+  if (machine === null || deps.lockPool === undefined) {
+    throw new ApiError("dependency_unavailable");
+  }
+  const outcome = await readEnvironmentMetadata(
+    { pool: deps.pool, lockPool: deps.lockPool },
+    {
+      scope: machine.scope,
+      routeId: ctx.route.id,
+      requestId: ctx.requestId,
+      recheck: machineRecheck(deps, machine),
+      exclusive: machine.credentialId,
+    },
+  );
+  if (outcome.kind === "refused") refusedOf(outcome);
+  return {
+    status: 200,
+    buffered: true,
+    body: {
+      apiMajor: API_MAJOR,
+      environmentId: machine.scope.environmentId,
+      generation: outcome.generation.toString(),
+      count: outcome.entries.length,
+      entries: outcome.entries.map((entry) => ({
+        name: entry.name,
+        version: entry.version,
+        createdAt: entry.createdAt?.toISOString() ?? null,
+        updatedAt: entry.updatedAt.toISOString(),
+      })),
       complete: true,
     },
   };

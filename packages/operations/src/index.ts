@@ -151,6 +151,7 @@ export {
 } from "./imports/apply.ts";
 export {
   readEnvironment,
+  readEnvironmentMetadata,
   readEnvironmentNames,
   type EnvironmentNamesOutcome,
   type EnvironmentRead,

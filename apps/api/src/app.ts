@@ -35,6 +35,7 @@ import { archiveHandler, reactivateHandler } from "./routes/lifecycle.ts";
 import {
   machineExchangeHandler,
   machineKeysHandler,
+  machineMetadataHandler,
   machineResolveHandler,
 } from "./routes/machine.ts";
 import { healthHandler } from "./routes/health.ts";
@@ -160,6 +161,7 @@ function handlers(
     "projects.reactivate": reactivateHandler,
     "environments.reactivate": reactivateHandler,
     "machine.keys": machineKeysHandler,
+    "machine.metadata": machineMetadataHandler,
     "machine.resolve": machineResolveHandler(held),
     "machine.exchange": machineExchangeHandler,
     "session.activity": sessionActivityHandler,

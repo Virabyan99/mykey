@@ -57,6 +57,7 @@ const HANDLED = new Set([
   // Session 11, Run 11.3: the first of its routes with a handler.
   "runtime_credentials.issue",
   "machine.exchange",
+  "machine.metadata",
 ]);
 
 /** A valid body for every contract route that takes one. */

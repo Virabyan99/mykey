@@ -45,6 +45,7 @@ export {
   indexRowsOf,
   recomputeCounters,
   listIndex,
+  listMetadata,
   versionEvents,
   type VersionEvent,
   lockIndexRow,
@@ -55,6 +56,7 @@ export {
   recordVersionEvent,
   writeIndexRow,
   type IndexRow,
+  type MetadataRow,
   type IndexState,
 } from "./repos/secrets.ts";
 export { releaseSlot, slotKey, slotOf, takeSlot } from "./repos/slots.ts";

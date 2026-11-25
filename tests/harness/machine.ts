@@ -121,11 +121,16 @@ const forwarded = (from: string | undefined): Record<string, string> =>
  */
 export function exchangeCall(
   f: SecretsFixture,
-  init: Omit<MachineRequest, "token"> & { secret?: string; from?: string } = {},
+  init: Omit<MachineRequest, "token"> & {
+    secret?: string;
+    from?: string;
+    to?: "first" | "second";
+  } = {},
 ): Promise<MachineAnswer> {
-  const { secret, from, ...rest } = init;
+  const { secret, from, to, ...rest } = init;
   const ca = readFileSync(f.stack.api.certAuthorityPath);
-  return machineFetch({ port: f.api.port, ca }, "POST", EXCHANGE_PATH, {
+  const port = to === "second" ? (f.second?.port ?? 0) : f.api.port;
+  return machineFetch({ port, ca }, "POST", EXCHANGE_PATH, {
     ...rest,
     ...(secret === undefined ? {} : { token: secret }),
     headers: { ...forwarded(from), ...rest.headers },
