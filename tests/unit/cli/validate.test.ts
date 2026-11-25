@@ -1,7 +1,7 @@
 // Run 5.5 Task A (P-96, FR-1.49, Review focus 4): a response is used only when
 // it is provably the complete set the API sent. Each check fails on its own.
 import { API_MAJOR } from "@mykey/contracts";
-import { CliError, validateKeys, validateResolve } from "@mykey/cli";
+import { CliError, validateExchange, validateKeys, validateResolve } from "@mykey/cli";
 import { describe, expect, it } from "vitest";
 
 const ENVIRONMENT = "0193a5c0-7b1e-7c3a-9f4e-2b6d8a1c5e7f";
@@ -111,6 +111,56 @@ describe("validateKeys", () => {
     ]) {
       const body = bytes(variant);
       malformed(() => validateKeys(body, headOf(body)));
+    }
+  });
+});
+
+// Run 11.4 (Session 11, P-187): the answer of an exchange. Its token goes into
+// the next request's Authorization header, so it must have a token's shape.
+describe("validateExchange", () => {
+  const exchangeBody = {
+    apiMajor: API_MAJOR,
+    token: "s.c3ludGhldGljLXRva2Vu",
+    expiresAt: "2026-11-26T00:15:00.000Z",
+    projectId: ENVIRONMENT,
+    environmentName: "dev",
+  };
+
+  it("passes a good body", () => {
+    const raw = bytes(exchangeBody);
+    expect(validateExchange(raw, headOf(raw))).toEqual(exchangeBody);
+  });
+
+  it("fails each check on its own, and no message repeats the token", () => {
+    const raw = bytes(exchangeBody);
+    malformed(() => validateExchange(raw, headOf(raw, { status: 201 })));
+    malformed(() => validateExchange(raw, headOf(raw, { contentType: "text/html" })));
+    malformed(() => validateExchange(raw, headOf(raw, { contentEncoding: "gzip" })));
+    malformed(() => validateExchange(raw, headOf(raw, { contentLength: String(raw.length + 1) })));
+    const without = (key: string): Record<string, unknown> =>
+      Object.fromEntries(Object.entries(exchangeBody).filter(([name]) => name !== key));
+    for (const variant of [
+      without("token"),
+      without("expiresAt"),
+      { ...exchangeBody, token: "" },
+      { ...exchangeBody, token: "s.abc def" },
+      { ...exchangeBody, token: "s.abc\r\nx-injected: 1" },
+      { ...exchangeBody, token: "s.".padEnd(4097, "a") },
+      { ...exchangeBody, token: 7 },
+      { ...exchangeBody, expiresAt: "soon" },
+      { ...exchangeBody, apiMajor: API_MAJOR + 1 },
+      { ...exchangeBody, extra: true },
+    ]) {
+      const body = bytes(variant);
+      try {
+        validateExchange(body, headOf(body));
+      } catch (error) {
+        expect(error).toBeInstanceOf(CliError);
+        expect((error as CliError).category).toBe("malformed");
+        expect((error as CliError).message.includes("s.")).toBe(false);
+        continue;
+      }
+      throw new Error("accepted");
     }
   });
 });

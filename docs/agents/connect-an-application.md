@@ -72,18 +72,18 @@ They are not secrets. Ask the human where they should live: a shell profile, or 
 
 ## 4. Install the CLI
 
-The release `cli-v0.1.2` and the launcher. The repository is public, so no account is needed:
+The release `cli-v0.2.0` and the launcher. The repository is public, so no account is needed:
 
 <!-- from: consumer-local.md §1 -->
 
 ```sh
 mkdir -p "$HOME/mykey-release"
 cd "$HOME/mykey-release"
-for f in install.sh mykey-cli-0.1.2.tgz SHA256SUMS; do
-  curl --proto '=https' -fsSLO "https://github.com/Virabyan99/mykey/releases/download/cli-v0.1.2/$f"
+for f in install.sh mykey-cli-0.2.0.tgz SHA256SUMS; do
+  curl --proto '=https' -fsSLO "https://github.com/Virabyan99/mykey/releases/download/cli-v0.2.0/$f"
 done
 curl --proto '=https' -fsSL -o secrets-launch.sh \
-  "https://raw.githubusercontent.com/Virabyan99/mykey/cli-v0.1.2/tests/fixtures/consumers/secrets-launch.sh"
+  "https://raw.githubusercontent.com/Virabyan99/mykey/cli-v0.2.0/tests/fixtures/consumers/secrets-launch.sh"
 ```
 
 Both lines must say `OK`:

@@ -3,9 +3,14 @@
 // the command. Nothing touches the network before the first four passed;
 // `--version` stops after the arguments. Every failure is one stderr line and
 // its exit code; an error that is not the CLI's own prints no message at all.
+//
+// Session 11 (Run 11.4, P-187): when the token read is a runtime credential's
+// client secret (`mkrc.<id>.<secret>`), it is exchanged once after the version
+// check, and the command runs with the exchanged token exactly as it runs with
+// a 30-day token. The client secret is held nowhere after the exchange.
 import { readFileSync, statSync } from "node:fs";
 import { isatty } from "node:tty";
-import { API_MAJOR } from "@mykey/contracts";
+import { API_MAJOR, RUNTIME_SECRET_PREFIX, parsePresentedSecret } from "@mykey/contracts";
 import { parseArgs } from "./args.ts";
 import { createClient } from "./client.ts";
 import { extraCaOf, resolveApiUrl, selectorOf } from "./config.ts";
@@ -78,6 +83,9 @@ export async function main(argv: readonly string[], io: Io): Promise<number> {
     const extraCa = extraCaOf(io.env, (path) => readFileSync(path, "utf8"));
     const client = createClient(apiUrl, extraCa === undefined ? {} : { extraCa });
     await client.version();
+    if (parsePresentedSecret(credential.token)?.prefix === RUNTIME_SECRET_PREFIX) {
+      credential.token = (await client.exchange(credential.token)).token;
+    }
     switch (command.name) {
       case "keys":
         return await keysCommand(client, selector, credential, io.stdout);

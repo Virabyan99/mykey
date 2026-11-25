@@ -7,6 +7,13 @@ import { CliError } from "./errors.ts";
 import { MACHINE_TOKEN_VARIABLE } from "./identity.ts";
 
 const SHAPE = /^[A-Za-z0-9._-]+$/;
+
+/** Whether a string can be sent as a bearer: not empty, not too long, a token's characters only. */
+export function hasTokenShape(text: string): boolean {
+  return (
+    text !== "" && Buffer.byteLength(text, "utf8") <= LIMITS.body.bearerMaxBytes && SHAPE.test(text)
+  );
+}
 /** Enough for the longest token, a line ending and one byte to see it is too long. */
 const STDIN_CAP = LIMITS.body.bearerMaxBytes + 3;
 
@@ -50,11 +57,7 @@ export async function readToken(
     if (token.endsWith("\r\n")) token = token.slice(0, -2);
     else if (token.endsWith("\n")) token = token.slice(0, -1);
   }
-  if (
-    token === "" ||
-    Buffer.byteLength(token, "utf8") > LIMITS.body.bearerMaxBytes ||
-    !SHAPE.test(token)
-  ) {
+  if (!hasTokenShape(token)) {
     throw new CliError(
       "usage",
       "the machine token is empty, too long, or has characters a token never has",

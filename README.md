@@ -84,7 +84,7 @@ Each environment's **Connect an application** page in the workspace shows the co
 The short version for a local application:
 
 1. In the workspace, create the project and enter its secrets, or import the `.env` file on the environment's Import screen.
-2. Install the CLI `cli-v0.1.2` and the launcher (`consumer-local.md` §1–4).
+2. Install the CLI `cli-v0.2.0` and the launcher (`consumer-local.md` §1–4).
 3. Set `SECRETS_API_URL`, `SECRETS_PROJECT` (the project's id) and `SECRETS_ENVIRONMENT` (its name). None of them is a secret.
 4. Issue a machine credential, and store its token with the one command shown. Paste only at the prompt `Paste the token, then press Enter:`.
 5. Start the application with `secrets-launch.sh -- <the start command>`.

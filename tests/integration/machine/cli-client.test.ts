@@ -11,6 +11,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import {
   createCredentialsFixture,
   issueFor,
+  issueRuntimeFor,
   type CredentialsFixture,
 } from "../../harness/credentials-fixture.ts";
 import { ENV_NAMES, digestOf, exportDigests } from "../../harness/machine.ts";
@@ -87,6 +88,30 @@ describe("the CLI's client against the real API", () => {
     const error = await refusal(() => client.resolve(selectorOf("env1b"), token));
     expect([error.category, error.code]).toEqual(["denied", "not_found"]);
     expect(error.requestId).not.toBeNull();
+  });
+
+  // Run 11.4 (Session 11, P-187): what `secrets run` does with a runtime
+  // credential, on the real API. The process itself runs in tests/cli.
+  it("a runtime credential: the client's exchange, then resolve with its token, gives all 25 entries; revoked, the exchange is denied with a request id", async () => {
+    await f.seedEnvironment("env2a", 25, 64);
+    const { clientSecret, credentialId } = await issueRuntimeFor(f, "env2a");
+    const exchanged = await client.exchange(clientSecret);
+    expect(Object.keys(exchanged)).toEqual(["token"]);
+    const resolved = await client.resolve(selectorOf("env2a"), exchanged.token);
+    expect(resolved.count).toBe(25);
+    const digests = new Map(resolved.entries.map((entry) => [entry.name, digestOf(entry.value)]));
+    expect(digests).toEqual(await exportDigests(f, "env2a"));
+    // The client secret is not a machine token.
+    const direct = await refusal(() => client.resolve(selectorOf("env2a"), clientSecret));
+    expect([direct.category, direct.code]).toEqual(["denied", "unauthenticated"]);
+
+    const revoked = await f.revoke("env2a", credentialId);
+    expect(revoked.status).toBe(200);
+    const error = await refusal(() => client.exchange(clientSecret));
+    expect([error.category, error.code]).toEqual(["denied", "unauthenticated"]);
+    expect(error.requestId).toMatch(/^[0-9a-f-]{36}$/);
+    const after = await refusal(() => client.resolve(selectorOf("env2a"), exchanged.token));
+    expect([after.category, after.code]).toEqual(["denied", "unauthenticated"]);
   });
 
   it("a held slot → unavailable with code key_under_review", async () => {

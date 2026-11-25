@@ -1,8 +1,13 @@
 // The CLI's test server (P-97): HTTPS with a certificate made at run time,
-// answering the three routes the CLI calls with bodies checked against the
+// answering the routes the CLI calls with bodies checked against the
 // contract's own schemas. A script replaces or damages single answers. It
-// records what it saw, and of the Authorization header only whether one came.
-import { randomUUID } from "node:crypto";
+// records what it saw, and of the Authorization header only whether one came
+// and the SHA-256 of its bearer (`seen`), never the bearer.
+//
+// Session 11 (Run 11.4): `POST /v1/machine/exchange` answers a token this
+// server made (`exchangedToken`), and a machine route refuses a bearer of the
+// client secret's shape, as the API does.
+import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 import https from "node:https";
 import type { AddressInfo } from "node:net";
@@ -10,6 +15,7 @@ import {
   API_MAJOR,
   ROUTES,
   errorEnvelopeSchema,
+  machineExchangeBody,
   machineKeysBody,
   machineResolveBody,
   type ErrorCode,
@@ -40,6 +46,18 @@ export interface ServerScript {
   version?: Answers;
   keys?: Answers;
   resolve?: Answers;
+  exchange?: Answers;
+}
+
+/** What `requests` does not hold: one entry for each request, in the same order. */
+export interface SeenDetail {
+  method: string;
+  path: string;
+  /** SHA-256 (hex) of the bearer, or null when no `Bearer` header came. */
+  bearerSha: string | null;
+  contentLength: string | null;
+  /** How many bytes of a body arrived. */
+  bodyBytes: number;
 }
 
 /** The answer to the `seen`th request (0-based) of a route. */
@@ -54,6 +72,9 @@ export interface CliServer {
   url: string;
   caPath: string;
   requests: SeenRequest[];
+  seen: SeenDetail[];
+  /** The token an exchange answers unless the script says otherwise (synthetic, made at start). */
+  exchangedToken: string;
   close(): Promise<void>;
 }
 
@@ -93,6 +114,15 @@ export const goodResolve = (
     complete: true,
   });
 
+export const goodExchange = (token: string): Record<string, unknown> =>
+  machineExchangeBody.parse({
+    apiMajor: API_MAJOR,
+    token,
+    expiresAt: new Date(Date.now() + 900_000).toISOString(),
+    projectId: PROJECT,
+    environmentName: ENV_NAME,
+  });
+
 /** The contract's error envelope; the request id is returned so a test can look for it. */
 export function errorReply(status: number, code: ErrorCode): { reply: Reply; requestId: string } {
   const requestId = randomUUID();
@@ -111,7 +141,9 @@ export async function startCliServer(script: ServerScript = {}): Promise<CliServ
         ? paths.expired
         : paths.good;
   const requests: SeenRequest[] = [];
-  const counts = { version: 0, keys: 0, resolve: 0 };
+  const seen: SeenDetail[] = [];
+  const exchangedToken = `s.${randomBytes(18).toString("base64url")}`;
+  const counts = { version: 0, keys: 0, resolve: 0, exchange: 0 };
   const server = https.createServer(
     { cert: readFileSync(pair.cert), key: readFileSync(pair.key) },
     (request, response) => {
@@ -121,12 +153,34 @@ export async function startCliServer(script: ServerScript = {}): Promise<CliServ
         path,
         hadAuthorization: request.headers.authorization !== undefined,
       });
+      const bearer = /^Bearer (.+)$/.exec(request.headers.authorization ?? "")?.[1] ?? null;
+      const detail: SeenDetail = {
+        method: request.method ?? "",
+        path,
+        bearerSha:
+          bearer === null ? null : createHash("sha256").update(bearer, "utf8").digest("hex"),
+        contentLength: request.headers["content-length"] ?? null,
+        bodyBytes: 0,
+      };
+      seen.push(detail);
+      request.on("data", (chunk: Buffer) => {
+        detail.bodyBytes += chunk.length;
+      });
       request.resume();
       const machine = MACHINE.exec(path);
       let reply: Reply | "hang";
       if (request.method === "GET" && path === "/v1/version") {
         reply = nth(script.version, counts.version++) ?? { status: 200, body: goodVersion() };
-      } else if (machine !== null && request.headers.authorization === undefined) {
+      } else if (request.method === "POST" && path === "/v1/machine/exchange") {
+        reply =
+          bearer === null
+            ? errorReply(401, "unauthenticated").reply
+            : (nth(script.exchange, counts.exchange++) ?? {
+                status: 200,
+                body: goodExchange(exchangedToken),
+              });
+      } else if (machine !== null && (bearer === null || bearer.startsWith("mkrc."))) {
+        // A client secret is not a machine token: the API finds no token for it.
         reply = errorReply(401, "unauthenticated").reply;
       } else if (request.method === "GET" && machine?.[3] === "keys") {
         reply = nth(script.keys, counts.keys++) ?? { status: 200, body: goodKeys() };
@@ -159,6 +213,8 @@ export async function startCliServer(script: ServerScript = {}): Promise<CliServ
     url: `https://127.0.0.1:${String(port)}`,
     caPath: paths.ca,
     requests,
+    seen,
+    exchangedToken,
     close: () =>
       new Promise<void>((resolve) => {
         server.closeAllConnections();

@@ -5,6 +5,10 @@
 // into one buffer with a hard cap. `GET /v1/version` goes first without a
 // credential; the bearer is sent only after its apiMajor matched. Nothing here
 // logs, and no error carries a body, a header value or the token.
+//
+// Session 11 (Run 11.4, P-187): `exchange` presents a runtime credential's
+// client secret once and answers the 15-minute token the reads are made with.
+// It is asked once: a refusal of an exchange is final, whatever its code.
 import https from "node:https";
 import { setTimeout as sleep } from "node:timers/promises";
 import { rootCertificates } from "node:tls";
@@ -13,6 +17,7 @@ import type { z } from "zod";
 import { CliError, categoryOf } from "./errors.ts";
 import { CLI_VERSION } from "./identity.ts";
 import {
+  validateExchange,
   validateKeys,
   validateResolve,
   type KeysBody,
@@ -28,6 +33,8 @@ export interface Selector {
 
 export interface ApiClient {
   version(): Promise<{ apiMajor: number }>;
+  /** A runtime credential's client secret for a short-lived machine token (and nothing else of the answer). */
+  exchange(presented: string): Promise<{ token: string }>;
   keys(s: Selector, token: string): Promise<KeysBody>;
   resolve(s: Selector, token: string): Promise<ResolveBody>;
 }
@@ -235,6 +242,12 @@ export function createClient(
 
   return {
     version,
+    async exchange(presented) {
+      if (!versionChecked) await version();
+      const answer = await call("POST", "/v1/machine/exchange", presented, SHORT_MS);
+      if (answer.head.status !== 200) throw refusal(answer);
+      return { token: validateExchange(answer.body, answer.head).token };
+    },
     async keys(s, token) {
       if (!versionChecked) await version();
       const answer = await machineRead("GET", machinePath(s, "keys"), token, SHORT_MS);

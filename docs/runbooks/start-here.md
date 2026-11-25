@@ -40,7 +40,7 @@ What a token can read, how to replace one (issue the new one, then revoke the ol
 
 Open the environment's **Connect an application** page (in the sidebar, under the environment). It shows `consumer-local.md`'s own commands, step by step, with this service's address, the project's id and the environment's name already filled in, and a **Copy** button on each block. The token is never filled in. A second tab has the same for a server (`consumer-deploy.md`). In short:
 
-- download and check the release `cli-v0.1.2`, then install it. The repository is public: step 1 uses `curl`, and `gh` is the alternative;
+- download and check the release `cli-v0.2.0`, then install it. The repository is public: step 1 uses `curl`, and `gh` is the alternative;
 - name the service and the environment:
   - the service is this page's address (on staging `https://mykey-staging.nomikey.com`);
   - the **project's id** is shown with a Copy button in the breadcrumbs and on the project's page (it is also the part of the address after `/p/`);
