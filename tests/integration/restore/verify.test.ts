@@ -124,6 +124,23 @@ describe("restoreVerify (P-124)", () => {
     }
   }, 120_000);
 
+  // Session 11 (Run 11.5): the check counts both tables of credentials.
+  it("one automation credential set active → credentials_all_revoked fails, and only it", async () => {
+    const one = world.old.automation.credentialId;
+    await restored.db.query(
+      "UPDATE app.automation_credential SET state = 'active', revoked_at = NULL WHERE id = $1",
+      [one],
+    );
+    try {
+      expect(failing(await restoreVerify(deps, journey))).toEqual(["credentials_all_revoked"]);
+    } finally {
+      await restored.db.query(
+        "UPDATE app.automation_credential SET state = 'revoked', revoked_at = now() WHERE id = $1",
+        [one],
+      );
+    }
+  }, 120_000);
+
   it("one accessor created → machine_accessors_none fails, and only it", async () => {
     const namespace = world.f.fx.namespace;
     const created = await baoFetch(restored.bao, "/v1/auth/token/create", {

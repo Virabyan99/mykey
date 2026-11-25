@@ -29,6 +29,7 @@ export {
 // Run 6.7 (P-124, D-55): the restore's invalidation by class.
 export {
   restoreInvalidate,
+  revokeEveryCredential,
   type InvalidateCounts,
   type RestoreDeps,
   type RestorePoint,

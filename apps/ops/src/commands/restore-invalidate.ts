@@ -45,6 +45,28 @@ export interface RestoreDeps {
   crashAt?: (point: RestorePoint) => void;
 }
 
+/**
+ * The credential step of the invalidation (D-55; Session 11, P-190): every row
+ * of both tables that is not revoked, and their number. A machine credential
+ * of either kind and an automation credential are refused by the product from
+ * this transaction on, whatever OpenBao still holds. A project keeps the
+ * chain that manages it: one automation credential issued with `replaces`
+ * takes the chain up again (runbook automation.md).
+ */
+export async function revokeEveryCredential(tx: pg.PoolClient): Promise<number> {
+  const machine =
+    (await tx.query("UPDATE app.machine_credential SET state = 'revoked' WHERE state <> 'revoked'"))
+      .rowCount ?? 0;
+  const automation =
+    (
+      await tx.query(
+        `UPDATE app.automation_credential SET state = 'revoked', revoked_at = now()
+          WHERE state <> 'revoked'`,
+      )
+    ).rowCount ?? 0;
+  return machine + automation;
+}
+
 export interface InvalidateCounts {
   sessions: number;
   accounts: number;
@@ -110,12 +132,7 @@ async function databasePart(deps: RestoreDeps): Promise<{
             WHERE state <> 'disabled'`,
         )
       ).rowCount ?? 0;
-    const credentials =
-      (
-        await tx.query(
-          "UPDATE app.machine_credential SET state = 'revoked' WHERE state <> 'revoked'",
-        )
-      ).rowCount ?? 0;
+    const credentials = await revokeEveryCredential(tx);
     const operationsClosed =
       (
         await tx.query(

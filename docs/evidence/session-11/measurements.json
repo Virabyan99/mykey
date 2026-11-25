@@ -78,6 +78,14 @@
       "runtimeCredentialMs": 37,
       "totalMs": 6276,
       "requestsPerChange": 1
+    },
+    "recoveryAfterTheRestoresRevocation": {
+      "source": "tests/integration/automation/recovery.test.ts, run alone",
+      "shape": "three tenants of 25 secrets (six environments); every credential row of both tables revoked by the restore's step; then one automation credential issued with replaces, and the script's reissue",
+      "fromTheIssuanceToTheLastResolveSeconds": 2.8,
+      "runtimeCredentialsIssued": 6,
+      "ownerActions": 1,
+      "aNewChainWithoutReplaces": "lists no project and issues nothing"
     }
   }
 }

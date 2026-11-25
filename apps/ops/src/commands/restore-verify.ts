@@ -151,9 +151,11 @@ export function storeChecks(deps: VerifyDeps): Record<string, () => Promise<Chec
     },
     credentials_all_revoked: async () =>
       zero(
+        // Session 11: both tables (machine credentials of either kind, automation credentials).
         await count(
           pool,
-          "SELECT count(*) AS n FROM app.machine_credential WHERE state <> 'revoked'",
+          `SELECT (SELECT count(*) FROM app.machine_credential WHERE state <> 'revoked')
+                + (SELECT count(*) FROM app.automation_credential WHERE state <> 'revoked') AS n`,
         ),
         "credential rows not revoked",
       ),

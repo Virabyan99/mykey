@@ -99,9 +99,11 @@ describe("restoreInvalidate (P-124)", () => {
         db,
         "SELECT count(*) AS n FROM auth.account_state WHERE state <> 'disabled'",
       ),
+      // Session 11 (Run 11.5): both tables of credentials.
       credentials: await count(
         db,
-        "SELECT count(*) AS n FROM app.machine_credential WHERE state <> 'revoked'",
+        `SELECT (SELECT count(*) FROM app.machine_credential WHERE state <> 'revoked')
+              + (SELECT count(*) FROM app.automation_credential WHERE state <> 'revoked') AS n`,
       ),
       operationsClosed: await count(
         db,
@@ -110,8 +112,17 @@ describe("restoreInvalidate (P-124)", () => {
     };
     expect(expected.sessions).toBeGreaterThanOrEqual(3);
     expect(expected.resetTokens).toBe(2);
-    // Five of the six 30-day rows (one was revoked before the capture) and the runtime credential.
-    expect(expected.credentials).toBe(6);
+    // Five of the six 30-day rows (one was revoked before the capture), the runtime
+    // credential, and the automation credential (Run 11.5).
+    expect(expected.credentials).toBe(7);
+    expect(
+      (
+        await db.query<{ state: string }>(
+          "SELECT state FROM app.automation_credential WHERE id = $1",
+          [world.old.automation.credentialId],
+        )
+      ).rows,
+    ).toEqual([{ state: "active" }]);
     expect(
       (
         await db.query<{ kind: string; state: string }>(
@@ -145,6 +156,26 @@ describe("restoreInvalidate (P-124)", () => {
       secretIdsRotated: 3 * orgs.length,
     });
     expect(await count(db, "SELECT count(*) AS n FROM auth.session")).toBe(0);
+    // Session 11 (Run 11.5): the automation credential is revoked with the rest, and
+    // the project its chain managed is still its chain's (the recovery needs that).
+    expect(
+      (
+        await db.query<{ state: string; stamped: boolean }>(
+          `SELECT state, revoked_at IS NOT NULL AS stamped
+             FROM app.automation_credential WHERE id = $1`,
+          [world.old.automation.credentialId],
+        )
+      ).rows,
+    ).toEqual([{ state: "revoked", stamped: true }]);
+    expect(
+      await count(
+        db,
+        "SELECT count(*) AS n FROM app.automation_credential WHERE state <> 'revoked'",
+      ),
+    ).toBe(0);
+    expect(
+      await count(db, "SELECT count(*) AS n FROM app.project WHERE managed_by IS NOT NULL"),
+    ).toBe(1);
     expect(await count(db, "SELECT count(*) AS n FROM auth.reset_token")).toBe(0);
     expect(await count(db, "SELECT count(*) AS n FROM auth.verification")).toBe(0);
     expect(await count(db, "SELECT count(*) AS n FROM auth.totp_step_used")).toBeGreaterThanOrEqual(
