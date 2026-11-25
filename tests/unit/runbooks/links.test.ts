@@ -14,6 +14,8 @@ const files = [
     .filter((name) => name.endsWith(".md"))
     .map((name) => `docs/agents/${name}`),
   "llms.txt",
+  // The README lists the guides for people and agents: its links must resolve too.
+  "README.md",
 ];
 
 /** A path with a placeholder, a glob or a brace list names no one file. */

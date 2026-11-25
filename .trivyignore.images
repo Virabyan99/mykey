@@ -44,6 +44,17 @@ CVE-2026-119079 exp:2026-12-14 # HIGH
 CVE-2026-71199 exp:2026-12-14 # HIGH
 CVE-2026-71200 exp:2026-12-14 # HIGH
 
+# postgres 18.6 — debian zstd (libzstd1, zstd 1.5.7+dfsg-1)
+# Reviewed 2026-11-25: a new upstream finding (the scan turned red on PR #26). Information
+# disclosure through an uninitialised buffer in Zstandard. Debian has the fix
+# (1.5.7+dfsg-1+deb13u1); the official postgres image has not been rebuilt with it.
+# Exposed: nothing reachable. No host or dev setting asks PostgreSQL for zstd: no
+# wal_compression, no pg_basebackup, and the backup's pg_dump --format=custom uses its
+# default gzip (restic compresses on its own).
+# Moving the pin is a runtime image change after Gate R (D-69): the owner chose on 2026-11-25
+# to ignore it now and move the postgres pin in the next session, with a release and deploys.
+CVE-2026-124851 exp:2026-12-14 # HIGH
+
 # postgres 18.6 — usr/local/bin/gosu
 # gosu only drops privileges at container start: it opens no socket and reads no untrusted input. Fixed when the official image rebuilds gosu.
 # stdlib v1.24.6
