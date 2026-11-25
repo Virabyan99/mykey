@@ -32,7 +32,11 @@ import {
 } from "./routes/credentials.ts";
 import { exportCreateHandler } from "./routes/export.ts";
 import { archiveHandler, reactivateHandler } from "./routes/lifecycle.ts";
-import { machineKeysHandler, machineResolveHandler } from "./routes/machine.ts";
+import {
+  machineExchangeHandler,
+  machineKeysHandler,
+  machineResolveHandler,
+} from "./routes/machine.ts";
 import { healthHandler } from "./routes/health.ts";
 import { importApplyHandler, importPreviewHandler, importResumeHandler } from "./routes/imports.ts";
 import { activityListHandler } from "./routes/activity.ts";
@@ -157,6 +161,7 @@ function handlers(
     "environments.reactivate": reactivateHandler,
     "machine.keys": machineKeysHandler,
     "machine.resolve": machineResolveHandler(held),
+    "machine.exchange": machineExchangeHandler,
     "session.activity": sessionActivityHandler,
     "auth.reset.complete": resetCompleteHandler,
     "openapi.get": openapiGetHandler(served),

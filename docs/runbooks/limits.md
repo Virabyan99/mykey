@@ -37,7 +37,8 @@ These are not in Doc 06 §11. The numbers are `LIMITS.runtimeCredential`, `LIMIT
 | Secrets nobody can attribute (either kind) | 30 a minute per source, shared with the row "Machine tokens nobody can attribute" | `429`                                     |
 
 - Both kinds are marked "expiring soon" 7 days before their expiry, as a 30-day token is.
-- **The two rate limits and the miss rule are enforced from the runs that give these routes a handler** (Runs 11.3 and 11.5). Until then every route of the two new classes answers `404`.
+- **The exchange's limits are enforced since Run 11.3:** 10 exchanges a minute for each runtime credential, and the miss rule for a client secret nobody can attribute. A bearer that is not of the client secret's shape costs no read and is not counted.
+- **The automation credential's limit is enforced from Run 11.5.** Until then every route of that class answers `404`.
 
 ## Concurrency
 
@@ -50,6 +51,8 @@ These are not in Doc 06 §11. The numbers are `LIMITS.runtimeCredential`, `LIMIT
 | A writer waits 2 s for an environment's lock                                    | the secret and import writes                                              | `503 busy`                                               | status 503                                                                       |
 | Read cool-down 1.5 s after each complete read of an environment                 | the next complete read of it waits it out; writers do not                 | a slower back-to-back read                               | nothing                                                                          |
 | PostgreSQL connections: an API process 20, the provisioner 6, an ops command 4  | the pools                                                                 | `503 dependency_unavailable` when a pool times out (2 s) | `tests/unit/contracts/pools.test.ts` keeps the sum under `max_connections` (100) |
+
+**Instances started together.** The cool-down and the two large slots admit about two complete reads of one environment every 1.6 s; the others get `503 busy` at once and ask again. The CLI asks ten times over 13.75 s from `0.2.0` (five times over 3.75 s before), which starts ten instances of one environment, the slowest after about 10 s (D-83, measured in Run 11.3).
 
 A back-to-back reader of one large environment can still make a person's write wait: the measured worst case is three attempts 1 s apart (6.4 s locally). A write that answers `busy` is safe to send again with the same `Idempotency-Key`.
 

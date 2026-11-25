@@ -9,6 +9,7 @@ import { appendAudit } from "@mykey/audit";
 import { API_MAJOR, type ErrorCode } from "@mykey/contracts";
 import { lockParents } from "@mykey/db";
 import {
+  exchangeRuntimeCredential,
   readEnvironment,
   readEnvironmentNames,
   type EnvironmentReadRequest,
@@ -94,6 +95,39 @@ export const machineKeysHandler: Handler = async (ctx, deps) => {
       count: outcome.names.length,
       names: outcome.names,
       complete: true,
+    },
+  };
+};
+
+/**
+ * machine.exchange (Session 11, Run 11.3; P-187, D-81). The pipeline has
+ * verified the client secret and admitted its runtime credential; the token is
+ * minted by the issuer for that credential's own environment (the request
+ * names none), and its audit row is committed before this answers. One
+ * buffered body that nothing may keep.
+ */
+export const machineExchangeHandler: Handler = async (ctx, deps) => {
+  const exchange = ctx.exchange;
+  if (exchange === null || deps.issuer === undefined) throw new ApiError("dependency_unavailable");
+  const faults = deps.test?.faults;
+  const outcome = await exchangeRuntimeCredential(
+    {
+      pool: deps.pool,
+      issuer: deps.issuer,
+      ...(faults === undefined ? {} : { faults: (point) => faults(point, "") }),
+    },
+    { scope: exchange.scope, credentialId: exchange.credentialId, requestId: ctx.requestId },
+  );
+  if (outcome.kind === "refused") throw new ApiError(outcome.code);
+  return {
+    status: 200,
+    buffered: true,
+    body: {
+      apiMajor: API_MAJOR,
+      token: outcome.token,
+      expiresAt: outcome.expiresAt.toISOString(),
+      projectId: exchange.scope.projectId,
+      environmentName: exchange.environmentName,
     },
   };
 };

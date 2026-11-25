@@ -57,6 +57,15 @@ export {
 export { revokeCredential, type RevokeOutcome, type RevokeRequest } from "./credentials/revoke.ts";
 export type { Actor } from "./actor.ts";
 export {
+  EXCHANGE_FAULT_POINTS,
+  exchangeMeta,
+  exchangeRuntimeCredential,
+  type ExchangeDeps,
+  type ExchangeFaultPoint,
+  type ExchangeOutcome,
+  type ExchangeRequest,
+} from "./credentials/exchange.ts";
+export {
   issueRuntimeCredential,
   revokeRuntimeCredential,
   type RuntimeCredentialDeps,

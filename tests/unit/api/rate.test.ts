@@ -48,7 +48,11 @@ describe("the table (P-113)", () => {
       "rl:export": LIMITS.rate.importExportPerMinute,
       "rl:issue": LIMITS.rate.credentialIssuePerMinute,
       "rl:machine-miss": LIMITS.rate.machineMissesPerSourcePerMinute,
+      // Session 11 (P-196): exchanges of one runtime credential, requests of one automation credential.
+      "rl:exchange": LIMITS.rate.exchangePerCredentialPerMinute,
+      "rl:automation": LIMITS.rate.perAutomationCredentialPerMinute,
     });
+    expect([scopeLimit("rl:exchange"), scopeLimit("rl:automation")]).toEqual([10, 120]);
   });
 
   it("route classes: reveal 30, the three import routes share one 5, export 5, both issuances of a person share one 5", () => {

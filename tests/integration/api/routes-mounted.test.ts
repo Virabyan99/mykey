@@ -56,6 +56,7 @@ const HANDLED = new Set([
   "metrics.get",
   // Session 11, Run 11.3: the first of its routes with a handler.
   "runtime_credentials.issue",
+  "machine.exchange",
 ]);
 
 /** A valid body for every contract route that takes one. */
@@ -99,11 +100,11 @@ const BODIES: Record<string, unknown> = {
 };
 
 /**
- * Session 11 (Run 11.2): the two classes this build cannot authenticate yet.
- * Nobody is an authorised caller of them, so the terminal 404 is their answer
- * to every request, a wrong body included.
+ * Session 11 (Run 11.2): the class this build cannot authenticate yet. Nobody
+ * is an authorised caller of it, so the terminal 404 is its answer to every
+ * request, a wrong body included. (Run 11.3 authenticates `machine_exchange`.)
  */
-const UNAUTHENTICATED_CLASSES = new Set(["machine_exchange", "automation"]);
+const UNAUTHENTICATED_CLASSES = new Set(["automation"]);
 
 /** An active organization of the owner (Run 3.7: an id the caller cannot see is 404 earlier). */
 let target: PathIds;
@@ -159,11 +160,11 @@ describe("mounted routes", () => {
   // A machine route without a handler is reached only with a real token: Run 11.3
   // gives machine.metadata its handler and its tests. Here: no token, no answer but 401.
   it.each(
-    ROUTES.filter((route) => !HANDLED.has(route.id) && route.auth === "machine").map((route) => [
-      route.id,
-      route,
-    ]),
-  )("%s without a handler still refuses a caller with no token", async (_id, route) => {
+    ROUTES.filter(
+      (route) =>
+        (!HANDLED.has(route.id) && route.auth === "machine") || route.auth === "machine_exchange",
+    ).map((route) => [route.id, route]),
+  )("%s refuses a caller with no token, handler or not", async (_id, route) => {
     const response = await api.request(route.method, concretePath(route));
     expect(response.status).toBe(401);
     expect((await errorOf(response)).code).toBe("unauthenticated");

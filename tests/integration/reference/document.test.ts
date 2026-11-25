@@ -12,6 +12,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
   createCredentialsFixture,
   issueFor,
+  issueRuntimeFor,
   type CredentialsFixture,
 } from "../../harness/credentials-fixture.ts";
 import { sessionCookieOf } from "../../harness/api.ts";
@@ -21,12 +22,15 @@ import { readFileSync } from "node:fs";
 type Json = Record<string, unknown>;
 let f: CredentialsFixture;
 let token: string;
+/** Run 11.3: a runtime credential's client secret, the bearer of machine.exchange. */
+let clientSecret: string;
 let credentialId: string;
 let operationId: string;
 
 beforeAll(async () => {
   f = await createCredentialsFixture();
   ({ token, credentialId, operationId } = await issueFor(f, "env1a", { ttlSeconds: 600 }));
+  ({ clientSecret } = await issueRuntimeFor(f, "env1a"));
 }, 600_000);
 
 afterAll(async () => {
@@ -149,12 +153,11 @@ const BODIES: Record<string, unknown> = {
 };
 
 /**
- * Session 11 (Run 11.2): the two classes this build cannot authenticate. A
- * route of them is never listed and never reaches the handler's door; Runs
- * 11.3 and 11.5 give them their requests here.
+ * Session 11 (Run 11.2): the class this build cannot authenticate. A route of
+ * it is never listed and never reaches the handler's door; Run 11.5 gives it
+ * its requests here. (Run 11.3: the exchange is sent with a client secret.)
  */
-const unauthenticatedClass = (route: RouteDef): boolean =>
-  route.auth === "machine_exchange" || route.auth === "automation";
+const unauthenticatedClass = (route: RouteDef): boolean => route.auth === "automation";
 
 describe("what the document lists is what the build answers", () => {
   it("every listed operation reaches a handler of this build; every contract route without one ends in the terminal answer", async () => {
@@ -186,6 +189,10 @@ describe("what the document lists is what the build answers", () => {
         const body = BODIES[route.id];
         if (route.auth === "machine") {
           await machineFetch({ port: f.api.port, ca }, route.method, concrete(route), { token });
+        } else if (route.auth === "machine_exchange") {
+          await machineFetch({ port: f.api.port, ca }, route.method, concrete(route), {
+            token: clientSecret,
+          });
         } else if (route.auth === "human" || route.auth === "human_fresh_totp") {
           await f.send(route.method, concrete(route), {
             user: "ownerA",

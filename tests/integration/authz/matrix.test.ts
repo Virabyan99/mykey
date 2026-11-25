@@ -249,9 +249,13 @@ const OPERATION_ROWS: Record<
 
 describe("machine routes (Run 5.4, P-93)", () => {
   it("every machine route with each of the seven users' sessions → 401: a session is never a machine credential", async () => {
-    const machine = ROUTES.filter((route) => route.auth === "machine");
-    // Session 11: machine.metadata is the third.
+    // Session 11: machine.metadata is the third, and the exchange (whose bearer
+    // is a client secret, not a token) refuses a session the same way.
+    const machine = ROUTES.filter(
+      (route) => route.auth === "machine" || route.auth === "machine_exchange",
+    );
     expect(machine.map((route) => route.id).sort()).toEqual([
+      "machine.exchange",
       "machine.keys",
       "machine.metadata",
       "machine.resolve",
@@ -268,10 +272,10 @@ describe("machine routes (Run 5.4, P-93)", () => {
     }
   });
 
-  // Session 11 (Run 11.2). Runs 11.3 and 11.5 replace this with their own classes' tests.
+  // Session 11 (Run 11.2). Run 11.5 replaces this with its own class's tests.
   it("a route of a class this build cannot authenticate answers 404 to every user's session, and no stub is reached", async () => {
     const routes = ROUTES.filter(unauthenticatedClass);
-    expect(routes).toHaveLength(11);
+    expect(routes).toHaveLength(10);
     for (const route of routes) {
       const path = pathIn(route, {
         org: tenants.a.organizationId,

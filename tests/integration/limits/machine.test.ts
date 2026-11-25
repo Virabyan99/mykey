@@ -4,16 +4,17 @@
 // valid credentials from that source included (the stated price of the rule,
 // in limits.md). Each credential has its own 60 a minute. A counter table that
 // refuses makes a machine read 503 before OpenBao is asked.
-import { randomBytes } from "node:crypto";
+import { randomBytes, randomUUID } from "node:crypto";
 import { setTimeout as sleep } from "node:timers/promises";
 import { windowSecondsLeft } from "@mykey/api";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import {
   createCredentialsFixture,
   issueFor,
+  issueRuntimeFor,
   type CredentialsFixture,
 } from "../../harness/credentials-fixture.ts";
-import { machineCall } from "../../harness/machine.ts";
+import { exchangeCall, machineCall } from "../../harness/machine.ts";
 
 let f: CredentialsFixture;
 let a: { credentialId: string; token: string };
@@ -163,4 +164,76 @@ describe("one request at a time per credential (P-114)", () => {
     }
     expect((await machineCall(f, "resolve", { token: a.token })).status).toBe(200);
   }, 120_000);
+});
+
+// Session 11 (Run 11.3, P-187, P-196): the exchange. A client secret nobody
+// can attribute costs one read of the database and is a miss of its source,
+// counted with the tokens nobody can attribute; each runtime credential has
+// its own 10 exchanges a minute.
+describe("the exchange (rl:machine-miss 30, rl:exchange 10)", () => {
+  /** A client secret of the right shape that names no credential. */
+  const stranger = (): string => `mkrc.${randomUUID()}.${randomBytes(32).toString("base64url")}`;
+
+  it("the 31st miss of one source in a minute answers 429 before the database is read for the credential", async () => {
+    const credential = await issueRuntimeFor(f, "env1a");
+    for (let i = 0; i < 30; i += 1) {
+      const answer = await exchangeCall(f, { secret: stranger() });
+      expect([answer.status, answer.code], `miss ${String(i + 1)}`).toEqual([
+        401,
+        "unauthenticated",
+      ]);
+    }
+    // With the table unreadable, a request that read it would answer 503.
+    await f.api.superuser.query("REVOKE SELECT ON app.machine_credential FROM api_runtime");
+    try {
+      // The credential's own secret is refused too: the stated price of the rule.
+      for (const secret of [stranger(), credential.clientSecret]) {
+        const refused = await exchangeCall(f, { secret });
+        expect([refused.status, refused.code]).toEqual([429, "rate_limited"]);
+        const retryAfter = Number(refused.headers.get("retry-after"));
+        expect(retryAfter).toBeGreaterThanOrEqual(1);
+        expect(retryAfter).toBeLessThanOrEqual(60);
+      }
+      // The control: in the next window the table is read, and that read fails.
+      await nextWindow();
+      const read = await exchangeCall(f, { secret: credential.clientSecret });
+      expect([read.status, read.code]).toEqual([503, "dependency_unavailable"]);
+    } finally {
+      await f.api.superuser.query("GRANT SELECT ON app.machine_credential TO api_runtime");
+    }
+    const served = await exchangeCall(f, { secret: credential.clientSecret });
+    expect(served.status, served.code ?? "").toBe(200);
+  }, 180_000);
+
+  it("a bearer that is no client secret costs no read and is not counted", async () => {
+    const credential = await issueRuntimeFor(f, "env1a");
+    for (let i = 0; i < 40; i += 1) {
+      const answer = await exchangeCall(f, { secret: unknownToken() });
+      expect(answer.status).toBe(401);
+    }
+    const served = await exchangeCall(f, { secret: credential.clientSecret });
+    expect(served.status, served.code ?? "").toBe(200);
+  }, 120_000);
+
+  it("the 11th exchange of one credential in a minute answers 429 with retry-after", async () => {
+    const one = await issueRuntimeFor(f, "env1a");
+    const two = await issueRuntimeFor(f, "env1a");
+    let token = "";
+    for (let i = 0; i < 10; i += 1) {
+      const answer = await exchangeCall(f, { secret: one.clientSecret });
+      expect(answer.status, `exchange ${String(i + 1)}: ${answer.code ?? ""}`).toBe(200);
+      token = answer.body.token as string;
+    }
+    const refused = await exchangeCall(f, { secret: one.clientSecret });
+    expect([refused.status, refused.code]).toEqual([429, "rate_limited"]);
+    const retryAfter = Number(refused.headers.get("retry-after"));
+    expect(retryAfter).toBeGreaterThanOrEqual(1);
+    expect(retryAfter).toBeLessThanOrEqual(60);
+    expect("token" in refused.body).toBe(false);
+    // Another credential of the same environment is served, and a token already minted reads.
+    expect((await exchangeCall(f, { secret: two.clientSecret })).status).toBe(200);
+    expect((await machineCall(f, "keys", { token })).status).toBe(200);
+    await nextWindow();
+    expect((await exchangeCall(f, { secret: one.clientSecret })).status).toBe(200);
+  }, 180_000);
 });

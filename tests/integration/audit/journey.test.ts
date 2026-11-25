@@ -30,10 +30,11 @@ import { signInComplete } from "../../harness/api.ts";
 import {
   createCredentialsFixture,
   issueFor,
+  issueRuntimeFor,
   type CredentialsFixture,
 } from "../../harness/credentials-fixture.ts";
 import { archive, archiveDriver, newProject, reactivate } from "../../harness/lifecycle-fixture.ts";
-import { machineCall } from "../../harness/machine.ts";
+import { exchangeCall, machineCall } from "../../harness/machine.ts";
 import { provisionTestOrganization } from "../../harness/org-fixture.ts";
 import { prepareDatabase } from "../database/setup.ts";
 
@@ -208,11 +209,11 @@ describe("the missing writers (Task A)", () => {
 
 /**
  * Actions whose writer arrives in a later run. Run 6.9 left this list empty.
- * Session 11 (Run 11.2) names three in the contract commit: Run 11.3 writes
- * the first, Run 11.5 the other two, and the list is empty again after it.
+ * Session 11 (Run 11.2) named three in the contract commit: Run 11.3 wrote
+ * the first (machine.exchange, in the journey below), Run 11.5 writes the
+ * other two, and the list is empty again after it.
  */
 const PENDING_WRITERS: readonly AuditAction[] = [
-  "machine.exchange",
   "automation_credential.issue",
   "automation_credential.revoke",
 ];
@@ -235,10 +236,9 @@ const WRITTEN_ELSEWHERE: Partial<Record<AuditAction, string>> = {
 };
 
 describe("writers of Session 6 (Run 6.9)", () => {
-  it("only Session 11's three actions are pending a writer, and each written elsewhere is asserted by the file that names it", () => {
+  it("only Session 11's two automation actions are pending a writer, and each written elsewhere is asserted by the file that names it", () => {
     // Run 11.5 must make this `[]` again.
     expect(PENDING_WRITERS).toEqual([
-      "machine.exchange",
       "automation_credential.issue",
       "automation_credential.revoke",
     ]);
@@ -406,6 +406,14 @@ describe("one journey through every writer (Task C)", () => {
       const resolved = await machineCall(f, "resolve", { token: issued.token });
       expect(resolved.status).toBe(200);
       answered.add(resolved.headers.get("x-request-id") ?? "");
+      // Session 11: a runtime credential, exchanged, and the token's read.
+      const runtime = await issueRuntimeFor(f, "env1a");
+      const exchange = await exchangeCall(f, { secret: runtime.clientSecret });
+      expect(exchange.status, exchange.code ?? "").toBe(200);
+      answered.add(exchange.headers.get("x-request-id") ?? "");
+      const byExchange = await machineCall(f, "keys", { token: exchange.body.token as string });
+      expect(byExchange.status).toBe(200);
+      answered.add(byExchange.headers.get("x-request-id") ?? "");
       await f.freshen();
       const revoked = await f.send("POST", `${path1a}/credentials/${issued.credentialId}/revoke`, {
         body: { confirmed: true },

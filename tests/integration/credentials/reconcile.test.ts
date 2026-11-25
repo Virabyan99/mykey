@@ -28,9 +28,11 @@ import {
   createCredentialsFixture,
   expectCatalogMatchesBackend,
   issueFor,
+  issueRuntimeFor,
   machineAccessors,
   type CredentialsFixture,
 } from "../../harness/credentials-fixture.ts";
+import { exchangeCall } from "../../harness/machine.ts";
 import type { EnvName } from "../../harness/secrets-fixture.ts";
 
 let f: CredentialsFixture;
@@ -355,6 +357,57 @@ describe("ops reconcile-credentials", () => {
     expect(await stateOf(issued.credentialId)).toBe("revoked");
     expect(await operation(first.operationId!)).toMatchObject({ state: "succeeded" });
     expect(await alive(issued.token)).toBe(false);
+  });
+
+  // Session 11 (Run 11.3, P-190): an exchanged token has no row of its own. It
+  // is recorded by the runtime credential its meta names, while that
+  // credential is active and unexpired; every other rule is unchanged.
+  it("reconcile-credentials with a live exchanged token: nothing is revoked, nothing is left; after the credential is revoked, the same command revokes the token as unrecorded", async () => {
+    const runtime = await issueRuntimeFor(f, "env1a");
+    const exchange = await exchangeCall(f, { secret: runtime.clientSecret });
+    expect(exchange.status, exchange.code ?? "").toBe(200);
+    const token = exchange.body.token as string;
+    // The controls: tokens that claim to be exchanged and name no usable credential.
+    const expired = await issueRuntimeFor(f, "env1a");
+    const ofExpired = await exchangeCall(f, { secret: expired.clientSecret });
+    expect(ofExpired.status).toBe(200);
+    await f.api.superuser.query(
+      "UPDATE app.machine_credential SET effective_expires_at = now() - interval '1 second' WHERE id = $1",
+      [expired.credentialId],
+    );
+    const ofNobody = await issuerToken("env1a", { credential_id: randomUUID(), exchange: "1" });
+    // A token that names the live credential without saying it was exchanged is not exempt.
+    const unmarked = await issuerToken("env1a", { credential_id: runtime.credentialId });
+
+    const run = await reconcile("env1a");
+    expect(run.code).toBe(0);
+    expect(run.out).toContain("unrecorded-revoked 3");
+    expect(run.out).toContain("revocations-completed 0");
+    expect(run.out).toContain("issuances-settled 0");
+    expect(await alive(token)).toBe(true);
+    expect(await alive(ofExpired.body.token as string)).toBe(false);
+    expect(await alive(ofNobody.token)).toBe(false);
+    expect(await alive(unmarked.token)).toBe(false);
+    expect(await stateOf(runtime.credentialId)).toBe("active");
+    expect((await auditOf("env1a")).at(-1)).toMatchObject({
+      outcome: "success",
+      details: { unrecordedRevoked: 3, left: 0 },
+    });
+    // A second run finds nothing to do, and the token still reads.
+    const again = await reconcile("env1a");
+    expect(again.code).toBe(0);
+    expect(again.out).toContain("unrecorded-revoked 0");
+    expect(await alive(token)).toBe(true);
+    for (const secret of [token, runtime.clientSecret, ofNobody.token, ofNobody.accessor]) {
+      expect(run.out.includes(secret)).toBe(false);
+    }
+
+    // After the revocation nothing records the token: the operator's command ends it.
+    expect((await f.revoke("env1a", runtime.credentialId)).status).toBe(200);
+    const after = await reconcile("env1a");
+    expect(after.code).toBe(0);
+    expect(after.out).toContain("unrecorded-revoked 1");
+    expect(await alive(token)).toBe(false);
   });
 
   it("usage: no --environment → 64; an unknown environment → 2", async () => {

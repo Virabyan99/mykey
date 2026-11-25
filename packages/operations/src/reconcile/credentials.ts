@@ -10,6 +10,8 @@
 // 2. Each kept accessor that is not the accessor of an `active`, unexpired
 //    row (nor of a `revoking` row, step 3) is revoked and its absence proven:
 //    `unrecordedRevoked`. The `meta.operation_id` of each is remembered.
+//    Session 11 (P-190): a token an exchange minted is left alone while the
+//    runtime credential its meta names is `active` and unexpired.
 // 3. Each `revoking` row is revoked again and proven: `revoked`, its uncertain
 //    revocations `succeeded`, an uncertain issuance of it `rejected`.
 // 4. Each `needs_review` row → `revoked`, its issuance `rejected`
@@ -63,6 +65,7 @@ export interface CredentialReconciliation {
 
 interface Row {
   id: CredentialId;
+  kind: "token" | "runtime";
   state: string;
   accessor: string | null;
   issuance_operation_id: OperationId;
@@ -118,7 +121,7 @@ async function settle(
 
   const rows = (
     await locked.client.query<Row>(
-      `SELECT id, state, accessor, issuance_operation_id,
+      `SELECT id, kind, state, accessor, issuance_operation_id,
               (effective_expires_at IS NOT NULL AND effective_expires_at > now()) AS live
          FROM app.machine_credential
         WHERE organization_id = $1 AND environment_id = $2`,
@@ -131,13 +134,25 @@ async function settle(
       .map((row) => row.accessor),
   );
 
+  // P-190 (Session 11): an exchanged token has no row and no stored accessor.
+  // It is recorded by the runtime credential its meta names, while that
+  // credential is active and unexpired; the token says of itself that it was
+  // exchanged, as the machine routes require of it (P-188).
+  const exchanging = new Set<string>(
+    rows
+      .filter((row) => row.kind === "runtime" && row.state === "active" && row.live)
+      .map((row) => row.id),
+  );
+  const exchanged = (meta: Record<string, string> | null): boolean =>
+    meta?.exchange === "1" && exchanging.has(meta.credential_id ?? "");
+
   // 2. Tokens nobody records.
   let unrecordedRevoked = 0;
   const found = new Map<string, string>();
   // The operation ids of tokens found here whose absence could not be proven.
   const unproven = new Set<string>();
   for (const token of kept) {
-    if (named.has(token.accessor)) continue;
+    if (named.has(token.accessor) || exchanged(token.meta)) continue;
     const proof = await revokeAndVerify(session, token.accessor, correlation());
     if (proof !== "absent") {
       if (token.meta?.operation_id !== undefined) unproven.add(token.meta.operation_id);

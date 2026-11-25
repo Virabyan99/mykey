@@ -1,0 +1,60 @@
+{
+  "session": 11,
+  "run": "11.3",
+  "date": "2026-11-25",
+  "where": "the owner's workstation: the integration stack in Docker (PostgreSQL and OpenBao 2.7.2), not staging",
+  "note": "Names and numbers only. No address, token or secret is in this file.",
+  "openbao": {
+    "source": "tests/integration/openbao/issuance.test.ts, 'the token of an exchange (Run 11.3)'",
+    "tokenOfAnExchange": {
+      "ttlSecondsAtMost": 900,
+      "renewable": false,
+      "orphan": true,
+      "policies": "exactly the environment's machine-env role",
+      "meta": ["credential_id", "exchange"]
+    },
+    "renewSelf": "refused (403); expire_time unchanged; the issuer's renew by accessor is refused too",
+    "expiry": "a 2 s token reads; 3 s later it is refused (control: a 60 s token still reads)",
+    "policyOutsideTheRole": "refused (400), with or without meta"
+  },
+  "exchange": {
+    "source": "tests/integration/machine/exchange.test.ts",
+    "oneExchangeMs": 234,
+    "tokenAfterItsCredentialIsRevoked": {
+      "atTheProduct": "refused at once (401 on machine.keys and machine.resolve)",
+      "inOpenBao": "still accepted until it expires",
+      "ttlSecondsLeftWhenMeasured": 899,
+      "ttlSecondsAtMost": 900
+    }
+  },
+  "fleet": {
+    "source": "tests/integration/machine/fleet.test.ts, and a temporary measurement of the same shape (not committed)",
+    "shape": "ten runtime credentials of one environment (25 values of 64 bytes), one source, the product's limits; each start is one exchange and one complete read; all ten, then all ten again",
+    "specSeconds": 20,
+    "testBoundSeconds": 30,
+    "rateLimited": 0,
+    "fiveRequests_cli_0_1_2": {
+      "pausesMs": [250, 500, 1000, 2000],
+      "startedOfTen": 8,
+      "refusedBusy": 2,
+      "tenCredentialsOverThreeEnvironments": { "startedRound1": 8, "startedRound2": 7 }
+    },
+    "tenRequests_cli_0_2_0": {
+      "pausesMs": [250, 500, 1000, 2000, 2000, 2000, 2000, 2000, 2000],
+      "alone": {
+        "startedRound1": 10,
+        "startedRound2": 10,
+        "oneRoundMs": 7659,
+        "twoRoundsMs": 16763,
+        "slowestStartMs": 9096,
+        "mostRequestsForOneStart": 7
+      },
+      "besideAnotherSuite": {
+        "startedRound1": 10,
+        "startedRound2": 10,
+        "twoRoundsMs": 19638,
+        "slowestStartMs": 10001
+      }
+    }
+  }
+}

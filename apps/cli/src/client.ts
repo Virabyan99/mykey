@@ -40,8 +40,13 @@ const RESOLVE_MS = 150_000;
  * environment's lock) is asked again after these pauses: a read has no effect,
  * and instances started together would otherwise lose one (gate review of
  * Session 5). Any other refusal is final at once.
+ *
+ * Session 11 (Run 11.3, D-83): ten requests in 13.75 s, where there were five
+ * in 3.75 s. Complete reads of one environment are admitted about two every
+ * 1.6 s (D-49's read cool-down), so ten instances started together need up to
+ * seven requests each (measured); with five, two of the ten did not start.
  */
-const BUSY_PAUSES_MS = [250, 500, 1_000, 2_000] as const;
+const BUSY_PAUSES_MS = [250, 500, 1_000, 2_000, 2_000, 2_000, 2_000, 2_000, 2_000] as const;
 
 const versionSchema = ROUTES.find((route) => route.id === "version.get")?.responses[200] as
   z.ZodType | undefined;

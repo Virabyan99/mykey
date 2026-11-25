@@ -43,13 +43,14 @@ export const VALID_BODIES: Record<string, unknown> = {
 };
 
 /**
- * Session 11 (Run 11.2): the two classes this build cannot authenticate yet.
- * A route of them answers the terminal 404 to every caller, whatever it sends;
- * a suite that walks the route table gives them that expectation, or leaves
- * them to the runs that authenticate them (11.3, 11.5).
+ * Session 11 (Run 11.2): the class this build cannot authenticate yet. A
+ * route of it answers the terminal 404 to every caller, whatever it sends; a
+ * suite that walks the route table gives it that expectation, or leaves it to
+ * the run that authenticates it (11.5). Run 11.3 took `machine_exchange` out:
+ * its route answers a caller without a client secret 401, like a machine route.
  */
 export function unauthenticatedClass(route: RouteDef): boolean {
-  return route.auth === "machine_exchange" || route.auth === "automation";
+  return route.auth === "automation";
 }
 
 /** A raw dotenv body for the import routes. */

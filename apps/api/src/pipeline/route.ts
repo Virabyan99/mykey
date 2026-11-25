@@ -21,6 +21,7 @@ import type { UserPrincipal as Principal } from "./authn.ts";
 import { admitStates, authorize, deny } from "./authz.ts";
 import { checkOrigin, hasMixedCredentials, needsOriginCheck } from "./origin.ts";
 import { drainBody, headerBytes, readBody } from "./body.ts";
+import { authenticateExchange } from "./exchange.ts";
 import { MISSED_LOOKUP, authenticateMachine, hasSelector } from "./machine.ts";
 import { ROUTE_CLASS_LIMIT, SESSION_EXEMPT, windowSecondsLeft, type RateScope } from "./rate.ts";
 import { requestSource } from "./source.ts";
@@ -98,16 +99,15 @@ export async function rateStep(
 /**
  * Machine authentication under the miss limit (P-113): a source at the limit
  * of unattributable tokens is refused before OpenBao is asked; a refusal that
- * cost a lookup is counted after it.
+ * cost a lookup is counted after it. Session 11: a client secret nobody can
+ * attribute is such a miss too, and is refused before the database is read.
  */
-async function machineStep(
+async function underMissLimit<T>(
   deps: AppDeps,
-  c: Context<ApiEnv>,
-  params: Record<string, string>,
-  route: RouteDef,
   requestId: string,
   source: string,
-): ReturnType<typeof authenticateMachine> {
+  authenticate: () => Promise<T>,
+): Promise<T> {
   const misses = await deps.limiter.count("rl:machine-miss", source);
   if (misses >= deps.limiter.limit("rl:machine-miss")) {
     deps.log({ event: "rate_limited", time: now(), requestId, scope: "rl:machine-miss" });
@@ -116,7 +116,7 @@ async function machineStep(
     });
   }
   try {
-    return await authenticateMachine(deps, c.env.incoming.rawHeaders, params, route, requestId);
+    return await authenticate();
   } catch (error) {
     if (error instanceof ApiError && error.reason === MISSED_LOOKUP) {
       // Counted; this request still answers 401 (the next one meets the check above).
@@ -292,26 +292,29 @@ async function run(
       c.set("bodyBytesRead", c.get("bodyBytesRead") + bytes);
     };
     const machineRoute = route.auth === "machine";
+    // Session 11: the exchange's bearer is a runtime credential's client secret.
+    const exchangeRoute = route.auth === "machine_exchange";
+    const bearerRoute = machineRoute || exchangeRoute;
     // A machine route takes no body; any JSON it is sent is read only to be refused as a selector.
     const readRaw = () =>
       readBody(
         c.req.raw,
-        machineRoute && route.method !== "GET" && hasBodyBytes(c.req.raw.headers)
+        bearerRoute && route.method !== "GET" && hasBodyBytes(c.req.raw.headers)
           ? { ...route, request: { ...route.request, body: "pending" } }
           : route,
         counted,
       );
     const early = LARGE_ROUTES.has(route.id);
     let raw = early || route.id === "health.get" ? undefined : await readRaw();
-    // Session 11 (Run 11.2): the contract names two classes this build cannot
-    // authenticate yet. A route of them is the terminal 404 for every caller,
+    // Session 11 (Run 11.2): the contract names a class this build cannot
+    // authenticate yet. A route of it is the terminal 404 for every caller,
     // before a header, a query or a state is looked at; no handler of such a
-    // route can be reached. Runs 11.3 and 11.5 put their authentication here.
-    if (route.auth === "machine_exchange" || route.auth === "automation") throw new NoHandler();
+    // route can be reached. Run 11.5 puts its authentication here.
+    if (route.auth === "automation") throw new NoHandler();
     const headers = c.req.raw.headers;
     const human = route.auth === "human" || route.auth === "human_fresh_totp";
     // One kind of credential per request, refused before any database read.
-    if ((human || route.auth === "machine") && hasMixedCredentials(headers)) {
+    if ((human || bearerRoute) && hasMixedCredentials(headers)) {
       throw new ApiError("mixed_authentication");
     }
     // FR-1.76: before the session is read.
@@ -333,10 +336,22 @@ async function run(
     // no selector. No Origin, no authorize (the binding is the authorization),
     // no replay, no freshness, no validation.
     const params = c.req.param();
+    const rawHeaders = c.env.incoming.rawHeaders;
     const machine = machineRoute
-      ? await machineStep(deps, c, params, route, requestId, source)
+      ? await underMissLimit(deps, requestId, source, () =>
+          authenticateMachine(deps, rawHeaders, params, route, requestId, source),
+        )
       : null;
     if (machine !== null) await rateStep(deps, requestId, "rl:credential", machine.credentialId);
+    // An exchange (Run 11.3, P-187): the client secret and its row, then the
+    // credential's own limit. Like a machine request: no Origin, no authorize,
+    // no replay, no validation, and no selector.
+    const exchange = exchangeRoute
+      ? await underMissLimit(deps, requestId, source, () =>
+          authenticateExchange(deps, rawHeaders, route, requestId, source),
+        )
+      : null;
+    if (exchange !== null) await rateStep(deps, requestId, "rl:exchange", exchange.credentialId);
     // P-118: after the gate and the limits, before validation.
     await captureStep(deps, route.id, route.method);
     if (early) {
@@ -345,11 +360,13 @@ async function run(
       slot = true;
       raw = await readRaw();
     }
-    if (machine !== null && hasSelector(c.req.url, raw)) throw new ApiError("forbidden_selector");
+    if ((machine !== null || exchange !== null) && hasSelector(c.req.url, raw)) {
+      throw new ApiError("forbidden_selector");
+    }
     const clock = deps.test?.clock?.(headers);
     // Run 8.2: health lists no error code (it answers its body); it reads no query and no body
     // (`raw` above is not read for it either).
-    const unread = machineRoute || route.id === "health.get";
+    const unread = bearerRoute || route.id === "health.get";
     const query = unread ? undefined : validateQuery(route, new URL(c.req.url).searchParams);
     const body = unread ? undefined : validateBody(route, raw);
     const access =
@@ -439,6 +456,7 @@ async function run(
         params,
         principal,
         machine,
+        exchange,
         scope: access.scope,
         authority: access.authority,
         operation: access.operation ?? null,

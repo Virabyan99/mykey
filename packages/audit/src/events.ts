@@ -62,7 +62,8 @@ export const AUDIT_DETAILS = {
   /** Run 3.7: a request of an authenticated caller that the pipeline refused. */
   "access.denied": z.strictObject({
     routeId,
-    reason: z.enum(["hidden", "action", "state", "fresh"]),
+    // `source` (Session 11): a credential used from outside its networks. No address is kept.
+    reason: z.enum(["hidden", "action", "state", "fresh", "source"]),
   }),
   /** Run 3.8: the organization became active, or stopped for review at a step. */
   "operator.organization_provision": z.strictObject({
