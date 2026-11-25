@@ -22,18 +22,18 @@ The project is in **Stage 1**, a 14-day plan of nine sessions.
 
 _Last updated: 24 Nov 2026, at the end of Session 10 (PR #24). Gate F was decided HARDEN (D-74): Stage 1 stays open._
 
-| Session | Topic                                       | State                                        |
-| ------- | ------------------------------------------- | -------------------------------------------- |
-| 1       | Foundation                                  | **Done** (PASS WITH ISSUES), merged          |
-| 2       | Infrastructure and make-or-break proofs     | **Done** (GO, no fallback), merged           |
-| 3       | Identity, access and resources              | **Done** (PASS WITH ISSUES), merged          |
-| 4       | Operations engine and secret lifecycle      | **Done** (PASS WITH ISSUES), merged          |
-| 5       | Machine access, CLI and API reference       | **Done** (PASS WITH ISSUES), merged          |
-| 6       | Audit, limits, backup, recovery, deployment | **Done** (PASS WITH ISSUES), merged          |
-| 7       | Web workspace                               | **Done** (PASS WITH ISSUES), merged          |
-| 8       | Security review and controlled-use release  | **Done**, Gate R signed (D-67), merged       |
-| 9       | Real use, agent experiment, stage exit      | **Done**, Gate F: HARDEN (D-74), merged      |
-| 10      | Hardening (D-75)                            | **Done**, PR #24 (merge on the owner's word) |
+| Session | Topic                                       | State                                   |
+| ------- | ------------------------------------------- | --------------------------------------- |
+| 1       | Foundation                                  | **Done** (PASS WITH ISSUES), merged     |
+| 2       | Infrastructure and make-or-break proofs     | **Done** (GO, no fallback), merged      |
+| 3       | Identity, access and resources              | **Done** (PASS WITH ISSUES), merged     |
+| 4       | Operations engine and secret lifecycle      | **Done** (PASS WITH ISSUES), merged     |
+| 5       | Machine access, CLI and API reference       | **Done** (PASS WITH ISSUES), merged     |
+| 6       | Audit, limits, backup, recovery, deployment | **Done** (PASS WITH ISSUES), merged     |
+| 7       | Web workspace                               | **Done** (PASS WITH ISSUES), merged     |
+| 8       | Security review and controlled-use release  | **Done**, Gate R signed (D-67), merged  |
+| 9       | Real use, agent experiment, stage exit      | **Done**, Gate F: HARDEN (D-74), merged |
+| 10      | Hardening (D-75)                            | **Done**, merged (25 Nov 2026)          |
 
 Each session's detail is in `docs/evidence/session-N/report.md`. Gate R's document is `docs/evidence/session-8/gate-r.md`, Gate F's is `docs/evidence/session-9/gate-f.md`.
 
@@ -49,7 +49,7 @@ Each session's detail is in `docs/evidence/session-N/report.md`. Gate R's docume
 ### Session 9 (real use, 22 Nov 2026, one day at the owner's request)
 
 - **Production is open** on `host-v0.9.1` (`b19ca6671e14`), epoch 7, opened through the owner's own journey (`run-9.1.md`).
-  - consumer-1 is the owner's WSL. It makes names-only starts: **no application runs yet** (Gate F's condition is open).
+  - consumer-1 is the owner's WSL. It makes names-only starts. Gate F's condition, that no application ran yet, was met on 25 Nov 2026 (below).
   - The real-use clock starts at 22 Nov 2026, 14:27:41 UTC.
 - **The workspace was reworked** (D-70). `host-v0.9.0` failed the owner's first look; `host-v0.9.1` passed the seven tasks (`task-test.md`).
 - **The manifest** (`session-9/manifest.md`, `--session 9`): 144 PASS (33 `earlier`; 29 of them on `host-v0.8.1` staging results, by the owner's focused pass), 9 NOT PROVEN, 7 NOT YET DUE.
@@ -127,7 +127,7 @@ Each session's detail is in `docs/evidence/session-N/report.md`. Gate R's docume
 
 - **Gate F was decided HARDEN** (D-74, 22 Nov 2026). Stage 1 stays open, and Gate F is decided again at W-2 (20 Dec 2026) on 28 days of use. The next session needs its own plan (three layers); Stage 2 does not start.
 - **The hardening list** (D-74). Session 10 did three of its four items: the token step (D-76), the re-drill (D-77) and the credential drill (D-78).
-  - **Left, and the owner's:** connect a real application on consumer-1, giving the agent `llms.txt` (D-79).
+  - **The fourth, the owner's, is done:** on 25 Nov 2026 the owner connected a real application to production and reported it working (`docs/evidence/field/real-app.md`, owner-reported; not checked by an agent). Its token is rotated before its 30 days end, then the application restarts.
   - Outside the list: the reviewers' M1 change (R3-1, D-65), in Stage 2.
 - **The owner's console step:** delete the KMS certificates `staging-seal-2`, and `drill-seal-1` if it is still listed.
 - **Dated:**
