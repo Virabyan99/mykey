@@ -62,6 +62,8 @@ export async function createCredentialsFixture(
     webDirectory?: string;
     /** Run 11.3: the edge hop the in-process API trusts (secrets-fixture.ts). */
     trustedProxy?: string;
+    /** Run 11.5: contract routes that answer through the harness's stub (secrets-fixture.ts). */
+    stubRoutes?: readonly string[];
   } = {},
 ): Promise<CredentialsFixture> {
   const base = await createSecretsFixture({
@@ -74,6 +76,7 @@ export async function createCredentialsFixture(
     ...(opts.rateLimits === undefined ? {} : { rateLimits: opts.rateLimits }),
     ...(opts.webDirectory === undefined ? {} : { webDirectory: opts.webDirectory }),
     ...(opts.trustedProxy === undefined ? {} : { trustedProxy: opts.trustedProxy }),
+    ...(opts.stubRoutes === undefined ? {} : { stubRoutes: opts.stubRoutes }),
   });
   const admin = new OpenBaoAdmin(base.stack.bao, base.stack.bao.rootToken);
   const freshen = async (): Promise<void> => {

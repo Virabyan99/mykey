@@ -13,6 +13,7 @@ import {
 } from "@mykey/contracts";
 import type pg from "pg";
 import type { Queryable } from "../tx.ts";
+import type { Resolved } from "./memberships.ts";
 
 export interface AutomationCredentialRow {
   id: string;
@@ -243,4 +244,145 @@ export async function listAutomationCredentials(
     [organizationId, page.anchor, afterMicros ?? null, afterId ?? null, page.limit],
   );
   return result.rows.map((stored) => ({ ...toRow(stored), sortKey: stored.sort_key }));
+}
+
+/** What authentication reads (Run 11.5 Task B): the row with its verifier, never shown. */
+export interface AutomationAuthRow {
+  id: string;
+  ownerId: string;
+  rights: AutomationRight[];
+  boundCidrs: string[];
+  verifier: Buffer;
+  verifierKeyId: string;
+  state: "active" | "revoked";
+  /** expires_at > now(), on database time. */
+  live: boolean;
+}
+
+/** `id` must be a UUID (the presented secret's shape says so). */
+export async function findAutomationForAuth(
+  db: Queryable,
+  organizationId: string,
+  id: string,
+): Promise<AutomationAuthRow | null> {
+  const result = await db.query<{
+    id: string;
+    owner_id: string;
+    rights: AutomationRight[];
+    bound_cidrs: string[];
+    verifier: Buffer;
+    verifier_key_id: string;
+    state: "active" | "revoked";
+    live: boolean;
+  }>(
+    `SELECT id, owner_id, rights, bound_cidrs, verifier, verifier_key_id, state,
+            expires_at > now() AS live
+       FROM app.automation_credential
+      WHERE organization_id = $1 AND id = $2`,
+    [organizationId, id],
+  );
+  const row = result.rows[0];
+  if (row === undefined) return null;
+  return {
+    id: row.id,
+    ownerId: row.owner_id,
+    rights: row.rights,
+    boundCidrs: row.bound_cidrs,
+    verifier: row.verifier,
+    verifierKeyId: row.verifier_key_id,
+    state: row.state,
+    live: row.live,
+  };
+}
+
+/** The credential as it is now, for the admission recheck: its state, expiry, chain and rights. */
+export async function automationCredentialNow(
+  db: Queryable,
+  organizationId: string,
+  id: string,
+): Promise<{
+  state: "active" | "revoked";
+  live: boolean;
+  ownerId: string;
+  rights: AutomationRight[];
+} | null> {
+  const row = await findAutomationForAuth(db, organizationId, id);
+  return row === null
+    ? null
+    : { state: row.state, live: row.live, ownerId: row.ownerId, rights: row.rights };
+}
+
+/** At most once a minute per credential. */
+export async function touchAutomationCredential(db: Queryable, id: string): Promise<void> {
+  await db.query(
+    `UPDATE app.automation_credential SET last_used_at = now()
+      WHERE id = $1 AND (last_used_at IS NULL OR last_used_at < now() - interval '1 minute')`,
+    [id],
+  );
+}
+
+/** True when `credentialId` is a credential of the chain `ownerId` in this organization. */
+export async function chainHasCredential(
+  db: Queryable,
+  organizationId: string,
+  ownerId: string,
+  credentialId: string,
+): Promise<boolean> {
+  const result = await db.query(
+    `SELECT 1 FROM app.automation_credential
+      WHERE organization_id = $1 AND owner_id = $2 AND id::text = $3`,
+    [organizationId, ownerId, credentialId],
+  );
+  return result.rowCount === 1;
+}
+
+/**
+ * The states an automation request is decided on (P-53), read in one
+ * statement: the organization, the project only when the chain `ownerId`
+ * manages it, and the environment only when it belongs to that project. A
+ * project of another chain, of the owner or of nobody reads as absent. The
+ * ids must be UUIDs. `authority` is null: a credential has rights, not a role.
+ */
+export async function resolveManaged(
+  db: Queryable,
+  organizationId: string,
+  ownerId: string,
+  ids: { projectId?: string; environmentId?: string },
+): Promise<Resolved> {
+  const result = await db.query<{
+    org_state: string;
+    org_reason: string | null;
+    project_state: string | null;
+    project_reason: string | null;
+    env_state: string | null;
+    env_reason: string | null;
+    kv_ready: boolean | null;
+  }>(
+    `SELECT o.state AS org_state, o.review_reason AS org_reason,
+            p.state AS project_state, p.review_reason AS project_reason,
+            e.state AS env_state, e.review_reason AS env_reason, e.kv_ready
+       FROM app.organization o
+       LEFT JOIN app.project p
+         ON p.organization_id = o.id AND p.id = $3::uuid AND p.managed_by = $2::uuid
+       LEFT JOIN app.environment e
+         ON e.organization_id = o.id AND e.project_id = p.id AND e.id = $4::uuid
+      WHERE o.id = $1`,
+    [organizationId, ownerId, ids.projectId ?? null, ids.environmentId ?? null],
+  );
+  const row = result.rows[0];
+  if (row === undefined) {
+    return { authority: null, organization: null, project: null, environment: null };
+  }
+  return {
+    authority: null,
+    organization: { state: row.org_state, reviewReason: row.org_reason },
+    project:
+      row.project_state === null
+        ? null
+        : { state: row.project_state, reviewReason: row.project_reason },
+    environment:
+      row.env_state === null
+        ? null
+        : { state: row.env_state, reviewReason: row.env_reason, kvReady: row.kv_ready === true },
+  };
 }

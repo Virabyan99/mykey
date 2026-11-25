@@ -8,6 +8,7 @@ import type pg from "pg";
 import type { HealthReading } from "../health.ts";
 import type { LogEntry } from "../log.ts";
 import type { UserPrincipal } from "./authn.ts";
+import type { AutomationPrincipal } from "./automation.ts";
 import type { ExchangePrincipal } from "./exchange.ts";
 import type { MachinePrincipal } from "./machine.ts";
 import type { Scope } from "./authz.ts";
@@ -112,6 +113,8 @@ export interface ApiContext {
   machine: MachinePrincipal | null;
   /** The runtime credential of machine.exchange (Run 11.3, P-187); null on every other route. */
   exchange: ExchangePrincipal | null;
+  /** The automation credential of an automation route (Run 11.5, P-194); null on every other route. */
+  automation: AutomationPrincipal | null;
   /** The resolved organization, project and environment of a scoped human route (Run 3.7). */
   scope: Scope | null;
   /** The caller's authority in that organization, read on this request. */

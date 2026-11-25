@@ -18,7 +18,7 @@ import {
   type FixtureUser,
   type Tenants,
 } from "../../harness/tenants.ts";
-import { pathIn, requestOf, unauthenticatedClass, type PathIds } from "./requests.ts";
+import { pathIn, requestOf, automationClass, type PathIds } from "./requests.ts";
 
 type Outcome = "A" | "D" | "H";
 type TargetName = "p1/e1a" | "p1/e1b" | "p2/e2a" | "B";
@@ -272,9 +272,9 @@ describe("machine routes (Run 5.4, P-93)", () => {
     }
   });
 
-  // Session 11 (Run 11.2). Run 11.5 replaces this with its own class's tests.
-  it("a route of a class this build cannot authenticate answers 404 to every user's session, and no stub is reached", async () => {
-    const routes = ROUTES.filter(unauthenticatedClass);
+  // Session 11 (Run 11.5): the class's own tests are tests/integration/automation/boundary.test.ts.
+  it("every automation route answers 401 to every user's session, and no stub is reached", async () => {
+    const routes = ROUTES.filter(automationClass);
     expect(routes).toHaveLength(10);
     for (const route of routes) {
       const path = pathIn(route, {
@@ -289,8 +289,8 @@ describe("machine routes (Run 5.4, P-93)", () => {
           cookie: cookies.get(user)!,
         });
         expect([response.status, (await errorOf(response)).code], `${route.id} ${user}`).toEqual([
-          404,
-          "not_found",
+          401,
+          "unauthenticated",
         ]);
         expect(api.reached.length, route.id).toBe(before);
       }

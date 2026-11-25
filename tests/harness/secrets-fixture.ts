@@ -222,6 +222,11 @@ export async function createSecretsFixture(
      * as the edge's is on a host; without the header the source is the peer.
      */
     trustedProxy?: string;
+    /**
+     * Run 11.5: these contract routes answer through the harness's stub (204,
+     * their id in `api.reached`) once every check of the pipeline has passed.
+     */
+    stubRoutes?: readonly string[];
   } = {},
 ): Promise<SecretsFixture> {
   const directory = mkdtempSync(join(tmpdir(), "mykey-secrets-"));
@@ -248,6 +253,7 @@ export async function createSecretsFixture(
         },
         importBudgetMs: () => importBudget ?? undefined,
         ...(opts.rateLimits === undefined ? {} : { rateLimits: opts.rateLimits }),
+        ...(opts.stubRoutes === undefined ? {} : { stubs: true, stubRoutes: opts.stubRoutes }),
         ...(opts.webDirectory === undefined && opts.trustedProxy === undefined
           ? {}
           : {

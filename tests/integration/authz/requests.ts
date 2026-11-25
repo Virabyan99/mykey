@@ -43,13 +43,13 @@ export const VALID_BODIES: Record<string, unknown> = {
 };
 
 /**
- * Session 11 (Run 11.2): the class this build cannot authenticate yet. A
- * route of it answers the terminal 404 to every caller, whatever it sends; a
- * suite that walks the route table gives it that expectation, or leaves it to
- * the run that authenticates it (11.5). Run 11.3 took `machine_exchange` out:
- * its route answers a caller without a client secret 401, like a machine route.
+ * Session 11: the automation class. Its bearer is an automation credential's
+ * secret (Run 11.5), so a suite that walks the route table with a session
+ * gets 401 from it, like from a machine route; a walk that needs these routes
+ * to pass the pipeline sends them with a credential of its own
+ * (tests/harness/automation.ts).
  */
-export function unauthenticatedClass(route: RouteDef): boolean {
+export function automationClass(route: RouteDef): boolean {
   return route.auth === "automation";
 }
 

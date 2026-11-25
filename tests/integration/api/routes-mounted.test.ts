@@ -105,9 +105,10 @@ const BODIES: Record<string, unknown> = {
 };
 
 /**
- * Session 11 (Run 11.2): the class this build cannot authenticate yet. Nobody
- * is an authorised caller of it, so the terminal 404 is its answer to every
- * request, a wrong body included. (Run 11.3 authenticates `machine_exchange`.)
+ * Session 11: the automation class (authenticated since Run 11.5). This API
+ * holds no automation credential, so every caller here is nobody: 401, with
+ * no bearer, with a bearer of either shape that names no row, and with a
+ * session. (Its handlers are proven in tests/integration/automation.)
  */
 const UNAUTHENTICATED_CLASSES = new Set(["automation"]);
 
@@ -181,7 +182,7 @@ describe("mounted routes", () => {
       route,
     ]),
   )(
-    "%s answers the same 404 with no bearer and with a bearer of either shape",
+    "%s answers the same 401 with no bearer, with a bearer of either shape and with a session",
     async (_id, route) => {
       // A well-formed request: the body's framing is checked first on every route (400).
       const body = BODIES[route.id];
@@ -199,20 +200,24 @@ describe("mounted routes", () => {
             ...(route.idempotent ? { "idempotency-key": randomUUID() } : {}),
           },
         });
-        expect(response.status, route.id).toBe(404);
+        expect(response.status, route.id).toBe(401);
         const error = await errorOf(response);
         answers.push(JSON.stringify({ ...error, requestId: undefined }));
       }
       expect(new Set(answers).size).toBe(1);
-      expect(answers[0]).toContain("not_found");
+      expect(answers[0]).toContain("unauthenticated");
     },
   );
 
   it.each(
-    ROUTES.filter((route) => !HANDLED.has(route.id) && route.auth !== "machine").map((route) => [
-      route.id,
-      route,
-    ]),
+    // An automation route's authorised caller is an automation credential, which this
+    // API does not hold: its routes are walked in tests/integration/automation.
+    ROUTES.filter(
+      (route) =>
+        !HANDLED.has(route.id) &&
+        route.auth !== "machine" &&
+        !UNAUTHENTICATED_CLASSES.has(route.auth),
+    ).map((route) => [route.id, route]),
   )("%s without a handler ends in 404 not_found, for an authorised caller", async (_id, route) => {
     const body = BODIES[route.id];
     const init =

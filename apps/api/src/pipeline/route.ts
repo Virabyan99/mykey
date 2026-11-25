@@ -16,9 +16,20 @@ import type { Context, Hono } from "hono";
 import { now } from "../log.ts";
 import { authenticateHuman } from "./authn.ts";
 import { captureMode, findOperationByKey, hasTombstone } from "@mykey/db";
-import { isCaptureRefusal, replayAnswer, sameIntent, type Intent } from "@mykey/operations";
+import {
+  isCaptureRefusal,
+  replayAnswer,
+  sameIntent,
+  type Actor,
+  type Intent,
+} from "@mykey/operations";
 import type { UserPrincipal as Principal } from "./authn.ts";
-import { admitStates, authorize, deny } from "./authz.ts";
+import {
+  admitAutomationStates,
+  authenticateAutomation,
+  authorizeAutomation,
+} from "./automation.ts";
+import { admitStates, authorize, deny, type Access } from "./authz.ts";
 import { checkOrigin, hasMixedCredentials, needsOriginCheck } from "./origin.ts";
 import { drainBody, headerBytes, readBody } from "./body.ts";
 import { authenticateExchange } from "./exchange.ts";
@@ -56,12 +67,26 @@ export function intentOf(
   principal: Principal,
   body: unknown,
 ): Intent {
+  return intentFor(route, params, { kind: "user", id: principal.userId }, body);
+}
+
+/**
+ * The intent of a mutation by any actor (Run 11.5). An automation route names
+ * no organization in its path: its caller passes the process's own as
+ * `params.org`, so that a route without a project has that as its target.
+ */
+export function intentFor(
+  route: RouteDef,
+  params: Record<string, string>,
+  actor: Actor,
+  body: unknown,
+): Intent {
   const extra = Object.fromEntries(
     Object.entries(params).filter(([name]) => !SCOPE_PARAMS.has(name)),
   );
   return {
-    principalKind: "user",
-    principalId: principal.userId,
+    principalKind: actor.kind,
+    principalId: actor.id,
     action: route.id,
     target: params.env ?? params.project ?? params.org ?? "",
     ...(Object.keys(extra).length === 0 ? {} : { params: extra }),
@@ -306,15 +331,14 @@ async function run(
       );
     const early = LARGE_ROUTES.has(route.id);
     let raw = early || route.id === "health.get" ? undefined : await readRaw();
-    // Session 11 (Run 11.2): the contract names a class this build cannot
-    // authenticate yet. A route of it is the terminal 404 for every caller,
-    // before a header, a query or a state is looked at; no handler of such a
-    // route can be reached. Run 11.5 puts its authentication here.
-    if (route.auth === "automation") throw new NoHandler();
+    // Session 11 (Run 11.5): the bearer is an automation credential's secret.
+    // Unlike the two machine classes its routes take a body and a query, an
+    // Idempotency-Key and the states: the human order, with another caller.
+    const automationRoute = route.auth === "automation";
     const headers = c.req.raw.headers;
     const human = route.auth === "human" || route.auth === "human_fresh_totp";
     // One kind of credential per request, refused before any database read.
-    if ((human || bearerRoute) && hasMixedCredentials(headers)) {
+    if ((human || bearerRoute || automationRoute) && hasMixedCredentials(headers)) {
       throw new ApiError("mixed_authentication");
     }
     // FR-1.76: before the session is read.
@@ -352,6 +376,16 @@ async function run(
         )
       : null;
     if (exchange !== null) await rateStep(deps, requestId, "rl:exchange", exchange.credentialId);
+    // An automation request (Run 11.5, P-194): the secret and its row under
+    // the miss limit, then the credential's own limit.
+    const automation = automationRoute
+      ? await underMissLimit(deps, requestId, source, () =>
+          authenticateAutomation(deps, rawHeaders, source, route, requestId),
+        )
+      : null;
+    if (automation !== null) {
+      await rateStep(deps, requestId, "rl:automation", automation.credentialId);
+    }
     // P-118: after the gate and the limits, before validation.
     await captureStep(deps, route.id, route.method);
     if (early) {
@@ -369,10 +403,20 @@ async function run(
     const unread = bearerRoute || route.id === "health.get";
     const query = unread ? undefined : validateQuery(route, new URL(c.req.url).searchParams);
     const body = unread ? undefined : validateBody(route, raw);
-    const access =
-      principal === null
-        ? { scope: null, authority: null, resolved: null }
-        : await authorize(deps, route, params, principal, requestId);
+    // The path and the right of an automation request; ancestry, visibility and action of a person's.
+    const access: Access =
+      automation !== null
+        ? await authorizeAutomation(deps, route, params, automation, requestId)
+        : principal === null
+          ? { scope: null, authority: null, resolved: null }
+          : await authorize(deps, route, params, principal, requestId);
+    // The caller of a mutation: a person, or an automation credential as a machine actor.
+    const actor: Actor | null =
+      principal !== null
+        ? { kind: "user", id: principal.userId }
+        : automation !== null
+          ? { kind: "machine", id: automation.credentialId }
+          : null;
     // P-113: the route's own class, per person, after authorization.
     const routeClass = ROUTE_CLASS_LIMIT[route.id];
     if (routeClass !== undefined && principal !== null) {
@@ -381,16 +425,21 @@ async function run(
     // A mutation (P-58): its key first; a request already made answers its
     // stored outcome before the state and freshness checks (Doc 06 §6.2 step 1).
     let idempotencyKey: string | null = null;
-    if (route.idempotent && principal !== null) {
+    if (route.idempotent && actor !== null) {
       const header = headers.get("idempotency-key")?.toLowerCase() ?? "";
       if (!UUID.test(header)) throw new ApiError("precondition_required");
       idempotencyKey = header;
       const ring = deps.auth?.keys.replayFingerprint;
       if (ring === undefined) throw new ApiError("dependency_unavailable");
-      const intent = intentOf(route, params, principal, body);
+      const intent = intentFor(
+        route,
+        automation === null ? params : { ...params, org: automation.organizationId },
+        actor,
+        body,
+      );
       const key = {
-        principalKind: "user" as const,
-        principalId: principal.userId,
+        principalKind: actor.kind,
+        principalId: actor.id,
         action: route.id,
         target: intent.target,
         idempotencyKey,
@@ -420,6 +469,9 @@ async function run(
     // P-115: after a replay (which adds nothing), before any state is read or written.
     if (EXPANDING_ROUTES.has(route.id)) await capacityStep(deps);
     if (principal !== null) await admitStates(deps, route, params, principal, requestId, access);
+    if (automation !== null) {
+      await admitAutomationStates(deps, route, params, automation, requestId, access);
+    }
     // Freshness (FR-1.77): last before the handler, after visibility, action and state.
     if (route.auth === "human_fresh_totp" && principal !== null && !principal.fresh) {
       await deny(deps, {
@@ -457,6 +509,7 @@ async function run(
         principal,
         machine,
         exchange,
+        automation,
         scope: access.scope,
         authority: access.authority,
         operation: access.operation ?? null,

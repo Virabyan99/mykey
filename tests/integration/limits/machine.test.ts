@@ -7,7 +7,14 @@
 import { randomBytes, randomUUID } from "node:crypto";
 import { setTimeout as sleep } from "node:timers/promises";
 import { windowSecondsLeft } from "@mykey/api";
+import { AUTOMATION_SECRET_PREFIX, LIMITS } from "@mykey/contracts";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import {
+  automationCall,
+  clearAutomation,
+  issueAutomationFor,
+  strangerSecret,
+} from "../../harness/automation.ts";
 import {
   createCredentialsFixture,
   issueFor,
@@ -235,5 +242,79 @@ describe("the exchange (rl:machine-miss 30, rl:exchange 10)", () => {
     expect((await machineCall(f, "keys", { token })).status).toBe(200);
     await nextWindow();
     expect((await exchangeCall(f, { secret: one.clientSecret })).status).toBe(200);
+  }, 180_000);
+});
+
+// Session 11 (Run 11.5, P-194): an automation credential has its own 120
+// requests a minute, counted after it is recognised and before anything else
+// is decided; a secret nobody can attribute is a miss of its source, with the
+// tokens and the client secrets nobody can attribute.
+describe("automation (rl:automation 120, rl:machine-miss 30)", () => {
+  it("the 121st request of one credential in a minute answers 429 with retry-after; another credential is served", async () => {
+    expect(LIMITS.rate.perAutomationCredentialPerMinute).toBe(120);
+    const one = await issueAutomationFor(f);
+    const two = await issueAutomationFor(f, { name: "two" });
+    try {
+      // A request that is refused later in the pipeline is counted like a served one:
+      // a project nobody manages is 404 for both credentials.
+      const ids = { project: f.env("env1a").projectId };
+      for (let i = 0; i < 120; i += 1) {
+        const answer = await automationCall(f, "automation.projects.get", {
+          secret: one.secret,
+          ids,
+        });
+        expect([answer.status, answer.code], `request ${String(i + 1)}`).toEqual([
+          404,
+          "not_found",
+        ]);
+      }
+      const refused = await automationCall(f, "automation.projects.get", {
+        secret: one.secret,
+        ids,
+      });
+      expect([refused.status, refused.code]).toEqual([429, "rate_limited"]);
+      const retryAfter = Number(refused.headers.get("retry-after"));
+      expect(retryAfter).toBeGreaterThanOrEqual(1);
+      expect(retryAfter).toBeLessThanOrEqual(60);
+      const other = await automationCall(f, "automation.projects.get", { secret: two.secret, ids });
+      expect([other.status, other.code]).toEqual([404, "not_found"]);
+      await nextWindow();
+      const again = await automationCall(f, "automation.projects.get", { secret: one.secret, ids });
+      expect([again.status, again.code]).toEqual([404, "not_found"]);
+    } finally {
+      await clearAutomation(f);
+    }
+  }, 180_000);
+
+  it("the 31st automation secret nobody can attribute from one source answers 429, its own credential included", async () => {
+    const credential = await issueAutomationFor(f);
+    try {
+      const ids = { project: f.env("env1a").projectId };
+      for (let i = 0; i < 30; i += 1) {
+        const answer = await automationCall(f, "automation.projects.get", {
+          secret: strangerSecret(AUTOMATION_SECRET_PREFIX, randomBytes(32)),
+          ids,
+        });
+        expect([answer.status, answer.code], `miss ${String(i + 1)}`).toEqual([
+          401,
+          "unauthenticated",
+        ]);
+      }
+      for (const secret of [
+        strangerSecret(AUTOMATION_SECRET_PREFIX, randomBytes(32)),
+        credential.secret,
+      ]) {
+        const refused = await automationCall(f, "automation.projects.get", { secret, ids });
+        expect([refused.status, refused.code]).toEqual([429, "rate_limited"]);
+      }
+      await nextWindow();
+      const served = await automationCall(f, "automation.projects.get", {
+        secret: credential.secret,
+        ids,
+      });
+      expect([served.status, served.code]).toEqual([404, "not_found"]);
+    } finally {
+      await clearAutomation(f);
+    }
   }, 180_000);
 });

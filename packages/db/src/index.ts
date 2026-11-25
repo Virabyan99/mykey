@@ -110,14 +110,20 @@ export {
   type ProjectRow,
 } from "./repos/resources.ts";
 export {
+  automationCredentialNow,
+  chainHasCredential,
   chainOf,
   findAutomationCredential,
   findAutomationCredentialByOperation,
+  findAutomationForAuth,
   insertAutomationCredential,
   listAutomationCredentials,
   lockAutomationCredential,
   managedProjectCount,
+  resolveManaged,
   revokeAutomationCredentialRow,
+  touchAutomationCredential,
+  type AutomationAuthRow,
   type AutomationCredentialRow,
 } from "./repos/automation.ts";
 export {
