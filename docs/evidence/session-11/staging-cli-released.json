@@ -1,0 +1,29 @@
+{
+  "cli": {
+    "version": "0.1.2",
+    "released": true
+  },
+  "project": {
+    "name": "s5-cli-97418b",
+    "id": "e84d9c5a-0183-4d15-9343-8dd99691e33a",
+    "environment": "8fe5127a-1727-4369-9a24-3ea64396f236"
+  },
+  "journey": {
+    "credentialId": "33f8133b-f590-4179-b84c-807dabe8ea5c",
+    "keys": 0,
+    "run": 0,
+    "names": 10,
+    "exportMode": "600",
+    "afterRevoke": {
+      "run": 77,
+      "keys": 77
+    },
+    "where": "node-glibc container"
+  },
+  "runtimeCredential": {
+    "cli": "0.1.2",
+    "exchanges": false,
+    "run": 77,
+    "started": false
+  }
+}

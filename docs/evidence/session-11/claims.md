@@ -2,7 +2,7 @@
 
 **Method.** Every sentence that states a fact in what this session wrote was read against a test or a measurement: the new catalogue `apps/web/src/copy/credentials.ts`, the new and changed entries of `copy/pages.ts` and `copy/actions.ts`, the help article `automation` and the new line of `machine-credentials` (`apps/web/src/help/articles.ts`), the two screens' own sentences, `docs/runbooks/automation.md`, the new sections of `machine-credentials.md`, the new lines of `known-limits.md` and `restore.md`, and the new part of the agent guide. Test names are shortened. Paths are under `tests/integration/` unless they say otherwise.
 
-**Result:** 56 claims. 53 TRUE, 1 CORRECTED (the project page's sentence), 2 TRUE BY RULE (no test names the case itself; each says so).
+**Result:** 56 claims. 54 TRUE, 1 CORRECTED (the project page's sentence), 1 TRUE BY RULE (no test names the case itself; it says so). One claim moved from TRUE BY RULE to TRUE in Run 11.8, when the published `cli-v0.1.2` was run against staging.
 
 ## `apps/web/src/copy/credentials.ts`
 
@@ -76,19 +76,19 @@
 
 ## `machine-credentials.md`, `known-limits.md`, `restore.md`, the agent guide
 
-| what it claims                                                                                   | verdict      | evidence or correction                                                                                                                                     |
-| ------------------------------------------------------------------------------------------------ | ------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| a runtime credential is a row of PostgreSQL and nothing in OpenBao                               | TRUE         | `runtime.test.ts` "OpenBao's accessor list of the namespace is the same before and after an issue and a revoke"                                            |
-| there is no unknown issuance                                                                     | TRUE         | `runtime.test.ts` "credentials.revoke of a runtime credential answers 200 revoked in one request, with OpenBao stopped"; the issue asks no backend         |
-| the exchange checks the secret, state, expiry, networks and environment; audited; 10 a minute    | TRUE         | `exchange.test.ts` "a revoked credential, an expired one, and a call from outside its CIDRs each answer 401"; `limits/machine.test.ts` "the 11th exchange" |
-| a revocation: refused in the product at once; accepted in OpenBao up to 15 minutes               | TRUE         | D-81 "Measured"                                                                                                                                            |
-| archive, restore and `reconcile-credentials` treat it as the section says                        | TRUE         | `credentials/runtime-everywhere.test.ts` (archive, sweep, reconcile); `restore/invalidate.test.ts`                                                         |
-| give each server its own runtime credential: the eleventh replica of a minute exits 75           | TRUE         | `limits/machine.test.ts` "the 11th exchange … 429"; `tests/cli/exchange.test.ts` "the exchange answering 429 is exit 75"                                   |
-| a lost answer of an exchange leaves a token nobody holds, at most 15 minutes; nothing is blocked | TRUE         | `exchange.test.ts` "fault after_create_sent: the answer is 503, nothing is in review, the next exchange answers 200"                                       |
-| `cli-v0.1.2` given a runtime credential exits 77                                                 | TRUE BY RULE | A token nobody can attribute is 401, and 401 is exit 77. The released `0.1.2` was not run against one; the line says so.                                   |
-| a writer of the database alone can move a project into a chain and undo a revocation             | TRUE         | D-82; `exchange.test.ts` "a row a writer of the database alone moved … is refused" is the part a key covers                                                |
-| a restore revokes both kinds with no added time; `credentials_all_revoked` counts both tables    | TRUE         | `restore/invalidate.test.ts`, `restore/verify.test.ts` "one automation credential set active → credentials_all_revoked fails, and only it"                 |
-| the guide: nothing changes for the agent; the same step, command and file; 77 is `replace-token` | TRUE         | `tests/unit/agents/guide.test.ts`; `tests/cli/exchange.test.ts` "the exchange refused with 401: nothing starts, exit 77"                                   |
+| what it claims                                                                                   | verdict | evidence or correction                                                                                                                                     |
+| ------------------------------------------------------------------------------------------------ | ------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| a runtime credential is a row of PostgreSQL and nothing in OpenBao                               | TRUE    | `runtime.test.ts` "OpenBao's accessor list of the namespace is the same before and after an issue and a revoke"                                            |
+| there is no unknown issuance                                                                     | TRUE    | `runtime.test.ts` "credentials.revoke of a runtime credential answers 200 revoked in one request, with OpenBao stopped"; the issue asks no backend         |
+| the exchange checks the secret, state, expiry, networks and environment; audited; 10 a minute    | TRUE    | `exchange.test.ts` "a revoked credential, an expired one, and a call from outside its CIDRs each answer 401"; `limits/machine.test.ts` "the 11th exchange" |
+| a revocation: refused in the product at once; accepted in OpenBao up to 15 minutes               | TRUE    | D-81 "Measured"                                                                                                                                            |
+| archive, restore and `reconcile-credentials` treat it as the section says                        | TRUE    | `credentials/runtime-everywhere.test.ts` (archive, sweep, reconcile); `restore/invalidate.test.ts`                                                         |
+| give each server its own runtime credential: the eleventh replica of a minute exits 75           | TRUE    | `limits/machine.test.ts` "the 11th exchange … 429"; `tests/cli/exchange.test.ts` "the exchange answering 429 is exit 75"                                   |
+| a lost answer of an exchange leaves a token nobody holds, at most 15 minutes; nothing is blocked | TRUE    | `exchange.test.ts` "fault after_create_sent: the answer is 503, nothing is in review, the next exchange answers 200"                                       |
+| `cli-v0.1.2` given a runtime credential exits 77                                                 | TRUE    | Run 11.8: the published `0.1.2` on staging exits 77 and starts nothing (`staging-cli-released.json`). The line was changed to say so.                      |
+| a writer of the database alone can move a project into a chain and undo a revocation             | TRUE    | D-82; `exchange.test.ts` "a row a writer of the database alone moved … is refused" is the part a key covers                                                |
+| a restore revokes both kinds with no added time; `credentials_all_revoked` counts both tables    | TRUE    | `restore/invalidate.test.ts`, `restore/verify.test.ts` "one automation credential set active → credentials_all_revoked fails, and only it"                 |
+| the guide: nothing changes for the agent; the same step, command and file; 77 is `replace-token` | TRUE    | `tests/unit/agents/guide.test.ts`; `tests/cli/exchange.test.ts` "the exchange refused with 401: nothing starts, exit 77"                                   |
 
 ## Not walked here
 

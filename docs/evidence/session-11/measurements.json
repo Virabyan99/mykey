@@ -37,7 +37,10 @@
       "pausesMs": [250, 500, 1000, 2000],
       "startedOfTen": 8,
       "refusedBusy": 2,
-      "tenCredentialsOverThreeEnvironments": { "startedRound1": 8, "startedRound2": 7 }
+      "tenCredentialsOverThreeEnvironments": {
+        "startedRound1": 8,
+        "startedRound2": 7
+      }
     },
     "tenRequests_cli_0_2_0": {
       "pausesMs": [250, 500, 1000, 2000, 2000, 2000, 2000, 2000, 2000],
@@ -86,6 +89,96 @@
       "runtimeCredentialsIssued": 6,
       "ownerActions": 1,
       "aNewChainWithoutReplaces": "lists no project and issues nothing"
+    }
+  },
+  "staging": {
+    "run": "11.8",
+    "date": "2026-11-26",
+    "where": "staging on host-v0.10.0 (5e13f421a4e6), through the public name and the real edge, from the owner's workstation",
+    "note": "Names and numbers only. One run each: figures of a single pass, not bounds.",
+    "runtimeCredential": {
+      "source": "tests/staging/runtime-credential.staging.test.ts",
+      "issueMs": 244,
+      "exchangeMs": 244,
+      "resolve25ValuesMs": 364,
+      "metadataMs": 311,
+      "revokeMs": 197,
+      "tokenSecondsLeftByTheWorkstationsClock": 901,
+      "tokenSecondsNote": "the token's expiresAt minus the workstation's clock; the test allows 900 s plus 5 s of clock difference"
+    },
+    "fleet": {
+      "source": "tests/staging/runtime-credential.staging.test.ts, 'the fleet'",
+      "servers": 10,
+      "firstRoundMs": 11434,
+      "twoRoundsMs": 19681,
+      "slowestStartMs": 11434,
+      "firstRoundWithinSpec20s": true
+    },
+    "automation": {
+      "source": "tests/staging/automation.staging.test.ts",
+      "issueAutomationMs": 528,
+      "provisionOneTenantMs": 19695,
+      "provisionSteps": {
+        "project": {
+          "count": 1,
+          "ms": 541
+        },
+        "environment": {
+          "count": 1,
+          "ms": 564
+        },
+        "ready": {
+          "count": 1,
+          "ms": 2265
+        },
+        "secret": {
+          "count": 25,
+          "ms": 15793
+        },
+        "runtime-credential": {
+          "count": 1,
+          "ms": 531
+        }
+      },
+      "serverStartByCliMs": 5911,
+      "serverStartNote": "includes starting the Linux container the CLI runs in on this workstation",
+      "reissueMs": 2359,
+      "reissueSteps": {
+        "projects": {
+          "count": 1,
+          "ms": 620
+        },
+        "project": {
+          "count": 1,
+          "ms": 621
+        },
+        "runtime-credential": {
+          "count": 2,
+          "ms": 1118
+        }
+      }
+    },
+    "publishedCli012": {
+      "source": "tests/staging/cli.staging.test.ts with MYKEY_CLI_DIST (the published bundle)",
+      "version": "0.1.2",
+      "thirtyDayTokenJourney": {
+        "credentialId": "33f8133b-f590-4179-b84c-807dabe8ea5c",
+        "keys": 0,
+        "run": 0,
+        "names": 10,
+        "exportMode": "600",
+        "afterRevoke": {
+          "run": 77,
+          "keys": 77
+        },
+        "where": "node-glibc container"
+      },
+      "givenARuntimeCredential": {
+        "cli": "0.1.2",
+        "exchanges": false,
+        "run": 77,
+        "started": false
+      }
     }
   }
 }

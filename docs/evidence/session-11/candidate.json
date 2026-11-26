@@ -40,5 +40,10 @@
   "lastMigration": "0019_automation_and_runtime",
   "hostFilesCommit": "427ddfbdfb590f71064d66747885851c68f8ec2c",
   "tooling": [],
-  "deploys": {}
+  "deploys": {
+    "staging": {
+      "at": "2026-11-26T00:11:54.717Z",
+      "gateEpoch": 18
+    }
+  }
 }

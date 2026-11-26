@@ -50,12 +50,10 @@ async function waitForApi(host: HostEntry, tls: string, status: string): Promise
 }
 
 describe.each([hosts.staging, hosts.prod])("$name, public HTTPS", (host) => {
-  // Production runs without a gate file since Session 3 (the owner opens it): its /health
-  // answers down by design. The chain, HSTS and forwarded headers are checked the same.
-  const health =
-    host.name === "prod"
-      ? { status: 503, body: '{"status":"down"}' }
-      : { status: 200, body: '{"status":"up"}' };
+  // Production was closed from Session 3 until the owner opened it (22 Nov 2026, Session 9),
+  // and this test expected its /health down until Run 11.8 found it stale. Both hosts are
+  // open and in service now: the same answer, chain, HSTS and forwarded headers on each.
+  const health = { status: 200, body: '{"status":"up"}' };
 
   it("serves /health with a valid chain for the host name and HSTS", async () => {
     const answer = await httpsGet(host.hostname, "/health");

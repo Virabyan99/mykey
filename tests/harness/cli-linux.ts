@@ -8,7 +8,10 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { CliResult } from "./cli.ts";
 
-const DIST = join(process.cwd(), "apps", "cli", "dist");
+// Session 11 (Run 11.8): MYKEY_CLI_DIST names a directory that holds another
+// `secrets.mjs`, the bundle of a published release unpacked from its archive,
+// so an older CLI can be run against a newer host (spec §6 item 12).
+const DIST = process.env.MYKEY_CLI_DIST ?? join(process.cwd(), "apps", "cli", "dist");
 
 function glibcImage(): string {
   const lock = JSON.parse(readFileSync("infra/dependencies.lock.json", "utf8")) as {

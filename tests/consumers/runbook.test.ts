@@ -97,18 +97,35 @@ function send(method: string, path: string, body: unknown): Promise<PublicAnswer
   });
 }
 
-async function issue(label: string): Promise<{ credentialId: string; token: string }> {
+/**
+ * A machine credential for the rehearsal. Session 11 (Run 11.8): with `runtime`
+ * it is a runtime credential, and what the runbook stores as "the token" is its
+ * client secret, which the CLI exchanges by itself. Everything the test does
+ * with a token (storing, searching, refusing after a revocation) is the same.
+ */
+async function issue(
+  label: string,
+  kind: "token" | "runtime" = "token",
+): Promise<{ credentialId: string; token: string }> {
   ({ cookie } = await stagingOwnerSession());
-  const answer = await send("POST", `${environmentPath}/credentials`, {
-    name: `s5-consumer-${label}`,
-    ttlSeconds: 3600,
-  });
-  expect(answer.status, answer.body.slice(0, 200)).toBe(201);
-  const body = json(answer) as { credential: { credentialId: string }; token: string };
-  registerSecret(body.token);
-  tokens.push(body.token);
-  issued.set(body.credential.credentialId, body.token);
-  return { credentialId: body.credential.credentialId, token: body.token };
+  const answer = await send(
+    "POST",
+    `${environmentPath}/${kind === "runtime" ? "runtime-credentials" : "credentials"}`,
+    { name: `s5-consumer-${label}`, ttlSeconds: 3600 },
+  );
+  expect(answer.status).toBe(201);
+  const body = json(answer) as {
+    credential: { credentialId: string; kind: string };
+    token?: string;
+    clientSecret?: string;
+  };
+  expect(body.credential.kind).toBe(kind);
+  const token = (kind === "runtime" ? body.clientSecret : body.token) ?? "";
+  expect(token.length).toBeGreaterThan(8);
+  registerSecret(token);
+  tokens.push(token);
+  issued.set(body.credential.credentialId, token);
+  return { credentialId: body.credential.credentialId, token };
 }
 
 async function revoke(credentialId: string): Promise<void> {
@@ -425,7 +442,8 @@ describe.each(FIXTURES)("consumer-deploy.md with the $label fixture", (fixture) 
       "stdin",
       "run",
     ]);
-    const first = await issue(`${fixture.key}-deploy-1`);
+    // Session 11: a deployed server takes a runtime credential (machine-credentials.md, "Two kinds").
+    const first = await issue(`${fixture.key}-deploy-1`, "runtime");
     let second: { credentialId: string; token: string } | undefined;
     const port = String(18_100 + Math.floor(Math.random() * 800));
     for (const block of blocks) {
@@ -443,7 +461,8 @@ describe.each(FIXTURES)("consumer-deploy.md with the $label fixture", (fixture) 
           }),
         );
       } else if (block.mode === "stdin") {
-        if (block.heading === "Rotate the token") second = await issue(`${fixture.key}-deploy-2`);
+        if (block.heading === "Rotate the token")
+          second = await issue(`${fixture.key}-deploy-2`, "runtime");
         await run(host, block, (second ?? first).token);
       } else {
         const result = await run(host, block);
