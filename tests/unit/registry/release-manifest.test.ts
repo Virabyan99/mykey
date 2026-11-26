@@ -151,6 +151,41 @@ describe("release-manifest", () => {
     expect(buildManifest(input(map, results)).problems).toEqual([]);
   });
 
+  it("a consumer rehearsal counts on the candidate's host release only: a green one of another release is refused, and a red one of the candidate's is not green", () => {
+    // Session 11's gate: the rehearsal was red on the candidate, and an older
+    // release's green result still made its four ids PASS.
+    const CONSUMERS = "tests/consumers/x.test.ts";
+    const { map, results } = complete();
+    map.entries["AC-1.20"] = { files: [{ path: CONSUMERS, kind: "consumers" }] };
+    results.results.push(
+      { kind: "consumers", files: [CONSUMERS], green: true, release: "host-v0.7.0" },
+      { kind: "consumers", files: [CONSUMERS], green: false, release: "host-v0.8.0" },
+    );
+    const refused = buildManifest(input(map, results));
+    expect(refused.problems.join("\n")).toMatch(
+      /AC-1\.20: .*the consumers result ran on host-v0\.7\.0, not the candidate's host-v0\.8\.0/,
+    );
+    expect(lineOf(refused.text, "AC-1.20")).not.toMatch(/\bPASS\b/);
+    // An earlier entry that names that release keeps it, as a staging result is kept.
+    map.entries["AC-1.20"].earlier = {
+      evidence: TEST,
+      changedSince: "nothing the rehearsal reads",
+      covering: [CONSUMERS],
+      release: "host-v0.7.0",
+    };
+    expect(buildManifest(input(map, results)).problems).toEqual([]);
+    delete map.entries["AC-1.20"].earlier;
+    results.results.push({
+      kind: "consumers",
+      files: [CONSUMERS],
+      green: true,
+      release: "host-v0.8.0",
+    });
+    const taken = buildManifest(input(map, results));
+    expect(taken.problems).toEqual([]);
+    expect(lineOf(taken.text, "AC-1.20")).toMatch(/\bPASS\b/);
+  });
+
   it("a ci result at a commit that differs from the candidate's in a product path is refused, and one that differs only in the paths P-145 allows is taken", () => {
     const { map } = complete();
     const at = (commit: string): Results => ({

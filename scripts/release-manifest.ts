@@ -9,8 +9,8 @@
 // that ran), docs/evidence/session-8/candidate.json, the registry and Doc 04.
 // It refuses an id with no entry, a file that does not exist, a file with no
 // green result of its kind, a ci result whose commit differs from the
-// candidate's in more than P-145 allows, a staging or cli result of another
-// release, and an "earlier" entry without its evidence, what changed since,
+// candidate's in more than P-145 allows, a staging, consumers or cli result of
+// another release, and an "earlier" entry without its evidence, what changed since,
 // and its covering files. FRs are derived: an FR is PASS when every release
 // scenario of Doc 04 §12 that names it is PASS. The Gate F scenarios and
 // FR-1.98, 1.99 and 1.100 are NOT YET DUE.
@@ -182,10 +182,12 @@ export function buildManifest(input: ManifestInput): Manifest {
         wrong.push(
           `${id}: ${path}: the ci result at ${r.commit.slice(0, 7)} differs from the candidate in ${product.join(", ")}`,
         );
-      } else if (kind === "staging" || kind === "cli") {
-        const wanted = kind === "staging" ? candidate.hostRelease : candidate.cliRelease;
+      } else if (kind === "staging" || kind === "cli" || kind === "consumers") {
+        // A consumer rehearsal runs against staging, so it is a result of the
+        // host release as a staging file's is (Session 11's gate).
+        const wanted = kind === "cli" ? candidate.cliRelease : candidate.hostRelease;
         if (r.release === wanted) return [];
-        if (kind === "staging" && earlierRelease !== undefined && r.release === earlierRelease) {
+        if (kind !== "cli" && earlierRelease !== undefined && r.release === earlierRelease) {
           return [];
         }
         wrong.push(

@@ -39,7 +39,16 @@
   },
   "lastMigration": "0019_automation_and_runtime",
   "hostFilesCommit": "427ddfbdfb590f71064d66747885851c68f8ec2c",
-  "tooling": [],
+  "tooling": [
+    {
+      "path": "tools/agent-runner/",
+      "note": "The agent runner's build context moved to cli-v0.2.0 (Run 11.8): the container of the agent experiment and the agent-guide proof on the workstation; not in any release image."
+    },
+    {
+      "path": ".gitleaksignore",
+      "note": "Six fingerprints of two evidence commits (Run 11.8): credential ids read as generic keys. The secret scan's reviewed false positives; not in any release image."
+    }
+  ],
   "deploys": {
     "staging": {
       "at": "2026-11-26T00:11:54.717Z",
