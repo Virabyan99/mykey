@@ -22,19 +22,19 @@ The project is in **Stage 1**, a 14-day plan of nine sessions.
 
 _Last updated: 26 Nov 2026, at the end of Session 11 (PR #27). Gate F was decided HARDEN (D-74): Stage 1 stays open._
 
-| Session | Topic                                       | State                                   |
-| ------- | ------------------------------------------- | --------------------------------------- |
-| 1       | Foundation                                  | **Done** (PASS WITH ISSUES), merged     |
-| 2       | Infrastructure and make-or-break proofs     | **Done** (GO, no fallback), merged      |
-| 3       | Identity, access and resources              | **Done** (PASS WITH ISSUES), merged     |
-| 4       | Operations engine and secret lifecycle      | **Done** (PASS WITH ISSUES), merged     |
-| 5       | Machine access, CLI and API reference       | **Done** (PASS WITH ISSUES), merged     |
-| 6       | Audit, limits, backup, recovery, deployment | **Done** (PASS WITH ISSUES), merged     |
-| 7       | Web workspace                               | **Done** (PASS WITH ISSUES), merged     |
-| 8       | Security review and controlled-use release  | **Done**, Gate R signed (D-67), merged  |
-| 9       | Real use, agent experiment, stage exit      | **Done**, Gate F: HARDEN (D-74), merged |
-| 10      | Hardening (D-75)                            | **Done**, merged (25 Nov 2026)          |
-| 11      | Runtime and automation credentials (D-80)   | **Done** (PASS WITH ISSUES), PR #27     |
+| Session | Topic                                       | State                                             |
+| ------- | ------------------------------------------- | ------------------------------------------------- |
+| 1       | Foundation                                  | **Done** (PASS WITH ISSUES), merged               |
+| 2       | Infrastructure and make-or-break proofs     | **Done** (GO, no fallback), merged                |
+| 3       | Identity, access and resources              | **Done** (PASS WITH ISSUES), merged               |
+| 4       | Operations engine and secret lifecycle      | **Done** (PASS WITH ISSUES), merged               |
+| 5       | Machine access, CLI and API reference       | **Done** (PASS WITH ISSUES), merged               |
+| 6       | Audit, limits, backup, recovery, deployment | **Done** (PASS WITH ISSUES), merged               |
+| 7       | Web workspace                               | **Done** (PASS WITH ISSUES), merged               |
+| 8       | Security review and controlled-use release  | **Done**, Gate R signed (D-67), merged            |
+| 9       | Real use, agent experiment, stage exit      | **Done**, Gate F: HARDEN (D-74), merged           |
+| 10      | Hardening (D-75)                            | **Done**, merged (25 Nov 2026)                    |
+| 11      | Runtime and automation credentials (D-80)   | **Done** (PASS WITH ISSUES), merged (26 Nov 2026) |
 
 Each session's detail is in `docs/evidence/session-N/report.md`. Gate R's document is `docs/evidence/session-8/gate-r.md`, Gate F's is `docs/evidence/session-9/gate-f.md`.
 
@@ -354,6 +354,8 @@ Scripts in `scripts/` and `infra/` are TypeScript run directly by Node (type str
   - A new upstream CVE can turn it red overnight. Review it, add an entry that gives the reason, and name what is exposed.
 - **The secret scan** must see the whole history and at least one commit. A scanner that crashes or scans nothing fails the `scans` self-test. Reviewed false positives go into `.gitleaksignore` by fingerprint, with the reason above them.
 - **GitGuardian** flags `-e PGPASSWORD postgres` in `tests/harness/stack.ts` (incident 39994924). It is a false positive that only the owner can dismiss, and it is not a required check.
+  - On PR #27 it failed with seven findings, incidents 41121353, 41140388, 41140389, 41141567 and 41141568: the lines `.gitleaksignore` records for Session 11 (a synthetic token literal in `validate.test.ts`, and credential ids in `staging-automation.json` on two commits). No secret; the owner's to dismiss.
+  - Read what it found with `gh api repos/Virabyan99/mykey/check-runs/<id>` (`.output.text` lists commit and file), before a merge.
 - **`cli-matrix`** runs only by hand, at a gate that changed the CLI: `gh workflow run ci --ref <branch> -f jobs=cli-matrix -f cli_release=cli-vX.Y.Z` (about 5 minutes).
   - A CLI release is never changed: a fix is a new version (bump `apps/cli/package.json`).
   - macOS has BSD tools, so the terminal test uses Python's `pty.spawn` there (`MYKEY_TEST_PTY=python` takes that path on Linux).

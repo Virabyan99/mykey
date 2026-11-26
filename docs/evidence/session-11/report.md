@@ -94,6 +94,7 @@
 - **The postgres pin** (Run 11.1): `.trivyignore.images` expires on 14 Dec 2026. Either a fixed image exists by then, or the entries are reviewed and extended.
 - **The new kinds' recovery after a restore** is proven at integration only (S11-11).
 - **Production** gets `host-v0.10.x`, and consumer-1 `cli-v0.2.0`, after W-2 (20 Dec 2026), with the owner's journey. From then production has no way back but a restore.
+- **GitGuardian failed on the pull request** with seven findings, incidents 41121353, 41140388, 41140389, 41141567 and 41141568. They are the lines `.gitleaksignore` records for this session, none a secret (`run-11.9.md`). Only the owner can dismiss them.
 - **NOT PROVEN from earlier sessions:** AC-1.25, AC-1.26, AC-1.36, AC-1.52, AC-1.55.
 
 ## What the next session must know

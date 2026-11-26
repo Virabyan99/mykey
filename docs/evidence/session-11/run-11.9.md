@@ -4,7 +4,7 @@
 
 ## Result
 
-The gate is run. The session's result is PASS WITH ISSUES (`report.md`). The merge waits for the owner's word.
+The gate is run. The session's result is PASS WITH ISSUES (`report.md`). The owner said "merge" on 26 Nov 2026 (`owner-requests.md`).
 
 ## What was done
 
@@ -36,6 +36,15 @@ The full run at `d856896` (45820861908) had integration shard 1 red. That commit
 
 The same shard, run again on the same commit, was green. Both tests depend on the runner's speed. The cause was not looked for: an open issue.
 
+## GitGuardian on the pull request
+
+The check failed with seven findings in 29 commits (it is not a required check). Read before the merge, by commit and file:
+
+- `603fe27`, `tests/unit/cli/validate.test.ts`: the synthetic literal of a token's shape (Run 11.4), assembled at run time since the next commit.
+- `0770d9a` and `d093e4c`, `docs/evidence/session-11/staging-automation.json`, three lines each: two credential ids, catalog row ids, one of them written twice (Run 11.8).
+
+They are the seven lines `.gitleaksignore` records for this session, each reviewed there. No secret is among them. The incidents (41121353, 41140388, 41140389, 41141567 and 41141568) are the owner's to dismiss.
+
 ## The registry
 
 `--apply` sets PASS and never lowers one. While the manifest stood at 159, the registry kept 161 PASS. With the second manifest both say 161.
@@ -57,4 +66,5 @@ The same shard, run again on the same commit, was green. Both tests depend on th
 ## Open issues
 
 - **The two fault tests** that were red once on CI.
+- **GitGuardian's five incidents** of this pull request: the owner's dismissal.
 - Everything else is in `report.md`, "Open issues".
