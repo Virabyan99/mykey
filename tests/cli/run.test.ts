@@ -271,7 +271,8 @@ describe("secrets run", () => {
   // Gate review, Important 1: resolve shares the API's large-request gate (two
   // per process), so instances started together can meet 503 busy. A read has
   // no effect: the CLI asks again, a few times, before anything is started.
-  it("503 busy is asked again before anything starts: busy twice then 200 → the child runs; busy every time → 75 after five requests", async () => {
+  // Session 11 (Run 11.3, D-83): ten requests, so a fleet of one environment starts.
+  it("503 busy is asked again before anything starts: busy twice then 200 → the child runs; busy every time → 75 after ten requests", async () => {
     const busy = errorReply(503, "busy").reply;
     const resolves = (server: CliServer) =>
       server.requests.filter((request) => request.path.endsWith("/resolve")).length;
@@ -285,7 +286,7 @@ describe("secrets run", () => {
     const refused = await runCli(runArgs(), { env: envOf(always), cwd: dirs.cwd });
     expect(refused.code).toBe(75);
     expect(existsSync(marker)).toBe(false);
-    expect(resolves(always)).toBe(5);
+    expect(resolves(always)).toBe(10);
     // Another refusal is never asked again.
     const sealed = await serve({ resolve: errorReply(503, "backend_sealed").reply });
     expect((await runCli(runArgs(), { env: envOf(sealed), cwd: dirs.cwd })).code).toBe(69);

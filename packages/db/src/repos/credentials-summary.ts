@@ -37,7 +37,8 @@ const COUNTS = `
     FROM app.machine_credential c
    WHERE c.organization_id = $1
      -- An issuance that never made a token: the inventory does not list it either.
-     AND NOT (c.state = 'revoked' AND c.accessor IS NULL)
+     -- A runtime credential never has an accessor and is always counted.
+     AND NOT (c.kind = 'token' AND c.state = 'revoked' AND c.accessor IS NULL)
    GROUP BY 1`;
 
 const EXPIRING = `

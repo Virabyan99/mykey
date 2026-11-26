@@ -18,7 +18,7 @@ import {
   type FixtureUser,
   type Tenants,
 } from "../../harness/tenants.ts";
-import { pathIn, requestOf, type PathIds } from "./requests.ts";
+import { pathIn, requestOf, automationClass, type PathIds } from "./requests.ts";
 
 type Outcome = "A" | "D" | "H";
 type TargetName = "p1/e1a" | "p1/e1b" | "p2/e2a" | "B";
@@ -248,9 +248,18 @@ const OPERATION_ROWS: Record<
 };
 
 describe("machine routes (Run 5.4, P-93)", () => {
-  it("both machine routes with each of the seven users' sessions → 401: a session is never a machine credential", async () => {
-    const machine = ROUTES.filter((route) => route.auth === "machine");
-    expect(machine.map((route) => route.id).sort()).toEqual(["machine.keys", "machine.resolve"]);
+  it("every machine route with each of the seven users' sessions → 401: a session is never a machine credential", async () => {
+    // Session 11: machine.metadata is the third, and the exchange (whose bearer
+    // is a client secret, not a token) refuses a session the same way.
+    const machine = ROUTES.filter(
+      (route) => route.auth === "machine" || route.auth === "machine_exchange",
+    );
+    expect(machine.map((route) => route.id).sort()).toEqual([
+      "machine.exchange",
+      "machine.keys",
+      "machine.metadata",
+      "machine.resolve",
+    ]);
     for (const route of machine) {
       const path = route.path.replace(":project", tenants.a.project1).replace(":envName", "dev");
       for (const user of FIXTURE_USERS) {
@@ -259,6 +268,31 @@ describe("machine routes (Run 5.4, P-93)", () => {
           401,
           "unauthenticated",
         ]);
+      }
+    }
+  });
+
+  // Session 11 (Run 11.5): the class's own tests are tests/integration/automation/boundary.test.ts.
+  it("every automation route answers 401 to every user's session, and no stub is reached", async () => {
+    const routes = ROUTES.filter(automationClass);
+    expect(routes).toHaveLength(10);
+    for (const route of routes) {
+      const path = pathIn(route, {
+        org: tenants.a.organizationId,
+        project: tenants.a.project1,
+        env: tenants.a.env1a,
+      });
+      for (const user of FIXTURE_USERS) {
+        const before = api.reached.length;
+        const response = await api.request(route.method, path, {
+          ...requestOf(route),
+          cookie: cookies.get(user)!,
+        });
+        expect([response.status, (await errorOf(response)).code], `${route.id} ${user}`).toEqual([
+          401,
+          "unauthenticated",
+        ]);
+        expect(api.reached.length, route.id).toBe(before);
       }
     }
   });

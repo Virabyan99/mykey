@@ -57,6 +57,12 @@ export function paletteEntries(scope: PaletteScope | null): PaletteEntry[] {
     );
     if (org.role === "owner" || org.role === "admin") {
       entries.push({
+        kind: "page",
+        label: "Automation",
+        to: webPath("automation", o),
+        words: "script provision api tenants",
+      });
+      entries.push({
         kind: "action",
         label: "New project",
         run: "new-project",

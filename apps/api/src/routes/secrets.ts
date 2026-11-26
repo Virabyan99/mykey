@@ -26,6 +26,8 @@ import {
   type SecretRequest,
 } from "@mykey/operations";
 import type pg from "pg";
+import { automationRecheck } from "../pipeline/automation.ts";
+import { actorOf, intentOfCaller } from "../pipeline/caller.ts";
 import { readCursor, signCursor } from "../pipeline/cursor.ts";
 import {
   ApiError,
@@ -34,7 +36,6 @@ import {
   type Handler,
   type HandlerResult,
 } from "../pipeline/context.ts";
-import { intentOf } from "../pipeline/route.ts";
 import { checkStates } from "../pipeline/states.ts";
 
 /** The protocol's dependencies; a process without the runtime identity answers 503. */
@@ -114,7 +115,17 @@ function answerOf(ctx: ApiContext, outcome: SecretOutcome): HandlerResult {
   }
 }
 
-/** The common part of every secret mutation. */
+/**
+ * The admission recheck of the request's caller (Session 11): a person's
+ * authority, or an automation credential's row, right and managed project.
+ */
+export function recheckFor(ctx: ApiContext, scope: EnvironmentScope) {
+  if (ctx.automation !== null) return automationRecheck(ctx.route, ctx.automation, scope);
+  if (ctx.principal === null) throw new ApiError("dependency_unavailable");
+  return recheckOf(ctx, ctx.principal.userId, scope);
+}
+
+/** The common part of every secret mutation, a person's or an automation credential's. */
 async function mutate(
   ctx: ApiContext,
   deps: AppDeps,
@@ -122,23 +133,23 @@ async function mutate(
   name: string,
   fields: Pick<SecretRequest, "value" | "expected" | "sourceVersion">,
 ): Promise<HandlerResult> {
-  const principal = ctx.principal;
+  const actor = actorOf(ctx);
   const scope = ctx.scope as EnvironmentScope | null;
   const key = ctx.idempotencyKey;
-  if (principal === null || scope === null || key === null) {
+  if (actor === null || scope === null || key === null) {
     throw new ApiError("dependency_unavailable");
   }
   const outcome = await runSecretAction(effectDeps(deps), {
     action,
     routeId: ctx.route.id,
     scope,
-    userId: principal.userId,
+    actor,
     name,
     ...fields,
     idempotencyKey: key,
-    intent: intentOf(ctx.route, ctx.params, principal, ctx.body),
+    intent: intentOfCaller(ctx, actor),
     requestId: ctx.requestId,
-    recheck: recheckOf(ctx, principal.userId, scope),
+    recheck: recheckFor(ctx, scope),
   });
   return answerOf(ctx, outcome);
 }

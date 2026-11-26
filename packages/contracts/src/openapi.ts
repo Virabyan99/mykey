@@ -50,6 +50,8 @@ function statusText(status: string): string {
 function security(auth: AuthClass): Json[] {
   if (auth === "human" || auth === "human_fresh_totp") return [{ sessionCookie: [] }];
   if (auth === "machine") return [{ machineBearer: [] }];
+  if (auth === "machine_exchange") return [{ runtimeCredentialBearer: [] }];
+  if (auth === "automation") return [{ automationBearer: [] }];
   return [];
 }
 
@@ -184,6 +186,18 @@ export function buildOpenApiDocument(routes: readonly RouteDef[]): Json {
           type: "http",
           scheme: "bearer",
           description: "Machine credential token. Never accepted together with a session cookie.",
+        },
+        runtimeCredentialBearer: {
+          type: "http",
+          scheme: "bearer",
+          description:
+            "A runtime credential's client secret (it starts with `mkrc.`). Accepted by machine.exchange only, which answers a machine token of 15 minutes for the credential's one environment.",
+        },
+        automationBearer: {
+          type: "http",
+          scheme: "bearer",
+          description:
+            "An automation credential's secret (it starts with `mkac.`). Accepted by the routes under /v1/automation only, from the source networks the credential is bound to. It never reads a value.",
         },
       },
     },

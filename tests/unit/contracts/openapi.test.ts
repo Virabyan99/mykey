@@ -49,14 +49,14 @@ describe("generated OpenAPI document", () => {
     expect(result.valid).toBe(false);
   });
 
-  it("contains all 41 operations, with operationId = route id and {param} paths", () => {
+  it("contains all 57 operations, with operationId = route id and {param} paths", () => {
     const found = new Map<string, string>();
     for (const [path, methods] of Object.entries(document.paths)) {
       for (const [method, candidate] of Object.entries(methods)) {
         found.set(candidate.operationId, `${method.toUpperCase()} ${path}`);
       }
     }
-    expect(found.size).toBe(41);
+    expect(found.size).toBe(57);
     for (const route of ROUTES) {
       expect(found.get(route.id), route.id).toBe(`${route.method} ${openApiPath(route.path)}`);
     }
@@ -115,10 +115,17 @@ describe("generated OpenAPI document", () => {
     expect(resolveOperation.security).toEqual([{ machineBearer: [] }]);
     expect(operation("secrets.list").security).toEqual([{ sessionCookie: [] }]);
     expect(operation("health.get").security).toEqual([]);
+    // Session 11: one scheme per kind of credential, so a client cannot mix them up.
     expect(Object.keys(document.components.securitySchemes).sort()).toEqual([
+      "automationBearer",
       "machineBearer",
+      "runtimeCredentialBearer",
       "sessionCookie",
     ]);
+    expect(operation("machine.exchange").security).toEqual([{ runtimeCredentialBearer: [] }]);
+    expect(operation("machine.metadata").security).toEqual([{ machineBearer: [] }]);
+    expect(operation("automation.projects.create").security).toEqual([{ automationBearer: [] }]);
+    expect(operation("automation_credentials.issue").security).toEqual([{ sessionCookie: [] }]);
     // P-39: the real name of Better Auth's session cookie.
     expect(JSON.stringify(document.components.securitySchemes)).toContain(
       '"name":"__Secure-better-auth.session_token"',

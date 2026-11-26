@@ -251,4 +251,5 @@ const AUTH_BODY_ROUTE = {
   errors: [],
   action: null,
   scope: "none",
+  right: null,
 } as const satisfies RouteDef;

@@ -27,7 +27,31 @@ export const VALID_BODIES: Record<string, unknown> = {
   "credentials.issue": { name: "c" },
   "credentials.revoke": { confirmed: true },
   "auth.reset.complete": { token: "A".repeat(43), newPassword: "a-long-new-password" },
+  // Session 11.
+  "runtime_credentials.issue": { name: "c" },
+  "automation_credentials.issue": {
+    name: "c",
+    rights: ["projects.create"],
+    cidrs: ["192.0.2.0/24"],
+  },
+  "automation_credentials.revoke": { confirmed: true },
+  "automation.projects.create": { name: "New project" },
+  "automation.environments.create": { name: "staging" },
+  "automation.secrets.create": { name: "A", value: "" },
+  "automation.runtime_credentials.issue": { name: "c" },
+  "automation.runtime_credentials.revoke": { confirmed: true },
 };
+
+/**
+ * Session 11: the automation class. Its bearer is an automation credential's
+ * secret (Run 11.5), so a suite that walks the route table with a session
+ * gets 401 from it, like from a machine route; a walk that needs these routes
+ * to pass the pipeline sends them with a credential of its own
+ * (tests/harness/automation.ts).
+ */
+export function automationClass(route: RouteDef): boolean {
+  return route.auth === "automation";
+}
 
 /** A raw dotenv body for the import routes. */
 export const DOTENV_ROUTES = new Set(["import.preview", "import.apply", "import.resume"]);

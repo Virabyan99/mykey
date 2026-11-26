@@ -91,12 +91,38 @@ const LIFECYCLE: ReadonlySet<string> = new Set([
   "environments.archive",
   "environments.reactivate",
   "credentials.revoke",
+  // Session 11: revoking an automation credential, and a runtime credential by automation.
+  "automation_credentials.revoke",
+  "automation.runtime_credentials.revoke",
 ]);
 
+/** Session 11: issuing a credential for an environment, whoever asks and whichever kind. */
+const CREDENTIAL_ISSUE: ReadonlySet<string> = new Set([
+  "credentials.issue",
+  "runtime_credentials.issue",
+  "automation.runtime_credentials.issue",
+]);
+
+/**
+ * Session 11: an automation route has no action, so its class is that of the
+ * human route it stands beside. Every read is a read of metadata: no
+ * automation route reads a value.
+ */
+const AUTOMATION_WRITES: Readonly<Record<string, StateClass>> = {
+  "automation.projects.create": "metadata_write",
+  "automation.environments.create": "metadata_write",
+  "automation.secrets.create": "secret_write",
+};
+
 export function stateClassOf(route: RouteDef): StateClass {
-  if (route.auth !== "human" && route.auth !== "human_fresh_totp") return "none";
   if (LIFECYCLE.has(route.id)) return "lifecycle";
-  if (route.id === "credentials.issue") return "credential_issue";
+  if (CREDENTIAL_ISSUE.has(route.id)) return "credential_issue";
+  if (route.auth === "automation") {
+    return route.method === "GET" ? "metadata_read" : (AUTOMATION_WRITES[route.id] ?? "none");
+  }
+  if (route.auth !== "human" && route.auth !== "human_fresh_totp") return "none";
+  // The organization's state answers before an automation credential is issued in it.
+  if (route.id === "automation_credentials.issue") return "metadata_write";
   switch (route.action) {
     case "secrets.read":
     case "secrets.history":

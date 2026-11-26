@@ -53,6 +53,9 @@ CVE-2026-71200 exp:2026-12-14 # HIGH
 # default gzip (restic compresses on its own).
 # Moving the pin is a runtime image change after Gate R (D-69): the owner chose on 2026-11-25
 # to ignore it now and move the postgres pin in the next session, with a release and deploys.
+# Re-reviewed 2026-11-25 in Run 11.1: the newest official image (18.7, rebuilt 2026-11-24,
+# sha256:c6993038…) clears the krb5 and zlib entries above but still ships zstd 1.5.7+dfsg-1.
+# No image with this fix exists yet, so the pin did not move.
 CVE-2026-124851 exp:2026-12-14 # HIGH
 
 # postgres 18.6 — usr/local/bin/gosu

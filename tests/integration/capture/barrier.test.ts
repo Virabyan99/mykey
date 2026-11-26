@@ -7,10 +7,16 @@
 // access continue and leave a backup_invalidation row behind.
 import { randomUUID } from "node:crypto";
 import { operationSweepPass } from "@mykey/api";
-import { EXPANDING_ROUTES, ROUTES, type RouteDef } from "@mykey/contracts";
+import { AUTOMATION_RIGHTS, EXPANDING_ROUTES, ROUTES, type RouteDef } from "@mykey/contracts";
 import type pg from "pg";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { signInComplete } from "../../harness/api.ts";
+import {
+  AUTOMATION_ROUTES,
+  automationCall,
+  clearAutomation,
+  issueAutomationFor,
+} from "../../harness/automation.ts";
 import {
   createCredentialsFixture,
   issueFor,
@@ -18,7 +24,7 @@ import {
 } from "../../harness/credentials-fixture.ts";
 import { accessorAnswer, archive, newProject } from "../../harness/lifecycle-fixture.ts";
 import { machineCall } from "../../harness/machine.ts";
-import { pathIn, requestOf } from "../authz/requests.ts";
+import { pathIn, requestOf, automationClass } from "../authz/requests.ts";
 
 let f: CredentialsFixture;
 
@@ -217,6 +223,8 @@ async function everyClosedRoute(): Promise<Map<string, { status: number; body: s
     (candidate) => EXPANDING_ROUTES.has(candidate.id) || candidate.id === "session.activity",
   )) {
     if (def.auth === "reset_flow") continue;
+    // Session 11: sent with their own bearer (their own test below).
+    if (automationClass(def)) continue;
     const request = requestOf(def);
     const response = await f.api.request(def.method, pathIn(def, ids()), { ...request, cookie });
     answers.set(def.id, { status: response.status, body: await response.text() });
@@ -249,7 +257,17 @@ describe("the API while a pair is captured", () => {
       await setMode(mode);
       const before = await footprint();
       const answers = await everyClosedRoute();
-      expect(answers.size).toBe(EXPANDING_ROUTES.size + 2);
+      // Session 11: the expanding automation routes are not in this walk (the next test).
+      const unauthenticated = ROUTES.filter(
+        (candidate) => EXPANDING_ROUTES.has(candidate.id) && automationClass(candidate),
+      );
+      expect(unauthenticated.map((candidate) => candidate.id)).toEqual([
+        "automation.projects.create",
+        "automation.environments.create",
+        "automation.secrets.create",
+        "automation.runtime_credentials.issue",
+      ]);
+      expect(answers.size).toBe(EXPANDING_ROUTES.size + 2 - unauthenticated.length);
       for (const [id, answer] of answers) {
         expect(answer.status, `${id}: ${answer.body}`).toBe(503);
         expect((JSON.parse(answer.body) as { error: { code: string } }).error.code, id).toBe(
@@ -257,6 +275,44 @@ describe("the API while a pair is captured", () => {
         );
       }
       expect(await footprint()).toEqual(before);
+    }, 300_000);
+
+    // Session 11 (Run 11.5): an automation request meets the barrier as a person's does.
+    it(`${mode}: every automation mutation but the revocation answers 503 busy and wrote nothing; a session is 401`, async () => {
+      const automation = await issueAutomationFor(f, { rights: [...AUTOMATION_RIGHTS] });
+      await f.api.superuser.query("UPDATE app.project SET managed_by = $2 WHERE id = $1", [
+        ids().project,
+        automation.ownerId,
+      ]);
+      try {
+        await setMode(mode);
+        const before = await footprint();
+        const own = { project: ids().project, env: ids().env };
+        const mutations = AUTOMATION_ROUTES.filter((def) => def.method !== "GET");
+        expect(mutations).toHaveLength(5);
+        for (const def of mutations) {
+          const answer = await automationCall(f, def.id, { secret: automation.secret, ids: own });
+          if (def.id === "automation.runtime_credentials.revoke") {
+            // A revocation reduces access: the barrier lets it through, and the
+            // credential it names (a random id) is nobody's.
+            expect([answer.status, answer.code], def.id).toEqual([404, "not_found"]);
+          } else {
+            expect([answer.status, answer.code], def.id).toEqual([503, "busy"]);
+          }
+        }
+        expect(await footprint()).toEqual(before);
+        for (const def of ROUTES.filter(automationClass)) {
+          const response = await f.api.request(def.method, pathIn(def, ids()), {
+            ...requestOf(def),
+            cookie: await f.tenants.cookie("ownerA"),
+          });
+          expect(response.status, def.id).toBe(401);
+        }
+        expect(await footprint()).toEqual(before);
+      } finally {
+        await setMode("idle");
+        await clearAutomation(f);
+      }
     }, 300_000);
 
     it(`${mode}: lists, history, reveal, export and machine resolve are served with their audit rows`, async () => {

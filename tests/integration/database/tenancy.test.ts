@@ -171,6 +171,31 @@ describe("tenant boundaries are enforced by the database", () => {
     ).toBe(FOREIGN_KEY);
   });
 
+  // Session 11 (migration 0019, P-193): a chain and its projects stay inside one organization.
+  it("rejects a project in A managed by B's automation credential, and a chain across organizations", async () => {
+    const insertAutomation = `INSERT INTO app.automation_credential
+        (id, organization_id, owner_id, name, rights, bound_cidrs, verifier, verifier_key_id, state,
+         expires_at, issued_by, issuance_operation_id)
+      VALUES ($1, $2, $3, 'provisioner', '{projects.create}', '{192.0.2.0/24}', decode(repeat('00', 32), 'hex'),
+              'k1', 'active', now() + interval '7 days', gen_random_uuid(), gen_random_uuid())`;
+    const ofA = randomUUID();
+    const ofB = randomUUID();
+    await run(maintenance(), insertAutomation, [ofA, a.organization, ofA]);
+    await run(maintenance(), insertAutomation, [ofB, b.organization, ofB]);
+
+    const managed =
+      "INSERT INTO app.project (id, organization_id, name, state, managed_by) VALUES (gen_random_uuid(), $1, 'managed', 'active', $2)";
+    expect(await attempt(maintenance(), managed, [a.organization, ofA])).toBe("ok");
+    expect(await attempt(maintenance(), managed, [a.organization, ofB])).toBe(FOREIGN_KEY);
+    // A credential of A cannot join B's chain.
+    expect(
+      await attempt(maintenance(), insertAutomation, [randomUUID(), a.organization, ofA]),
+    ).toBe("ok");
+    expect(
+      await attempt(maintenance(), insertAutomation, [randomUUID(), a.organization, ofB]),
+    ).toBe(FOREIGN_KEY);
+  });
+
   it("allows the same project and environment names in two organizations", async () => {
     const names = await run<{ count: string }>(
       db.pool("superuser"),

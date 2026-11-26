@@ -6,7 +6,16 @@ import { ROUTES } from "@mykey/contracts";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
-const CREDENTIAL_FIELDS = new Set(["token", "secretId", "accessor", "client_token"]);
+const CREDENTIAL_FIELDS = new Set([
+  "token",
+  "secretId",
+  "accessor",
+  "client_token",
+  // Session 11 (P-185): the two presented secrets, and what must never be served.
+  "clientSecret",
+  "secret",
+  "verifier",
+]);
 
 /** Every property name of a JSON schema whose value can be a string, with its path. */
 function credentialFields(schema: unknown, path: string, found: string[]): void {
@@ -25,7 +34,7 @@ function credentialFields(schema: unknown, path: string, found: string[]): void 
 }
 
 describe("credential fields in responses", () => {
-  it("only the 201 of credentials.issue holds a token", () => {
+  it("only the issue routes and the exchange hold a credential, each once (Session 11: five)", () => {
     const found: string[] = [];
     for (const route of ROUTES) {
       for (const [status, schema] of Object.entries(route.responses)) {
@@ -34,7 +43,13 @@ describe("credential fields in responses", () => {
         credentialFields(json, `${route.id} ${status}`, found);
       }
     }
-    expect(found).toEqual(["credentials.issue 201.token"]);
+    expect(found).toEqual([
+      "credentials.issue 201.token",
+      "machine.exchange 200.token",
+      "runtime_credentials.issue 201.clientSecret",
+      "automation_credentials.issue 201.secret",
+      "automation.runtime_credentials.issue 201.clientSecret",
+    ]);
   });
 
   it("the walker finds a nested field (control)", () => {

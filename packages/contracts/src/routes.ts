@@ -2,6 +2,12 @@
 // routes; none adds, renames or removes one without a `contract:` commit.
 import { z } from "zod";
 import type { Action, RouteScope } from "./authz.ts";
+import {
+  AUTOMATION_RIGHTS,
+  CIDR_TEXT_MAX_LENGTH,
+  CIDR_TEXT_PATTERN,
+  type AutomationRight,
+} from "./automation.ts";
 import { DOTENV_RULES } from "./dotenv/parse.ts";
 import type { ErrorCode } from "./errors.ts";
 import { environmentIdSchema } from "./ids.ts";
@@ -23,9 +29,18 @@ export type HttpMethod = "GET" | "POST" | "PATCH";
 /**
  * Who may call a route. `human_fresh_totp` is a human session with a TOTP
  * verification inside the last ten minutes; `reset_flow` is the password-reset
- * flow, which carries its own proof in the body.
+ * flow, which carries its own proof in the body. Session 11 (D-80):
+ * `machine_exchange` presents a runtime credential's client secret and gets a
+ * short-lived machine token; `automation` presents an automation credential.
  */
-export type AuthClass = "public" | "human" | "human_fresh_totp" | "machine" | "reset_flow";
+export type AuthClass =
+  | "public"
+  | "human"
+  | "human_fresh_totp"
+  | "machine"
+  | "machine_exchange"
+  | "automation"
+  | "reset_flow";
 
 /** A body the owning run has not specified yet. */
 export const PENDING = "pending";
@@ -58,6 +73,12 @@ export interface RouteDef {
   readonly action: Action | null;
   /** The deepest resource the path names, for human routes; `none` for other classes. */
   readonly scope: RouteScope;
+  /**
+   * What an automation route asks of its caller's credential (P-192): one
+   * right, or `any` for a read that comes with every right. Null for every
+   * other class.
+   */
+  readonly right: AutomationRight | "any" | null;
 }
 
 export const DENIED_ALIASES: readonly { readonly method: HttpMethod; readonly path: string }[] =
@@ -192,7 +213,8 @@ const secretsListBody = z.strictObject({
   nextCursor: z.string().nullable(),
 });
 const historyActor = z.strictObject({
-  kind: z.enum(["user", "operator", "system", "unknown"]),
+  // `machine` (Session 11, P-191): an automation credential wrote the version.
+  kind: z.enum(["user", "operator", "system", "unknown", "machine"]),
   id: z.string().nullable(),
 });
 /** secrets.history: newest version first, at most the twenty OpenBao keeps. */
@@ -409,22 +431,40 @@ const projectsBody = z.strictObject({
       state: resourceState,
       reviewReason: z.string().nullable(),
       createdAt: z.iso.datetime(),
+      /**
+       * Session 11 (P-193): the first automation credential of the chain that
+       * manages the project, or null for a project a person made.
+       */
+      managedBy: z.uuid().nullable(),
     }),
   ),
   nextCursor: z.string().nullable(),
 });
+const environmentRow = z.strictObject({
+  id: z.uuid(),
+  name: z.string(),
+  state: resourceState,
+  reviewReason: z.string().nullable(),
+  kvReady: z.boolean(),
+  createdAt: z.iso.datetime(),
+});
 const environmentsBody = z.strictObject({
-  environments: z.array(
-    z.strictObject({
-      id: z.uuid(),
-      name: z.string(),
-      state: resourceState,
-      reviewReason: z.string().nullable(),
-      kvReady: z.boolean(),
-      createdAt: z.iso.datetime(),
-    }),
-  ),
+  environments: z.array(environmentRow),
   nextCursor: z.string().nullable(),
+});
+/**
+ * automation.projects.get (Session 11): one managed project with its
+ * environments, so a client can wait for `kvReady` with one request.
+ */
+const automationProjectBody = z.strictObject({
+  id: z.uuid(),
+  name: z.string(),
+  state: resourceState,
+  reviewReason: z.string().nullable(),
+  createdAt: z.iso.datetime(),
+  environments: z.array(environmentRow).max(LIMITS.listing.maxLimit),
+  /** True when the project has more environments than the answer holds. */
+  truncated: z.boolean(),
 });
 
 /**
@@ -511,12 +551,151 @@ const credentialView = z.strictObject({
   expiresAt: z.iso.datetime().nullable(),
   expiringSoon: z.boolean(),
   lastUsedAt: z.iso.datetime().nullable(),
+  /**
+   * Session 11 (P-186): `token` is the 30-day machine token; `runtime` is a
+   * client secret that `machine.exchange` turns into short-lived tokens.
+   */
+  kind: z.enum(["token", "runtime"]),
+  /** Who issued it: a person, or an automation credential (then `issuedBy` is that credential). */
+  issuedByKind: z.enum(["user", "automation"]),
+  /** The source networks a runtime credential is bound to; empty when unbound. */
+  boundCidrs: z.array(z.string()),
 });
-/** credentials.issue (FR-1.41, P-88): the one response of the contract that holds a token. */
+/** credentials.issue (FR-1.41, P-88): the one response of the contract that holds an OpenBao token of 30 days. */
 const credentialIssuedBody = z.strictObject({
   operationId: z.uuid(),
   credential: credentialView,
   token: z.string().min(1),
+});
+
+// ------------------------------------------------ Session 11 (D-80): new bodies
+
+const cidr = z
+  .string()
+  .max(CIDR_TEXT_MAX_LENGTH)
+  .regex(CIDR_TEXT_PATTERN)
+  .describe(
+    "An IPv4 or IPv6 network in CIDR form, with no host bits set and a prefix longer than 0.",
+  );
+const distinct = (list: readonly string[]) => new Set(list).size === list.length;
+
+/** runtime_credentials.issue, for a person and for automation: the same body. */
+const runtimeIssueBody = z.strictObject({
+  name: projectName,
+  ttlSeconds: z
+    .int()
+    .positive()
+    .max(LIMITS.runtimeCredential.maxTtlSeconds)
+    .default(LIMITS.runtimeCredential.defaultTtlSeconds),
+  cidrs: z.array(cidr).max(LIMITS.runtimeCredential.maxCidrs).default([]),
+});
+/** The one answer that holds a runtime credential's client secret (P-185). */
+const runtimeIssuedBody = z.strictObject({
+  operationId: z.uuid(),
+  credential: credentialView,
+  clientSecret: z.string().min(1),
+});
+
+/**
+ * An automation credential as the owner's list shows it: never its secret,
+ * never its verifier. An `active` credential past its expiry shows as `expired`.
+ */
+export const AUTOMATION_CREDENTIAL_STATES = ["active", "revoked", "expired"] as const;
+const automationCredentialView = z.strictObject({
+  credentialId: z.uuid(),
+  /** The first credential of its chain (P-193); its own id when it replaces none. */
+  ownerId: z.uuid(),
+  name: z.string(),
+  rights: z.array(z.enum(AUTOMATION_RIGHTS)),
+  boundCidrs: z.array(z.string()),
+  state: z.enum(AUTOMATION_CREDENTIAL_STATES),
+  issuedBy: z.uuid(),
+  issuedAt: z.iso.datetime(),
+  expiresAt: z.iso.datetime(),
+  expiringSoon: z.boolean(),
+  /** Null when it was never used. */
+  lastUsedAt: z.iso.datetime().nullable(),
+  /** How many projects its chain manages. */
+  managedProjects: z.int().nonnegative(),
+});
+const automationIssueBody = z.strictObject({
+  name: projectName,
+  rights: z
+    .array(z.enum(AUTOMATION_RIGHTS))
+    .min(1)
+    .max(AUTOMATION_RIGHTS.length)
+    .refine(distinct)
+    .describe("One to three distinct rights."),
+  ttlSeconds: z
+    .int()
+    .min(LIMITS.automationCredential.minTtlSeconds)
+    .max(LIMITS.automationCredential.maxTtlSeconds)
+    .default(LIMITS.automationCredential.defaultTtlSeconds),
+  cidrs: z.array(cidr).min(1).max(LIMITS.automationCredential.maxCidrs),
+  /** An earlier credential whose chain, and so whose projects, the new one joins (P-193). */
+  replaces: z.uuid().optional(),
+});
+/** The one answer that holds an automation credential's secret (P-185). */
+const automationIssuedBody = z.strictObject({
+  operationId: z.uuid(),
+  credential: automationCredentialView,
+  secret: z.string().min(1),
+});
+const automationCredentialsListBody = z.strictObject({
+  credentials: z.array(automationCredentialView),
+  nextCursor: z.string().nullable(),
+});
+
+/**
+ * automation.secrets.list (Session 11): the index's view of each name, with
+ * its times. Never a value, a digest or a state tag. `createdAt` is null when
+ * the first write of the name is not on record.
+ */
+const automationSecretsBody = z.strictObject({
+  secrets: z.array(
+    z.strictObject({
+      name: z.string(),
+      state: indexState,
+      version: z.int().positive().nullable(),
+      createdAt: z.iso.datetime().nullable(),
+      updatedAt: z.iso.datetime(),
+    }),
+  ),
+  nextCursor: z.string().nullable(),
+});
+
+/**
+ * machine.metadata (Session 11): every live name of one generation with its
+ * version and times, bytewise order; never a value. A new route beside
+ * `machine.keys`, whose strict body shipped clients parse.
+ */
+const metadataBody = z.strictObject({
+  apiMajor: z.int().positive(),
+  environmentId: environmentIdSchema,
+  generation: generationText,
+  count: z.int().nonnegative(),
+  entries: z.array(
+    z.strictObject({
+      name: z.string(),
+      /** Null only when the index holds none for a live name (it says unknown, never a guess). */
+      version: z.int().positive().nullable(),
+      createdAt: z.iso.datetime().nullable(),
+      updatedAt: z.iso.datetime(),
+    }),
+  ),
+  complete: z.literal(true),
+});
+
+/**
+ * machine.exchange (Session 11, P-187): a short-lived, non-renewable machine
+ * token for the runtime credential's one environment, and where it belongs.
+ */
+const exchangeBody = z.strictObject({
+  apiMajor: z.int().positive(),
+  token: z.string().min(1),
+  expiresAt: z.iso.datetime(),
+  projectId: z.uuid(),
+  environmentName: z.string(),
 });
 /** credentials.revoke (Run 5.2, P-89): the envelope of a revocation proven in the backend. */
 const credentialRevokedBody = operationResponseSchema.extend({
@@ -586,6 +765,19 @@ const MACHINE: readonly ErrorCode[] = [
   "forbidden_selector",
   "dependency_unavailable",
 ];
+/**
+ * Session 11: an automation request. No selector rule (its routes take
+ * bodies and queries); the organization's and the resources' states answer on
+ * every one of them, as on a scoped human route (P-53).
+ */
+const AUTOMATION: readonly ErrorCode[] = [
+  "mixed_authentication",
+  "unauthenticated",
+  "action_denied",
+  "dependency_unavailable",
+  "state_conflict",
+  "backend_inconsistent",
+];
 const IDEMPOTENT: readonly ErrorCode[] = [
   "precondition_required",
   "idempotency_conflict",
@@ -615,6 +807,8 @@ interface RouteInput {
   errors?: readonly ErrorCode[];
   /** Required for a human route (`null` when seeing the target is enough). */
   action?: Action | null;
+  /** Required for an automation route, and for no other. */
+  right?: AutomationRight | "any";
 }
 
 function scopeOf(auth: AuthClass, path: string): RouteScope {
@@ -650,9 +844,14 @@ function define(
   if (id !== "health.get") add(EVERY);
   if (auth === "human" || auth === "human_fresh_totp") add(SESSION);
   if (auth === "machine") add(MACHINE);
+  // The exchange mints through the issuer and audits before it answers (P-187).
+  if (auth === "machine_exchange") add([...MACHINE, "audit_unavailable", ...BACKEND]);
+  if (auth === "automation") add(AUTOMATION);
   if (auth === "human_fresh_totp") add(["fresh_verification_required"]);
   if (auth === "reset_flow") add(["unauthenticated", "dependency_unavailable"]);
-  if (auth !== "public" && auth !== "machine" && method !== "GET") add(["origin_rejected"]);
+  // A bearer credential is not sent by a browser on its own: no Origin rule for the three bearer classes.
+  const bearer = auth === "machine" || auth === "machine_exchange" || auth === "automation";
+  if (auth !== "public" && !bearer && method !== "GET") add(["origin_rejected"]);
   if (path.includes("/:")) add(["not_found"]);
   if (input.body !== undefined || input.query !== undefined) add(["validation_failed"]);
   if (id.endsWith(".list")) add(["listing_changed"]);
@@ -664,6 +863,11 @@ function define(
   const human = auth === "human" || auth === "human_fresh_totp";
   if (human && input.action === undefined) throw new Error(`route ${id} has no action`);
   if (!human && input.action != null) throw new Error(`route ${id} is not a human route`);
+  if (auth === "automation" && input.right === undefined)
+    throw new Error(`route ${id} has no right`);
+  if (auth !== "automation" && input.right !== undefined) {
+    throw new Error(`route ${id} is not an automation route`);
+  }
 
   const request: { body?: RequestBody; query?: z.ZodObject } = {};
   if (input.body !== undefined) request.body = input.body;
@@ -684,6 +888,7 @@ function define(
     errors: Object.freeze([...errors]),
     action: input.action ?? null,
     scope: scopeOf(auth, path),
+    right: input.right ?? null,
   });
 }
 
@@ -691,6 +896,11 @@ const O = "/v1/organizations/:org";
 const P = `${O}/projects/:project`;
 const E = `${P}/environments/:env`;
 const M = "/v1/machine/projects/:project/environments/:envName";
+// Session 11 (P-194): the organization is the process's own (D-34), so no :org;
+// a project and an environment are named by id.
+const A = "/v1/automation";
+const AP = `${A}/projects/:project`;
+const AE = `${AP}/environments/:env`;
 
 const health = { 200: healthBody, 503: healthBody };
 const operation = { 200: operationResponseSchema };
@@ -944,6 +1154,174 @@ export const ROUTES: readonly RouteDef[] = Object.freeze([
     responses: { 200: resolveBody },
     errors: ["environment_changed", "capacity_exceeded", ...VALUE_READ],
   }),
+
+  // ------------------------------------------------------------------------
+  // Session 11 (D-80; D-15's amendment): 41 → 57. Everything above is as it was.
+
+  // Version and times of every live name, from the index: no value is read.
+  define("machine.metadata", "GET", `${M}/metadata`, "machine", false, "11.3", {
+    responses: { 200: metadataBody },
+    errors: ["key_under_review", ...BACKEND],
+  }),
+  // The bearer is a runtime credential's client secret, not a token. No body and
+  // no query: a selector is refused as on every machine route.
+  define("machine.exchange", "POST", "/v1/machine/exchange", "machine_exchange", false, "11.3", {
+    responses: { 200: exchangeBody },
+  }),
+  define(
+    "runtime_credentials.issue",
+    "POST",
+    `${E}/runtime-credentials`,
+    "human_fresh_totp",
+    true,
+    "11.3",
+    {
+      action: "credentials.manage",
+      body: runtimeIssueBody,
+      completed: 201,
+      responses: { 201: runtimeIssuedBody },
+      errors: ["capacity_exceeded", "credential_not_replayable", "state_conflict"],
+    },
+  ),
+
+  define(
+    "automation_credentials.list",
+    "GET",
+    `${O}/automation-credentials`,
+    "human",
+    false,
+    "11.5",
+    {
+      action: "credentials.manage",
+      query: pageQuery,
+      responses: { 200: automationCredentialsListBody },
+    },
+  ),
+  define(
+    "automation_credentials.issue",
+    "POST",
+    `${O}/automation-credentials`,
+    "human_fresh_totp",
+    true,
+    "11.5",
+    {
+      action: "credentials.manage",
+      body: automationIssueBody,
+      completed: 201,
+      responses: { 201: automationIssuedBody },
+      // `not_found` (listed for `:org`) is also the answer when `replaces` names no credential of the organization.
+      errors: ["capacity_exceeded", "credential_not_replayable"],
+    },
+  ),
+  define(
+    "automation_credentials.revoke",
+    "POST",
+    `${O}/automation-credentials/:credential/revoke`,
+    "human",
+    true,
+    "11.5",
+    {
+      action: "credentials.manage",
+      body: confirmedBody,
+      responses: { 200: credentialRevokedBody },
+    },
+  ),
+
+  define("automation.projects.list", "GET", `${A}/projects`, "automation", false, "11.5", {
+    right: "any",
+    query: pageQuery,
+    responses: { 200: projectsBody },
+  }),
+  define("automation.projects.create", "POST", `${A}/projects`, "automation", true, "11.5", {
+    right: "projects.create",
+    body: nameBody(projectName),
+    completed: 201,
+    errors: ["capacity_exceeded", "already_exists"],
+  }),
+  define("automation.projects.get", "GET", AP, "automation", false, "11.5", {
+    right: "any",
+    responses: { 200: automationProjectBody },
+  }),
+  define(
+    "automation.environments.create",
+    "POST",
+    `${AP}/environments`,
+    "automation",
+    true,
+    "11.5",
+    {
+      right: "projects.create",
+      body: nameBody(environmentName),
+      completed: 201,
+      errors: ["capacity_exceeded", "already_exists", ...BACKEND],
+    },
+  ),
+  define("automation.secrets.list", "GET", `${AE}/secrets`, "automation", false, "11.5", {
+    right: "any",
+    query: secretsListQuery,
+    responses: { 200: automationSecretsBody },
+  }),
+  // Create-only (rule 7): an existing name is 409 already_exists and nothing changes.
+  define("automation.secrets.create", "POST", `${AE}/secrets`, "automation", true, "11.5", {
+    right: "secrets.create",
+    body: z.strictObject({ name: secretName, value: secretValue }),
+    completed: 201,
+    errors: ["already_exists", "capacity_exceeded", ...KEY_WRITE],
+  }),
+  define(
+    "automation.runtime_credentials.list",
+    "GET",
+    `${AE}/runtime-credentials`,
+    "automation",
+    false,
+    "11.5",
+    {
+      right: "runtime_credentials.manage",
+      query: pageQuery,
+      responses: { 200: credentialsListBody },
+    },
+  ),
+  define(
+    "automation.runtime_credentials.issue",
+    "POST",
+    `${AE}/runtime-credentials`,
+    "automation",
+    true,
+    "11.5",
+    {
+      right: "runtime_credentials.manage",
+      body: runtimeIssueBody,
+      completed: 201,
+      responses: { 201: runtimeIssuedBody },
+      errors: ["capacity_exceeded", "credential_not_replayable"],
+    },
+  ),
+  define(
+    "automation.runtime_credentials.revoke",
+    "POST",
+    `${AE}/runtime-credentials/:credential/revoke`,
+    "automation",
+    true,
+    "11.5",
+    {
+      right: "runtime_credentials.manage",
+      body: confirmedBody,
+      responses: { 200: credentialRevokedBody },
+    },
+  ),
+  // Its own operations only; another caller's operation is the same 404 as an absent one.
+  define(
+    "automation.operations.get",
+    "GET",
+    `${A}/operations/:operation`,
+    "automation",
+    false,
+    "11.5",
+    {
+      right: "any",
+      responses: operation,
+    },
+  ),
 ]);
 
 // The types of the bodies above, for the owner workspace (Session 7, P-136).
@@ -965,6 +1343,17 @@ export type SessionActivityBody = z.infer<typeof activityBody>;
 export type OverviewBody = z.infer<typeof overviewBody>;
 export type CredentialsSummaryBody = z.infer<typeof credentialsSummaryBody>;
 export type MetricsBody = z.infer<typeof metricsBody>;
+// Session 11.
+export type RuntimeIssuedBody = z.infer<typeof runtimeIssuedBody>;
+export type AutomationCredentialView = z.infer<typeof automationCredentialView>;
+export type AutomationIssuedBody = z.infer<typeof automationIssuedBody>;
+export type AutomationCredentialsListBody = z.infer<typeof automationCredentialsListBody>;
+export type AutomationProjectBody = z.infer<typeof automationProjectBody>;
+export type AutomationSecretsBody = z.infer<typeof automationSecretsBody>;
+export type MachineMetadataBody = z.infer<typeof metadataBody>;
+
+/** The exchange's body, for the CLI's validator (Run 11.4). */
+export { exchangeBody as machineExchangeBody };
 
 /** The two machine bodies, for the CLI's validator (Run 5.5, P-96). */
 export { keysBody as machineKeysBody, resolveBody as machineResolveBody };

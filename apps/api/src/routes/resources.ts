@@ -16,12 +16,16 @@ import {
   renameProject,
   resourceGeneration,
   withTransaction,
+  type EnvironmentRow,
   type EnvironmentScope,
+  type ListedProject,
   type OrgScope,
   type ProjectScope,
 } from "@mykey/db";
 import { beginOperation, operationResponse } from "@mykey/operations";
 import type pg from "pg";
+import { automationRecheck } from "../pipeline/automation.ts";
+import { actorOf } from "../pipeline/caller.ts";
 import { readCursor, signCursor } from "../pipeline/cursor.ts";
 import { ApiError, type ApiContext, type AppDeps, type Handler } from "../pipeline/context.ts";
 
@@ -40,15 +44,22 @@ function resourceCode(state: string | null): ErrorCode | null {
   return state === "pending" || state === "active" ? null : "state_conflict";
 }
 
+/**
+ * Who changes, where and under which key. Session 11: the caller is a person
+ * or an automation credential (a machine actor), whose credential, right and
+ * managed project are checked again inside the change.
+ */
 function requireContext(ctx: ApiContext, deps: AppDeps) {
-  const principal = ctx.principal;
+  const actor = actorOf(ctx);
   const scope = ctx.scope;
   const key = ctx.idempotencyKey;
   const ring = deps.auth?.keys.replayFingerprint;
-  if (principal === null || scope === null || key === null || ring === undefined) {
+  if (actor === null || scope === null || key === null || ring === undefined) {
     throw new ApiError("dependency_unavailable");
   }
-  return { principal, scope, key, ring };
+  const recheck =
+    ctx.automation === null ? null : automationRecheck(ctx.route, ctx.automation, scope);
+  return { actor, scope, key, ring, recheck };
 }
 
 /** The common part of every create and rename. */
@@ -59,12 +70,12 @@ async function mutate(
   creates: boolean,
   work: (tx: pg.PoolClient) => Promise<Done>,
 ): Promise<{ status: number; body: unknown }> {
-  const { principal, scope, key, ring } = requireContext(ctx, deps);
+  const { actor, scope, key, ring, recheck } = requireContext(ctx, deps);
   const completed = 201 in ctx.route.responses ? 201 : 200;
   return withTransaction(deps.pool, async (tx) => {
     const begin = await beginOperation(tx, ring, {
-      principalKind: "user",
-      principalId: principal.userId,
+      principalKind: actor.kind,
+      principalId: actor.id,
       action: ctx.route.id,
       target,
       idempotencyKey: key,
@@ -100,6 +111,9 @@ async function mutate(
       ("projectId" in scope ? resourceCode(parents.project) : null) ??
       ("environmentId" in scope ? resourceCode(parents.environment) : null);
     if (code !== null) throw new ApiError(code);
+    // An automation caller (FR-1.10): its credential, its right and the project its chain manages, now.
+    const refused = recheck === null ? null : await recheck(tx);
+    if (refused !== null) throw new ApiError(refused);
 
     const done = await work(tx);
     const row = await completeOperation(
@@ -111,7 +125,7 @@ async function mutate(
     if (done.audit !== null) {
       await appendAudit(tx, {
         action: done.audit.action,
-        actor: { kind: "user", id: principal.userId },
+        actor,
         source: "api",
         organizationId: scope.organizationId,
         target: { kind: done.audit.kind, id: done.audit.id },
@@ -134,7 +148,13 @@ export const projectsCreateHandler: Handler = (ctx, deps) => {
     const projectId = randomUUID() as ProjectId;
     const developmentEnvironmentId = randomUUID() as EnvironmentId;
     const name = nameOf(ctx);
-    const outcome = await createProject(tx, scope, { projectId, name, developmentEnvironmentId });
+    const outcome = await createProject(tx, scope, {
+      projectId,
+      name,
+      developmentEnvironmentId,
+      // Session 11 (P-193): a project made by automation is managed by its maker's chain.
+      managedBy: ctx.automation?.ownerId ?? null,
+    });
     if (outcome === "name_taken") throw new ApiError("already_exists");
     return {
       result: { projectId, developmentEnvironmentId },
@@ -197,7 +217,7 @@ interface Page {
 }
 
 /** The page's start and the generation its cursor must carry; 400 or 409 when the cursor does not fit. */
-async function pageStart(
+export async function pageStart(
   ctx: ApiContext,
   deps: AppDeps,
   scopeText: string,
@@ -214,7 +234,7 @@ async function pageStart(
   return { afterId: read.lastKey, generation: current };
 }
 
-function nextCursor(
+export function nextCursor(
   ctx: ApiContext,
   deps: AppDeps,
   scopeText: string,
@@ -234,6 +254,26 @@ function nextCursor(
     generation: generation.toString(),
   });
 }
+
+/** A project as a list shows it. */
+export const projectView = (row: ListedProject) => ({
+  id: row.id,
+  name: row.name,
+  state: row.state,
+  reviewReason: row.reviewReason,
+  createdAt: row.createdAt.toISOString(),
+  managedBy: row.managedBy,
+});
+
+/** An environment as a list shows it. */
+export const environmentView = (row: EnvironmentRow) => ({
+  id: row.id,
+  name: row.name,
+  state: row.state,
+  reviewReason: row.reviewReason,
+  kvReady: row.kvReady,
+  createdAt: row.createdAt.toISOString(),
+});
 
 export const projectsListHandler: Handler = async (ctx, deps) => {
   const scope = ctx.scope as OrgScope;
@@ -258,13 +298,7 @@ export const projectsListHandler: Handler = async (ctx, deps) => {
   return {
     status: 200,
     body: {
-      projects: rows.slice(0, limit).map((row) => ({
-        id: row.id,
-        name: row.name,
-        state: row.state,
-        reviewReason: row.reviewReason,
-        createdAt: row.createdAt.toISOString(),
-      })),
+      projects: rows.slice(0, limit).map(projectView),
       nextCursor: nextCursor(ctx, deps, scopeText, rows, limit, start.generation),
     },
   };
@@ -290,14 +324,7 @@ export const environmentsListHandler: Handler = async (ctx, deps) => {
   return {
     status: 200,
     body: {
-      environments: rows.slice(0, limit).map((row) => ({
-        id: row.id,
-        name: row.name,
-        state: row.state,
-        reviewReason: row.reviewReason,
-        kvReady: row.kvReady,
-        createdAt: row.createdAt.toISOString(),
-      })),
+      environments: rows.slice(0, limit).map(environmentView),
       nextCursor: nextCursor(ctx, deps, scopeText, rows, limit, start.generation),
     },
   };

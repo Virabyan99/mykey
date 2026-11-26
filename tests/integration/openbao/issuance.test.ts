@@ -1008,6 +1008,123 @@ describe("token metadata, lifetime and issuer sessions (Run 5.1)", () => {
   });
 });
 
+// Run 11.3 Task B Step 1 (P-187, P-188; D-81 quotes these names): what the
+// exchange of a runtime credential rests on, measured on the pinned OpenBao
+// before any code uses it. The exchange mints with the same issuer identity
+// and the same fixed role as a 30-day token, at 900 s, with a meta that names
+// the runtime credential.
+describe("the token of an exchange (Run 11.3)", () => {
+  const EXCHANGE_TTL = LIMITS.runtimeCredential.exchangeTtlSeconds;
+
+  async function mint(
+    ttlSeconds: number,
+    meta: Record<string, string>,
+  ): Promise<{ issued: IssuedToken; info: TokenInfo }> {
+    const issuer = typed(await a.login("issuer"));
+    const created = await issuer.tokenCreateFromRole(role(a), ttlSeconds, correlation(), meta);
+    if (!created.ok) throw new Error("the exchange's create failed");
+    const lookup = await issuer.tokenLookupAccessor(created.data.accessor);
+    if (!lookup.ok) throw new Error("lookup by accessor failed");
+    await issuer.tokenRevokeSelf();
+    return { issued: created.data, info: lookup.data };
+  }
+
+  it("the issuer mints a 900 s token from a machine-env role with meta; lookup-self shows ttl ≤ 900, not renewable, orphan, policies exactly [machine-env-<eid>], meta.credential_id", async () => {
+    expect(EXCHANGE_TTL).toBe(900);
+    const credentialId = randomUUID();
+    const meta = { credential_id: credentialId, exchange: "1" };
+    const { issued, info } = await mint(EXCHANGE_TTL, meta);
+    try {
+      const self = await typed(issued.token).tokenLookupSelf();
+      expect(self.ok).toBe(true);
+      if (!self.ok) return;
+      for (const seen of [info, self.data]) {
+        expect(seen).toMatchObject({
+          accessor: issued.accessor,
+          orphan: true,
+          renewable: false,
+          type: "service",
+          policies: [role(a)],
+          numUses: 0,
+          creationTtlSeconds: EXCHANGE_TTL,
+          namespacePath: `${a.namespace}/`,
+          meta,
+        });
+        expect(seen.ttlSeconds).toBeLessThanOrEqual(EXCHANGE_TTL);
+        expect(seen.ttlSeconds).toBeGreaterThanOrEqual(EXCHANGE_TTL - 5);
+      }
+      const lifetime =
+        Date.parse(self.data.expireTime ?? "") - Date.parse(self.data.issueTime ?? "");
+      expect(Math.round(lifetime / 1000)).toBe(EXCHANGE_TTL);
+      // It is a machine token of its environment: it reads there and nowhere else.
+      expect(await readsSeed(issued.token)).toBe(200);
+      expect((await call(issued.token, "GET", seedPath(a, 1))).status).toBe(403);
+    } finally {
+      await rootRevokeAccessor(issued.accessor);
+    }
+  });
+
+  it("renew-self leaves its lifetime unchanged", async () => {
+    const { issued } = await mint(EXCHANGE_TTL, { credential_id: randomUUID(), exchange: "1" });
+    try {
+      const before = dataOf(await rootLookupAccessor(issued.accessor)).expire_time;
+      const renewed = await call(issued.token, "POST", "auth/token/renew-self", {
+        body: { increment: "24h" },
+      });
+      // Observed on 2.7.2: the machine policy does not grant renew-self at all.
+      expect(renewed.status).toBe(403);
+      // Whatever the answer, the token ends when it was going to end.
+      const after = dataOf(await rootLookupAccessor(issued.accessor));
+      expect(after.expire_time).toBe(before);
+      expect(after.renewable).toBe(false);
+      // Nor can the issuer, which made it, lengthen it.
+      const issuer = await a.login("issuer");
+      const byIssuer = await call(issuer, "POST", "auth/token/renew-accessor", {
+        body: { accessor: issued.accessor, increment: "24h" },
+      });
+      expect(byIssuer.status).not.toBe(200);
+      expect(dataOf(await rootLookupAccessor(issued.accessor)).expire_time).toBe(before);
+    } finally {
+      await rootRevokeAccessor(issued.accessor);
+    }
+  });
+
+  it("a 2 s token reads, and 3 s later it is refused", async () => {
+    const meta = { credential_id: randomUUID(), exchange: "1" };
+    // The control: a 60 s token minted beside it still reads afterwards.
+    const control = await mint(60, meta);
+    try {
+      const short = await mint(2, meta);
+      expect(await readsSeed(short.issued.token)).toBe(200);
+      await sleep(3_000);
+      expect(await readsSeed(short.issued.token)).toBe(403);
+      expect((await rootLookupAccessor(short.issued.accessor)).status).toBe(400);
+      expect(await readsSeed(control.issued.token)).toBe(200);
+    } finally {
+      await rootRevokeAccessor(control.issued.accessor);
+    }
+  });
+
+  it("the issuer cannot ask for a policy the role does not allow, with or without meta", async () => {
+    const issuer = await a.login("issuer");
+    const before = await accessors(a.namespace);
+    const meta = { credential_id: randomUUID(), exchange: "1" };
+    for (const policies of [[role(a), "default"], [role(a, 1)], ["root"], [role(a), role(a, 1)]]) {
+      for (const extra of [{}, { meta }]) {
+        const answer = await call(issuer, "POST", `auth/token/create/${role(a)}`, {
+          body: { ttl: `${String(EXCHANGE_TTL)}s`, policies, no_default_policy: true, ...extra },
+        });
+        expect(answer.status, JSON.stringify(policies)).toBe(400);
+        expect(errorsOf(answer)).toContain(NOT_A_SUBSET);
+      }
+    }
+    // Nothing was made: the namespace holds the issuer's own login token and no more.
+    const made = added(before, await accessors(a.namespace));
+    expect(made.length).toBeLessThanOrEqual(1);
+    await call(issuer, "POST", "auth/token/revoke-self");
+  });
+});
+
 async function freePort(): Promise<number> {
   const server = net.createServer();
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));

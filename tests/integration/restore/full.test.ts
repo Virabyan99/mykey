@@ -9,7 +9,7 @@
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { createThrottle, codeAt, loadAuthKeys, stepAt } from "@mykey/auth";
 import { initiateReset } from "@mykey/auth/operator";
-import { REQUIRED_CHECKS, type VerificationReport } from "@mykey/contracts";
+import { AUTOMATION_RIGHTS, REQUIRED_CHECKS, type VerificationReport } from "@mykey/contracts";
 import { beginCapture, openGate, recordCapture } from "@mykey/operations/operator";
 import {
   recheckForOpen,
@@ -23,6 +23,7 @@ import * as OTPAuth from "otpauth";
 import pg from "pg";
 import { existsSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { reissue } from "../../fixtures/automation/tenant-provisioner.ts";
 import { sessionCookieOf } from "../../harness/api.ts";
 import { TEST_BUILD } from "../../harness/gate.ts";
 import { createLostWorld, type LostWorld } from "../../harness/restore-fixture.ts";
@@ -129,7 +130,7 @@ describe("the whole restore, locally (P-124)", () => {
     await client.end().catch(() => undefined);
   });
 
-  it("each of nine old credentials is refused, by the product and by OpenBao", async () => {
+  it("each of eleven old credentials is refused, by the product and by OpenBao", async () => {
     const { f } = world;
     const owner = f.tenants.credentials("ownerA");
     const refusedOnBoth = async (
@@ -181,6 +182,24 @@ describe("the whole restore, locally (P-124)", () => {
       });
       expect(answer.status).toBe(403);
     }
+    // (10) the runtime credential live at the capture: its client secret buys no token;
+    // (11) the token it had exchanged: the API and OpenBao's lookup-self (Session 11).
+    await refusedOnBoth("POST", "/v1/machine/exchange", {
+      headers: { authorization: `Bearer ${world.old.runtime.clientSecret}` },
+    });
+    await refusedOnBoth(
+      "GET",
+      `/v1/machine/projects/${f.tenants.a.project2}/environments/dev/keys`,
+      { headers: { authorization: `Bearer ${world.old.runtime.token}` } },
+    );
+    expect(
+      (
+        await baoFetch(bao, "/v1/auth/token/lookup-self", {
+          token: world.old.runtime.token,
+          namespace: f.fx.namespace,
+        })
+      ).status,
+    ).toBe(403);
     // (8) the old runtime secret id: AppRole login refused.
     const login = await baoFetch(bao, "/v1/auth/approle/login", {
       method: "POST",
@@ -319,7 +338,7 @@ describe("the whole restore, locally (P-124)", () => {
         releaseBuild: TEST_BUILD,
       },
       origin: { kind: "restore", pairId: world.pair.pairId },
-      schemaRevision: "0018_incarnation",
+      schemaRevision: "0019_automation_and_runtime",
       restoreStartedAt,
       given: {
         ...restored.given,
@@ -422,6 +441,99 @@ describe("the whole restore, locally (P-124)", () => {
       { headers: { authorization: `Bearer ${token}` } },
     );
     expect(keys.status).toBe(200);
+    // Session 11 (Run 11.3): with the gate open, the refusal of the old runtime
+    // credential is its own: 401 for its client secret and for the token it had
+    // exchanged, while a credential issued after the restore is exchanged and read.
+    const oldExchange = await target.request("public", "POST", "/v1/machine/exchange", {
+      headers: { authorization: `Bearer ${world.old.runtime.clientSecret}` },
+    });
+    expect([oldExchange.status, await codeOf(oldExchange)]).toEqual([401, "unauthenticated"]);
+    const oldToken = await target.request(
+      "public",
+      "GET",
+      `/v1/machine/projects/${f.tenants.a.project2}/environments/dev/keys`,
+      { headers: { authorization: `Bearer ${world.old.runtime.token}` } },
+    );
+    expect([oldToken.status, await codeOf(oldToken)]).toEqual([401, "unauthenticated"]);
+    const reissued = await target.request("public", "POST", `${env}/runtime-credentials`, {
+      body: { name: "after-restore-runtime" },
+      cookie,
+      headers: { "idempotency-key": randomUUID() },
+    });
+    expect(reissued.status).toBe(201);
+    const clientSecret = ((await reissued.json()) as { clientSecret: string }).clientSecret;
+    const exchange = await target.request("public", "POST", "/v1/machine/exchange", {
+      headers: { authorization: `Bearer ${clientSecret}` },
+    });
+    expect(exchange.status).toBe(200);
+    const exchangedKeys = await target.request(
+      "public",
+      "GET",
+      `/v1/machine/projects/${project1}/environments/${envName ?? ""}/keys`,
+      {
+        headers: {
+          authorization: `Bearer ${((await exchange.json()) as { token: string }).token}`,
+        },
+      },
+    );
+    expect(exchangedKeys.status).toBe(200);
+    // Session 11 (Run 11.5 Task D; spec §4, §6 item 11): the lost automation
+    // credential is refused; a new chain manages nothing; ONE credential issued
+    // with `replaces` manages the lost one's project again, and the script alone
+    // re-issues a runtime credential that is exchanged and read.
+    const bearer = (secret: string) => ({ headers: { authorization: `Bearer ${secret}` } });
+    const lostList = await target.request(
+      "public",
+      "GET",
+      "/v1/automation/projects",
+      bearer(world.old.automation.secret),
+    );
+    expect([lostList.status, await codeOf(lostList)]).toEqual([401, "unauthenticated"]);
+    const issueAutomation = async (body: Record<string, unknown>): Promise<string> => {
+      const answer = await target.request(
+        "public",
+        "POST",
+        `/v1/organizations/${organizationId}/automation-credentials`,
+        {
+          body: { rights: AUTOMATION_RIGHTS, cidrs: ["127.0.0.0/8"], ...body },
+          cookie,
+          headers: { "idempotency-key": randomUUID() },
+        },
+      );
+      // The body of a 201 holds the secret: it is parsed here and never printed.
+      const text = await answer.text();
+      expect(answer.status, "automation issue").toBe(201);
+      return (JSON.parse(text) as { secret: string }).secret;
+    };
+    const script = {
+      baseUrl: `https://127.0.0.1:${String(target.api?.port ?? 0)}`,
+      ca: readFileSync(f.stack.api.certAuthorityPath),
+    };
+    const newChain = await reissue(script, await issueAutomation({ name: "a new chain" }));
+    expect([newChain.projects, newChain.issued.length]).toEqual([0, 0]);
+    const recovered = await reissue(
+      script,
+      await issueAutomation({
+        name: "after the restore",
+        replaces: world.old.automation.credentialId,
+      }),
+    );
+    expect(recovered.projects).toBe(1);
+    expect(recovered.issued.map((one) => one.projectId)).toEqual([f.tenants.a.project2]);
+    const recoveredExchange = await target.request(
+      "public",
+      "POST",
+      "/v1/machine/exchange",
+      bearer(recovered.issued[0]?.clientSecret ?? ""),
+    );
+    expect(recoveredExchange.status).toBe(200);
+    const recoveredKeys = await target.request(
+      "public",
+      "GET",
+      `/v1/machine/projects/${f.tenants.a.project2}/environments/dev/keys`,
+      bearer(((await recoveredExchange.json()) as { token: string }).token),
+    );
+    expect(recoveredKeys.status).toBe(200);
     // Denied: another organization's projects and secret, an unknown credential.
     const b = f.tenants.b;
     expect(
@@ -460,7 +572,7 @@ describe("the whole restore, locally (P-124)", () => {
       host: "local",
       captureStartedAt: begun.captureStartedAt.toISOString(),
       boundary: begun.boundary,
-      schemaRevision: "0018_incarnation",
+      schemaRevision: "0019_automation_and_runtime",
       releaseBuild: "000000000000",
       keyRefs: { backupPassword: "local/1" },
       artifacts: [],

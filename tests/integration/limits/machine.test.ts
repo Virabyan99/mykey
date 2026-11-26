@@ -4,16 +4,24 @@
 // valid credentials from that source included (the stated price of the rule,
 // in limits.md). Each credential has its own 60 a minute. A counter table that
 // refuses makes a machine read 503 before OpenBao is asked.
-import { randomBytes } from "node:crypto";
+import { randomBytes, randomUUID } from "node:crypto";
 import { setTimeout as sleep } from "node:timers/promises";
 import { windowSecondsLeft } from "@mykey/api";
+import { AUTOMATION_SECRET_PREFIX, LIMITS } from "@mykey/contracts";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import {
+  automationCall,
+  clearAutomation,
+  issueAutomationFor,
+  strangerSecret,
+} from "../../harness/automation.ts";
 import {
   createCredentialsFixture,
   issueFor,
+  issueRuntimeFor,
   type CredentialsFixture,
 } from "../../harness/credentials-fixture.ts";
-import { machineCall } from "../../harness/machine.ts";
+import { exchangeCall, machineCall } from "../../harness/machine.ts";
 
 let f: CredentialsFixture;
 let a: { credentialId: string; token: string };
@@ -163,4 +171,258 @@ describe("one request at a time per credential (P-114)", () => {
     }
     expect((await machineCall(f, "resolve", { token: a.token })).status).toBe(200);
   }, 120_000);
+});
+
+// Session 11 (Run 11.3, P-187, P-196): the exchange. A client secret nobody
+// can attribute costs one read of the database and is a miss of its source,
+// counted with the tokens nobody can attribute; each runtime credential has
+// its own 10 exchanges a minute.
+describe("the exchange (rl:machine-miss 30, rl:exchange 10)", () => {
+  /** A client secret of the right shape that names no credential. */
+  const stranger = (): string => `mkrc.${randomUUID()}.${randomBytes(32).toString("base64url")}`;
+
+  it("the 31st miss of one source in a minute answers 429 before the database is read for the credential", async () => {
+    const credential = await issueRuntimeFor(f, "env1a");
+    for (let i = 0; i < 30; i += 1) {
+      const answer = await exchangeCall(f, { secret: stranger() });
+      expect([answer.status, answer.code], `miss ${String(i + 1)}`).toEqual([
+        401,
+        "unauthenticated",
+      ]);
+    }
+    // With the table unreadable, a request that read it would answer 503.
+    await f.api.superuser.query("REVOKE SELECT ON app.machine_credential FROM api_runtime");
+    try {
+      // The credential's own secret is refused too: the stated price of the rule.
+      for (const secret of [stranger(), credential.clientSecret]) {
+        const refused = await exchangeCall(f, { secret });
+        expect([refused.status, refused.code]).toEqual([429, "rate_limited"]);
+        const retryAfter = Number(refused.headers.get("retry-after"));
+        expect(retryAfter).toBeGreaterThanOrEqual(1);
+        expect(retryAfter).toBeLessThanOrEqual(60);
+      }
+      // The control: in the next window the table is read, and that read fails.
+      await nextWindow();
+      const read = await exchangeCall(f, { secret: credential.clientSecret });
+      expect([read.status, read.code]).toEqual([503, "dependency_unavailable"]);
+    } finally {
+      await f.api.superuser.query("GRANT SELECT ON app.machine_credential TO api_runtime");
+    }
+    const served = await exchangeCall(f, { secret: credential.clientSecret });
+    expect(served.status, served.code ?? "").toBe(200);
+  }, 180_000);
+
+  it("a bearer that is no client secret costs no read and is not counted", async () => {
+    const credential = await issueRuntimeFor(f, "env1a");
+    for (let i = 0; i < 40; i += 1) {
+      const answer = await exchangeCall(f, { secret: unknownToken() });
+      expect(answer.status).toBe(401);
+    }
+    const served = await exchangeCall(f, { secret: credential.clientSecret });
+    expect(served.status, served.code ?? "").toBe(200);
+  }, 120_000);
+
+  it("the 11th exchange of one credential in a minute answers 429 with retry-after", async () => {
+    const one = await issueRuntimeFor(f, "env1a");
+    const two = await issueRuntimeFor(f, "env1a");
+    let token = "";
+    for (let i = 0; i < 10; i += 1) {
+      const answer = await exchangeCall(f, { secret: one.clientSecret });
+      expect(answer.status, `exchange ${String(i + 1)}: ${answer.code ?? ""}`).toBe(200);
+      token = answer.body.token as string;
+    }
+    const refused = await exchangeCall(f, { secret: one.clientSecret });
+    expect([refused.status, refused.code]).toEqual([429, "rate_limited"]);
+    const retryAfter = Number(refused.headers.get("retry-after"));
+    expect(retryAfter).toBeGreaterThanOrEqual(1);
+    expect(retryAfter).toBeLessThanOrEqual(60);
+    expect("token" in refused.body).toBe(false);
+    // Another credential of the same environment is served, and a token already minted reads.
+    expect((await exchangeCall(f, { secret: two.clientSecret })).status).toBe(200);
+    expect((await machineCall(f, "keys", { token })).status).toBe(200);
+    await nextWindow();
+    expect((await exchangeCall(f, { secret: one.clientSecret })).status).toBe(200);
+  }, 180_000);
+
+  // Review M1 (Run 11.8). The secret of a revoked credential, or one presented
+  // from outside its networks, still verifies: it was neither a miss of its
+  // source nor a request of its credential, and each refusal wrote an audit row.
+  it("a revoked credential's secret and one from outside its networks are misses of their source: the 31st answers 429 and writes no audit row, as a made-up secret does", async () => {
+    const dead = await issueRuntimeFor(f, "env1a");
+    const elsewhere = await issueRuntimeFor(f, "env1a", { cidrs: ["192.0.2.0/24"] });
+    await f.api.superuser.query(
+      "UPDATE app.machine_credential SET state = 'revoked' WHERE id = $1",
+      [dead.credentialId],
+    );
+    const denials = async (): Promise<number> => {
+      const rows = await f.api.superuser.query<{ n: number }>(
+        `SELECT count(*)::int AS n FROM audit.event
+          WHERE action = 'access.denied' AND actor_kind = 'machine' AND actor_id = ANY($1)`,
+        [[dead.credentialId, elsewhere.credentialId]],
+      );
+      return rows.rows[0]?.n ?? -1;
+    };
+    for (let i = 0; i < 30; i += 1) {
+      const secret = i % 2 === 0 ? dead.clientSecret : elsewhere.clientSecret;
+      const answer = await exchangeCall(f, { secret });
+      expect([answer.status, answer.code], `refusal ${String(i + 1)}`).toEqual([
+        401,
+        "unauthenticated",
+      ]);
+    }
+    expect(await denials()).toBe(30);
+    for (const secret of [dead.clientSecret, elsewhere.clientSecret, stranger()]) {
+      const refused = await exchangeCall(f, { secret });
+      expect([refused.status, refused.code]).toEqual([429, "rate_limited"]);
+    }
+    expect(await denials()).toBe(30);
+    // The control: in the next window it is refused as itself again, with its row.
+    await nextWindow();
+    const again = await exchangeCall(f, { secret: dead.clientSecret });
+    expect([again.status, again.code]).toEqual([401, "unauthenticated"]);
+    expect(await denials()).toBe(31);
+  }, 180_000);
+
+  it("a token of an exchange whose credential was revoked is a miss of its source too: the 31st request answers 429", async () => {
+    const credential = await issueRuntimeFor(f, "env1a");
+    const exchanged = await exchangeCall(f, { secret: credential.clientSecret });
+    expect(exchanged.status, exchanged.code ?? "").toBe(200);
+    const token = exchanged.body.token as string;
+    expect((await machineCall(f, "keys", { token })).status).toBe(200);
+    await f.api.superuser.query(
+      "UPDATE app.machine_credential SET state = 'revoked' WHERE id = $1",
+      [credential.credentialId],
+    );
+    for (let i = 0; i < 30; i += 1) {
+      const answer = await machineCall(f, "keys", { token });
+      expect([answer.status, answer.code], `refusal ${String(i + 1)}`).toEqual([
+        401,
+        "unauthenticated",
+      ]);
+    }
+    const refused = await machineCall(f, "keys", { token });
+    expect([refused.status, refused.code]).toEqual([429, "rate_limited"]);
+    // The control: another credential's token is served in the next window.
+    await nextWindow();
+    expect((await machineCall(f, "keys", { token: a.token })).status).toBe(200);
+  }, 180_000);
+});
+
+// Session 11 (Run 11.5, P-194): an automation credential has its own 120
+// requests a minute, counted after it is recognised and before anything else
+// is decided; a secret nobody can attribute is a miss of its source, with the
+// tokens and the client secrets nobody can attribute.
+describe("automation (rl:automation 120, rl:machine-miss 30)", () => {
+  it("the 121st request of one credential in a minute answers 429 with retry-after; another credential is served", async () => {
+    expect(LIMITS.rate.perAutomationCredentialPerMinute).toBe(120);
+    const one = await issueAutomationFor(f);
+    const two = await issueAutomationFor(f, { name: "two" });
+    try {
+      // A request that is refused later in the pipeline is counted like a served one:
+      // a project nobody manages is 404 for both credentials.
+      const ids = { project: f.env("env1a").projectId };
+      for (let i = 0; i < 120; i += 1) {
+        const answer = await automationCall(f, "automation.projects.get", {
+          secret: one.secret,
+          ids,
+        });
+        expect([answer.status, answer.code], `request ${String(i + 1)}`).toEqual([
+          404,
+          "not_found",
+        ]);
+      }
+      const refused = await automationCall(f, "automation.projects.get", {
+        secret: one.secret,
+        ids,
+      });
+      expect([refused.status, refused.code]).toEqual([429, "rate_limited"]);
+      const retryAfter = Number(refused.headers.get("retry-after"));
+      expect(retryAfter).toBeGreaterThanOrEqual(1);
+      expect(retryAfter).toBeLessThanOrEqual(60);
+      const other = await automationCall(f, "automation.projects.get", { secret: two.secret, ids });
+      expect([other.status, other.code]).toEqual([404, "not_found"]);
+      await nextWindow();
+      const again = await automationCall(f, "automation.projects.get", { secret: one.secret, ids });
+      expect([again.status, again.code]).toEqual([404, "not_found"]);
+    } finally {
+      await clearAutomation(f);
+    }
+  }, 180_000);
+
+  it("the 31st automation secret nobody can attribute from one source answers 429, its own credential included", async () => {
+    const credential = await issueAutomationFor(f);
+    try {
+      const ids = { project: f.env("env1a").projectId };
+      for (let i = 0; i < 30; i += 1) {
+        const answer = await automationCall(f, "automation.projects.get", {
+          secret: strangerSecret(AUTOMATION_SECRET_PREFIX, randomBytes(32)),
+          ids,
+        });
+        expect([answer.status, answer.code], `miss ${String(i + 1)}`).toEqual([
+          401,
+          "unauthenticated",
+        ]);
+      }
+      for (const secret of [
+        strangerSecret(AUTOMATION_SECRET_PREFIX, randomBytes(32)),
+        credential.secret,
+      ]) {
+        const refused = await automationCall(f, "automation.projects.get", { secret, ids });
+        expect([refused.status, refused.code]).toEqual([429, "rate_limited"]);
+      }
+      await nextWindow();
+      const served = await automationCall(f, "automation.projects.get", {
+        secret: credential.secret,
+        ids,
+      });
+      expect([served.status, served.code]).toEqual([404, "not_found"]);
+    } finally {
+      await clearAutomation(f);
+    }
+  }, 180_000);
+
+  // Review M1 (Run 11.8): the same for an automation credential.
+  it("a revoked automation credential's secret is a miss of its source: the 31st request answers 429 and writes no audit row", async () => {
+    const dead = await issueAutomationFor(f, { name: "dead" });
+    try {
+      await f.api.superuser.query(
+        "UPDATE app.automation_credential SET state = 'revoked', revoked_at = now() WHERE id = $1",
+        [dead.credentialId],
+      );
+      const denials = async (): Promise<number> => {
+        const rows = await f.api.superuser.query<{ n: number }>(
+          `SELECT count(*)::int AS n FROM audit.event
+            WHERE action = 'access.denied' AND actor_kind = 'machine' AND actor_id = $1`,
+          [dead.credentialId],
+        );
+        return rows.rows[0]?.n ?? -1;
+      };
+      const ids = { project: f.env("env1a").projectId };
+      for (let i = 0; i < 30; i += 1) {
+        const answer = await automationCall(f, "automation.projects.get", {
+          secret: dead.secret,
+          ids,
+        });
+        expect([answer.status, answer.code], `refusal ${String(i + 1)}`).toEqual([
+          401,
+          "unauthenticated",
+        ]);
+      }
+      expect(await denials()).toBe(30);
+      const refused = await automationCall(f, "automation.projects.get", {
+        secret: dead.secret,
+        ids,
+      });
+      expect([refused.status, refused.code]).toEqual([429, "rate_limited"]);
+      expect(await denials()).toBe(30);
+      await nextWindow();
+      const again = await automationCall(f, "automation.projects.get", {
+        secret: dead.secret,
+        ids,
+      });
+      expect([again.status, again.code]).toEqual([401, "unauthenticated"]);
+    } finally {
+      await clearAutomation(f);
+    }
+  }, 180_000);
 });

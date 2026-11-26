@@ -16,7 +16,7 @@ import { StateBadge } from "../ui/StateBadge.tsx";
 import { articleOf, CLI_EXIT_CODES, type Block, type ScreenId } from "./articles.ts";
 import { KnownLimits } from "./KnownLimits.tsx";
 
-const ORG_SCREENS = new Set<ScreenId>(["overview", "activity", "audit"]);
+const ORG_SCREENS = new Set<ScreenId>(["overview", "activity", "audit", "automation"]);
 const ENV_SCREENS = new Set<ScreenId>([
   "secrets",
   "import",

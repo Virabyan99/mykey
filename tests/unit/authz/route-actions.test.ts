@@ -47,6 +47,25 @@ const ROW: Record<string, readonly [Action | null, RouteScope, StateClass]> = {
   "session.activity": [null, "none", "none"],
   "reference.get": ["reference.read", "none", "metadata_read"],
   "openapi.get": ["reference.read", "none", "metadata_read"],
+  // Session 11 (D-80): the owner's routes for the two new kinds.
+  "runtime_credentials.issue": ["credentials.manage", "environment", "credential_issue"],
+  "automation_credentials.list": ["credentials.manage", "organization", "metadata_read"],
+  "automation_credentials.issue": ["credentials.manage", "organization", "metadata_write"],
+  "automation_credentials.revoke": ["credentials.manage", "organization", "lifecycle"],
+};
+
+/** Session 11: the state class of each automation route (it has no action and no human scope). */
+const AUTOMATION_CLASS: Record<string, StateClass> = {
+  "automation.projects.list": "metadata_read",
+  "automation.projects.create": "metadata_write",
+  "automation.projects.get": "metadata_read",
+  "automation.environments.create": "metadata_write",
+  "automation.secrets.list": "metadata_read",
+  "automation.secrets.create": "secret_write",
+  "automation.runtime_credentials.list": "metadata_read",
+  "automation.runtime_credentials.issue": "credential_issue",
+  "automation.runtime_credentials.revoke": "lifecycle",
+  "automation.operations.get": "metadata_read",
 };
 
 const isHuman = (auth: string) => auth === "human" || auth === "human_fresh_totp";
@@ -81,10 +100,24 @@ describe("route actions and scopes", () => {
   });
 
   it("machine, public and reset routes have no action, scope none and state class none", () => {
-    for (const route of ROUTES.filter((r) => !isHuman(r.auth))) {
+    const others = ROUTES.filter((r) => !isHuman(r.auth) && r.auth !== "automation");
+    expect(others.map((r) => r.id)).toContain("machine.exchange");
+    for (const route of others) {
       expect(route.action, route.id).toBeNull();
       expect(route.scope, route.id).toBe("none");
       expect(stateClassOf(route), route.id).toBe("none");
+    }
+  });
+
+  it("an automation route has no action and no human scope, and the state class of its twin", () => {
+    const automation = ROUTES.filter((r) => r.auth === "automation");
+    expect(automation.map((r) => r.id).toSorted()).toEqual(
+      Object.keys(AUTOMATION_CLASS).toSorted(),
+    );
+    for (const route of automation) {
+      expect(route.action, route.id).toBeNull();
+      expect(route.scope, route.id).toBe("none");
+      expect(stateClassOf(route), route.id).toBe(AUTOMATION_CLASS[route.id]);
     }
   });
 

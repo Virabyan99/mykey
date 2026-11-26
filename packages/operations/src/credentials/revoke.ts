@@ -187,7 +187,8 @@ async function withSession(
       const code = await request.recheck(tx);
       if (code !== null) throw new Refusal(refused(code));
       const row = await lockCredential(tx, scope, request.credentialId, "update");
-      if (row === null) throw new Refusal(refused("not_found"));
+      // Session 11: a runtime credential is revoked by its own transaction (runtime.ts), never here.
+      if (row?.kind !== "token") throw new Refusal(refused("not_found"));
       if (row.state === "revoked") throw new Refusal(refused("state_conflict"));
       if (row.state === "issuing" || row.state === "needs_review") {
         // The operator settles an unresolved issuance (P-90).

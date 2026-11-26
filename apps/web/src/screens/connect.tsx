@@ -12,6 +12,7 @@ import {
   CONSUMER_LOCAL as localRunbook,
 } from "../connect/runbooks.ts";
 import { CONNECT_STEPS, type ConnectStepId } from "../copy/connect.ts";
+import { CREDENTIAL_COPY } from "../copy/credentials.ts";
 import { PAGES } from "../copy/pages.ts";
 import { Link } from "../router.tsx";
 import { useScope } from "../state/scope.tsx";
@@ -139,6 +140,7 @@ export function Connect() {
           under <Link to={webPath("credentials", at)}>Machine credentials</Link> and type it into a
           file.
         </p>
+        <p>{CREDENTIAL_COPY.choose}</p>
       </Callout>
       <nav className="tabs" aria-label="Where the application runs">
         <ul>

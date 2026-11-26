@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import {
   API_MAJOR,
+  AUTOMATION_RIGHTS,
   DENIED_ALIASES,
   ERROR_CODES,
   LIMITS,
@@ -11,12 +12,16 @@ import {
   type RouteDef,
 } from "@mykey/contracts";
 import { describe, expect, it } from "vitest";
-import type { z } from "zod";
+import { z } from "zod";
 
 const O = "/v1/organizations/:org";
 const P = `${O}/projects/:project`;
 const E = `${P}/environments/:env`;
 const M = "/v1/machine/projects/:project/environments/:envName";
+const A = "/v1/automation";
+const AP = `${A}/projects/:project`;
+const AE = `${AP}/environments/:env`;
+const RC = "runtime-credentials";
 
 /** The frozen table of docs/plans/session-1-plan.md Run 1.6 Task C: id, method, path, auth, idempotent, owner run. */
 const TABLE: readonly (readonly [string, string, string, string, boolean, string])[] = [
@@ -61,13 +66,66 @@ const TABLE: readonly (readonly [string, string, string, string, boolean, string
   ["openapi.get", "GET", "/v1/openapi.json", "human", false, "5.9"],
   ["machine.keys", "GET", `${M}/keys`, "machine", false, "5.4"],
   ["machine.resolve", "POST", `${M}/resolve`, "machine", false, "5.4"],
+  // Session 11 (D-15's amendment, D-80): 41 → 57.
+  ["machine.metadata", "GET", `${M}/metadata`, "machine", false, "11.3"],
+  ["machine.exchange", "POST", "/v1/machine/exchange", "machine_exchange", false, "11.3"],
+  ["runtime_credentials.issue", "POST", `${E}/${RC}`, "human_fresh_totp", true, "11.3"],
+  ["automation_credentials.list", "GET", `${O}/automation-credentials`, "human", false, "11.5"],
+  [
+    "automation_credentials.issue",
+    "POST",
+    `${O}/automation-credentials`,
+    "human_fresh_totp",
+    true,
+    "11.5",
+  ],
+  [
+    "automation_credentials.revoke",
+    "POST",
+    `${O}/automation-credentials/:credential/revoke`,
+    "human",
+    true,
+    "11.5",
+  ],
+  ["automation.projects.list", "GET", `${A}/projects`, "automation", false, "11.5"],
+  ["automation.projects.create", "POST", `${A}/projects`, "automation", true, "11.5"],
+  ["automation.projects.get", "GET", AP, "automation", false, "11.5"],
+  ["automation.environments.create", "POST", `${AP}/environments`, "automation", true, "11.5"],
+  ["automation.secrets.list", "GET", `${AE}/secrets`, "automation", false, "11.5"],
+  ["automation.secrets.create", "POST", `${AE}/secrets`, "automation", true, "11.5"],
+  ["automation.runtime_credentials.list", "GET", `${AE}/${RC}`, "automation", false, "11.5"],
+  ["automation.runtime_credentials.issue", "POST", `${AE}/${RC}`, "automation", true, "11.5"],
+  [
+    "automation.runtime_credentials.revoke",
+    "POST",
+    `${AE}/${RC}/:credential/revoke`,
+    "automation",
+    true,
+    "11.5",
+  ],
+  ["automation.operations.get", "GET", `${A}/operations/:operation`, "automation", false, "11.5"],
 ];
+
+/** The right each automation route asks (P-192): the route's own, or `any` for a read. */
+const RIGHTS: Record<string, string> = {
+  "automation.projects.list": "any",
+  "automation.projects.create": "projects.create",
+  "automation.projects.get": "any",
+  "automation.environments.create": "projects.create",
+  "automation.secrets.list": "any",
+  "automation.secrets.create": "secrets.create",
+  "automation.runtime_credentials.list": "runtime_credentials.manage",
+  "automation.runtime_credentials.issue": "runtime_credentials.manage",
+  "automation.runtime_credentials.revoke": "runtime_credentials.manage",
+  "automation.operations.get": "any",
+};
 
 const NOT_IDEMPOTENT_MUTATIONS = [
   "auth.reset.complete",
   "export.create",
   "import.preview",
   "import.resume",
+  "machine.exchange",
   "machine.resolve",
   "secrets.reveal",
   "session.activity",
@@ -88,20 +146,20 @@ function body(id: string): z.ZodType {
 const stateTag = "tag-1";
 
 describe("frozen route list", () => {
-  it("has 41 routes with unique ids and unique method + path", () => {
-    expect(ROUTES).toHaveLength(41);
-    expect(new Set(ROUTES.map((r) => r.id)).size).toBe(41);
-    expect(new Set(ROUTES.map((r) => `${r.method} ${r.path}`)).size).toBe(41);
+  it("has 57 routes with unique ids and unique method + path", () => {
+    expect(ROUTES).toHaveLength(57);
+    expect(new Set(ROUTES.map((r) => r.id)).size).toBe(57);
+    expect(new Set(ROUTES.map((r) => `${r.method} ${r.path}`)).size).toBe(57);
   });
 
   it("matches the frozen table row by row", () => {
-    expect(TABLE).toHaveLength(41);
+    expect(TABLE).toHaveLength(57);
     expect(ROUTES.map((r) => [r.id, r.method, r.path, r.auth, r.idempotent, r.ownerRun])).toEqual(
       TABLE.map((row) => [...row]),
     );
   });
 
-  it("requires Idempotency-Key on every POST and PATCH except the seven read-like or flow routes", () => {
+  it("requires Idempotency-Key on every POST and PATCH except the eight read-like or flow routes", () => {
     const mutations = ROUTES.filter((r) => r.method !== "GET");
     expect(
       mutations
@@ -357,5 +415,230 @@ describe("review fixes", () => {
     const created = body("projects.create").safeParse({ name: long });
     expect(created.success).toBe(true);
     expect(Array.from((created.data as { name: string }).name)).toHaveLength(64);
+  });
+});
+
+const outputJson = (schema: unknown): string =>
+  JSON.stringify(z.toJSONSchema(schema as z.ZodType, { target: "draft-2020-12", io: "output" }));
+
+describe("Session 11: automation and runtime credentials (D-15's amendment)", () => {
+  const automation = ROUTES.filter((r) => r.auth === "automation");
+  const id1 = "0193a5c0-7b1e-7c3a-9f4e-2b6d8a1c5e7f";
+
+  it("every automation route has a right and no action, and no other route has a right", () => {
+    expect(AUTOMATION_RIGHTS).toEqual([
+      "projects.create",
+      "secrets.create",
+      "runtime_credentials.manage",
+    ]);
+    expect(Object.fromEntries(automation.map((r) => [r.id, r.right]))).toEqual(RIGHTS);
+    for (const r of automation) expect(r.action, r.id).toBeNull();
+    for (const r of ROUTES.filter((candidate) => candidate.auth !== "automation")) {
+      expect(r.right, r.id).toBeNull();
+    }
+  });
+
+  it("every automation mutation requires an Idempotency-Key", () => {
+    const mutations = automation.filter((r) => r.method !== "GET");
+    expect(mutations.map((r) => r.id)).toEqual([
+      "automation.projects.create",
+      "automation.environments.create",
+      "automation.secrets.create",
+      "automation.runtime_credentials.issue",
+      "automation.runtime_credentials.revoke",
+    ]);
+    for (const r of mutations) expect(r.idempotent, r.id).toBe(true);
+  });
+
+  it("no automation route reads a value or reaches a destructive action (spec 1.1)", () => {
+    for (const r of automation) {
+      expect(r.path, r.id).not.toContain("/secrets/:name");
+      expect(r.id).not.toMatch(
+        /(reveal|export|history|delete|undelete|restore|archive|reactivate|update)$/,
+      );
+      for (const schema of Object.values(r.responses)) {
+        if (typeof schema === "string") continue;
+        expect(outputJson(schema), r.id).not.toContain('"value"');
+      }
+    }
+    // Control: the human reveal does hold a value, so the search can find one.
+    expect(outputJson(route("secrets.reveal").responses[200])).toContain('"value"');
+  });
+
+  it("the new classes never answer origin_rejected, and automation never forbidden_selector", () => {
+    const added = ROUTES.filter((c) => c.auth === "automation" || c.auth === "machine_exchange");
+    expect(added).toHaveLength(11);
+    for (const r of added) {
+      expect(r.errors, r.id).not.toContain("origin_rejected");
+      expect(r.errors, r.id).toContain("unauthenticated");
+      expect(r.errors, r.id).toContain("mixed_authentication");
+    }
+    for (const r of automation) {
+      expect(r.errors, r.id).not.toContain("forbidden_selector");
+      expect(r.errors, r.id).toContain("action_denied");
+      expect(r.errors, r.id).toContain("backend_inconsistent");
+    }
+    const exchange = route("machine.exchange");
+    for (const code of ["forbidden_selector", "audit_unavailable", "backend_sealed"] as const) {
+      expect(exchange.errors, code).toContain(code);
+    }
+    expect(exchange.request.body).toBeUndefined();
+    expect(exchange.request.query).toBeUndefined();
+  });
+
+  it("machine.keys and machine.resolve are what they were before Session 11", () => {
+    const snapshot = JSON.parse(
+      readFileSync(join(import.meta.dirname, "machine-bodies.snapshot.json"), "utf8"),
+    ) as Record<string, unknown>;
+    for (const id of ["machine.keys", "machine.resolve"]) {
+      const r = route(id);
+      const now = {
+        method: r.method,
+        path: r.path,
+        auth: r.auth,
+        errors: [...r.errors],
+        body: JSON.parse(outputJson(r.responses[200])) as unknown,
+      };
+      expect(now, id).toEqual(snapshot[id]);
+    }
+  });
+
+  it("the three issue routes answer credential_not_replayable and hold their secret once", () => {
+    const issued: Record<string, string> = {
+      "runtime_credentials.issue": "clientSecret",
+      "automation.runtime_credentials.issue": "clientSecret",
+      "automation_credentials.issue": "secret",
+    };
+    for (const [id, field] of Object.entries(issued)) {
+      const r = route(id);
+      expect(r.errors, id).toContain("credential_not_replayable");
+      const json = JSON.parse(outputJson(r.responses[201])) as { required: string[] };
+      expect(json.required, id).toContain(field);
+      expect(json.required, id).toContain("operationId");
+      expect(json.required, id).toContain("credential");
+    }
+  });
+
+  it("automation_credentials.issue bounds rights, lifetime and addresses (P-192, P-196)", () => {
+    const schema = body("automation_credentials.issue");
+    const { minTtlSeconds, defaultTtlSeconds, maxTtlSeconds, maxCidrs } =
+      LIMITS.automationCredential;
+    const good = { name: "provisioner", rights: ["projects.create"], cidrs: ["192.0.2.0/24"] };
+    expect(schema.parse(good)).toEqual({ ...good, ttlSeconds: defaultTtlSeconds });
+    const refused: Record<string, unknown>[] = [
+      { ...good, rights: [] },
+      { ...good, rights: ["secrets.read"] },
+      { ...good, rights: ["projects.create", "projects.create"] },
+      { ...good, cidrs: [] },
+      { ...good, cidrs: ["example.org/24"] },
+      { ...good, cidrs: Array.from({ length: maxCidrs + 1 }, () => "192.0.2.0/24") },
+      { ...good, ttlSeconds: minTtlSeconds - 1 },
+      { ...good, ttlSeconds: maxTtlSeconds + 1 },
+      { ...good, replaces: "nobody" },
+      { ...good, secret: "x" },
+    ];
+    for (const candidate of refused) {
+      expect(schema.safeParse(candidate).success, JSON.stringify(candidate)).toBe(false);
+    }
+    expect(schema.safeParse({ ...good, ttlSeconds: minTtlSeconds }).success).toBe(true);
+    expect(schema.safeParse({ ...good, ttlSeconds: maxTtlSeconds }).success).toBe(true);
+    expect(schema.safeParse({ ...good, replaces: id1 }).success).toBe(true);
+  });
+
+  it("runtime_credentials.issue: at most a year, addresses optional, one body for both callers", () => {
+    const max = LIMITS.runtimeCredential.maxTtlSeconds;
+    expect(max).toBe(31536000);
+    for (const id of ["runtime_credentials.issue", "automation.runtime_credentials.issue"]) {
+      const schema = body(id);
+      expect(schema.parse({ name: "web-1" }), id).toEqual({
+        name: "web-1",
+        ttlSeconds: max,
+        cidrs: [],
+      });
+      expect(schema.safeParse({ name: "web-1", ttlSeconds: max + 1 }).success, id).toBe(false);
+      expect(schema.safeParse({ name: "web-1", ttlSeconds: 0 }).success, id).toBe(false);
+      expect(schema.safeParse({ name: "web-1", cidrs: ["2001:db8::/32"] }).success, id).toBe(true);
+      expect(schema.safeParse({ name: "web-1", cidrs: ["not a range"] }).success, id).toBe(false);
+    }
+  });
+
+  it("machine.metadata and automation.secrets.list give version and times, null where unknown", () => {
+    const metadata = route("machine.metadata").responses[200] as z.ZodType;
+    const entry = { name: "A", version: 2, createdAt: null, updatedAt: "2026-11-25T10:00:00Z" };
+    const good = {
+      apiMajor: 1,
+      environmentId: id1,
+      generation: "7",
+      count: 1,
+      entries: [entry],
+      complete: true,
+    };
+    expect(metadata.safeParse(good).success).toBe(true);
+    expect(metadata.safeParse({ ...good, entries: [{ ...entry, value: "v" }] }).success).toBe(
+      false,
+    );
+    expect(metadata.safeParse({ ...good, complete: false }).success).toBe(false);
+    expect(route("machine.metadata").request.query).toBeUndefined();
+    const list = route("automation.secrets.list").responses[200] as z.ZodType;
+    const row = {
+      name: "A",
+      state: "live",
+      version: 2,
+      createdAt: null,
+      updatedAt: entry.updatedAt,
+    };
+    expect(list.safeParse({ secrets: [row], nextCursor: null }).success).toBe(true);
+    expect(list.safeParse({ secrets: [{ ...row, value: "v" }], nextCursor: null }).success).toBe(
+      false,
+    );
+  });
+
+  it("machine.exchange answers a token, its expiry and where it belongs, and nothing else", () => {
+    const schema = route("machine.exchange").responses[200] as z.ZodType;
+    const good = {
+      apiMajor: 1,
+      token: "synthetic",
+      expiresAt: "2026-11-25T10:15:00Z",
+      projectId: id1,
+      environmentName: "production",
+    };
+    expect(schema.safeParse(good).success).toBe(true);
+    expect(schema.safeParse({ ...good, accessor: "x" }).success).toBe(false);
+    expect(schema.safeParse({ ...good, token: "" }).success).toBe(false);
+  });
+
+  it("existing bodies only gained fields: a credential's kind, a project's manager, a machine actor", () => {
+    const list = route("credentials.list").responses[200] as z.ZodType;
+    const credential = {
+      credentialId: id1,
+      name: "web-1",
+      projectId: id1,
+      environmentId: id1,
+      state: "active",
+      issuedBy: id1,
+      issuedAt: "2026-11-25T10:00:00Z",
+      expiresAt: "2027-11-25T10:00:00Z",
+      expiringSoon: false,
+      lastUsedAt: null,
+      kind: "runtime",
+      issuedByKind: "automation",
+      boundCidrs: ["192.0.2.0/24"],
+    };
+    expect(list.safeParse({ credentials: [credential], nextCursor: null }).success).toBe(true);
+    const other = { ...credential, kind: "approle" };
+    expect(list.safeParse({ credentials: [other], nextCursor: null }).success).toBe(false);
+    const projects = route("projects.list").responses[200] as z.ZodType;
+    const project = {
+      id: id1,
+      name: "tenant-1",
+      state: "active",
+      reviewReason: null,
+      createdAt: credential.issuedAt,
+      managedBy: null,
+    };
+    expect(projects.safeParse({ projects: [project], nextCursor: null }).success).toBe(true);
+    const managed = { ...project, managedBy: id1 };
+    expect(projects.safeParse({ projects: [managed], nextCursor: null }).success).toBe(true);
+    expect(outputJson(route("secrets.history").responses[200])).toContain('"machine"');
   });
 });

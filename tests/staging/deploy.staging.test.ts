@@ -7,6 +7,13 @@
 // the release's, the record is v2 open + serving with this build and a report
 // hash, and the journey revealed the same digest. Releases are read from
 // MYKEY_RELEASE_NEW and MYKEY_RELEASE_PREVIOUS, both required (Session 9).
+//
+// Session 11 (Run 11.8): a release that adds a migration cannot be rolled back
+// by a deploy. The plan refuses the previous release as a downgrade (D-57;
+// known-limits.md: "a rollback is a redeploy on the same schema, or a
+// restore"). When the previous release ends at an earlier migration, the
+// middle step is that refusal: the deploy exits with it, the gate never
+// closes, and the host goes on serving the new release.
 import { spawn } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
@@ -158,15 +165,34 @@ describe("staging through the deploy tooling (P-128)", () => {
     "host-v0.6.0, back to host-v0.5.9 and forward again: each ends open; quarantined while closed; the same reveal digest",
     async () => {
       const digests: string[] = [];
+      const downgrade = releaseOf(PREVIOUS).migrations.last < releaseOf(NEW).migrations.last;
       for (const [label, dir] of [
         ["deploy", NEW],
         ["rollback", PREVIOUS],
         ["forward again", NEW],
       ] as const) {
-        const release = releaseOf(dir);
         const poller = poll();
         const run = await deploy(dir);
         const samples = await poller.stop();
+        if (label === "rollback" && downgrade) {
+          expect(run.code, "a downgrade is refused").not.toBe(0);
+          expect(run.output).toContain(
+            `downgrade: the release ends at ${releaseOf(PREVIOUS).migrations.last}, the host is at ${releaseOf(NEW).migrations.last}`,
+          );
+          // Nothing was closed, and the host still serves the new release.
+          expect(samples.some((s) => s.code === "quarantined")).toBe(false);
+          const kept = releaseOf(NEW);
+          const listed = Object.fromEntries(kept.images.map((i) => [i.name, i.imageId]));
+          expect(await running()).toEqual({ api: listed.api, provisioner: listed.provisioner });
+          expect(await gateRecord()).toMatchObject({
+            version: 2,
+            state: "open",
+            phase: "serving",
+            releaseBuild: kept.commit.slice(0, 12),
+          });
+          continue;
+        }
+        const release = releaseOf(dir);
         expect(run.code, `${label}: ${run.output.slice(-2_000)}`).toBe(0);
 
         expect(
@@ -202,9 +228,11 @@ describe("staging through the deploy tooling (P-128)", () => {
             GROUP BY action ORDER BY action`,
           [started],
         );
+        // A refused rollback deploys nothing and opens nothing.
+        const deploys = downgrade ? 2 : 3;
         expect(rows.rows.map((r) => [r.action, Number(r.n)])).toEqual([
-          ["operator.deploy", 3],
-          ["operator.gate_open", 3],
+          ["operator.deploy", deploys],
+          ["operator.gate_open", deploys],
         ]);
       } finally {
         await db.drop();

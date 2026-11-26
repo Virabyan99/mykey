@@ -6,12 +6,18 @@
 // route without one is absent and ends in the terminal answer.
 import { randomUUID } from "node:crypto";
 import { handledRouteIds } from "@mykey/api";
-import { ROUTES, type RouteDef } from "@mykey/contracts";
+import { AUTOMATION_RIGHTS, ROUTES, type RouteDef } from "@mykey/contracts";
 import { validate } from "@scalar/openapi-parser";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
+  automationCall,
+  issueAutomationFor,
+  type IssuedAutomation,
+} from "../../harness/automation.ts";
+import {
   createCredentialsFixture,
   issueFor,
+  issueRuntimeFor,
   type CredentialsFixture,
 } from "../../harness/credentials-fixture.ts";
 import { sessionCookieOf } from "../../harness/api.ts";
@@ -21,12 +27,26 @@ import { readFileSync } from "node:fs";
 type Json = Record<string, unknown>;
 let f: CredentialsFixture;
 let token: string;
+/** Run 11.3: a runtime credential's client secret, the bearer of machine.exchange. */
+let clientSecret: string;
 let credentialId: string;
 let operationId: string;
+/** Run 11.5: an automation credential whose chain manages env1a's project, and an operation it made. */
+let automation: IssuedAutomation;
+let automationOperationId: string;
 
 beforeAll(async () => {
   f = await createCredentialsFixture();
   ({ token, credentialId, operationId } = await issueFor(f, "env1a", { ttlSeconds: 600 }));
+  ({ clientSecret } = await issueRuntimeFor(f, "env1a"));
+  automation = await issueAutomationFor(f, { rights: AUTOMATION_RIGHTS });
+  const made = await automationCall(f, "automation.projects.create", { secret: automation.secret });
+  expect(made.status, made.code).toBe(201);
+  automationOperationId = made.body.operationId as string;
+  await f.api.superuser.query("UPDATE app.project SET managed_by = $2 WHERE id = $1", [
+    f.env("env1a").projectId,
+    automation.ownerId,
+  ]);
 }, 600_000);
 
 afterAll(async () => {
@@ -138,6 +158,14 @@ const BODIES: Record<string, unknown> = {
   "credentials.issue": { name: "c" },
   "credentials.revoke": { confirmed: true },
   "auth.reset.complete": { token: "A".repeat(43), newPassword: "a-long-new-password" },
+  // Session 11: the human routes of the new credentials.
+  "runtime_credentials.issue": { name: "c" },
+  "automation_credentials.issue": {
+    name: "c",
+    rights: ["projects.create"],
+    cidrs: ["192.0.2.0/24"],
+  },
+  "automation_credentials.revoke": { confirmed: true },
 };
 
 describe("what the document lists is what the build answers", () => {
@@ -170,6 +198,21 @@ describe("what the document lists is what the build answers", () => {
         const body = BODIES[route.id];
         if (route.auth === "machine") {
           await machineFetch({ port: f.api.port, ca }, route.method, concrete(route), { token });
+        } else if (route.auth === "machine_exchange") {
+          await machineFetch({ port: f.api.port, ca }, route.method, concrete(route), {
+            token: clientSecret,
+          });
+        } else if (route.auth === "automation") {
+          // Run 11.5: with an automation credential, in the project its chain manages.
+          await automationCall(f, route.id, {
+            secret: automation.secret,
+            ids: {
+              project: env.projectId,
+              env: env.environmentId,
+              credential: credentialId,
+              operation: automationOperationId,
+            },
+          });
         } else if (route.auth === "human" || route.auth === "human_fresh_totp") {
           await f.send(route.method, concrete(route), {
             user: "ownerA",
@@ -190,6 +233,10 @@ describe("what the document lists is what the build answers", () => {
       }
       const expected = Object.fromEntries(ROUTES.map((route) => [route.id, listed.has(route.id)]));
       expect(seen).toEqual(expected);
+      // Session 11: the ten automation routes are served, so they are listed.
+      expect(
+        ROUTES.filter((route) => route.auth === "automation" && !listed.has(route.id)),
+      ).toEqual([]);
     } finally {
       f.setBeforeHandler(null);
     }

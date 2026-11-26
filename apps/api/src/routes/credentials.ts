@@ -3,9 +3,11 @@
 // record, the one create and its proof; the token leaves only in the 201 this
 // handler builds. The inventory reads the catalog only and never shows an
 // accessor or a token.
-import { LIMITS, credentialIdSchema, type OperationId } from "@mykey/contracts";
+import { LIMITS, credentialIdSchema, type CredentialId, type OperationId } from "@mykey/contracts";
 import {
   AuditReadTimeout,
+  credentialKindOf,
+  findAutomationCredentialByOperation,
   findCredentialByOperation,
   listCredentials,
   readCredentialsSummary,
@@ -15,16 +17,27 @@ import {
 } from "@mykey/db";
 import {
   issueCredential,
+  issueRuntimeCredential,
   operationResponse,
+  parseCidrs,
   replayAnswer,
   revokeCredential,
+  revokeRuntimeCredential,
   type CredentialDeps,
   type IssueOutcome,
+  type RuntimeCredentialDeps,
 } from "@mykey/operations";
 import { readCursor, signCursor } from "../pipeline/cursor.ts";
-import { ApiError, type ApiContext, type AppDeps, type Handler } from "../pipeline/context.ts";
+import {
+  ApiError,
+  type ApiContext,
+  type AppDeps,
+  type Handler,
+  type HandlerResult,
+} from "../pipeline/context.ts";
+import { actorOf, intentOfCaller } from "../pipeline/caller.ts";
 import { intentOf } from "../pipeline/route.ts";
-import { recheckOf } from "./secrets.ts";
+import { recheckFor, recheckOf } from "./secrets.ts";
 
 /** The protocol's dependencies; a process without the issuer identity answers 503. */
 export function credentialDeps(deps: AppDeps): CredentialDeps {
@@ -46,6 +59,25 @@ export function credentialDeps(deps: AppDeps): CredentialDeps {
   };
 }
 
+/**
+ * What a runtime credential's issue and revoke need (Session 11): PostgreSQL
+ * and two key rings. No issuer identity and no OpenBao: they answer while
+ * OpenBao is unreachable.
+ */
+export function runtimeCredentialDeps(deps: AppDeps): RuntimeCredentialDeps {
+  const ring = deps.auth?.keys.replayFingerprint;
+  const verifierRing = deps.auth?.keys.resetVerifier;
+  if (ring === undefined || verifierRing === undefined) {
+    throw new ApiError("dependency_unavailable");
+  }
+  return {
+    pool: deps.pool,
+    ring,
+    verifierRing,
+    gateOpen: () => deps.gate?.open() === true,
+  };
+}
+
 /** The inventory's shape of a credential (P-86): an `active` row past its expiry reads `expired`. */
 export function credentialView(row: CredentialRow) {
   return {
@@ -59,20 +91,36 @@ export function credentialView(row: CredentialRow) {
     expiresAt: row.effectiveExpiresAt === null ? null : row.effectiveExpiresAt.toISOString(),
     expiringSoon: row.expiringSoon,
     lastUsedAt: row.lastUsedAt === null ? null : row.lastUsedAt.toISOString(),
+    // Session 11: the row's own columns; a 30-day token reads token, user, none.
+    kind: row.kind,
+    issuedByKind: row.issuedByKind === "machine" ? ("automation" as const) : ("user" as const),
+    boundCidrs: row.boundCidrs,
   };
 }
 
 /**
  * The details of `credential_not_replayable` (P-88): the credential the
  * replayed issuance made and its state now. Absent when the row is not found.
+ * Session 11: the issuance may be an automation credential's.
  */
 export async function notReplayable(db: Queryable, operationId: OperationId): Promise<ApiError> {
   const credential = await findCredentialByOperation(db, operationId);
+  let details: { credentialId: string; state: string } | null =
+    credential === null
+      ? null
+      : { credentialId: credential.id, state: credentialView(credential).state };
+  if (details === null) {
+    const automation = await findAutomationCredentialByOperation(db, operationId);
+    if (automation !== null) {
+      details = {
+        credentialId: automation.id,
+        state: automation.state === "active" && automation.expired ? "expired" : automation.state,
+      };
+    }
+  }
   return new ApiError("credential_not_replayable", "replay", undefined, {
     operationId,
-    ...(credential === null
-      ? {}
-      : { details: { credentialId: credential.id, state: credentialView(credential).state } }),
+    ...(details === null ? {} : { details }),
   });
 }
 
@@ -131,7 +179,103 @@ export const credentialsIssueHandler: Handler = async (ctx, deps) => {
   return answerOf(ctx, deps, outcome);
 };
 
-/** credentials.revoke (Run 5.2, P-89): denied first, revoked only when the backend proved it. */
+/**
+ * runtime_credentials.issue (Session 11, P-186): one transaction, no OpenBao.
+ * The client secret leaves only in this 201; a replay answers
+ * `credential_not_replayable` (the pipeline, or the transaction for a race).
+ */
+export const runtimeCredentialsIssueHandler: Handler = async (ctx, deps) => {
+  // A person, or an automation credential (Run 11.5): then `issuedBy` is that credential.
+  const actor = actorOf(ctx);
+  const scope = ctx.scope as EnvironmentScope | null;
+  const key = ctx.idempotencyKey;
+  if (actor === null || scope === null || key === null) {
+    throw new ApiError("dependency_unavailable");
+  }
+  const body = ctx.body as { name: string; ttlSeconds: number; cidrs: string[] };
+  // The schema checks the text; whether each entry is a network is checked here.
+  if (parseCidrs(body.cidrs) === null) throw new ApiError("validation_failed");
+  const outcome = await issueRuntimeCredential(runtimeCredentialDeps(deps), {
+    routeId: ctx.route.id,
+    scope,
+    actor,
+    name: body.name,
+    ttlSeconds: body.ttlSeconds,
+    cidrs: body.cidrs,
+    idempotencyKey: key,
+    intent: intentOfCaller(ctx, actor),
+    requestId: ctx.requestId,
+    recheck: recheckFor(ctx, scope),
+  });
+  switch (outcome.kind) {
+    case "issued":
+      return {
+        status: 201,
+        body: {
+          operationId: outcome.operation.id,
+          credential: credentialView(outcome.credential),
+          clientSecret: outcome.clientSecret,
+        },
+        headers: { "cache-control": "no-store" },
+      };
+    case "replay": {
+      const answer = replayAnswer(ctx.route, outcome.operation);
+      if (!("error" in answer)) return answer;
+      if (answer.error === "credential_not_replayable" && answer.operationId !== undefined) {
+        throw await notReplayable(deps.pool, answer.operationId);
+      }
+      throw new ApiError(answer.error, "replay", undefined, {
+        ...(answer.operationId === undefined ? {} : { operationId: answer.operationId }),
+      });
+    }
+    case "refused":
+      throw new ApiError(outcome.code);
+  }
+};
+
+/**
+ * A runtime credential's revocation (Session 11, P-189), by a person or by an
+ * automation credential: one transaction, nothing in the backend.
+ */
+export async function revokeRuntime(
+  ctx: ApiContext,
+  deps: AppDeps,
+  scope: EnvironmentScope,
+  credentialId: CredentialId,
+): Promise<HandlerResult> {
+  const actor = actorOf(ctx);
+  const key = ctx.idempotencyKey;
+  if (actor === null || key === null) throw new ApiError("dependency_unavailable");
+  const revoked = await revokeRuntimeCredential(runtimeCredentialDeps(deps), {
+    routeId: ctx.route.id,
+    scope,
+    actor,
+    credentialId,
+    idempotencyKey: key,
+    intent: intentOfCaller(ctx, actor),
+    requestId: ctx.requestId,
+    recheck: recheckFor(ctx, scope),
+  });
+  switch (revoked.kind) {
+    case "revoked":
+      return { status: 200, body: operationResponse(revoked.operation) };
+    case "replay": {
+      const answer = replayAnswer(ctx.route, revoked.operation);
+      if (!("error" in answer)) return answer;
+      throw new ApiError(answer.error, "replay", undefined, {
+        ...(answer.operationId === undefined ? {} : { operationId: answer.operationId }),
+      });
+    }
+    case "refused":
+      throw new ApiError(revoked.code);
+  }
+}
+
+/**
+ * credentials.revoke (Run 5.2, P-89): denied first, revoked only when the
+ * backend proved it. A runtime credential (Session 11, P-189) has nothing in
+ * the backend: it is revoked in one transaction, with OpenBao reachable or not.
+ */
 export const credentialsRevokeHandler: Handler = async (ctx, deps) => {
   const principal = ctx.principal;
   const scope = ctx.scope as EnvironmentScope | null;
@@ -142,6 +286,11 @@ export const credentialsRevokeHandler: Handler = async (ctx, deps) => {
   // A :credential that is not an id names nothing: 404, as an absent one.
   const credentialId = credentialIdSchema.safeParse(ctx.params.credential);
   if (!credentialId.success) throw new ApiError("not_found");
+  // The row's kind chooses the protocol; a kind never changes, and each
+  // protocol refuses the other's rows under its own lock.
+  if ((await credentialKindOf(deps.pool, scope, credentialId.data)) === "runtime") {
+    return revokeRuntime(ctx, deps, scope, credentialId.data);
+  }
   const outcome = await revokeCredential(credentialDeps(deps), {
     routeId: ctx.route.id,
     scope,
@@ -200,7 +349,13 @@ export const credentialsListHandler: Handler = async (ctx, deps) => {
     after = read.lastKey;
   }
   const limit = Math.min(query.limit, LIMITS.listing.maxLimit);
-  const rows = await listCredentials(deps.pool, scope, { anchor, after, limit: limit + 1 });
+  const rows = await listCredentials(deps.pool, scope, {
+    anchor,
+    after,
+    limit: limit + 1,
+    // An automation caller (Run 11.5) manages runtime credentials: a 30-day token is not shown to it.
+    ...(ctx.automation === null ? {} : { kind: "runtime" as const }),
+  });
   const page = rows.slice(0, limit);
   const last = page.at(-1);
   const pageAnchor = anchor ?? page[0]?.sortKey.split("|")[0] ?? null;

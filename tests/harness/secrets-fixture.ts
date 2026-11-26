@@ -216,6 +216,17 @@ export async function createSecretsFixture(
     rateLimits?: "product";
     /** Run 7.3: the built workspace the in-process API serves (the browser project). */
     webDirectory?: string;
+    /**
+     * Run 11.3: the edge hop the in-process API trusts (Doc 06 §9). With the
+     * loopback address, a test's `X-Forwarded-For` is the request's source,
+     * as the edge's is on a host; without the header the source is the peer.
+     */
+    trustedProxy?: string;
+    /**
+     * Run 11.5: these contract routes answer through the harness's stub (204,
+     * their id in `api.reached`) once every check of the pipeline has passed.
+     */
+    stubRoutes?: readonly string[];
   } = {},
 ): Promise<SecretsFixture> {
   const directory = mkdtempSync(join(tmpdir(), "mykey-secrets-"));
@@ -242,7 +253,15 @@ export async function createSecretsFixture(
         },
         importBudgetMs: () => importBudget ?? undefined,
         ...(opts.rateLimits === undefined ? {} : { rateLimits: opts.rateLimits }),
-        ...(opts.webDirectory === undefined ? {} : { config: { webDirectory: opts.webDirectory } }),
+        ...(opts.stubRoutes === undefined ? {} : { stubs: true, stubRoutes: opts.stubRoutes }),
+        ...(opts.webDirectory === undefined && opts.trustedProxy === undefined
+          ? {}
+          : {
+              config: {
+                ...(opts.webDirectory === undefined ? {} : { webDirectory: opts.webDirectory }),
+                ...(opts.trustedProxy === undefined ? {} : { trustedProxy: opts.trustedProxy }),
+              },
+            }),
         routes: [{ def: TEST_READ_ROUTE, handler: testReadHandler() }, ...(opts.routes ?? [])],
       };
     },
@@ -560,6 +579,7 @@ export const TEST_READ_ROUTE: RouteDef = Object.freeze({
   ],
   action: "secrets.read",
   scope: "environment",
+  right: null,
 });
 
 /** The handler of TEST_READ_ROUTE, inside its own large-request gate of two. */

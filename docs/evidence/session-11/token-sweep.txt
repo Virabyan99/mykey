@@ -1,0 +1,18 @@
+# Token sweep on staging (Run 5.10 Step 5; Session 11's three kinds added in Run 11.8)
+# 2026-11-26T11:15:08.939Z; project s5-sweep-1fe2ca (258b0dcb-366d-4618-86b6-cae1ca0dda54), environment bd2b7557-0ab3-4b7e-a2c6-9ee6834f88b7
+# Three machine tokens issued here (two resolved, the first also listed keys, one never used; all revoked)
+# and one run-time canary value resolved by those machines.
+# Session 11: one runtime credential's client secret (whole, and its secret part), the token of its exchange
+# (which resolved the canary too), and one automation secret (whole, and its secret part) that listed its projects.
+# Values reach the host on fd 3 of the search, never the pipe; only counts come back (countOnHost).
+# Each surface has controls, strings that are not secret and must be found there; a search missing one fails.
+# The last control of each surface is sent as the values are (a needle control): found, it shows the values arrived as patterns.
+# surface | command | values searched | values found | controls found
+API log | docker logs --since 2026-11-26T11:14:09.400Z mykey-api-1 | 9 | 0 | 3 of 3
+provisioner log | docker logs --since 2026-11-26T11:14:09.400Z mykey-provisioner-1 | 9 | 0 | 2 of 2
+pg_dump (database postgres) | docker exec mykey-postgres-1 sh -c 'PGPASSWORD="$(cat "$POSTGRES_PASSWORD_FILE")" pg_dump -U postgres -d postgres' | 9 | 0 | 5 of 5
+PostgreSQL log | docker logs mykey-postgres-1 | 9 | 0 | 2 of 2
+OpenBao audit device | docker exec mykey-openbao-1 cat /openbao/audit/audit.log | 9 | 0 | 2 of 2
+Traefik access log | docker logs --since 2026-11-26T11:14:09.400Z mykey-edge-1 | 9 | 0 | 3 of 3
+# total values found outside the responses: 0
+# The clean machine's history files and process list: docs/evidence/session-5/run-5.8-consumers.json (pnpm run test:consumers).

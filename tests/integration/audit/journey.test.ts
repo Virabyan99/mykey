@@ -27,13 +27,15 @@ import {
 import { directoryStore } from "@mykey/backup";
 import { auditArchive, runOps, type OpsEnv } from "@mykey/ops";
 import { signInComplete } from "../../harness/api.ts";
+import { issueAutomationFor, revokeAutomation } from "../../harness/automation.ts";
 import {
   createCredentialsFixture,
   issueFor,
+  issueRuntimeFor,
   type CredentialsFixture,
 } from "../../harness/credentials-fixture.ts";
 import { archive, archiveDriver, newProject, reactivate } from "../../harness/lifecycle-fixture.ts";
-import { machineCall } from "../../harness/machine.ts";
+import { exchangeCall, machineCall } from "../../harness/machine.ts";
 import { provisionTestOrganization } from "../../harness/org-fixture.ts";
 import { prepareDatabase } from "../database/setup.ts";
 
@@ -206,7 +208,13 @@ describe("the missing writers (Task A)", () => {
   });
 });
 
-/** Actions whose writer arrives in a later run of Session 6; Run 6.9 left this list empty. */
+/**
+ * Actions whose writer arrives in a later run. Run 6.9 left this list empty.
+ * Session 11 (Run 11.2) named three in the contract commit: Run 11.3 wrote
+ * the first (machine.exchange, in the journey below) and Run 11.5 the other
+ * two (an automation credential issued and revoked, in the journey below). The
+ * list is empty again.
+ */
 const PENDING_WRITERS: readonly AuditAction[] = [];
 
 /**
@@ -393,6 +401,20 @@ describe("one journey through every writer (Task C)", () => {
       const resolved = await machineCall(f, "resolve", { token: issued.token });
       expect(resolved.status).toBe(200);
       answered.add(resolved.headers.get("x-request-id") ?? "");
+      // Session 11: a runtime credential, exchanged, and the token's read.
+      const runtime = await issueRuntimeFor(f, "env1a");
+      const exchange = await exchangeCall(f, { secret: runtime.clientSecret });
+      expect(exchange.status, exchange.code ?? "").toBe(200);
+      answered.add(exchange.headers.get("x-request-id") ?? "");
+      const byExchange = await machineCall(f, "keys", { token: exchange.body.token as string });
+      expect(byExchange.status).toBe(200);
+      answered.add(byExchange.headers.get("x-request-id") ?? "");
+      // Session 11 (Run 11.5): an automation credential, issued and revoked by the owner.
+      const automation = await issueAutomationFor(f);
+      answered.add(automation.requestId);
+      const automationRevoked = await revokeAutomation(f, automation.credentialId);
+      expect(automationRevoked.status, automationRevoked.code ?? "").toBe(200);
+      answered.add(automationRevoked.headers.get("x-request-id") ?? "");
       await f.freshen();
       const revoked = await f.send("POST", `${path1a}/credentials/${issued.credentialId}/revoke`, {
         body: { confirmed: true },

@@ -11,16 +11,16 @@ Every shell block marked `<!-- rehearsed … -->` in this file is run, in order 
 
 ## 1. Get the release
 
-The CLI release `cli-v0.1.2` (three files) and the launch wrapper `secrets-launch.sh`, which reads the token from a file. The repository is public, so `curl` needs no account:
+The CLI release `cli-v0.2.0` (three files) and the launch wrapper `secrets-launch.sh`, which reads the token from a file. The repository is public, so `curl` needs no account:
 
 ```sh
 mkdir -p "$HOME/mykey-release"
 cd "$HOME/mykey-release"
-for f in install.sh mykey-cli-0.1.2.tgz SHA256SUMS; do
-  curl --proto '=https' -fsSLO "https://github.com/Virabyan99/mykey/releases/download/cli-v0.1.2/$f"
+for f in install.sh mykey-cli-0.2.0.tgz SHA256SUMS; do
+  curl --proto '=https' -fsSLO "https://github.com/Virabyan99/mykey/releases/download/cli-v0.2.0/$f"
 done
 curl --proto '=https' -fsSL -o secrets-launch.sh \
-  "https://raw.githubusercontent.com/Virabyan99/mykey/cli-v0.1.2/tests/fixtures/consumers/secrets-launch.sh"
+  "https://raw.githubusercontent.com/Virabyan99/mykey/cli-v0.2.0/tests/fixtures/consumers/secrets-launch.sh"
 ```
 
 With `gh`, if you have it, the same four files:
@@ -29,9 +29,9 @@ With `gh`, if you have it, the same four files:
 
 ```sh
 mkdir -p "$HOME/mykey-release"
-gh release download cli-v0.1.2 --repo Virabyan99/mykey --dir "$HOME/mykey-release"
+gh release download cli-v0.2.0 --repo Virabyan99/mykey --dir "$HOME/mykey-release"
 gh api -H "Accept: application/vnd.github.raw" \
-  "repos/Virabyan99/mykey/contents/tests/fixtures/consumers/secrets-launch.sh?ref=cli-v0.1.2" \
+  "repos/Virabyan99/mykey/contents/tests/fixtures/consumers/secrets-launch.sh?ref=cli-v0.2.0" \
   > "$HOME/mykey-release/secrets-launch.sh"
 ```
 
@@ -101,6 +101,8 @@ echo
 ## 7. Issue a machine token
 
 The owner issues a token for the environment, with a name and a lifetime: on the workspace's Machine credentials screen, as "Issue" in `docs/runbooks/machine-credentials.md` describes. The token is shown once, and the service stores no copy. So first run the command of section 8, which waits at its prompt; then issue the token, copy it, and paste it there. Copying the command after the token would replace the token on the clipboard.
+
+A server that must start by itself for longer than 30 days takes a runtime credential instead ("Runtime credentials" in `machine-credentials.md`). The owner chooses that kind on the same screen, and its client secret is stored by the same command of section 8.
 
 ## 8. Store the token
 

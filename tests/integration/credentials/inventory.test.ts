@@ -21,13 +21,17 @@ afterAll(async () => {
   await f.close();
 });
 
+// Session 11 (D-15's amendment): boundCidrs, issuedByKind and kind are added.
 const VIEW_KEYS = [
+  "boundCidrs",
   "credentialId",
   "environmentId",
   "expiresAt",
   "expiringSoon",
   "issuedAt",
   "issuedBy",
+  "issuedByKind",
+  "kind",
   "lastUsedAt",
   "name",
   "projectId",
@@ -59,6 +63,10 @@ describe("credentials.list", () => {
       state: "active",
       issuedBy: f.tenants.userId("ownerA"),
       lastUsedAt: null,
+      // A 30-day token reads as it always was.
+      kind: "token",
+      issuedByKind: "user",
+      boundCidrs: [],
     });
     expect(typeof row!.issuedAt).toBe("string");
     expect(JSON.stringify(credentials).includes(issued.token)).toBe(false);

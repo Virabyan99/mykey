@@ -18,9 +18,19 @@
 // Denials of a recognized credential (4–6) are audited as `access.denied` with
 // a machine actor. The token stays a local of this module and of the reader
 // client built from it; it is never logged, stored or put into an error.
+//
+// Session 11 (Run 11.3, P-188): a token that an exchange minted has no row of
+// its own. Its `meta` says so and names its runtime credential, and step 4
+// finds that row by id instead. Only the issuer can make a token from a
+// machine role (D-17), and a wrong `meta` could only change which row is
+// checked, never what OpenBao lets the token read; still the token's policy
+// must be the one of that row's environment, or nobody is recognized. A
+// runtime credential's networks are checked on every request (the source as
+// the edge reports it), between the state and the path.
 import { appendAudit } from "@mykey/audit";
 import {
   LIMITS,
+  credentialIdSchema,
   type CredentialId,
   type EnvironmentId,
   type ErrorCode,
@@ -29,7 +39,8 @@ import {
   type RouteDef,
 } from "@mykey/contracts";
 import { isCaptureRefusal, type EnvironmentScope } from "@mykey/db";
-import type { OpenBaoClient } from "@mykey/openbao";
+import { machineName, type OpenBaoClient } from "@mykey/openbao";
+import { sourceAllowed } from "@mykey/operations";
 import { now } from "../log.ts";
 import { ApiError, type AppDeps } from "./context.ts";
 
@@ -63,8 +74,10 @@ export function bearerOf(rawHeaders: readonly string[]): string | null {
 
 interface CatalogRow {
   id: CredentialId;
+  kind: "token" | "runtime";
   state: string;
   live: boolean;
+  bound_cidrs: string[];
   project_id: ProjectId;
   environment_id: EnvironmentId;
   environment_name: string;
@@ -83,20 +96,25 @@ function unattributable(deps: AppDeps, requestId: string, cause: "header" | "tok
 }
 
 /** A parent's state as the machine routes answer it (P-93). */
-function parentCode(state: string): ErrorCode | null {
+export function parentCode(state: string): ErrorCode | null {
   if (state === "active") return null;
   if (state === "needs_review") return "backend_inconsistent";
   return "action_denied";
 }
 
-async function denyMachine(
+/**
+ * The refusal of a recognized credential, audited with the machine actor.
+ * `source` (Session 11): the caller is outside the credential's networks; the
+ * row says so and holds no address.
+ */
+export async function denyMachine(
   deps: AppDeps,
   input: {
     route: RouteDef;
     requestId: string;
     organizationId: OrganizationId;
-    row: CatalogRow;
-    reason: "hidden" | "state";
+    row: { id: CredentialId; environment_id: EnvironmentId };
+    reason: "hidden" | "state" | "source";
     code: ErrorCode;
   },
 ): Promise<never> {
@@ -115,7 +133,7 @@ async function denyMachine(
 }
 
 /** At most once a minute per credential; its failure never changes the answer. */
-async function touch(deps: AppDeps, credentialId: CredentialId): Promise<void> {
+export async function touch(deps: AppDeps, credentialId: CredentialId): Promise<void> {
   try {
     await deps.pool.query(
       `UPDATE app.machine_credential SET last_used_at = now()
@@ -140,6 +158,8 @@ export async function authenticateMachine(
   params: Record<string, string>,
   route: RouteDef,
   requestId: string,
+  /** The request's source (source.ts): what a runtime credential's networks are checked against. */
+  source: string,
 ): Promise<MachinePrincipal> {
   const token = bearerOf(rawHeaders);
   if (token === null) throw unattributable(deps, requestId, "header");
@@ -163,8 +183,17 @@ export async function authenticateMachine(
     throw new ApiError("dependency_unavailable");
   }
 
+  // P-188: an exchanged token says what it is and names its runtime credential;
+  // every other token is found by its accessor, as before. Never both.
+  const named =
+    self.data.meta?.exchange === "1"
+      ? credentialIdSchema.safeParse(self.data.meta.credential_id)
+      : null;
+  if (named !== null && !named.success) throw unattributable(deps, requestId, "catalog");
+  const runtimeId = named === null ? null : named.data;
   const found = await deps.pool.query<CatalogRow>(
-    `SELECT c.id, c.state, coalesce(c.effective_expires_at > now(), false) AS live,
+    `SELECT c.id, c.kind, c.state, coalesce(c.effective_expires_at > now(), false) AS live,
+            c.bound_cidrs,
             c.project_id, c.environment_id, e.name AS environment_name,
             e.state AS environment_state, p.state AS project_state,
             o.state AS organization_state
@@ -174,14 +203,25 @@ export async function authenticateMachine(
         AND e.id = c.environment_id
        JOIN app.project p ON p.organization_id = c.organization_id AND p.id = c.project_id
        JOIN app.organization o ON o.id = c.organization_id
-      WHERE c.organization_id = $1 AND c.accessor = $2`,
-    [organizationId, self.data.accessor],
+      WHERE c.organization_id = $1
+        AND (($3::uuid IS NULL AND c.kind = 'token' AND c.accessor = $2)
+          OR ($3::uuid IS NOT NULL AND c.kind = 'runtime' AND c.id = $3::uuid))`,
+    [organizationId, self.data.accessor, runtimeId],
   );
   const row = found.rows[0];
   if (row === undefined) throw unattributable(deps, requestId, "catalog");
-  const deny = (reason: "hidden" | "state", code: ErrorCode) =>
+  // The row was found by what the token says of itself: its policy must be the
+  // one of that row's environment, or the token names a credential it is not of.
+  if (row.kind === "runtime") {
+    const policies = self.data.policies;
+    if (policies.length !== 1 || policies[0] !== machineName(row.environment_id)) {
+      throw unattributable(deps, requestId, "catalog");
+    }
+  }
+  const deny = (reason: "hidden" | "state" | "source", code: ErrorCode) =>
     denyMachine(deps, { route, requestId, organizationId, row, reason, code });
   if (row.state !== "active" || !row.live) await deny("state", "unauthenticated");
+  if (!sourceAllowed(row.bound_cidrs, source)) await deny("source", "unauthenticated");
   if (params.project !== row.project_id || params.envName !== row.environment_name) {
     await deny("hidden", "not_found");
   }

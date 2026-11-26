@@ -88,8 +88,13 @@ function pathOf(route: RouteDef): string {
   });
 }
 
+/** The classes whose credential is a bearer: a browser session cannot send their requests. */
+const BEARER: ReadonlySet<string> = new Set(["machine", "machine_exchange", "automation"]);
+/** Session 11 (Run 11.2): a session GET with no handler in this build (404). Empty since Run 11.5. */
+const NO_HANDLER: ReadonlySet<string> = new Set<string>();
+
 const gets = (): RouteDef[] =>
-  ROUTES.filter((route) => route.method === "GET" && route.auth !== "machine");
+  ROUTES.filter((route) => route.method === "GET" && !BEARER.has(route.auth));
 
 const ASKED_AS: [string, Record<string, string>][] = [
   ["this origin", {}],
@@ -103,10 +108,20 @@ describe("a GET changes nothing", () => {
     expect(ids).toContain("secrets.history");
     expect(ids).toContain("metrics.get");
     expect(ids).toContain("operations.get");
-    expect(ids.length).toBe(ROUTES.filter((route) => route.method === "GET").length - 1);
-    expect(
-      ROUTES.filter((route) => route.method === "GET" && route.auth === "machine"),
-    ).toHaveLength(1);
+    // Session 11: machine.metadata and the five GETs of automation are bearer routes too.
+    const bearer = ROUTES.filter((route) => route.method === "GET" && BEARER.has(route.auth));
+    expect(bearer.map((route) => route.id).sort()).toEqual([
+      "automation.operations.get",
+      "automation.projects.get",
+      "automation.projects.list",
+      "automation.runtime_credentials.list",
+      "automation.secrets.list",
+      "machine.keys",
+      "machine.metadata",
+    ]);
+    expect(ids.length).toBe(
+      ROUTES.filter((route) => route.method === "GET").length - bearer.length,
+    );
   });
 
   it("no GET of ROUTES changes a row, asked from this origin, from another site or without an Origin", async () => {
@@ -118,7 +133,8 @@ describe("a GET changes nothing", () => {
         await response.arrayBuffer();
         // The handler answered: the request was not stopped before it could do anything.
         // The reference page needs its asset, which this stack may not have (503).
-        const answered = route.id === "reference.get" ? [200, 503] : [200];
+        const answered =
+          route.id === "reference.get" ? [200, 503] : NO_HANDLER.has(route.id) ? [404] : [200];
         expect(answered, `${route.id}, ${label}: ${String(response.status)}`).toContain(
           response.status,
         );

@@ -55,6 +55,43 @@ export {
   type IssueRequest,
 } from "./credentials/issue.ts";
 export { revokeCredential, type RevokeOutcome, type RevokeRequest } from "./credentials/revoke.ts";
+export type { Actor } from "./actor.ts";
+export {
+  EXCHANGE_FAULT_POINTS,
+  exchangeMeta,
+  exchangeRuntimeCredential,
+  type ExchangeDeps,
+  type ExchangeFaultPoint,
+  type ExchangeOutcome,
+  type ExchangeRequest,
+} from "./credentials/exchange.ts";
+export {
+  issueAutomationCredential,
+  revokeAutomationCredential,
+  type AutomationIssueOutcome,
+  type AutomationIssueRequest,
+  type AutomationRevokeOutcome,
+  type AutomationRevokeRequest,
+} from "./credentials/automation.ts";
+export {
+  issueRuntimeCredential,
+  revokeRuntimeCredential,
+  type RuntimeCredentialDeps,
+  type RuntimeIssueOutcome,
+  type RuntimeIssueRequest,
+  type RuntimeRevokeOutcome,
+  type RuntimeRevokeRequest,
+} from "./credentials/runtime.ts";
+export {
+  automationBinding,
+  mintSecret,
+  parseCidrs,
+  sourceAllowed,
+  runtimeBinding,
+  verifierOf,
+  verifies,
+  type StoredVerifier,
+} from "./credentials/secret.ts";
 export {
   ARCHIVE_FAULT_POINTS,
   beginArchive,
@@ -124,6 +161,7 @@ export {
 } from "./imports/apply.ts";
 export {
   readEnvironment,
+  readEnvironmentMetadata,
   readEnvironmentNames,
   type EnvironmentNamesOutcome,
   type EnvironmentRead,

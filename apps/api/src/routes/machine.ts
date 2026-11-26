@@ -9,7 +9,9 @@ import { appendAudit } from "@mykey/audit";
 import { API_MAJOR, type ErrorCode } from "@mykey/contracts";
 import { lockParents } from "@mykey/db";
 import {
+  exchangeRuntimeCredential,
   readEnvironment,
+  readEnvironmentMetadata,
   readEnvironmentNames,
   type EnvironmentReadRequest,
 } from "@mykey/operations";
@@ -94,6 +96,82 @@ export const machineKeysHandler: Handler = async (ctx, deps) => {
       count: outcome.names.length,
       names: outcome.names,
       complete: true,
+    },
+  };
+};
+
+/**
+ * machine.metadata (Session 11, Run 11.3): every live name with its version
+ * and its two times, for either kind of machine credential. PostgreSQL's
+ * answer alone: the token's lookup at authentication is the only request
+ * OpenBao gets, and there is no audit row, as for a person's list of names.
+ * The per-credential slot is taken as for machine.keys (P-114).
+ */
+export const machineMetadataHandler: Handler = async (ctx, deps) => {
+  const machine = ctx.machine;
+  // The runtime identity is not needed: this read never asks OpenBao.
+  if (machine === null || deps.lockPool === undefined) {
+    throw new ApiError("dependency_unavailable");
+  }
+  const outcome = await readEnvironmentMetadata(
+    { pool: deps.pool, lockPool: deps.lockPool },
+    {
+      scope: machine.scope,
+      routeId: ctx.route.id,
+      requestId: ctx.requestId,
+      recheck: machineRecheck(deps, machine),
+      exclusive: machine.credentialId,
+    },
+  );
+  if (outcome.kind === "refused") refusedOf(outcome);
+  return {
+    status: 200,
+    buffered: true,
+    body: {
+      apiMajor: API_MAJOR,
+      environmentId: machine.scope.environmentId,
+      generation: outcome.generation.toString(),
+      count: outcome.entries.length,
+      entries: outcome.entries.map((entry) => ({
+        name: entry.name,
+        version: entry.version,
+        createdAt: entry.createdAt?.toISOString() ?? null,
+        updatedAt: entry.updatedAt.toISOString(),
+      })),
+      complete: true,
+    },
+  };
+};
+
+/**
+ * machine.exchange (Session 11, Run 11.3; P-187, D-81). The pipeline has
+ * verified the client secret and admitted its runtime credential; the token is
+ * minted by the issuer for that credential's own environment (the request
+ * names none), and its audit row is committed before this answers. One
+ * buffered body that nothing may keep.
+ */
+export const machineExchangeHandler: Handler = async (ctx, deps) => {
+  const exchange = ctx.exchange;
+  if (exchange === null || deps.issuer === undefined) throw new ApiError("dependency_unavailable");
+  const faults = deps.test?.faults;
+  const outcome = await exchangeRuntimeCredential(
+    {
+      pool: deps.pool,
+      issuer: deps.issuer,
+      ...(faults === undefined ? {} : { faults: (point) => faults(point, "") }),
+    },
+    { scope: exchange.scope, credentialId: exchange.credentialId, requestId: ctx.requestId },
+  );
+  if (outcome.kind === "refused") throw new ApiError(outcome.code);
+  return {
+    status: 200,
+    buffered: true,
+    body: {
+      apiMajor: API_MAJOR,
+      token: outcome.token,
+      expiresAt: outcome.expiresAt.toISOString(),
+      projectId: exchange.scope.projectId,
+      environmentName: exchange.environmentName,
     },
   };
 };

@@ -5,11 +5,16 @@
 // hides the tab, leaves the screen or signs out. It cannot be shown again,
 // and the page says so before and after. A row whose outcome is open is
 // settled by an operator: the page offers nothing on it.
+//
+// Session 11 (Run 11.6, D-81): the form opens with a choice of two kinds. A
+// runtime credential's client secret is shown once in the same way, and the
+// list says which kind a row is, who issued it and where it may call from.
 import { ACTIONS } from "../copy/actions.ts";
 import { useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
 import { LIMITS, checkProjectName, webPath, type CredentialView } from "@mykey/contracts";
 import { useId, useState, type SyntheticEvent } from "react";
 import { call, callSecret, failureOf, need } from "../api/client.ts";
+import { CREDENTIAL_COPY } from "../copy/credentials.ts";
 import { PAGES } from "../copy/pages.ts";
 import { ErrorPanel } from "../errors/ErrorPanel.tsx";
 import { Link } from "../router.tsx";
@@ -17,7 +22,7 @@ import { useScope } from "../state/scope.tsx";
 import { isCode, useAction } from "../state/use-action.ts";
 import { useEphemeral } from "../state/use-ephemeral.ts";
 import { ConfirmDialog } from "../ui/Dialog.tsx";
-import { Field } from "../ui/Field.tsx";
+import { AreaField, Field } from "../ui/Field.tsx";
 import { Icon } from "../ui/icons.tsx";
 import { Callout, EmptyState, PageHeader, ScopeIds } from "../ui/PageHeader.tsx";
 import { EnvironmentNotice } from "../ui/Resource.tsx";
@@ -25,6 +30,13 @@ import { CopyButton, SecretLine } from "../ui/Secret.tsx";
 import { Loading, StateBadge } from "../ui/StateBadge.tsx";
 import { StepUp } from "../ui/StepUp.tsx";
 import { Time } from "../ui/Time.tsx";
+import {
+  NETWORKS_HINT,
+  NETWORK_REFUSED,
+  OncePanel,
+  daysOf,
+  networksOf,
+} from "./credential-parts.tsx";
 import { useNow, type At } from "./secret-value.tsx";
 
 /** A token stays on the screen longer than a value: it has to be carried to its consumer. */
@@ -32,12 +44,15 @@ const TOKEN_TTL_MS = 120_000;
 const DAY_SECONDS = 86_400;
 const MAX_DAYS = Math.floor(LIMITS.machineToken.maxTtlSeconds / DAY_SECONDS);
 const WARNING_DAYS = Math.floor(LIMITS.machineToken.expiryWarningSeconds / DAY_SECONDS);
+const RUNTIME_MAX_DAYS = Math.floor(LIMITS.runtimeCredential.maxTtlSeconds / DAY_SECONDS);
+const MAX_NETWORKS = LIMITS.runtimeCredential.maxCidrs;
 const RUNBOOK = "docs/runbooks/machine-credentials.md";
 
 const NAME_RULE = `A credential name is ${String(LIMITS.project.nameMinCodePoints)} to ${String(LIMITS.project.nameMaxCodePoints)} characters, not only spaces and without control characters.`;
-const DAYS_RULE = `A lifetime is a whole number of days from 1 to ${String(MAX_DAYS)}.`;
 
 interface Shown {
+  /** Which kind the secret is of: a 30-day token, or a runtime credential's client secret. */
+  kind: "token" | "runtime";
   token: string;
   name: string;
   until: number;
@@ -73,10 +88,19 @@ function TokenPanel(props: { shown: Shown; onHide: () => void }) {
   );
 }
 
+type Kind = "token" | "runtime";
+const KIND_MAX_DAYS: Readonly<Record<Kind, number>> = {
+  token: MAX_DAYS,
+  runtime: RUNTIME_MAX_DAYS,
+};
+const daysRule = (max: number): string =>
+  `A lifetime is a whole number of days from 1 to ${String(max)}.`;
+const NETWORKS_RULE = `Name at most ${String(MAX_NETWORKS)} networks, one per line, each once.`;
+
 function IssueForm(props: {
   at: At;
-  /** The token of the answer, or null when it arrived while the tab was hidden. */
-  onIssued: (name: string, token: string | null) => void;
+  /** The token or the client secret of the answer, or null when it arrived while the tab was hidden. */
+  onIssued: (name: string, kind: Kind, secret: string | null) => void;
   /** Any answer or none: the catalog may have a new row. */
   onAnswer: () => void;
   onCancel: () => void;
@@ -85,46 +109,76 @@ function IssueForm(props: {
 }) {
   const { at, blocked } = props;
   const action = useAction();
+  const group = useId();
+  const [kind, setKind] = useState<Kind>("token");
   const [name, setName] = useState("");
   const [days, setDays] = useState(String(MAX_DAYS));
-  const [problems, setProblems] = useState<{ name: string | null; days: string | null }>({
-    name: null,
-    days: null,
-  });
+  const [networks, setNetworks] = useState("");
+  const [problems, setProblems] = useState<{
+    name: string | null;
+    days: string | null;
+    networks: string | null;
+  }>({ name: null, days: null, networks: null });
   const [asking, setAsking] = useState(false);
   const [note, setNote] = useState<string | null>(null);
+
+  /** Each kind opens with its own longest lifetime, which is also its default. */
+  const choose = (next: Kind): void => {
+    setKind(next);
+    setDays(String(KIND_MAX_DAYS[next]));
+    setProblems({ name: null, days: null, networks: null });
+    action.clear();
+  };
 
   const submit = async (event: SyntheticEvent<HTMLFormElement>): Promise<void> => {
     event.preventDefault();
     setNote(null);
     const wanted = name.trim().normalize("NFC");
-    const lifetime = /^[0-9]{1,3}$/.test(days.trim()) ? Number(days.trim()) : 0;
+    const lifetime = daysOf(days, KIND_MAX_DAYS[kind]);
+    const cidrs = kind === "runtime" ? networksOf(networks) : [];
     const found = {
       name: checkProjectName(wanted).ok ? null : NAME_RULE,
-      days: lifetime >= 1 && lifetime <= MAX_DAYS ? null : DAYS_RULE,
+      days: lifetime === null ? daysRule(KIND_MAX_DAYS[kind]) : null,
+      networks:
+        cidrs.length <= MAX_NETWORKS && new Set(cidrs).size === cidrs.length ? null : NETWORKS_RULE,
     };
     setProblems(found);
-    if (found.name !== null || found.days !== null) return;
+    if (lifetime === null || found.name !== null || found.networks !== null) return;
     if (blocked !== null) return;
-    const result = await action.run(
-      `credentials.issue ${at.env} ${wanted} ${String(lifetime)}`,
-      (key) =>
-        callSecret("credentials.issue", {
-          params: at,
-          body: { name: wanted, ttlSeconds: lifetime * DAY_SECONDS },
-          idempotencyKey: key,
-        }),
-    );
+    const result =
+      kind === "token"
+        ? await action.run(`credentials.issue ${at.env} ${wanted} ${String(lifetime)}`, (key) =>
+            callSecret("credentials.issue", {
+              params: at,
+              body: { name: wanted, ttlSeconds: lifetime * DAY_SECONDS },
+              idempotencyKey: key,
+            }),
+          )
+        : await action.run(
+            `runtime_credentials.issue ${at.env} ${wanted} ${String(lifetime)} ${cidrs.join(",")}`,
+            (key) =>
+              callSecret("runtime_credentials.issue", {
+                params: at,
+                body: { name: wanted, ttlSeconds: lifetime * DAY_SECONDS, cidrs },
+                idempotencyKey: key,
+              }),
+          );
     props.onAnswer();
     if (result.ok) {
-      // A token that arrived while nobody could see the tab is not kept.
-      props.onIssued(wanted, document.visibilityState === "hidden" ? null : result.body.token);
+      const secret = "token" in result.body ? result.body.token : result.body.clientSecret;
+      // A secret that arrived while nobody could see the tab is not kept.
+      props.onIssued(wanted, kind, document.visibilityState === "hidden" ? null : secret);
       return;
     }
     // The code is older than ten minutes: the owner proves presence, then asks again.
     if (isCode(result.failure, "fresh_verification_required")) {
       action.clear();
       setAsking(true);
+      return;
+    }
+    // The page did not check the networks: the service did.
+    if (kind === "runtime" && isCode(result.failure, "validation_failed")) {
+      setProblems({ ...found, networks: NETWORK_REFUSED });
     }
   };
 
@@ -134,10 +188,38 @@ function IssueForm(props: {
         <h2>New credential</h2>
         <p>
           A credential lets one consumer read the complete secret set of this environment, and
-          nothing else. {ACTIONS.issue} Issuing needs a code from your authenticator of the last ten
-          minutes.
+          nothing else.{" "}
+          {kind === "token"
+            ? ACTIONS.issue
+            : `${CREDENTIAL_COPY.runtime.how} ${ACTIONS.issueRuntime}`}{" "}
+          Issuing needs a code from your authenticator of the last ten minutes.
         </p>
         {blocked === null ? null : <p role="status">{blocked}</p>}
+        <fieldset>
+          <legend>Kind</legend>
+          {(["token", "runtime"] as const).map((option) => {
+            const id = `${group}-${option}`;
+            const words = CREDENTIAL_COPY.kinds[option];
+            return (
+              <div className="field" key={option}>
+                <label htmlFor={id}>
+                  <input
+                    id={id}
+                    type="radio"
+                    name={group}
+                    checked={kind === option}
+                    disabled={blocked !== null}
+                    onChange={() => {
+                      choose(option);
+                    }}
+                  />{" "}
+                  {words.label}: {words.text.charAt(0).toLowerCase()}
+                  {words.text.slice(1)}
+                </label>
+              </div>
+            );
+          })}
+        </fieldset>
         <Field
           label="Name"
           disabled={blocked !== null}
@@ -158,9 +240,25 @@ function IssueForm(props: {
           }}
           inputMode="numeric"
           error={problems.days}
-          hint={`At most ${String(MAX_DAYS)}, which is also the default. A token cannot be renewed: before it ends, a new credential replaces it.`}
+          hint={
+            kind === "token"
+              ? `At most ${String(MAX_DAYS)}, which is also the default. A token cannot be renewed: before it ends, a new credential replaces it.`
+              : `At most ${String(RUNTIME_MAX_DAYS)}, which is also the default. It cannot be renewed: before it ends, a new credential replaces it.`
+          }
           autoComplete="off"
         />
+        {kind === "runtime" ? (
+          <AreaField
+            label="Networks it may call from (optional)"
+            disabled={blocked !== null}
+            value={networks}
+            onChange={(event) => {
+              setNetworks(event.target.value);
+            }}
+            error={problems.networks}
+            hint={`${NETWORKS_HINT} At most ${String(MAX_NETWORKS)}. With none, the client secret works from any network.`}
+          />
+        ) : null}
         {note === null ? null : <p role="status">{note}</p>}
         {action.failure === null ? null : (
           <ErrorPanel failure={action.failure} action="issue the credential" />
@@ -216,7 +314,7 @@ function RevokeDialog(props: {
       onConfirm={() => void revoke()}
       onCancel={props.onCancel}
     >
-      {ACTIONS.revoke.map((line) => (
+      {(credential.kind === "runtime" ? ACTIONS.revokeRuntime : ACTIONS.revoke).map((line) => (
         <p key={line}>{line}</p>
       ))}
       {action.failure === null ? null : (
@@ -294,23 +392,37 @@ function Inventory(props: { at: At; userId: string; scope: string; writable: boo
 
   return (
     <>
-      {shown === null ? null : <TokenPanel shown={shown} onHide={hide} />}
+      {shown === null ? null : shown.kind === "token" ? (
+        <TokenPanel shown={shown} onHide={hide} />
+      ) : (
+        <OncePanel
+          title="The client secret, shown once"
+          label="Client secret"
+          copy="Copy client secret"
+          shown={{ secret: shown.token, name: shown.name, until: shown.until }}
+          onHide={hide}
+        >
+          <p>
+            This is the client secret of {shown.name}. {CREDENTIAL_COPY.runtime.once}
+          </p>
+        </OncePanel>
+      )}
       {notice === null ? null : <p role="status">{notice}</p>}
       {!writable || list.data === undefined ? null : form ? (
         <IssueForm
           at={at}
           blocked={blocked}
           onAnswer={refresh}
-          onIssued={(name, token) => {
+          onIssued={(name, kind, token) => {
             setForm(false);
             if (token === null) {
               setNotice(
-                `${name} was issued, and its token arrived while this tab was hidden, so it was not kept. It cannot be shown again: revoke ${name} and issue a new credential.`,
+                `${name} was issued, and its ${kind === "token" ? "token" : "client secret"} arrived while this tab was hidden, so it was not kept. It cannot be shown again: revoke ${name} and issue a new credential.`,
               );
               return;
             }
             setNotice(`${name} is issued.`);
-            show({ token, name, until: Date.now() + TOKEN_TTL_MS });
+            show({ kind, token, name, until: Date.now() + TOKEN_TTL_MS });
           }}
           onCancel={() => {
             setForm(false);
@@ -372,6 +484,7 @@ function Inventory(props: { at: At; userId: string; scope: string; writable: boo
             <thead>
               <tr>
                 <th scope="col">Name</th>
+                <th scope="col">Kind</th>
                 <th scope="col">Scope</th>
                 <th scope="col">State</th>
                 <th scope="col">Issued</th>
@@ -387,6 +500,16 @@ function Inventory(props: { at: At; userId: string; scope: string; writable: boo
               {rows.map((row) => (
                 <tr key={row.credentialId}>
                   <th scope="row">{row.name}</th>
+                  <td>
+                    {CREDENTIAL_COPY.kinds[row.kind].word}
+                    {row.kind === "runtime" ? (
+                      <p className="hint">
+                        {row.boundCidrs.length === 0
+                          ? CREDENTIAL_COPY.runtime.anywhere
+                          : `from ${row.boundCidrs.join(", ")}`}
+                      </p>
+                    ) : null}
+                  </td>
                   <td>{scope}</td>
                   <td>
                     <StateBadge kind="credential" state={row.state} />
@@ -394,8 +517,9 @@ function Inventory(props: { at: At; userId: string; scope: string; writable: boo
                   </td>
                   <td>{row.issuedAt === null ? NOT_KNOWN : <Time at={row.issuedAt} />}</td>
                   <td>
-                    user <code>{row.issuedBy}</code>
-                    {row.issuedBy === userId ? " (you)" : ""}
+                    {row.issuedByKind === "automation" ? "automation" : "user"}{" "}
+                    <code>{row.issuedBy}</code>
+                    {row.issuedByKind === "user" && row.issuedBy === userId ? " (you)" : ""}
                   </td>
                   <td>{row.expiresAt === null ? NOT_KNOWN : <Time at={row.expiresAt} />}</td>
                   <td>{row.lastUsedAt === null ? NOT_KNOWN : <Time at={row.lastUsedAt} />}</td>
@@ -435,7 +559,9 @@ function Inventory(props: { at: At; userId: string; scope: string; writable: boo
           at={at}
           credential={revoking}
           onDone={() => {
-            setNotice(`${revoking.name} is revoked. Its token is refused from now on.`);
+            setNotice(
+              `${revoking.name} is revoked. Its ${revoking.kind === "runtime" ? "client secret" : "token"} is refused from now on.`,
+            );
             setRevoking(null);
             refresh();
           }}
@@ -475,6 +601,9 @@ export function Credentials() {
         <p>
           When the service is restored from a backup, every token is revoked, and each consumer
           needs a new credential.
+        </p>
+        <p>
+          {CREDENTIAL_COPY.runtime.how} A runtime credential is replaced the same way as a token.
         </p>
         <p>
           <Link to={webPath("connect", at)}>Connect an application</Link> shows the commands that

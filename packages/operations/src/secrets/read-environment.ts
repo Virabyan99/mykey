@@ -23,11 +23,15 @@
 // `unauthenticated` and nothing is marked; a live token that may not read is
 // a broken machine policy, the drift path as for the runtime identity.
 // `readEnvironmentNames` is steps 1, 2 and 5 without the value reads.
+//
+// Session 11 (Run 11.3): `readEnvironmentMetadata` is step 1 alone, with the
+// index's versions and times. It asks OpenBao nothing and writes no audit row.
 import { appendAudit } from "@mykey/audit";
 import { LIMITS, type ErrorCode, type OperationId } from "@mykey/contracts";
 import {
   environmentCounters,
   listIndex,
+  listMetadata,
   markEnvironmentReview,
   markKeyReview,
   slotOf,
@@ -63,6 +67,22 @@ export interface EnvironmentReadRequest {
 }
 
 export type EnvironmentReadOutcome = { kind: "ok"; read: EnvironmentRead } | Refused;
+
+/** What a read of PostgreSQL alone needs of a request: no reader, no audit. */
+export type EnvironmentAdmission = Pick<
+  EnvironmentReadRequest,
+  "scope" | "routeId" | "requestId" | "recheck" | "exclusive"
+>;
+
+export interface MetadataEntry {
+  name: string;
+  version: number | null;
+  createdAt: Date | null;
+  updatedAt: Date;
+}
+
+export type EnvironmentMetadataOutcome =
+  { kind: "ok"; generation: bigint; entries: MetadataEntry[] } | Refused;
 export type EnvironmentNamesOutcome = { kind: "ok"; generation: bigint; names: string[] } | Refused;
 
 /** Values read at once (Doc 06 §8). */
@@ -208,8 +228,8 @@ async function commitRead(
 
 /** Runs `work` under the environment's lock; busy and stops become refusals. */
 async function underLock<T>(
-  deps: ReadDeps,
-  request: EnvironmentReadRequest,
+  deps: Pick<ReadDeps, "pool" | "lockPool">,
+  request: EnvironmentAdmission,
   work: (locked: Locked) => Promise<T | Refused>,
   cooldownMs?: number,
 ): Promise<T | Refused> {
@@ -295,6 +315,45 @@ export async function readEnvironment(
       return { kind: "ok", read: { generation, entries, valueBytes } };
     },
     READ_COOLDOWN_MS,
+  );
+}
+
+/**
+ * machine.metadata (Session 11, Run 11.3): step 1 of `readEnvironment` and
+ * nothing else. Under the environment's lock, in one transaction: the
+ * admission recheck, the slot, and every index row with its version and times
+ * and the generation they belong to (one statement). A slot or a name under
+ * review stops the whole answer, as for the names' read. The live names leave
+ * in bytewise order. OpenBao is not asked, no value is read, no audit row is
+ * written (AUDIT_COVERAGE), and no cool-down is left behind.
+ */
+export async function readEnvironmentMetadata(
+  deps: Pick<ReadDeps, "pool" | "lockPool">,
+  request: EnvironmentAdmission,
+): Promise<EnvironmentMetadataOutcome> {
+  const { scope } = request;
+  return underLock(deps, request, (locked) =>
+    inTransaction(locked.client, async (tx): Promise<EnvironmentMetadataOutcome> => {
+      const code = await request.recheck(tx);
+      if (code !== null) throw new Stop(refused(code));
+      const slot = await slotOf(tx, scope);
+      if (slot !== null) {
+        throw new Stop(refused("key_under_review", { operationId: slot.operationId }));
+      }
+      const { rows, generation } = await listMetadata(tx, scope);
+      if (rows.some((row) => row.state === "needs_review")) {
+        throw new Stop(refused("key_under_review"));
+      }
+      const entries = rows
+        .filter((row) => row.state === "live")
+        .map(({ name, version, createdAt, updatedAt }) => ({
+          name,
+          version,
+          createdAt,
+          updatedAt,
+        }));
+      return { kind: "ok", generation, entries };
+    }),
   );
 }
 

@@ -101,6 +101,14 @@ MSYS_NO_PATHCONV=1 node scripts/host.ts <host> restore-verify --confirm-members 
 
 After opening: every person signs in after an `mfa` reset (`reset-account --kind mfa`), every machine needs a new token, and every `uncertain` operation needs review (`reconciliation.md`). The authenticators and recovery codes in the pair are never trusted (rule 9): a `password` reset is refused (`restored_factor`) while a person's active authenticator is older than the restore, and becomes possible again once they have enrolled anew.
 
+**Runtime and automation credentials (Session 11).** The restore revokes both kinds with every token, in the same transaction of its step 5 and with no added time, and `restore-verify`'s check `credentials_all_revoked` counts both tables. After the opening:
+
+1. Every server that held a runtime credential needs a new one, as a consumer with a token needs a new token.
+2. For each automation chain, the owner issues **one** automation credential with the lost one under **Replaces** (`automation.md`, "After a restore"). The projects kept their chains: a credential issued without it manages nothing.
+3. The holder of that credential issues the runtime credentials again, with no further person.
+
+This is proven in the integration suite, not yet on a host (`known-limits.md`).
+
 ## After, on the host's own server
 
 A host restored onto its own reinstalled server (Run 10.6, staging onto staging) is open but makes no pairs yet. Its disk lost the signing key and the R2 tokens, and the restore brings back only the backup password. In this order:

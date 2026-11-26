@@ -27,11 +27,34 @@ import {
   credentialsIssueHandler,
   credentialsListHandler,
   credentialsRevokeHandler,
+  runtimeCredentialsIssueHandler,
   credentialsSummaryHandler,
 } from "./routes/credentials.ts";
+import {
+  automationEnvironmentsCreateHandler,
+  automationOperationsGetHandler,
+  automationProjectsCreateHandler,
+  automationProjectsGetHandler,
+  automationProjectsListHandler,
+  automationRuntimeCredentialsIssueHandler,
+  automationRuntimeCredentialsListHandler,
+  automationRuntimeCredentialsRevokeHandler,
+  automationSecretsCreateHandler,
+  automationSecretsListHandler,
+} from "./routes/automation.ts";
+import {
+  automationCredentialsIssueHandler,
+  automationCredentialsListHandler,
+  automationCredentialsRevokeHandler,
+} from "./routes/automation-credentials.ts";
 import { exportCreateHandler } from "./routes/export.ts";
 import { archiveHandler, reactivateHandler } from "./routes/lifecycle.ts";
-import { machineKeysHandler, machineResolveHandler } from "./routes/machine.ts";
+import {
+  machineExchangeHandler,
+  machineKeysHandler,
+  machineMetadataHandler,
+  machineResolveHandler,
+} from "./routes/machine.ts";
 import { healthHandler } from "./routes/health.ts";
 import { importApplyHandler, importPreviewHandler, importResumeHandler } from "./routes/imports.ts";
 import { activityListHandler } from "./routes/activity.ts";
@@ -148,13 +171,29 @@ function handlers(
     "credentials.list": credentialsListHandler,
     "credentials.issue": credentialsIssueHandler,
     "credentials.revoke": credentialsRevokeHandler,
+    "runtime_credentials.issue": runtimeCredentialsIssueHandler,
     "credentials.summary": credentialsSummaryHandler,
+    "automation_credentials.list": automationCredentialsListHandler,
+    "automation_credentials.issue": automationCredentialsIssueHandler,
+    "automation_credentials.revoke": automationCredentialsRevokeHandler,
+    "automation.projects.list": automationProjectsListHandler,
+    "automation.projects.create": automationProjectsCreateHandler,
+    "automation.projects.get": automationProjectsGetHandler,
+    "automation.environments.create": automationEnvironmentsCreateHandler,
+    "automation.secrets.list": automationSecretsListHandler,
+    "automation.secrets.create": automationSecretsCreateHandler,
+    "automation.runtime_credentials.list": automationRuntimeCredentialsListHandler,
+    "automation.runtime_credentials.issue": automationRuntimeCredentialsIssueHandler,
+    "automation.runtime_credentials.revoke": automationRuntimeCredentialsRevokeHandler,
+    "automation.operations.get": automationOperationsGetHandler,
     "projects.archive": archiveHandler,
     "environments.archive": archiveHandler,
     "projects.reactivate": reactivateHandler,
     "environments.reactivate": reactivateHandler,
     "machine.keys": machineKeysHandler,
+    "machine.metadata": machineMetadataHandler,
     "machine.resolve": machineResolveHandler(held),
+    "machine.exchange": machineExchangeHandler,
     "session.activity": sessionActivityHandler,
     "auth.reset.complete": resetCompleteHandler,
     "openapi.get": openapiGetHandler(served),

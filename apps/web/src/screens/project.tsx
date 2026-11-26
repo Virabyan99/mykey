@@ -3,10 +3,11 @@
 // the reason of a review, and offers only what that state allows. The
 // buttons are a convenience for owners and admins: the server decides who
 // may do what, and a refusal is shown as it is.
-import { useQueryClient } from "@tanstack/react-query";
-import { webPath } from "@mykey/contracts";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { LIMITS, webPath } from "@mykey/contracts";
 import { useState } from "react";
-import { call } from "../api/client.ts";
+import { call, need } from "../api/client.ts";
+import { CREDENTIAL_COPY } from "../copy/credentials.ts";
 import { PAGES } from "../copy/pages.ts";
 import { Link } from "../router.tsx";
 import { useScope, type Environment } from "../state/scope.tsx";
@@ -34,6 +35,34 @@ type Open =
   | { kind: "archive"; target: Target }
   | { kind: "reactivate"; target: Target }
   | null;
+
+/**
+ * Session 11 (D-82): a project a script made says so, with the name of the
+ * first credential of the chain that manages it. Only an owner or an admin
+ * can list automation credentials, so only they are told the name.
+ */
+function ManagedBy(props: { org: string; userId: string; chain: string; manages: boolean }) {
+  const list = useQuery({
+    queryKey: [props.userId, props.org, "automation-credentials", "chain"],
+    enabled: props.manages,
+    queryFn: () =>
+      need(
+        call("automation_credentials.list", {
+          params: { org: props.org },
+          query: { limit: LIMITS.listing.maxLimit },
+        }),
+      ),
+  });
+  const name = list.data?.credentials.find((row) => row.credentialId === props.chain)?.name ?? null;
+  return (
+    <p>
+      {CREDENTIAL_COPY.automation.managed}
+      {name === null ? "" : `: ${name}`}. A script made this project. A credential of its chain can
+      add environments, new secrets and runtime credentials to it, as far as its rights go. You keep
+      every right over it.
+    </p>
+  );
+}
 
 /** A name can be changed, and an environment added, while the server still prepares the resource. */
 const nameable = (state: string): boolean => state === "active" || state === "pending";
@@ -248,6 +277,9 @@ export function Project() {
         />
       ) : null}
 
+      {project.managedBy === null ? null : (
+        <ManagedBy org={org} userId={userId} chain={project.managedBy} manages={manages} />
+      )}
       <h2>Environments</h2>
       <p>
         Secrets, machine credentials and Connect an application belong to one environment: open them

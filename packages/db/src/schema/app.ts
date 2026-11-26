@@ -5,6 +5,7 @@
 // - every timestamp is `timestamptz`;
 // - no column holds a secret value, a token or a password.
 import {
+  AUTOMATION_RIGHTS,
   ENVIRONMENT_NAME_PATTERN,
   LIMITS,
   OPERATION_STATES,
@@ -103,6 +104,60 @@ export const membership = appSchema.table(
   ],
 );
 
+const AUTOMATION_RIGHT_LIST = AUTOMATION_RIGHTS.map((right) => `'${right}'`).join(", ");
+
+/**
+ * An automation credential's record (Session 11, D-80, P-185, P-193). Its
+ * secret is never stored: `verifier` is a keyed digest of it. `owner_id` is
+ * the first credential of its chain; a project is managed by a chain, so a
+ * credential issued to replace another manages the same projects.
+ */
+export const automationCredential = appSchema.table(
+  "automation_credential",
+  {
+    id: uuid("id").primaryKey(),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organization.id),
+    ownerId: uuid("owner_id").notNull(),
+    name: text("name").notNull(),
+    rights: text("rights").array().notNull(),
+    boundCidrs: text("bound_cidrs").array().notNull(),
+    verifier: bytea("verifier").notNull(),
+    verifierKeyId: text("verifier_key_id").notNull(),
+    state: text("state").notNull(),
+    expiresAt: timestamptz("expires_at").notNull(),
+    issuedBy: uuid("issued_by").notNull(),
+    issuanceOperationId: uuid("issuance_operation_id").notNull(),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
+    lastUsedAt: timestamptz("last_used_at"),
+    revokedAt: timestamptz("revoked_at"),
+  },
+  (t) => [
+    unique("automation_credential_organization_id_key").on(t.organizationId, t.id),
+    foreignKey({
+      name: "automation_credential_owner_fk",
+      columns: [t.organizationId, t.ownerId],
+      foreignColumns: [t.organizationId, t.id],
+    }),
+    check("automation_credential_state_check", oneOf(t.state, ["active", "revoked"])),
+    check(
+      "automation_credential_rights_check",
+      sql`cardinality(${t.rights}) between 1 and ${sql.raw(String(AUTOMATION_RIGHTS.length))} and ${t.rights} <@ array[${sql.raw(AUTOMATION_RIGHT_LIST)}]::text[]`,
+    ),
+    check(
+      "automation_credential_cidrs_check",
+      sql`cardinality(${t.boundCidrs}) between 1 and ${sql.raw(String(LIMITS.automationCredential.maxCidrs))}`,
+    ),
+    check(
+      "automation_credential_name_length_check",
+      sql`char_length(${t.name}) between ${sql.raw(String(LIMITS.project.nameMinCodePoints))} and ${sql.raw(String(LIMITS.project.nameMaxCodePoints))}`,
+    ),
+    check("automation_credential_verifier_check", sql`octet_length(${t.verifier}) = 32`),
+    index("automation_credential_owner_idx").on(t.organizationId, t.ownerId),
+  ],
+);
+
 export const project = appSchema.table(
   "project",
   {
@@ -115,9 +170,17 @@ export const project = appSchema.table(
     archiveOperationId: uuid("archive_operation_id"),
     reviewReason: text("review_reason"),
     createdAt: timestamptz("created_at").notNull().defaultNow(),
+    /** Session 11 (P-193): the chain of automation credentials that manages the project; null for a person's. */
+    managedBy: uuid("managed_by"),
   },
   (t) => [
     ...reviewReasonChecks("project", t.state, t.reviewReason),
+    foreignKey({
+      name: "project_managed_by_fk",
+      columns: [t.organizationId, t.managedBy],
+      foreignColumns: [automationCredential.organizationId, automationCredential.id],
+    }),
+    index("project_managed_by_idx").on(t.organizationId, t.managedBy),
     unique("project_organization_name_key").on(t.organizationId, t.name),
     unique("project_organization_id_key").on(t.organizationId, t.id),
     check(
@@ -268,12 +331,20 @@ export const secretVersionEvent = appSchema.table(
     index("secret_version_event_name_version_idx").on(t.environmentId, t.name, t.version),
     check(
       "secret_version_event_actor_kind_check",
-      oneOf(t.actorKind, ["user", "operator", "system", "unknown"]),
+      // `machine` (Session 11, P-191): an automation credential wrote the version.
+      oneOf(t.actorKind, ["user", "operator", "system", "unknown", "machine"]),
     ),
   ],
 );
 
-/** A machine credential's record. The token itself is never stored. */
+/**
+ * A machine credential's record. The token itself is never stored.
+ *
+ * Session 11 (P-186): a row of `kind = 'runtime'` is a runtime credential. It
+ * has no accessor for its whole life; `verifier` is a keyed digest of its
+ * client secret, which is never stored. `issued_by` is a user, or with
+ * `issued_by_kind = 'machine'` the automation credential that issued it.
+ */
 export const machineCredential = appSchema.table(
   "machine_credential",
   {
@@ -289,8 +360,27 @@ export const machineCredential = appSchema.table(
     state: text("state").notNull(),
     issuedBy: uuid("issued_by").notNull(),
     lastUsedAt: timestamptz("last_used_at"),
+    kind: text("kind").notNull().default("token"),
+    verifier: bytea("verifier"),
+    verifierKeyId: text("verifier_key_id"),
+    boundCidrs: text("bound_cidrs")
+      .array()
+      .notNull()
+      .default(sql`'{}'::text[]`),
+    issuedByKind: text("issued_by_kind").notNull().default("user"),
   },
   (t) => [
+    check("machine_credential_kind_check", oneOf(t.kind, ["token", "runtime"])),
+    check("machine_credential_issued_by_kind_check", oneOf(t.issuedByKind, ["user", "machine"])),
+    // A runtime row has a verifier and never an accessor; a token row never has a verifier.
+    check(
+      "machine_credential_material_check",
+      sql`(${t.kind} = 'runtime' and ${t.verifier} is not null and octet_length(${t.verifier}) = 32 and ${t.verifierKeyId} is not null and ${t.accessor} is null) or (${t.kind} = 'token' and ${t.verifier} is null and ${t.verifierKeyId} is null)`,
+    ),
+    check(
+      "machine_credential_cidrs_check",
+      sql`cardinality(${t.boundCidrs}) <= ${sql.raw(String(LIMITS.runtimeCredential.maxCidrs))}`,
+    ),
     foreignKey({
       name: "machine_credential_environment_fk",
       columns: [t.organizationId, t.projectId, t.environmentId],

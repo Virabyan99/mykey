@@ -34,6 +34,7 @@ const ECHO: RouteDef = {
   errors: ["malformed_request", "validation_failed", "audit_unavailable", "quarantined"],
   action: null,
   scope: "none",
+  right: null,
 };
 
 let reached = 0;

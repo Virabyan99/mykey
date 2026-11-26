@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { randomBytes, randomUUID } from "node:crypto";
 import {
   ENVIRONMENT_NAME_PATTERN,
   LIMITS,
@@ -10,6 +10,7 @@ import { attempt, prepareDatabase, run, type TestDatabase } from "./setup.ts";
 
 const UNIQUE = "23505";
 const CHECK = "23514";
+const FOREIGN_KEY = "23503";
 
 let db: TestDatabase;
 const organization = randomUUID();
@@ -27,6 +28,15 @@ const insertOperation = `INSERT INTO app.operation (id, principal_kind, principa
   VALUES (gen_random_uuid(), 'user', $1, 'secret.update', 'env/NAME', $2, $3)`;
 const insertSlot =
   "INSERT INTO app.effect_slot (scope_key, operation_id, generation, acquired_at) VALUES ($1, $2, 1, now())";
+const insertCredential = `INSERT INTO app.machine_credential
+    (id, organization_id, project_id, environment_id, name, issuance_operation_id, requested_expires_at,
+     state, issued_by, kind, verifier, verifier_key_id, accessor, bound_cidrs, issued_by_kind)
+  VALUES (gen_random_uuid(), $1, $2, $3, 'server', gen_random_uuid(), now() + interval '1 day',
+          'active', gen_random_uuid(), $4, $5, $6, $7, $8, $9)`;
+const insertAutomation = `INSERT INTO app.automation_credential
+    (id, organization_id, owner_id, name, rights, bound_cidrs, verifier, verifier_key_id, state,
+     expires_at, issued_by, issuance_operation_id)
+  VALUES ($1, $2, $3, $4, $5, $6, $7, 'k1', $8, now() + interval '7 days', gen_random_uuid(), gen_random_uuid())`;
 
 beforeAll(async () => {
   db = await prepareDatabase();
@@ -188,6 +198,124 @@ describe("database constraints", () => {
     );
   });
 
+  // Session 11 (migration 0019, P-185, P-186).
+  it("a runtime row with an accessor is refused, and a token row with a verifier is refused", async () => {
+    const insert = (
+      kind: string,
+      verifier: Buffer | null,
+      keyId: string | null,
+      accessor: string | null,
+      cidrs: string[] = [],
+      issuedByKind = "user",
+    ) =>
+      attempt(pool(), insertCredential, [
+        organization,
+        project,
+        environment,
+        kind,
+        verifier,
+        keyId,
+        accessor,
+        cidrs,
+        issuedByKind,
+      ]);
+    const verifier = randomBytes(32);
+    expect(await insert("runtime", verifier, "k1", null)).toBe("ok");
+    expect(await insert("runtime", verifier, "k1", null, ["192.0.2.0/24"], "machine")).toBe("ok");
+    expect(await insert("runtime", verifier, "k1", "accessor-1")).toBe(CHECK);
+    expect(await insert("runtime", null, null, null)).toBe(CHECK);
+    expect(await insert("runtime", verifier, null, null)).toBe(CHECK);
+    expect(await insert("runtime", randomBytes(31), "k1", null)).toBe(CHECK);
+    // A 30-day token: with its accessor, and before it has one.
+    expect(await insert("token", null, null, "accessor-1")).toBe("ok");
+    expect(await insert("token", null, null, null)).toBe("ok");
+    expect(await insert("token", verifier, "k1", "accessor-1")).toBe(CHECK);
+    expect(await insert("token", verifier, "k1", null)).toBe(CHECK);
+    expect(await insert("other", null, null, null)).toBe(CHECK);
+    expect(await insert("token", null, null, null, [], "operator")).toBe(CHECK);
+    const nine = Array.from({ length: 9 }, (_, index) => `192.0.2.${String(index)}/32`);
+    expect(await insert("runtime", verifier, "k1", null, nine.slice(0, 8))).toBe("ok");
+    expect(await insert("runtime", verifier, "k1", null, nine)).toBe(CHECK);
+  });
+
+  it("the first credential of a chain names itself as owner", async () => {
+    const insert = (
+      id: string,
+      owner: string,
+      overrides: {
+        rights?: string[];
+        cidrs?: string[];
+        verifier?: Buffer;
+        state?: string;
+        name?: string;
+        organization?: string;
+      } = {},
+    ) =>
+      attempt(pool(), insertAutomation, [
+        id,
+        overrides.organization ?? organization,
+        owner,
+        overrides.name ?? "provisioner",
+        overrides.rights ?? ["projects.create"],
+        overrides.cidrs ?? ["192.0.2.0/24"],
+        overrides.verifier ?? randomBytes(32),
+        overrides.state ?? "active",
+      ]);
+    const first = randomUUID();
+    expect(await insert(first, first)).toBe("ok");
+    // An owner that is no credential of this organization.
+    expect(await insert(randomUUID(), randomUUID())).toBe(FOREIGN_KEY);
+
+    // A second credential joins the first one's chain, and a project is managed by the chain.
+    await run(pool(), insertAutomation, [
+      first,
+      organization,
+      first,
+      "provisioner",
+      ["projects.create", "secrets.create", "runtime_credentials.manage"],
+      ["192.0.2.0/24"],
+      randomBytes(32),
+      "active",
+    ]);
+    expect(await insert(randomUUID(), first)).toBe("ok");
+    const managed =
+      "INSERT INTO app.project (id, organization_id, name, state, managed_by) VALUES (gen_random_uuid(), $1, 'managed', 'active', $2)";
+    expect(await attempt(pool(), managed, [organization, first])).toBe("ok");
+    expect(await attempt(pool(), managed, [organization, randomUUID()])).toBe(FOREIGN_KEY);
+    expect(await attempt(pool(), managed, [organization, null])).toBe("ok");
+
+    const next = () => randomUUID();
+    expect(await insert(next(), first, { rights: [] })).toBe(CHECK);
+    expect(await insert(next(), first, { rights: ["secrets.read"] })).toBe(CHECK);
+    expect(await insert(next(), first, { cidrs: [] })).toBe(CHECK);
+    expect(
+      await insert(next(), first, {
+        cidrs: Array.from({ length: 9 }, (_, index) => `192.0.2.${String(index)}/32`),
+      }),
+    ).toBe(CHECK);
+    expect(await insert(next(), first, { verifier: randomBytes(16) })).toBe(CHECK);
+    expect(await insert(next(), first, { state: "expired" })).toBe(CHECK);
+    expect(await insert(next(), first, { state: "revoked" })).toBe("ok");
+    expect(await insert(next(), first, { name: "" })).toBe(CHECK);
+    expect(
+      await insert(next(), first, { name: "x".repeat(LIMITS.project.nameMaxCodePoints + 1) }),
+    ).toBe(CHECK);
+  });
+
+  it("a version may be written by a machine actor (P-191)", async () => {
+    const insert = (kind: string) =>
+      attempt(
+        pool(),
+        `INSERT INTO app.secret_version_event
+           (id, organization_id, environment_id, name, version, actor_kind, action, occurred_at)
+         VALUES (gen_random_uuid(), $1, $2, 'API_KEY', 1, $3, 'created', now())`,
+        [organization, environment, kind],
+      );
+    expect(await insert("machine")).toBe("ok");
+    expect(await insert("user")).toBe("ok");
+    expect(await insert("automation")).toBe(CHECK);
+  });
+
   it("no column could hold a secret value, token or password", async () => {
     const columns = await run<{ column_name: string }>(
       db.pool("superuser"),
@@ -212,7 +340,8 @@ describe("database constraints", () => {
         WHERE table_schema IN ('app', 'audit') AND column_name = 'id' AND table_name <> 'service_control'`,
     );
     // Run 6.5 (migration 0017): app.backup_invalidation is the fifteenth.
-    expect(ids).toHaveLength(15);
+    // Session 11 (migration 0019): app.automation_credential is the sixteenth.
+    expect(ids).toHaveLength(16);
     expect(ids.filter((row) => row.data_type !== "uuid" || row.column_default !== null)).toEqual(
       [],
     );

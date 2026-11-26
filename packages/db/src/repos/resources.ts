@@ -47,12 +47,19 @@ async function provisioningOperation(
 export async function createProject(
   tx: pg.PoolClient,
   scope: OrgScope,
-  input: { projectId: ProjectId; name: string; developmentEnvironmentId: EnvironmentId },
+  input: {
+    projectId: ProjectId;
+    name: string;
+    developmentEnvironmentId: EnvironmentId;
+    /** Session 11 (P-193): the chain of the automation credential that makes it; null for a person. */
+    managedBy?: string | null;
+  },
 ): Promise<"created" | "name_taken"> {
   const taken = await unlessTaken(tx, async () => {
     await tx.query(
-      "INSERT INTO app.project (id, organization_id, name, state) VALUES ($1, $2, $3, 'pending')",
-      [input.projectId, scope.organizationId, input.name],
+      `INSERT INTO app.project (id, organization_id, name, state, managed_by)
+       VALUES ($1, $2, $3, 'pending', $4)`,
+      [input.projectId, scope.organizationId, input.name, input.managedBy ?? null],
     );
   });
   if (taken === "name_taken") return "name_taken";
@@ -187,20 +194,35 @@ export interface EnvironmentRow extends ProjectRow {
   kvReady: boolean;
 }
 
+/** A project as a list shows it. Session 11 (P-193): `managedBy` is a chain's first credential, or null. */
+export interface ListedProject extends ProjectRow {
+  managedBy: string | null;
+}
+
 export async function listProjects(
   db: Queryable,
   scope: OrgScope,
   visible: "all" | readonly string[],
   page: { afterId: string | null; limit: number },
-): Promise<ProjectRow[]> {
-  const result = await db.query<ProjectRow>(
-    `SELECT id, name, state, review_reason AS "reviewReason", created_at AS "createdAt"
+  /** Session 11: only the projects this chain manages (an automation caller's list). */
+  managedBy: string | null = null,
+): Promise<ListedProject[]> {
+  const result = await db.query<ListedProject>(
+    `SELECT id, name, state, review_reason AS "reviewReason", created_at AS "createdAt",
+            managed_by AS "managedBy"
        FROM app.project
       WHERE organization_id = $1
         AND ($2::uuid[] IS NULL OR id = ANY ($2::uuid[]))
         AND ($3::uuid IS NULL OR id > $3::uuid)
+        AND ($5::uuid IS NULL OR managed_by = $5::uuid)
       ORDER BY id LIMIT $4`,
-    [scope.organizationId, visible === "all" ? null : [...visible], page.afterId, page.limit],
+    [
+      scope.organizationId,
+      visible === "all" ? null : [...visible],
+      page.afterId,
+      page.limit,
+      managedBy,
+    ],
   );
   return result.rows;
 }

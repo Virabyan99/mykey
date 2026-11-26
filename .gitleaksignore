@@ -30,3 +30,19 @@ aaeab2a78fea7b594227af829c92c0d6c188c76e:docs/runbooks/consumer-local.md:generic
 # value) to prove a day record never holds a name; generic-api-key reads the name as a key.
 # Reviewed false positive.
 aa69922f772cf287311edefe87ddf686244036c5:tests/unit/hosts/field-day.test.ts:generic-api-key:17
+
+# Session 11, Run 11.4: the exchange's unit test held a literal of a token's shape, "s." followed
+# by the base64 of the text "synthetic-token", written by the test's author; no OpenBao ever
+# issued it. The next commit assembles it at run time. Reviewed false positive.
+603fe272c3708f5b4eec29b2f47ec13f6802184f:tests/unit/cli/validate.test.ts:generic-api-key:123
+
+# Session 11, Run 11.8: the automation staging file's evidence held the ids of two credentials
+# (catalog row ids, UUIDs, never a secret) under keys with "Credential" in their names, and the
+# generic rule read them as keys. The file is rewritten by every run, so two commits hold them.
+# The next commit names the keys without that word. Reviewed false positives.
+0770d9a4a1d470ce50ad1b1fcb9e78420d71ceeb:docs/evidence/session-11/staging-automation.json:generic-api-key:7
+0770d9a4a1d470ce50ad1b1fcb9e78420d71ceeb:docs/evidence/session-11/staging-automation.json:generic-api-key:8
+0770d9a4a1d470ce50ad1b1fcb9e78420d71ceeb:docs/evidence/session-11/staging-automation.json:generic-api-key:72
+d093e4c925db5fcfa65bfff2e6826c4f230fe36b:docs/evidence/session-11/staging-automation.json:generic-api-key:10
+d093e4c925db5fcfa65bfff2e6826c4f230fe36b:docs/evidence/session-11/staging-automation.json:generic-api-key:11
+d093e4c925db5fcfa65bfff2e6826c4f230fe36b:docs/evidence/session-11/staging-automation.json:generic-api-key:75

@@ -21,6 +21,7 @@ import {
   signInByForm,
   signOutByButton,
 } from "../harness/journey.ts";
+import { IN_PAGE, type Places } from "../harness/kept.ts";
 import { pgDump, readAuditLog } from "../harness/stack.ts";
 import { startWebWithStores, type StoresWeb, type WebSession } from "../harness/web.ts";
 
@@ -46,56 +47,6 @@ interface Needle {
   /** A short code of digits: it counts only as a whole word, not inside an id. */
   word?: boolean;
 }
-
-/** Every place the browser keeps something, as text. */
-type Places = Record<string, string>;
-
-/** What the page itself can reach: read inside the page. */
-const IN_PAGE = `(async () => {
-  const entries = (store) => JSON.stringify(Object.entries(store));
-  const text = (value) => {
-    try {
-      return JSON.stringify(value) ?? String(value);
-    } catch {
-      return String(value);
-    }
-  };
-  const asked = (request) =>
-    new Promise((resolve, reject) => {
-      request.onsuccess = () => resolve(request.result);
-      request.onerror = () => reject(request.error);
-    });
-  const databases = [];
-  for (const info of await indexedDB.databases()) {
-    databases.push(String(info.name));
-    const database = await asked(indexedDB.open(info.name));
-    for (const name of [...database.objectStoreNames]) {
-      const store = database.transaction(name, "readonly").objectStore(name);
-      databases.push(name, text(await asked(store.getAllKeys())), text(await asked(store.getAll())));
-    }
-    database.close();
-  }
-  const cached = [];
-  for (const name of await caches.keys()) {
-    cached.push(name);
-    const cache = await caches.open(name);
-    for (const request of await cache.keys()) {
-      const response = await cache.match(request);
-      cached.push(request.url, response === undefined ? "" : await response.text());
-    }
-  }
-  const fields = [...document.querySelectorAll("input, textarea, select")].map((field) => field.value);
-  return {
-    "localStorage": entries(localStorage),
-    "sessionStorage": entries(sessionStorage),
-    "IndexedDB": databases.join("\\n"),
-    "Cache Storage": cached.join("\\n"),
-    "document.cookie": document.cookie,
-    "history.state": text(history.state),
-    "the address": location.href,
-    "the document": document.documentElement.outerHTML + "\\n" + fields.join("\\n"),
-  };
-})()`;
 
 interface Watch {
   session: WebSession;

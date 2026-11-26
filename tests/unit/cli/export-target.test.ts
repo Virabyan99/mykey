@@ -75,6 +75,7 @@ function fakeFs(opts: {
 
 const client: ApiClient = {
   version: () => Promise.resolve({ apiMajor: API_MAJOR }),
+  exchange: () => Promise.reject(new Error("unused")),
   keys: () => Promise.reject(new Error("unused")),
   resolve: () =>
     Promise.resolve(

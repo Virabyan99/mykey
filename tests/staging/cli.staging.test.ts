@@ -6,12 +6,18 @@
 // (300 s): keys prints the ten names; run starts a child whose value digests
 // equal the owner's export; export writes a 0600 file there whose digests are
 // the same; after the revocation run and keys exit 77 and start nothing.
+//
+// Session 11 (Run 11.8, spec §6 item 12; Review focus 7): with MYKEY_CLI_DIST
+// the CLI is a published release's bundle, not this tree's build, and the
+// evidence goes to Session 11's file. A second test gives the CLI a runtime
+// credential's client secret: from 0.2.0 it starts with it; an older CLI
+// presents it as a token, is refused, exits 77 and starts nothing.
 import { spawnSync } from "node:child_process";
 import { randomBytes, randomUUID } from "node:crypto";
-import { writeFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
 import { setTimeout as sleep } from "node:timers/promises";
 import { beforeAll, describe, expect, it } from "vitest";
-import { runCliInLinux, runShellInLinux } from "../harness/cli-linux.ts";
+import { releasedCliDist, runCliInLinux, runShellInLinux } from "../harness/cli-linux.ts";
 import { registerSecret } from "../harness/staging.ts";
 import { exportedDigests } from "../harness/staging-machine.ts";
 import {
@@ -30,7 +36,28 @@ let projectId: string;
 let environmentPath: string;
 const issued = new Set<string>();
 const evidence: Record<string, unknown> = {};
-const EVIDENCE = "docs/evidence/session-5/run-5.6-staging-cli.json";
+const RELEASED = releasedCliDist() !== undefined;
+// The second review of Run 11.8 (M1): the run names the version it means to
+// prove. For a published bundle the operator names it (MYKEY_CLI_EXPECT);
+// without one it is this tree's. What the CLI under test says about itself is
+// compared with it and never decides an expectation.
+const EXPECTED_VERSION = RELEASED
+  ? (process.env.MYKEY_CLI_EXPECT ?? "")
+  : (JSON.parse(readFileSync("apps/cli/package.json", "utf8")) as { version: string }).version;
+const expectedParts = EXPECTED_VERSION.split(".");
+if (
+  expectedParts.length !== 3 ||
+  !expectedParts.every((part) => part !== "" && Number.isInteger(Number(part)))
+) {
+  throw new Error("with MYKEY_CLI_DIST, MYKEY_CLI_EXPECT names the bundle's version (x.y.z)");
+}
+/** From 0.2.0 the CLI exchanges a client secret by itself (D-81). */
+const EXCHANGES = Number(expectedParts[0]) > 0 || Number(expectedParts[1]) >= 2;
+const EVIDENCE = RELEASED
+  ? `docs/evidence/session-11/staging-cli-released-${EXPECTED_VERSION}.json`
+  : "docs/evidence/session-5/run-5.6-staging-cli.json";
+/** The CLI under test, as it says itself (`secrets --version`). */
+let cliVersion = "";
 const record = (key: string, value: unknown): void => {
   evidence[key] = value;
   writeFileSync(EVIDENCE, `${JSON.stringify(evidence, null, 2)}\n`);
@@ -57,6 +84,7 @@ async function revokeAll(): Promise<void> {
     });
     if (answer.status === 200 || codeOf(answer) === "state_conflict") issued.delete(credentialId);
   }
+  expect(issued.size, "a credential of this file was not revoked").toBe(0);
 }
 
 // Prints {name: sha256(value)} for the seeded names: what the child was given.
@@ -85,8 +113,16 @@ const FILE_DIGESTS = [
 ].join("\n");
 
 beforeAll(async () => {
-  const built = spawnSync(process.execPath, ["apps/cli/build.ts"], { encoding: "utf8" });
-  expect(built.status, built.stderr).toBe(0);
+  if (!RELEASED) {
+    const built = spawnSync(process.execPath, ["apps/cli/build.ts"], { encoding: "utf8" });
+    expect(built.status, built.stderr).toBe(0);
+  }
+  const said = await runCliInLinux(["--version"]);
+  expect(said.code, said.stderr).toBe(0);
+  cliVersion = /^secrets (\d+\.\d+\.\d+) /.exec(said.stdout)?.[1] ?? "";
+  expect(cliVersion).not.toBe("");
+  expect(cliVersion, "the CLI under test is not the version this run names").toBe(EXPECTED_VERSION);
+  record("cli", { version: cliVersion, released: RELEASED });
   ({ cookie } = await stagingOwnerSession());
   const name = `s5-cli-${randomBytes(3).toString("hex")}`;
   const created = await send("POST", `/v1/organizations/${ORGANIZATION}/projects`, { name });
@@ -197,6 +233,67 @@ describe("the CLI against staging", () => {
         exportMode: mode,
         afterRevoke: { run: runAfter.code, keys: keysAfter.code },
         where: process.platform === "win32" ? "node-glibc container" : process.platform,
+      });
+    } finally {
+      await revokeAll();
+    }
+  }, 600_000);
+
+  it("a runtime credential's client secret: from 0.2.0 the CLI starts with it; an older CLI exits 77 and starts nothing", async () => {
+    try {
+      ({ cookie } = await stagingOwnerSession());
+      const issuedAnswer = await send("POST", `${environmentPath}/runtime-credentials`, {
+        name: "s11-cli-runtime",
+        ttlSeconds: 3600,
+      });
+      expect(issuedAnswer.status).toBe(201);
+      const body = json(issuedAnswer) as {
+        credential: { credentialId: string };
+        clientSecret: string;
+      };
+      registerSecret(body.clientSecret);
+      issued.add(body.credential.credentialId);
+      const env = {
+        SECRETS_API_URL: STAGING_ORIGIN,
+        SECRETS_MACHINE_TOKEN: body.clientSecret,
+        SECRETS_PROJECT: projectId,
+        SECRETS_ENVIRONMENT: ENVIRONMENT,
+      };
+      const exchanges = EXCHANGES;
+      const run = await runCliInLinux(["run", "--", "node", "-e", 'console.log("started")'], {
+        env,
+      });
+      if (exchanges) {
+        expect(run.code, run.stderr).toBe(0);
+        expect(run.stdout).toBe("started\n");
+      } else {
+        expect(run.code).toBe(77);
+        expect(run.stdout).toBe("");
+        expect(run.stderr).toMatch(
+          /^secrets: denied: .*\(code: unauthenticated, requestId: [0-9a-f-]{36}\)\n$/,
+        );
+      }
+      // Session 11's own record of this test, one file per CLI version: the
+      // journey's file is Session 5's when the CLI is this tree's build.
+      writeFileSync(
+        `docs/evidence/session-11/staging-cli-runtime-credential-${cliVersion}.json`,
+        `${JSON.stringify(
+          {
+            cli: cliVersion,
+            published: RELEASED,
+            exchanges,
+            exit: run.code,
+            startedTheChild: run.stdout.length > 0,
+          },
+          null,
+          2,
+        )}\n`,
+      );
+      record("runtimeCredential", {
+        cli: cliVersion,
+        exchanges,
+        run: run.code,
+        started: run.stdout === "started\n",
       });
     } finally {
       await revokeAll();

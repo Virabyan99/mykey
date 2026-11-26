@@ -38,7 +38,14 @@ export interface CredentialRow {
   expired: boolean;
   /** Expires within LIMITS.machineToken.expiryWarningSeconds, in the statement. */
   expiringSoon: boolean;
+  /** Session 11 (P-186): `runtime` rows hold a verifier and never an accessor. */
+  kind: CredentialKind;
+  /** `machine`: `issuedBy` is an automation credential's id, not a user's. */
+  issuedByKind: "user" | "machine";
+  boundCidrs: string[];
 }
+
+export type CredentialKind = "token" | "runtime";
 
 interface StoredCredential {
   id: CredentialId;
@@ -56,6 +63,9 @@ interface StoredCredential {
   last_used_at: Date | null;
   expired: boolean;
   expiring_soon: boolean;
+  kind: CredentialKind;
+  issued_by_kind: "user" | "machine";
+  bound_cidrs: string[];
 }
 
 const WARNING = String(LIMITS.machineToken.expiryWarningSeconds);
@@ -63,7 +73,7 @@ const WARNING = String(LIMITS.machineToken.expiryWarningSeconds);
 /** The columns of a row as read; `c` is app.machine_credential, `o` its issuance operation. */
 const COLUMNS = `c.id, c.organization_id, c.project_id, c.environment_id, c.name,
   c.issuance_operation_id, c.accessor, c.requested_expires_at, c.effective_expires_at, c.state,
-  c.issued_by, c.last_used_at,
+  c.issued_by, c.last_used_at, c.kind, c.issued_by_kind, c.bound_cidrs,
   CASE WHEN o.state = 'succeeded' THEN o.completed_at END AS issued_at,
   coalesce(c.effective_expires_at <= now(), false) AS expired,
   coalesce(c.effective_expires_at > now()
@@ -88,6 +98,9 @@ function toRow(stored: StoredCredential): CredentialRow {
     lastUsedAt: stored.last_used_at,
     expired: stored.expired,
     expiringSoon: stored.expiring_soon,
+    kind: stored.kind,
+    issuedByKind: stored.issued_by_kind,
+    boundCidrs: stored.bound_cidrs,
   };
 }
 
@@ -124,6 +137,64 @@ export async function insertIssuing(
     ],
   );
   return result.rowCount === 1 ? "inserted" : "blocked";
+}
+
+/**
+ * A runtime credential (Session 11, P-186): `active` from its first moment,
+ * with the verifier of its client secret and no accessor. The expiry is set on
+ * database time. It is no unresolved issuance: the partial index does not see it.
+ */
+export async function insertRuntimeCredential(
+  tx: pg.PoolClient,
+  scope: EnvironmentScope,
+  c: {
+    id: CredentialId;
+    name: string;
+    operationId: OperationId;
+    ttlSeconds: number;
+    issuedBy: string;
+    issuedByKind: "user" | "machine";
+    verifier: Buffer;
+    verifierKeyId: string;
+    cidrs: readonly string[];
+  },
+): Promise<void> {
+  await tx.query(
+    `INSERT INTO app.machine_credential
+       (id, organization_id, project_id, environment_id, name, issuance_operation_id,
+        requested_expires_at, effective_expires_at, state, issued_by, kind, verifier,
+        verifier_key_id, bound_cidrs, issued_by_kind)
+     VALUES ($1, $2, $3, $4, $5, $6, now() + make_interval(secs => $7),
+             now() + make_interval(secs => $7), 'active', $8, 'runtime', $9, $10, $11::text[], $12)`,
+    [
+      c.id,
+      scope.organizationId,
+      scope.projectId,
+      scope.environmentId,
+      c.name,
+      c.operationId,
+      c.ttlSeconds,
+      c.issuedBy,
+      c.verifier,
+      c.verifierKeyId,
+      [...c.cidrs],
+      c.issuedByKind,
+    ],
+  );
+}
+
+/** The kind of a credential of the environment; null when the environment has no such row. */
+export async function credentialKindOf(
+  db: Queryable,
+  scope: EnvironmentScope,
+  id: CredentialId,
+): Promise<CredentialKind | null> {
+  const result = await db.query<{ kind: CredentialKind }>(
+    `SELECT kind FROM app.machine_credential
+      WHERE organization_id = $1 AND environment_id = $2 AND id = $3`,
+    [scope.organizationId, scope.environmentId, id],
+  );
+  return result.rows[0]?.kind ?? null;
 }
 
 /** The unresolved issuance of the environment, if any. */
@@ -216,8 +287,9 @@ export async function findCredentialByOperation(
 }
 
 /**
- * The inventory of one environment, newest issuance first (P-86). A row that
- * is `revoked` with no accessor was never a token and is not listed. Paged as
+ * The inventory of one environment, newest issuance first (P-86). A token row
+ * that is `revoked` with no accessor was never a token and is not listed; a
+ * runtime row never has an accessor and is always listed. Paged as
  * listOperations: `anchor` (microseconds since the epoch of the first page's
  * first issuance) bounds every later page; `after` is the previous page's
  * last sort key "<micros>|<id>".
@@ -225,7 +297,13 @@ export async function findCredentialByOperation(
 export async function listCredentials(
   db: Queryable,
   scope: EnvironmentScope,
-  page: { anchor: string | null; after: string | null; limit: number },
+  page: {
+    anchor: string | null;
+    after: string | null;
+    limit: number;
+    /** Session 11: only this kind (an automation caller sees runtime credentials only). */
+    kind?: CredentialKind;
+  },
 ): Promise<(CredentialRow & { sortKey: string })[]> {
   const [afterMicros, afterId] = page.after === null ? [null, null] : page.after.split("|");
   const result = await db.query<StoredCredential & { sort_key: string }>(
@@ -233,12 +311,13 @@ export async function listCredentials(
             (extract(epoch FROM o.created_at) * 1000000)::bigint::text || '|' || c.id AS sort_key
        FROM app.machine_credential c JOIN app.operation o ON o.id = c.issuance_operation_id
       WHERE c.organization_id = $1 AND c.environment_id = $2
-        AND NOT (c.state = 'revoked' AND c.accessor IS NULL)
+        AND NOT (c.kind = 'token' AND c.state = 'revoked' AND c.accessor IS NULL)
         AND ($3::bigint IS NULL
              OR o.created_at <= 'epoch'::timestamptz + $3::bigint * interval '1 microsecond')
         AND ($4::bigint IS NULL
              OR (o.created_at, c.id) < ('epoch'::timestamptz + $4::bigint * interval '1 microsecond',
                                         $5::uuid))
+        AND ($7::text IS NULL OR c.kind = $7::text)
       ORDER BY o.created_at DESC, c.id DESC
       LIMIT $6`,
     [
@@ -248,6 +327,7 @@ export async function listCredentials(
       afterMicros ?? null,
       afterId ?? null,
       page.limit,
+      page.kind ?? null,
     ],
   );
   return result.rows.map((stored) => ({ ...toRow(stored), sortKey: stored.sort_key }));

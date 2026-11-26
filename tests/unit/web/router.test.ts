@@ -20,6 +20,8 @@ const EXAMPLES: Record<string, { path: string; params: Record<string, string> }>
   overview: { path: `/o/${ORG}`, params: { org: ORG } },
   activity: { path: `/o/${ORG}/activity`, params: { org: ORG } },
   audit: { path: `/o/${ORG}/audit`, params: { org: ORG } },
+  // Session 11 (Run 11.6): the automation credentials of the organization.
+  automation: { path: `/o/${ORG}/automation`, params: { org: ORG } },
   project: { path: `/o/${ORG}/p/${PROJECT}`, params: { org: ORG, project: PROJECT } },
   secrets: {
     path: `/o/${ORG}/p/${PROJECT}/e/${ENV}`,
@@ -48,7 +50,7 @@ const EXAMPLES: Record<string, { path: string; params: Record<string, string> }>
 };
 
 describe("the table of client paths", () => {
-  it("has exactly the seventeen screens of the plans (Session 7, and P-161's two)", () => {
+  it("has exactly the eighteen screens of the plans (Session 7, P-161's two, and Session 11's automation)", () => {
     expect(WEB_ROUTES.map((route) => route.id).sort()).toEqual(Object.keys(EXAMPLES).sort());
     expect(new Set(WEB_ROUTES.map((route) => route.pattern)).size).toBe(WEB_ROUTES.length);
   });

@@ -54,6 +54,25 @@ const HANDLED = new Set([
   "overview.get",
   "credentials.summary",
   "metrics.get",
+  // Session 11, Run 11.3: the first of its routes with a handler.
+  "runtime_credentials.issue",
+  "machine.exchange",
+  "machine.metadata",
+  // Run 11.5 Task A: the owner's three routes for automation credentials.
+  "automation_credentials.list",
+  "automation_credentials.issue",
+  "automation_credentials.revoke",
+  // Run 11.5 Task C: the ten routes of the automation class.
+  "automation.projects.list",
+  "automation.projects.create",
+  "automation.projects.get",
+  "automation.environments.create",
+  "automation.secrets.list",
+  "automation.secrets.create",
+  "automation.runtime_credentials.list",
+  "automation.runtime_credentials.issue",
+  "automation.runtime_credentials.revoke",
+  "automation.operations.get",
 ]);
 
 /** A valid body for every contract route that takes one. */
@@ -81,7 +100,28 @@ const BODIES: Record<string, unknown> = {
   "credentials.issue": { name: "c" },
   "credentials.revoke": { confirmed: true },
   "auth.reset.complete": { token: "A".repeat(43), newPassword: "a-long-new-password" },
+  // Session 11.
+  "runtime_credentials.issue": { name: "c" },
+  "automation_credentials.issue": {
+    name: "c",
+    rights: ["projects.create"],
+    cidrs: ["192.0.2.0/24"],
+  },
+  "automation_credentials.revoke": { confirmed: true },
+  "automation.projects.create": { name: "p" },
+  "automation.environments.create": { name: "dev" },
+  "automation.secrets.create": { name: "A", value: "" },
+  "automation.runtime_credentials.issue": { name: "c" },
+  "automation.runtime_credentials.revoke": { confirmed: true },
 };
+
+/**
+ * Session 11: the automation class (authenticated since Run 11.5). This API
+ * holds no automation credential, so every caller here is nobody: 401, with
+ * no bearer, with a bearer of either shape that names no row, and with a
+ * session. (Its handlers are proven in tests/integration/automation.)
+ */
+const UNAUTHENTICATED_CLASSES = new Set(["automation"]);
 
 /** An active organization of the owner (Run 3.7: an id the caller cannot see is 404 earlier). */
 let target: PathIds;
@@ -134,39 +174,91 @@ describe("mounted routes", () => {
     expect(missing).toEqual([]);
   });
 
-  it.each(ROUTES.filter((route) => !HANDLED.has(route.id)).map((route) => [route.id, route]))(
-    "%s without a handler ends in 404 not_found, for an authorised caller",
+  // A machine route without a handler is reached only with a real token: Run 11.3
+  // gives machine.metadata its handler and its tests. Here: no token, no answer but 401.
+  it.each(
+    ROUTES.filter(
+      (route) =>
+        (!HANDLED.has(route.id) && route.auth === "machine") || route.auth === "machine_exchange",
+    ).map((route) => [route.id, route]),
+  )("%s refuses a caller with no token, handler or not", async (_id, route) => {
+    const response = await api.request(route.method, concretePath(route));
+    expect(response.status).toBe(401);
+    expect((await errorOf(response)).code).toBe("unauthenticated");
+  });
+
+  it.each(
+    ROUTES.filter((route) => UNAUTHENTICATED_CLASSES.has(route.auth)).map((route) => [
+      route.id,
+      route,
+    ]),
+  )(
+    "%s answers the same 401 with no bearer, with a bearer of either shape and with a session",
     async (_id, route) => {
+      // A well-formed request: the body's framing is checked first on every route (400).
       const body = BODIES[route.id];
-      const init =
-        route.request.body === "raw-dotenv"
-          ? { rawBody: "A=1\n", headers: { "content-type": "text/plain" } }
-          : route.request.body === "pending"
-            ? { body: {} }
-            : body === undefined
-              ? {}
-              : { body };
-      const human = route.auth === "human" || route.auth === "human_fresh_totp";
-      const response = await api.request(route.method, concretePath(route), {
-        ...init,
-        ...(human ? { cookie } : {}),
-        headers: {
-          ...("headers" in init ? init.headers : {}),
-          ...(route.idempotent ? { "idempotency-key": randomUUID() } : {}),
-        },
-      });
-      expect(response.status).toBe(404);
-      expect((await errorOf(response)).code).toBe("not_found");
-      // The terminal 404, not a refusal of the authorization steps.
-      {
-        const denied = await api.superuser.query(
-          "SELECT 1 FROM audit.event WHERE action = 'access.denied' AND request_id = $1",
-          [response.headers.get("x-request-id")],
-        );
-        expect(denied.rowCount, route.id).toBe(0);
+      const answers: string[] = [];
+      for (const headers of [
+        {},
+        { authorization: `Bearer mkac.${randomUUID()}.${"A".repeat(43)}` },
+        { authorization: `Bearer mkrc.${randomUUID()}.${"A".repeat(43)}` },
+        { cookie },
+      ] as Record<string, string>[]) {
+        const response = await api.request(route.method, concretePath(route), {
+          ...(body === undefined ? {} : { body }),
+          headers: {
+            ...headers,
+            ...(route.idempotent ? { "idempotency-key": randomUUID() } : {}),
+          },
+        });
+        expect(response.status, route.id).toBe(401);
+        const error = await errorOf(response);
+        answers.push(JSON.stringify({ ...error, requestId: undefined }));
       }
+      expect(new Set(answers).size).toBe(1);
+      expect(answers[0]).toContain("unauthenticated");
     },
   );
+
+  it.each(
+    // An automation route's authorised caller is an automation credential, which this
+    // API does not hold: its routes are walked in tests/integration/automation.
+    ROUTES.filter(
+      (route) =>
+        !HANDLED.has(route.id) &&
+        route.auth !== "machine" &&
+        !UNAUTHENTICATED_CLASSES.has(route.auth),
+    ).map((route) => [route.id, route]),
+  )("%s without a handler ends in 404 not_found, for an authorised caller", async (_id, route) => {
+    const body = BODIES[route.id];
+    const init =
+      route.request.body === "raw-dotenv"
+        ? { rawBody: "A=1\n", headers: { "content-type": "text/plain" } }
+        : route.request.body === "pending"
+          ? { body: {} }
+          : body === undefined
+            ? {}
+            : { body };
+    const human = route.auth === "human" || route.auth === "human_fresh_totp";
+    const response = await api.request(route.method, concretePath(route), {
+      ...init,
+      ...(human ? { cookie } : {}),
+      headers: {
+        ...("headers" in init ? init.headers : {}),
+        ...(route.idempotent ? { "idempotency-key": randomUUID() } : {}),
+      },
+    });
+    expect(response.status).toBe(404);
+    expect((await errorOf(response)).code).toBe("not_found");
+    // The terminal 404, not a refusal of the authorization steps.
+    {
+      const denied = await api.superuser.query(
+        "SELECT 1 FROM audit.event WHERE action = 'access.denied' AND request_id = $1",
+        [response.headers.get("x-request-id")],
+      );
+      expect(denied.rowCount, route.id).toBe(0);
+    }
+  });
 
   it("GET /v1/version answers 200 with apiMajor 1 and the build", async () => {
     const response = await api.request("GET", "/v1/version");

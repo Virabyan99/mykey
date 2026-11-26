@@ -28,9 +28,9 @@ Every shell block marked `<!-- rehearsed … -->` in this file is run, in order 
 
 ```sh
 mkdir -p "$HOME/mykey-release"
-gh release download cli-v0.1.2 --repo Virabyan99/mykey --dir "$HOME/mykey-release"
+gh release download cli-v0.2.0 --repo Virabyan99/mykey --dir "$HOME/mykey-release"
 gh api -H "Accept: application/vnd.github.raw" \
-  "repos/Virabyan99/mykey/contents/tests/fixtures/consumers/secrets-launch.sh?ref=cli-v0.1.2" \
+  "repos/Virabyan99/mykey/contents/tests/fixtures/consumers/secrets-launch.sh?ref=cli-v0.2.0" \
   > "$HOME/mykey-release/secrets-launch.sh"
 ```
 
@@ -75,6 +75,8 @@ docker build --quiet -t "$APP_IMAGE" "$APP_DIR"
 ## 5. Store the token on the host
 
 Run the one line below on the host first, then issue a token for the environment ("Issue" in `machine-credentials.md`).
+
+For a server that must start by itself for longer than 30 days, issue a runtime credential instead ("Runtime credentials" in `machine-credentials.md`): the kind is chosen on the same screen, and its client secret is stored by the same line.
 
 - **Paste only when the terminal shows `Paste the token, then press Enter:`.** If it shows anything else, do not paste: fix the command first.
 - Nothing you paste is shown, and the token is in no shell history and no argument list. `Token stored.` means it is stored; anything that is not one token is refused.

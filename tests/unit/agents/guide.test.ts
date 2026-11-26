@@ -272,6 +272,17 @@ describe("the agent guide (D-79)", () => {
     );
   });
 
+  // Session 11 (Run 11.7): the runtime credential is the human's step too.
+  it("a server that runs longer than 30 days: the section names LIMITS's numbers, and the secret stays the human's (store-token)", () => {
+    const part =
+      /### A server that runs longer than 30 days\n([\s\S]*?)\n## 9\./.exec(GUIDE)?.[1] ?? "";
+    expect(part).toContain(`${String(LIMITS.runtimeCredential.maxTtlSeconds / 86400)} days`);
+    expect(part).toContain(`${String(LIMITS.runtimeCredential.exchangeTtlSeconds / 60)} minutes`);
+    expect(part).toContain("`store-token`");
+    expect(part).toContain("You never hold a client secret");
+    expect(blocksOf(part)).toEqual([]);
+  });
+
   it("proof finding 2: the names never come from a file that holds values, by any command", () => {
     const never = /## 13\. Never\n([\s\S]*?)(\n## |$)/.exec(GUIDE)?.[1] ?? "";
     expect(never).toMatch(/cut -d= -f1 \.env, awk … \.env, sed … \.env/);

@@ -55,6 +55,7 @@ export const TEST_OPS: RouteDef = {
   ],
   action: "secrets.write",
   scope: "environment",
+  right: null,
 };
 
 /** Inserts the operation in the state the body names and answers from it, as a replay would. */

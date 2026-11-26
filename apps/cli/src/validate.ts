@@ -1,10 +1,18 @@
 // A machine response is used only when it is provably the whole body the API
 // sent and the complete set it describes (P-96, FR-1.49, Review focus 4).
 // Every failure is `malformed`, and no message quotes the body.
-import { API_MAJOR, checkSecretName, machineKeysBody, machineResolveBody } from "@mykey/contracts";
+import {
+  API_MAJOR,
+  checkSecretName,
+  machineExchangeBody,
+  machineKeysBody,
+  machineResolveBody,
+} from "@mykey/contracts";
 import type { z } from "zod";
 import { CliError } from "./errors.ts";
+import { hasTokenShape } from "./token.ts";
 
+export type ExchangeBody = z.infer<typeof machineExchangeBody>;
 export type ResolveBody = z.infer<typeof machineResolveBody>;
 export type KeysBody = z.infer<typeof machineKeysBody>;
 
@@ -61,5 +69,18 @@ export function validateKeys(raw: Buffer, head: ResponseHead): KeysBody {
   if (!parsed.success) throw malformed("the answer is not a complete keys body");
   const body = parsed.data;
   checkNames(body.names, body.count, body.apiMajor);
+  return body;
+}
+
+/**
+ * The answer of an exchange (Session 11, P-187). Its token becomes the next
+ * request's bearer, so it must have a token's shape; no message repeats it.
+ */
+export function validateExchange(raw: Buffer, head: ResponseHead): ExchangeBody {
+  const parsed = machineExchangeBody.safeParse(parsedJson(raw, head));
+  if (!parsed.success) throw malformed("the answer is not an exchange body");
+  const body = parsed.data;
+  if (body.apiMajor !== API_MAJOR) throw malformed("the answer is of another API version");
+  if (!hasTokenShape(body.token)) throw malformed("the answer's token is not a token");
   return body;
 }

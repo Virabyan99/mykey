@@ -48,10 +48,14 @@ describe("the table (P-113)", () => {
       "rl:export": LIMITS.rate.importExportPerMinute,
       "rl:issue": LIMITS.rate.credentialIssuePerMinute,
       "rl:machine-miss": LIMITS.rate.machineMissesPerSourcePerMinute,
+      // Session 11 (P-196): exchanges of one runtime credential, requests of one automation credential.
+      "rl:exchange": LIMITS.rate.exchangePerCredentialPerMinute,
+      "rl:automation": LIMITS.rate.perAutomationCredentialPerMinute,
     });
+    expect([scopeLimit("rl:exchange"), scopeLimit("rl:automation")]).toEqual([10, 120]);
   });
 
-  it("route classes: reveal 30, the three import routes share one 5, export 5, issuance 5", () => {
+  it("route classes: reveal 30, the three import routes share one 5, export 5, the three issuances of a person share one 5", () => {
     expect(ROUTE_CLASS_LIMIT).toEqual({
       "secrets.reveal": { scope: "rl:reveal", perMinute: 30 },
       "import.preview": { scope: "rl:import", perMinute: 5 },
@@ -59,6 +63,8 @@ describe("the table (P-113)", () => {
       "import.resume": { scope: "rl:import", perMinute: 5 },
       "export.create": { scope: "rl:export", perMinute: 5 },
       "credentials.issue": { scope: "rl:issue", perMinute: 5 },
+      "runtime_credentials.issue": { scope: "rl:issue", perMinute: 5 },
+      "automation_credentials.issue": { scope: "rl:issue", perMinute: 5 },
     });
     const ids = new Set(ROUTES.map((route) => route.id));
     for (const id of [...Object.keys(ROUTE_CLASS_LIMIT), ...SESSION_EXEMPT]) {
@@ -68,6 +74,7 @@ describe("the table (P-113)", () => {
 
   it("only revocation and archive skip the session limit", () => {
     expect([...SESSION_EXEMPT].sort()).toEqual([
+      "automation_credentials.revoke",
       "credentials.revoke",
       "environments.archive",
       "projects.archive",

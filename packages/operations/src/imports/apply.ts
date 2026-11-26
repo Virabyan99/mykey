@@ -411,7 +411,7 @@ async function applyEntry(
     action,
     routeId,
     scope: run.scope,
-    userId: run.userId,
+    actor: { kind: "user", id: run.userId },
     name: entry.name,
     value,
     ...(expected === undefined ? {} : { expected }),

@@ -63,6 +63,23 @@ const routes: Record<string, Coverage> = {
   "openapi.get": { none: REFERENCE },
   "machine.keys": { actions: ["machine.keys", "system.drift_detected", DENIED] },
   "machine.resolve": { actions: ["machine.resolve", "system.drift_detected", DENIED] },
+  // Session 11 (D-80). A refused secret that names no credential is a log line, as an unknown token is (D-42).
+  "machine.metadata": { actions: [DENIED] },
+  "machine.exchange": { actions: ["machine.exchange", DENIED] },
+  "runtime_credentials.issue": { actions: ["credential.issue", DENIED] },
+  "automation_credentials.list": { actions: [DENIED] },
+  "automation_credentials.issue": { actions: ["automation_credential.issue", DENIED] },
+  "automation_credentials.revoke": { actions: ["automation_credential.revoke", DENIED] },
+  "automation.projects.list": { actions: [DENIED] },
+  "automation.projects.create": { actions: ["project.create", DENIED] },
+  "automation.projects.get": { actions: [DENIED] },
+  "automation.environments.create": { actions: ["environment.create", DENIED] },
+  "automation.secrets.list": { actions: [DENIED] },
+  "automation.secrets.create": { actions: ["secret.create", "system.drift_detected", DENIED] },
+  "automation.runtime_credentials.list": { actions: [DENIED] },
+  "automation.runtime_credentials.issue": { actions: ["credential.issue", DENIED] },
+  "automation.runtime_credentials.revoke": { actions: ["credential.revoke", DENIED] },
+  "automation.operations.get": { actions: [DENIED] },
 };
 
 const auth: Record<string, Coverage> = {

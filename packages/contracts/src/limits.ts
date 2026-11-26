@@ -46,6 +46,10 @@ const VALUES = {
     // and credential issuance per person.
     machineMissesPerSourcePerMinute: 30,
     credentialIssuePerMinute: 5,
+    // Not in Doc 06 §11; Session 11 (P-196, D-83): exchanges of one runtime
+    // credential, and requests of one automation credential.
+    exchangePerCredentialPerMinute: 10,
+    perAutomationCredentialPerMinute: 120,
   },
   concurrency: { httpPerProcess: 64, largePerProcess: 2, apiProcesses: 2, provisionerJobs: 2 },
   db: { apiPool: 20, provisionerPool: 6, opsPool: 4, maxConnections: 100 },
@@ -62,6 +66,21 @@ const VALUES = {
     maxTtlSeconds: 2592000,
     expiryWarningSeconds: 604800,
     issuerSessionSeconds: 60,
+  },
+  // Not in Doc 06 §11; Session 11 (P-196, D-83). A runtime credential lives at
+  // most a year; each exchange gives a token of `exchangeTtlSeconds`.
+  runtimeCredential: {
+    defaultTtlSeconds: 31536000,
+    maxTtlSeconds: 31536000,
+    exchangeTtlSeconds: 900,
+    maxCidrs: 8,
+  },
+  // Not in Doc 06 §11; Session 11 (P-196, D-83): an hour to a year, a week by default.
+  automationCredential: {
+    minTtlSeconds: 3600,
+    defaultTtlSeconds: 604800,
+    maxTtlSeconds: 31536000,
+    maxCidrs: 8,
   },
   disk: {
     minFreeBytesPercent: 15,

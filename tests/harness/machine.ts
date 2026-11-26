@@ -100,25 +100,66 @@ export function machineFetch(
   });
 }
 
+export type MachineRoute = "keys" | "resolve" | "metadata";
+
 /** The machine path of an environment: the project id and the environment's name. */
-export function machinePath(projectId: string, envName: string, route: "keys" | "resolve"): string {
+export function machinePath(projectId: string, envName: string, route: MachineRoute): string {
   return `/v1/machine/projects/${projectId}/environments/${encodeURIComponent(envName)}/${route}`;
+}
+
+/** Session 11: the one machine path that names no environment. */
+export const EXCHANGE_PATH = "/v1/machine/exchange";
+
+/** `from`: the caller's address as the trusted edge reports it (a fixture with `trustedProxy`). */
+const forwarded = (from: string | undefined): Record<string, string> =>
+  from === undefined ? {} : { "x-forwarded-for": from };
+
+/**
+ * machine.exchange against the fixture's first API. `secret` is the bearer:
+ * a runtime credential's client secret, a local of the caller that nothing
+ * here prints.
+ */
+export function exchangeCall(
+  f: SecretsFixture,
+  init: Omit<MachineRequest, "token"> & {
+    secret?: string;
+    from?: string;
+    to?: "first" | "second";
+  } = {},
+): Promise<MachineAnswer> {
+  const { secret, from, to, ...rest } = init;
+  const ca = readFileSync(f.stack.api.certAuthorityPath);
+  const port = to === "second" ? (f.second?.port ?? 0) : f.api.port;
+  return machineFetch({ port, ca }, "POST", EXCHANGE_PATH, {
+    ...rest,
+    ...(secret === undefined ? {} : { token: secret }),
+    headers: { ...forwarded(from), ...rest.headers },
+  });
 }
 
 /** The names the tenants fixture gives its environments (tests/harness/tenants.ts). */
 export const ENV_NAMES: Record<EnvName, string> = { env1a: "dev", env1b: "prod", env2a: "dev" };
 
-/** A machine call against the fixture's first API: keys is GET, resolve is POST. */
+/** A machine call against the fixture's first API: resolve is POST, keys and metadata are GET. */
 export function machineCall(
   f: SecretsFixture,
-  route: "keys" | "resolve",
-  init: MachineRequest & { env?: EnvName; path?: string; to?: "first" | "second" } = {},
+  route: MachineRoute,
+  init: MachineRequest & {
+    env?: EnvName;
+    path?: string;
+    to?: "first" | "second";
+    /** The caller's address as the trusted edge reports it. */
+    from?: string;
+  } = {},
 ): Promise<MachineAnswer> {
   const env = init.env ?? "env1a";
   const path = init.path ?? machinePath(f.env(env).projectId, ENV_NAMES[env], route);
   const port = init.to === "second" ? (f.second?.port ?? 0) : f.api.port;
   const ca = readFileSync(f.stack.api.certAuthorityPath);
-  return machineFetch({ port, ca }, route === "keys" ? "GET" : "POST", path, init);
+  return machineFetch({ port, ca }, route === "resolve" ? "POST" : "GET", path, {
+    ...init,
+    headers: { ...forwarded(init.from), ...init.headers },
+  });
 }
 
 /** sha256 of a value, hex: what the machine tests compare instead of values. */

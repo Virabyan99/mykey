@@ -4,9 +4,11 @@
 // piped into a short script run inside the API container, which logs in with
 // the API's own issuer identity (bound to the API's address), looks each
 // accessor up, revokes its session and prints status codes only.
-import { createHash } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
+import net from "node:net";
+import { setTimeout as sleep } from "node:timers/promises";
 import { parseDotenv } from "@mykey/contracts";
-import { expectSuccess, shQuote, sshExec, type HostEntry } from "./staging.ts";
+import { expectSuccess, registerSecret, shQuote, sshExec, type HostEntry } from "./staging.ts";
 import { publicRequest, type PublicAnswer } from "./staging-owner.ts";
 
 export const digestOf = (value: string): string =>
@@ -14,15 +16,51 @@ export const digestOf = (value: string): string =>
 
 /** A machine route on the public name: the bearer and nothing else (no cookie). */
 export function machineRequest(
-  route: "keys" | "resolve",
+  route: "keys" | "resolve" | "metadata",
   projectId: string,
   environmentName: string,
   token: string,
 ): Promise<PublicAnswer> {
   const path = `/v1/machine/projects/${projectId}/environments/${environmentName}/${route}`;
-  return publicRequest(route === "keys" ? "GET" : "POST", path, {
+  return publicRequest(route === "resolve" ? "POST" : "GET", path, {
     headers: { authorization: `Bearer ${token}` },
   });
+}
+
+/** machine.exchange on the public name (Session 11): the client secret as the bearer, no body. */
+export function exchangeRequest(clientSecret: string): Promise<PublicAnswer> {
+  return publicRequest("POST", "/v1/machine/exchange", {
+    headers: { authorization: `Bearer ${clientSecret}` },
+  });
+}
+
+/**
+ * This workstation as staging's edge sees it, as a network of one address
+ * (Run 11.8): one request to a path nobody else asks for, then the client
+ * field of its line in the edge's access log. That is the address the edge
+ * reports to the API, so it is what a bound credential is compared with. It
+ * is the owner's own address: it is registered as a secret, comes back from
+ * the host under `secretOutput`, and is never printed or written down.
+ */
+export async function callerNetwork(host: HostEntry): Promise<string> {
+  const marker = `s11-caller-${randomBytes(8).toString("hex")}`;
+  const since = new Date(Date.now() - 120_000).toISOString();
+  await publicRequest("GET", `/v1/${marker}`);
+  const command = `docker logs --since ${since} mykey-edge-1 2>&1 | grep -F -- ${marker} | head -n 1 | cut -d' ' -f1`;
+  for (let attempt = 0; attempt < 10; attempt += 1) {
+    const result = expectSuccess(
+      await sshExec(host, command, { sudo: true, secretOutput: true, timeoutMs: 30_000 }),
+      "reading the marker request in the edge's access log",
+    );
+    const address = result.stdout.trim();
+    const family = net.isIP(address);
+    if (family !== 0) {
+      registerSecret(address);
+      return `${address}/${family === 4 ? "32" : "128"}`;
+    }
+    await sleep(1000);
+  }
+  throw new Error("the edge's access log did not show the marker request");
 }
 
 /** A resolve body as digests by name. */

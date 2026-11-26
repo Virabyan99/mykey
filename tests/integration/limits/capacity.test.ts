@@ -5,16 +5,17 @@
 // its factors, and every read continue. A record that is missing, unreadable
 // or stale: the expanding routes are 503 dependency_unavailable.
 import { randomUUID } from "node:crypto";
-import { EXPANDING_ROUTES, ROUTES, type RouteDef } from "@mykey/contracts";
+import { AUTOMATION_RIGHTS, EXPANDING_ROUTES, ROUTES, type RouteDef } from "@mykey/contracts";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { signInComplete } from "../../harness/api.ts";
+import { automationCall, clearAutomation, issueAutomationFor } from "../../harness/automation.ts";
 import {
   createCredentialsFixture,
   issueFor,
   type CredentialsFixture,
 } from "../../harness/credentials-fixture.ts";
 import { archive, newProject } from "../../harness/lifecycle-fixture.ts";
-import { pathIn, requestOf } from "../authz/requests.ts";
+import { pathIn, requestOf, automationClass } from "../authz/requests.ts";
 
 let f: CredentialsFixture;
 
@@ -55,6 +56,8 @@ async function everyExpandingRoute(): Promise<Map<string, { status: number; body
   const answers = new Map<string, { status: number; body: string }>();
   for (const def of ROUTES.filter((candidate) => EXPANDING_ROUTES.has(candidate.id))) {
     if (def.auth === "reset_flow") continue; // answered below, without a session
+    // Session 11: sent with their own bearer, below.
+    if (automationClass(def)) continue;
     const request = requestOf(def);
     const response = await f.api.request(def.method, pathIn(def, ids()), { ...request, cookie });
     answers.set(def.id, { status: response.status, body: await response.text() });
@@ -76,9 +79,31 @@ async function everyExpandingRoute(): Promise<Map<string, { status: number; body
 
 describe("low", () => {
   it("every expanding route is 507 { limit: disk }; no operation, no audit row of success, no OpenBao request", async () => {
+    // Session 11 (Run 11.5): an automation credential and the project its chain manages,
+    // made while there is room (its issuance expands too).
+    const automation = await issueAutomationFor(f, { rights: [...AUTOMATION_RIGHTS] });
+    await f.api.superuser.query("UPDATE app.project SET managed_by = $2 WHERE id = $1", [
+      ids().project,
+      automation.ownerId,
+    ]);
     f.api.setCapacity("low");
     const before = await footprint();
     const answers = await everyExpandingRoute();
+    const byAutomation = ROUTES.filter(
+      (candidate) => EXPANDING_ROUTES.has(candidate.id) && automationClass(candidate),
+    );
+    expect(byAutomation).toHaveLength(4);
+    try {
+      for (const def of byAutomation) {
+        const answer = await automationCall(f, def.id, {
+          secret: automation.secret,
+          ids: { project: ids().project, env: ids().env },
+        });
+        answers.set(def.id, { status: answer.status, body: answer.text });
+      }
+    } finally {
+      await clearAutomation(f);
+    }
     expect(answers.size).toBe(EXPANDING_ROUTES.size);
     for (const [id, answer] of answers) {
       expect(answer.status, `${id}: ${answer.body}`).toBe(507);

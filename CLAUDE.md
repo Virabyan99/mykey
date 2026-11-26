@@ -20,22 +20,37 @@ The project is in **Stage 1**, a 14-day plan of nine sessions.
 
 ## Where we stand
 
-_Last updated: 24 Nov 2026, at the end of Session 10 (PR #24). Gate F was decided HARDEN (D-74): Stage 1 stays open._
+_Last updated: 26 Nov 2026, at the end of Session 11 (PR #27). Gate F was decided HARDEN (D-74): Stage 1 stays open._
 
-| Session | Topic                                       | State                                   |
-| ------- | ------------------------------------------- | --------------------------------------- |
-| 1       | Foundation                                  | **Done** (PASS WITH ISSUES), merged     |
-| 2       | Infrastructure and make-or-break proofs     | **Done** (GO, no fallback), merged      |
-| 3       | Identity, access and resources              | **Done** (PASS WITH ISSUES), merged     |
-| 4       | Operations engine and secret lifecycle      | **Done** (PASS WITH ISSUES), merged     |
-| 5       | Machine access, CLI and API reference       | **Done** (PASS WITH ISSUES), merged     |
-| 6       | Audit, limits, backup, recovery, deployment | **Done** (PASS WITH ISSUES), merged     |
-| 7       | Web workspace                               | **Done** (PASS WITH ISSUES), merged     |
-| 8       | Security review and controlled-use release  | **Done**, Gate R signed (D-67), merged  |
-| 9       | Real use, agent experiment, stage exit      | **Done**, Gate F: HARDEN (D-74), merged |
-| 10      | Hardening (D-75)                            | **Done**, merged (25 Nov 2026)          |
+| Session | Topic                                       | State                                             |
+| ------- | ------------------------------------------- | ------------------------------------------------- |
+| 1       | Foundation                                  | **Done** (PASS WITH ISSUES), merged               |
+| 2       | Infrastructure and make-or-break proofs     | **Done** (GO, no fallback), merged                |
+| 3       | Identity, access and resources              | **Done** (PASS WITH ISSUES), merged               |
+| 4       | Operations engine and secret lifecycle      | **Done** (PASS WITH ISSUES), merged               |
+| 5       | Machine access, CLI and API reference       | **Done** (PASS WITH ISSUES), merged               |
+| 6       | Audit, limits, backup, recovery, deployment | **Done** (PASS WITH ISSUES), merged               |
+| 7       | Web workspace                               | **Done** (PASS WITH ISSUES), merged               |
+| 8       | Security review and controlled-use release  | **Done**, Gate R signed (D-67), merged            |
+| 9       | Real use, agent experiment, stage exit      | **Done**, Gate F: HARDEN (D-74), merged           |
+| 10      | Hardening (D-75)                            | **Done**, merged (25 Nov 2026)                    |
+| 11      | Runtime and automation credentials (D-80)   | **Done** (PASS WITH ISSUES), merged (26 Nov 2026) |
 
 Each session's detail is in `docs/evidence/session-N/report.md`. Gate R's document is `docs/evidence/session-8/gate-r.md`, Gate F's is `docs/evidence/session-9/gate-f.md`.
+
+### Session 11 (two new credentials, 25–26 Nov 2026; `session-11/report.md`)
+
+A Stage 1 amendment (D-80) from `docs/mykey-automation-credential-spec.md`. On staging only; production gets it after W-2.
+
+- **The runtime credential** (D-81): a client secret `mkrc.<id>.<secret>` for one environment, up to 365 days, exchanged at `POST /v1/machine/exchange` for a 900-second token. PostgreSQL keeps a verifier, never the secret. A revocation stops the credential at once; a token already exchanged lives out its 15 minutes in OpenBao.
+- **`machine.metadata`:** names, versions and times of an environment, no value, no audit row.
+- **The automation credential** (D-82): `mkac.<id>.<secret>`, 1 hour to 365 days, bound to 1 to 8 networks, with up to three rights. Ten `/v1/automation` routes make a project, an environment, secrets and runtime credentials. A credential reaches only what its own chain made (`project.managed_by`); everything else is one 404. It reads no value and deletes nothing.
+- **`cli-v0.2.0`** exchanges a client secret by itself; a 30-day token works as before. The published `cli-v0.1.2` given a runtime credential exits 77.
+- **The workspace** has an Automation page (owners and admins) and issues a runtime credential beside the token.
+- **`host-v0.10.0`** (`5e13f421a4e6`) is on staging: 25 staging files green on it. Its migration `0019` means **no rollback**: a host goes back only by a restore.
+- **The manifest** (`--session 11`): 161 PASS (7 `earlier`), 7 NOT YET DUE, 5 NOT PROVEN. `test:consumers` was red once on the candidate (the workstation's memory) and green on its second run.
+- **Not proven on staging:** the fleet's 20 seconds (ten servers started in 19.7 s and 21.7 s, D-83), and the new kinds' recovery after a restore (integration only).
+- **Run 11.1, the postgres pin, was not done:** no PostgreSQL 18 image without CVE-2026-124851 exists yet. `host-v0.9.3` was never built.
 
 ### Session 10 (hardening, 23–24 Nov 2026; `session-10/report.md`)
 
@@ -108,7 +123,7 @@ Each session's detail is in `docs/evidence/session-N/report.md`. Gate R's docume
 
 ### Hosts
 
-- **Staging** runs `host-v0.9.2` on its **reinstalled server** (24 Nov 2026), restored from its own pair (D-77): gate open (epoch 12), timers installed, its first pair of the new server eligible, the staging test owner re-established.
+- **Staging** runs `host-v0.10.0` (26 Nov 2026, migrations up to `0019`) on its **reinstalled server** (24 Nov 2026), restored from its own pair (D-77): gate open (epoch 26), timers installed, the staging test owner re-established.
   - A new host key, a new WireGuard key, and the seal certificate `staging-seal-3`.
   - The pair signing key is still `k1`, back from custody.
   - Session 2's 16 spike organizations are retired (`failed`, their environments `archived`), so `reviewOpen` is 0.
@@ -121,7 +136,7 @@ Each session's detail is in `docs/evidence/session-N/report.md`. Gate R's docume
 
   Production deploys need the owner's permission. Every one is `--stay-closed`, then the owner's journey in the `tunnel verify --browser` window, then `--owner-confirmed` (`production.md`).
 
-- **Evidence registry:** 161 `PASS` (from Session 10's manifest only, `--session 10`: 35 of them `earlier`), 20 `SPIKE_PASS`, 10 `OPEN`. The manifest: 161 PASS, 7 NOT YET DUE, 5 NOT PROVEN (AC-1.25, AC-1.26, AC-1.36, AC-1.52, AC-1.55).
+- **Evidence registry:** 161 `PASS` (from Session 11's manifest, `--session 11`: 7 of them `earlier`), 20 `SPIKE_PASS`, 10 `OPEN`. The manifest: 161 PASS, 7 NOT YET DUE, 5 NOT PROVEN (AC-1.25, AC-1.26, AC-1.36, AC-1.52, AC-1.55). `--apply` sets PASS and never lowers one.
 
 ### Open items
 
@@ -130,15 +145,21 @@ Each session's detail is in `docs/evidence/session-N/report.md`. Gate R's docume
   - **The fourth, the owner's, is done:** on 25 Nov 2026 the owner connected a real application to production and reported it working (`docs/evidence/field/real-app.md`, owner-reported; not checked by an agent). Its token is rotated before its 30 days end, then the application restarts.
   - Outside the list: the reviewers' M1 change (R3-1, D-65), in Stage 2.
 - **The owner's console step:** delete the KMS certificates `staging-seal-2`, and `drill-seal-1` if it is still listed.
+- **Session 11 left open** (`session-11/report.md`):
+  - the fleet's 20 seconds on staging (D-83);
+  - two fault tests that fail sometimes on CI (above, under "CI and scans");
+  - nothing bounds what one automation credential makes, and `machine.metadata` is not audited: the owner's design questions;
+  - nine deferred minors of its two reviews.
 - **Dated:**
   - **Staging's seal certificate `staging-seal-3` expires on 24 Dec 2026, 10:28:57 UTC.** Replace it by 17 Dec (runbook `kms-and-unseal.md`); `certificate_expiring` opens 10 days before.
   - **The checkpoint `kms-cert-expiry`** is due from 12 Dec 09:57 UTC. Its instance `expiry` (`losstest-1day`) was put back on the reinstalled server, so it keeps its subject.
   - **Production's seal certificate `prod-seal-1` expires on 21 Dec 2026, 07:48 UTC** (issued 21 Nov 2026). Replace it before then, the same way, with production's names (`production.md`).
   - `.trivyignore.images` expires on 14 Dec 2026.
-  - **The next session moves the postgres pin** (owner, 25 Nov 2026): CVE-2026-124851 (zstd) and the zlib and krb5 entries are fixed in Debian, not yet in the pinned image. It is a runtime image change (D-69): a new host release, staging, then production with the owner's journey.
+  - **The postgres pin is still to move** (owner, 25 Nov 2026). Session 11 looked on 25 Nov: `18.7` clears the zlib and krb5 entries but still has CVE-2026-124851 (zstd), so it was not moved (`run-11.1.md`). Look again before 14 Dec. It is a runtime image change (D-69): a new host release, staging, then production with the owner's journey.
   - The checkpoint `pair-30-day` is due from 17 Dec 2026 19:00 UTC, before the 05:00 retention of 18 Dec.
   - **consumer-1's token** expires by about 22 Dec 2026: rotate it around 20 Dec, with the one-command form.
   - **W-2,** the 28-day report: 20 Dec 2026 (D-05, D-72). **W-1,** retention ageing: 23 to 26 Dec 2026.
+  - **After W-2:** production gets `host-v0.10.x` (the owner's journey; from then no way back but a restore), and consumer-1 `cli-v0.2.0`.
   - Weekly from 29 Nov: `host.ts prod field-pull` and `node scripts/field-report.ts prod --week <n>`.
 
 ## Commands
@@ -194,6 +215,7 @@ pnpm run test:staging tests/staging/agent-guide.staging.test.ts        # the age
 node scripts/probe.ts secrets --host <staging|prod>   # one host's existing heartbeat token and units; no new token, nothing else touched
 MYKEY_DRILL_TARGET=staging MYKEY_REDRILL_PHASE=before|lost|restore MYKEY_DRILL_RELEASE=<dir> pnpm run test:staging tests/staging/redrill.staging.test.ts   # the re-drill (D-77); state in ~/.mykey/drill/redrill-state.json
 MYKEY_RELEASE_NEW=<dir> MYKEY_RELEASE_PREVIOUS=<dir> pnpm run test:staging tests/staging/deploy.staging.test.ts   # both required
+MYKEY_CLI_DIST=<unpacked bundle> MYKEY_CLI_EXPECT=<x.y.z> pnpm run test:staging tests/staging/cli.staging.test.ts   # a published CLI against staging; both required together
 node scripts/sweep-ci.ts <file>…                 # counts canary and token shapes in downloaded CI logs and reports
 node scripts/ci-scan.ts secrets | dependencies | images | selftest   # the CI scanners, locally
 ```
@@ -217,10 +239,10 @@ Scripts in `scripts/` and `infra/` are TypeScript run directly by Node (type str
 - **Two stores, one owner per fact.** Secret values and versions live only in OpenBao: one namespace per organization, KV v2. PostgreSQL holds metadata, permissions, operations and audit, and never a secret value or a machine token.
 - **`packages/contracts`** is the single source for limits (Doc 06 §11), name rules, ids, error codes (one HTTP status each), the operation envelope and the route table.
   - `openapi.json` is generated from the route table, and `contracts:check` fails when it is stale.
-  - The route list is frozen (D-15). Since Session 7 no route has a pending body.
+  - The route list is frozen (D-15), amended once in Session 11: 57 routes. Since Session 7 no route has a pending body.
   - `WEB_ROUTES` is the table of the workspace's page paths; the API and the page's router both read it.
 - **`packages/db`** has five schemas:
-  - `app`: 19 tables;
+  - `app`: 20 tables;
   - `audit`: `event` and `archive_segment`;
   - `meta`: `schema_migration`;
   - `auth`: Better Auth's tables plus the product's factor and reset tables;
@@ -246,6 +268,13 @@ Scripts in `scripts/` and `infra/` are TypeScript run directly by Node (type str
   - **Secrets in the page:** a route of `SECRET_BEARING` is sent by `callSecret` from an event handler, never through the query cache; its answer lives in `useEphemeral` (30 seconds, gone on tab hide, navigation and sign-out). Nothing is written to any storage. `tests/unit/web/sources.test.ts` keeps these rules.
   - **Errors:** one table (`errors/explain.ts`) gives every code its text; a screen never prints a code or the server's message.
   - **Changes:** every change goes through `useAction`. It keeps the idempotency key while the outcome is open, and turns a 202 into "Not finished yet" unless the screen prints the operation's state itself.
+- **Machine access has three credentials** (Session 11):
+  - the 30-day token (an OpenBao token, shown once);
+  - the runtime credential (`mkrc.`, class `machine_exchange`): PostgreSQL keeps a verifier bound to its kind, environment and networks, and the exchange mints a 900-second token that says `meta.exchange`;
+  - the automation credential (`mkac.`, class `automation`): its verifier covers its chain, rights and networks. The person's handlers serve its routes with another actor and recheck.
+
+  A request with a dead credential, or from outside its networks, is a miss of its source (`rl:machine-miss`).
+
 - **`@mykey/operations`** has three entry points: the root (jobs, outbox, gate, replay), `/operator` (organization provisioning, admin authority) and `/provisioner` (environment job, sweep). The API imports only the root, which the skeleton test checks.
 - **Shape (Doc 06):**
   - `apps/api` serves the routes;
@@ -303,6 +332,8 @@ Scripts in `scripts/` and `infra/` are TypeScript run directly by Node (type str
 - **Node:** the workstation runs Node 24.18.0; the pin is 24.22.2, and CI uses the pin.
 - **`host.ts` paths:** use `MSYS_NO_PATHCONV=1` before `host.ts` commands that take remote absolute paths. With it, `$HOME` is not converted either, so pass `C:/Users/…` paths.
 - **One heavy job at a time.** Two suites, or a suite and a Docker build at once, exhaust the memory: workers fail to start (`0xC0000142`) and Claude Code stops background jobs.
+  - **A job Claude Code "stopped" may still run:** only its wrapper dies. Look for the script and its vitest children (`Win32_Process`) before starting anything, or two staging files overlap (Session 11).
+  - `docker desktop stop` between the files that need Docker frees about 4 GB.
   - The WSL VM keeps its memory after a job; quitting Docker Desktop (or `wsl --shutdown`) frees it.
   - After a killed job, find orphan vitest processes by command line (`Win32_Process`) and remove leftover `mykey-t-*` Compose projects.
   - Claude Code also stops background jobs when memory is short while the session is idle. It asks that they are not started again without the owner's word: report, and wait.
@@ -317,11 +348,14 @@ Scripts in `scripts/` and `infra/` are TypeScript run directly by Node (type str
   - Integration runs in two shards, about 12 and 14 minutes, each with a 30-minute limit; `browser` takes about 7.
   - Runners cost nothing (the repository is public).
 - **Watch CI after every push** (`gh run list --branch <branch>`). Session 3 was red for its whole length unnoticed.
+- **Two fault tests were red once on a documents-only commit** (Session 11's gate) and green on `gh run rerun <id> --failed`: `tests/fault/audit/exhaustion.test.ts` ("after space is freed", 503 `quarantined`) and `tests/fault/capture/compete.test.ts` (a 5xx that is not `busy`). The cause is not known.
 - **Linux CI sees file ownership; Windows Docker hides it.** Test containers that write into a bind mount run as the caller (`tests/harness/restic.ts`).
 - **The image scan** covers the pinned upstream images and the API image. It is green only through `.trivyignore.images`: reviewed upstream CVEs with no fix possible in this repository without moving an image pin, all expiring on 14 Dec 2026.
   - A new upstream CVE can turn it red overnight. Review it, add an entry that gives the reason, and name what is exposed.
 - **The secret scan** must see the whole history and at least one commit. A scanner that crashes or scans nothing fails the `scans` self-test. Reviewed false positives go into `.gitleaksignore` by fingerprint, with the reason above them.
 - **GitGuardian** flags `-e PGPASSWORD postgres` in `tests/harness/stack.ts` (incident 39994924). It is a false positive that only the owner can dismiss, and it is not a required check.
+  - On PR #27 it failed with seven findings, incidents 41121353, 41140388, 41140389, 41141567 and 41141568: the lines `.gitleaksignore` records for Session 11 (a synthetic token literal in `validate.test.ts`, and credential ids in `staging-automation.json` on two commits). No secret; the owner's to dismiss.
+  - Read what it found with `gh api repos/Virabyan99/mykey/check-runs/<id>` (`.output.text` lists commit and file), before a merge.
 - **`cli-matrix`** runs only by hand, at a gate that changed the CLI: `gh workflow run ci --ref <branch> -f jobs=cli-matrix -f cli_release=cli-vX.Y.Z` (about 5 minutes).
   - A CLI release is never changed: a fix is a new version (bump `apps/cli/package.json`).
   - macOS has BSD tools, so the terminal test uses Python's `pty.spawn` there (`MYKEY_TEST_PTY=python` takes that path on Linux).
@@ -342,6 +376,12 @@ Scripts in `scripts/` and `infra/` are TypeScript run directly by Node (type str
 - **CLI tests on Windows** run only through `pnpm run test:cli`. Its arguments may hold only letters, digits and `. _ / = -`: use `--testNamePattern=word`.
 - **The token sweep** (`token-sweep.staging.test.ts`): tokens are stored nowhere, so each test searches the tokens it holds, with a control per surface.
 - **Synthetic users:** sign-in lowercases e-mail, so synthetic users must be stored lower-case.
+- **A search needs a needle control** (Session 11): one known string sent as the secrets are, which must be found. It must differ from every argument control of the same `countOnHost` call and be at least 8 bytes, or the count goes wrong.
+- **The caller's address is never recorded.** `callerNetwork` (`tests/harness/staging-machine.ts`) reads it under `secretOutput`; no evidence file, message or assertion may hold it.
+- **An evidence key with "credential", "token" or "key" in its name turns the secret scan red** when the id beside it has high entropy, so only on some runs. Name such keys `ids.…`.
+- **`alerts.staging` takes about 85 minutes.** Plan the pass around it, on mains power.
+- **`transport.staging` expects production open** (`/health` 200 on both hosts). It is red during a `--stay-closed` deploy of production.
+- **The consumer rehearsal counts only on the candidate's release** (the manifest refuses an older one since Session 11). Run it before the manifest.
 
 - **A bound on the probe is its worst case, never a typical run** (Session 8). Doc 06 §12: a check every minute and a three-minute grace, counted from the last good observation; the evaluation comes a minute later and the cron can run a minute late. `kms_unreachable` opened at 292 and 300 s, and the blackout's `health_failing` at 304 s: the tests now allow 410 s and 360 s. A drill's cause must outlast the window in which its alert is looked for.
 - **The deploy staging test deploys releases.** Without its two variables it used to deploy Run 6.9's pair and left staging on `host-v0.6.0` (Session 9). It now refuses to start without them.
@@ -420,6 +460,7 @@ Scripts in `scripts/` and `infra/` are TypeScript run directly by Node (type str
   - Build them from the clean clone `~/mykey-release/src`; the API image needs its `MYKEY_BUILD`, which the release build sets.
   - `gh release create` needs `--target <branch>` (a bare SHA is refused).
   - A release is never changed: a fix is a new version.
+- **No rollback across a migration.** `deploy` refuses a release whose last migration is older than the host's (D-57). `host-v0.10.0` holds `0019`: from it a host goes back only by a restore, and `deploy.staging` asserts the refusal.
 - **A v2 gate opens only with a verification report.** A bare `gate open` is refused; to reopen (after `quiesce` + `resume`, or anything else), redeploy the running release. A v1 record reads as closed (cause `version`): never write one to a v2 host.
 - **After a reinstall:**
   - The `ubuntu` password is expired, and the owner changes it in a terminal.

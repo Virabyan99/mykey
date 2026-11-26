@@ -99,9 +99,11 @@ describe("restoreInvalidate (P-124)", () => {
         db,
         "SELECT count(*) AS n FROM auth.account_state WHERE state <> 'disabled'",
       ),
+      // Session 11 (Run 11.5): both tables of credentials.
       credentials: await count(
         db,
-        "SELECT count(*) AS n FROM app.machine_credential WHERE state <> 'revoked'",
+        `SELECT (SELECT count(*) FROM app.machine_credential WHERE state <> 'revoked')
+              + (SELECT count(*) FROM app.automation_credential WHERE state <> 'revoked') AS n`,
       ),
       operationsClosed: await count(
         db,
@@ -110,7 +112,29 @@ describe("restoreInvalidate (P-124)", () => {
     };
     expect(expected.sessions).toBeGreaterThanOrEqual(3);
     expect(expected.resetTokens).toBe(2);
-    expect(expected.credentials).toBe(5);
+    // Five of the six 30-day rows (one was revoked before the capture), the runtime
+    // credential, and the automation credential (Run 11.5).
+    expect(expected.credentials).toBe(7);
+    expect(
+      (
+        await db.query<{ state: string }>(
+          "SELECT state FROM app.automation_credential WHERE id = $1",
+          [world.old.automation.credentialId],
+        )
+      ).rows,
+    ).toEqual([{ state: "active" }]);
+    expect(
+      (
+        await db.query<{ kind: string; state: string }>(
+          "SELECT kind, state FROM app.machine_credential WHERE id = $1",
+          [world.old.runtime.credentialId],
+        )
+      ).rows,
+    ).toEqual([{ kind: "runtime", state: "active" }]);
+    // The token it had exchanged came back with the snapshot, alive.
+    expect(
+      await status(bao, "/v1/auth/token/lookup-self", world.old.runtime.token, namespace),
+    ).toBe(200);
     expect(expected.operationsClosed).toBeGreaterThanOrEqual(1);
     const epochs = await db.query<{ user_id: string; auth_epoch: string }>(
       "SELECT user_id, auth_epoch FROM auth.account_state WHERE state <> 'disabled'",
@@ -132,6 +156,26 @@ describe("restoreInvalidate (P-124)", () => {
       secretIdsRotated: 3 * orgs.length,
     });
     expect(await count(db, "SELECT count(*) AS n FROM auth.session")).toBe(0);
+    // Session 11 (Run 11.5): the automation credential is revoked with the rest, and
+    // the project its chain managed is still its chain's (the recovery needs that).
+    expect(
+      (
+        await db.query<{ state: string; stamped: boolean }>(
+          `SELECT state, revoked_at IS NOT NULL AS stamped
+             FROM app.automation_credential WHERE id = $1`,
+          [world.old.automation.credentialId],
+        )
+      ).rows,
+    ).toEqual([{ state: "revoked", stamped: true }]);
+    expect(
+      await count(
+        db,
+        "SELECT count(*) AS n FROM app.automation_credential WHERE state <> 'revoked'",
+      ),
+    ).toBe(0);
+    expect(
+      await count(db, "SELECT count(*) AS n FROM app.project WHERE managed_by IS NOT NULL"),
+    ).toBe(1);
     expect(await count(db, "SELECT count(*) AS n FROM auth.reset_token")).toBe(0);
     expect(await count(db, "SELECT count(*) AS n FROM auth.verification")).toBe(0);
     expect(await count(db, "SELECT count(*) AS n FROM auth.totp_step_used")).toBeGreaterThanOrEqual(
@@ -161,6 +205,19 @@ describe("restoreInvalidate (P-124)", () => {
     for (const old of world.old.tokens) {
       expect(await status(bao, "/v1/auth/token/lookup-self", old.token, namespace)).toBe(403);
     }
+    // Session 11 (Run 11.3): the runtime credential is revoked as every row is (by
+    // class, not by kind), and the token it had exchanged is gone with every accessor.
+    expect(
+      (
+        await db.query<{ kind: string; state: string }>(
+          "SELECT kind, state FROM app.machine_credential WHERE id = $1",
+          [world.old.runtime.credentialId],
+        )
+      ).rows,
+    ).toEqual([{ kind: "runtime", state: "revoked" }]);
+    expect(
+      await status(bao, "/v1/auth/token/lookup-self", world.old.runtime.token, namespace),
+    ).toBe(403);
     expect(await status(bao, "/v1/auth/token/lookup-self", world.old.rootToken)).toBe(403);
     // The AppRoles: new secret ids delivered; the lost host's no longer log in.
     for (const name of ["runtime", "issuer", "provisioner"] as AppRoleName[]) {

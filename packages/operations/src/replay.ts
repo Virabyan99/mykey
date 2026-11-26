@@ -156,6 +156,15 @@ export type ReplayAnswer =
 
 const TERMINAL: ReadonlySet<string> = new Set(["succeeded", "partial", "rejected"]);
 
+/** The issuances whose answer holds a secret that is shown once. */
+const SHOWN_ONCE: ReadonlySet<string> = new Set([
+  "credentials.issue",
+  "runtime_credentials.issue",
+  "automation.runtime_credentials.issue",
+  // Run 11.5: nor does an automation credential's issuance show its secret again.
+  "automation_credentials.issue",
+]);
+
 /**
  * The answer to a request whose operation already exists (P-65): unfinished →
  * 202 with the envelope; succeeded → the route's completed status; partial →
@@ -173,7 +182,8 @@ export function replayAnswer(route: RouteDef, row: OperationRow): ReplayAnswer {
       return { status: 202, body: operationResponse(row) };
     case "succeeded":
       // P-88 (FR-1.43): a token is shown once; a replayed issuance never shows it again.
-      if (route.id === "credentials.issue") {
+      // Session 11: nor does one of a runtime credential show its client secret again.
+      if (SHOWN_ONCE.has(route.id)) {
         return { error: "credential_not_replayable", operationId: row.id };
       }
       return { status: 201 in route.responses ? 201 : 200, body: operationResponse(row) };

@@ -59,7 +59,7 @@ beforeAll(async () => {
     copyFileSync(join(MIGRATIONS, name), join(dir, "rehearsal", name));
   }
   writeFileSync(
-    join(dir, "rehearsal", "0019_rehearsal_fails.sql"),
+    join(dir, "rehearsal", "0020_rehearsal_fails.sql"),
     "CREATE TABLE app.rehearsal (id int);\nSELECT 1 / 0;\n",
   );
 }, 900_000);
@@ -92,8 +92,8 @@ function release(version: string, commit: string, last: string): Release {
     scans: { secrets: "pass", dependencies: "pass", images: "pass" },
   };
 }
-const PREVIOUS = release("0.5.9", "c96b83d".padEnd(40, "0"), "0018_incarnation");
-const REHEARSAL = release("0.6.1", "d1e2f3a".padEnd(40, "0"), "0019_rehearsal_fails");
+const PREVIOUS = release("0.5.9", "c96b83d".padEnd(40, "0"), "0019_automation_and_runtime");
+const REHEARSAL = release("0.6.1", "d1e2f3a".padEnd(40, "0"), "0020_rehearsal_fails");
 
 /** A local DeployIo: the gate file, migrate and the report are real. */
 function localIo(target: Release, migrationsDir: string, reports: VerificationReport[]) {
@@ -198,7 +198,7 @@ describe("a deploy whose migration fails (P-128)", () => {
     const reports: VerificationReport[] = [];
     // The host runs the previous release, open.
     const first = localIo(PREVIOUS, MIGRATIONS, reports);
-    const plan = deployPlan({ build: "", lastMigration: "0018_incarnation" }, PREVIOUS, {
+    const plan = deployPlan({ build: "", lastMigration: "0019_automation_and_runtime" }, PREVIOUS, {
       related: true,
     });
     if (!("steps" in plan)) throw new Error(plan.refused);
@@ -210,7 +210,7 @@ describe("a deploy whose migration fails (P-128)", () => {
     const before = await schemaRows();
     const failing = localIo(REHEARSAL, join(dir, "rehearsal"), reports);
     const rehearsalPlan = deployPlan(
-      { build: PREVIOUS.commit.slice(0, 12), lastMigration: "0018_incarnation" },
+      { build: PREVIOUS.commit.slice(0, 12), lastMigration: "0019_automation_and_runtime" },
       REHEARSAL,
       { related: true },
     );
@@ -226,7 +226,7 @@ describe("a deploy whose migration fails (P-128)", () => {
     // deploy --release <previous>: every step again, a fresh report, open.
     const back = localIo(PREVIOUS, MIGRATIONS, reports);
     const backPlan = deployPlan(
-      { build: REHEARSAL.commit.slice(0, 12), lastMigration: "0018_incarnation" },
+      { build: REHEARSAL.commit.slice(0, 12), lastMigration: "0019_automation_and_runtime" },
       PREVIOUS,
       { related: true },
     );
@@ -243,7 +243,7 @@ describe("a deploy whose migration fails (P-128)", () => {
     // A redeploy over the open gate: the record its opening replaces is its own closed one.
     const again = localIo(PREVIOUS, MIGRATIONS, reports);
     const againPlan = deployPlan(
-      { build: PREVIOUS.commit.slice(0, 12), lastMigration: "0018_incarnation" },
+      { build: PREVIOUS.commit.slice(0, 12), lastMigration: "0019_automation_and_runtime" },
       PREVIOUS,
       { related: true },
     );

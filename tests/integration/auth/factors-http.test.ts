@@ -42,6 +42,8 @@ beforeAll(async () => {
         route.id.startsWith("import.") ||
         route.id === "export.create" ||
         route.id.startsWith("credentials.") ||
+        route.id.startsWith("runtime_credentials.") ||
+        route.id.startsWith("automation_credentials.") ||
         route.id.endsWith(".archive") ||
         route.id.endsWith(".reactivate"),
     ).map((route) => route.id),
@@ -79,6 +81,14 @@ const BODIES: Record<string, unknown> = {
   "export.create": { confirmed: true },
   "credentials.issue": { name: "c" },
   "credentials.revoke": { confirmed: true },
+  // Session 11: the four human routes of the new credentials.
+  "runtime_credentials.issue": { name: "c" },
+  "automation_credentials.issue": {
+    name: "c",
+    rights: ["projects.create"],
+    cidrs: ["192.0.2.0/24"],
+  },
+  "automation_credentials.revoke": { confirmed: true },
 };
 
 /** Ids of an active organization of the enrolled owner (Run 3.7: random ids are 404). */

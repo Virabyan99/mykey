@@ -6,21 +6,40 @@ Written in Run 6.3 (P-113 – P-115, D-49). This runbook lists every limit of th
 
 Windows are 60 seconds, cut from the epoch on database time, shared by every API process (`app.rate_limit`).
 
-| Limit                                     | A minute | Counted for                                                        | Caller sees                                                                                              | Operator sees                                                            |
-| ----------------------------------------- | -------- | ------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------ |
-| Requests from one source                  | 300      | the source address (the edge's `X-Forwarded-For` hop only)         | `429 rate_limited`, `retry-after`, `connection: close`; the body is not read                             | log `rate_limited { scope: "rl:source" }`                                |
-| Requests of one session                   | 120      | the session; not counted on credential revocation and the archives | `429 rate_limited`, `retry-after`                                                                        | log `rl:session`                                                         |
-| Requests of one machine credential        | 60       | the credential                                                     | `429 rate_limited`, `retry-after`                                                                        | log `rl:credential`                                                      |
-| Reveals                                   | 30       | the person                                                         | `429`                                                                                                    | log `rl:reveal`                                                          |
-| Import preview, apply and resume together | 5        | the person                                                         | `429`                                                                                                    | log `rl:import`                                                          |
-| Exports                                   | 5        | the person                                                         | `429`                                                                                                    | log `rl:export`                                                          |
-| Credential issuance                       | 5        | the person                                                         | `429`                                                                                                    | log `rl:issue`                                                           |
-| Machine tokens nobody can attribute       | 30       | the source address                                                 | the 31st and every later machine request of that source in the window: `429`, with no request to OpenBao | log `rl:machine-miss`; `machine_unauthenticated { cause }` for each miss |
-| Sign-in attempts, failures, locks         | as D-28  | source and account                                                 | `429` or the delayed refusal of the auth module                                                          | unchanged since Session 3                                                |
+| Limit                                     | A minute | Counted for                                                                 | Caller sees                                                                                              | Operator sees                                                            |
+| ----------------------------------------- | -------- | --------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------ |
+| Requests from one source                  | 300      | the source address (the edge's `X-Forwarded-For` hop only)                  | `429 rate_limited`, `retry-after`, `connection: close`; the body is not read                             | log `rate_limited { scope: "rl:source" }`                                |
+| Requests of one session                   | 120      | the session; not counted on the two credential revocations and the archives | `429 rate_limited`, `retry-after`                                                                        | log `rl:session`                                                         |
+| Requests of one machine credential        | 60       | the credential                                                              | `429 rate_limited`, `retry-after`                                                                        | log `rl:credential`                                                      |
+| Reveals                                   | 30       | the person                                                                  | `429`                                                                                                    | log `rl:reveal`                                                          |
+| Import preview, apply and resume together | 5        | the person                                                                  | `429`                                                                                                    | log `rl:import`                                                          |
+| Exports                                   | 5        | the person                                                                  | `429`                                                                                                    | log `rl:export`                                                          |
+| Credential issuance                       | 5        | the person                                                                  | `429`                                                                                                    | log `rl:issue`                                                           |
+| Machine tokens nobody can attribute       | 30       | the source address                                                          | the 31st and every later machine request of that source in the window: `429`, with no request to OpenBao | log `rl:machine-miss`; `machine_unauthenticated { cause }` for each miss |
+| Sign-in attempts, failures, locks         | as D-28  | source and account                                                          | `429` or the delayed refusal of the auth module                                                          | unchanged since Session 3                                                |
 
 - **The price of the miss rule:** once a source has sent 30 tokens nobody can attribute in a minute, every machine request from that source is refused until the window ends, a valid credential's included. Clients behind one NAT share that fate. The answer says how many seconds remain (`retry-after`).
+- **A dead credential is a miss too** (Run 11.8): a machine credential of any kind, or an automation credential, that is revoked, expired or called from outside its networks counts against the same 30 of its source. From the 31st it is refused before the database is read, and no audit row is written.
 - **A counter that cannot be written** (the database refuses, is full or is gone) makes every request `503 dependency_unavailable`. No limit is skipped.
 - **Clearing a counter by hand** is never needed: a window ends by itself within 60 s. `ops reset-account` clears an account's sign-in locks (runbook `operator-accounts.md`).
+
+## Runtime and automation credentials (Session 11, D-83)
+
+These are not in Doc 06 §11. The numbers are `LIMITS.runtimeCredential`, `LIMITS.automationCredential` and two entries of `LIMITS.rate`.
+
+| Limit                                      | Value                                                                             | Caller sees                               |
+| ------------------------------------------ | --------------------------------------------------------------------------------- | ----------------------------------------- |
+| A runtime credential's lifetime            | at most 365 days, which is the default                                            | `422 validation_failed` for a longer one  |
+| The token one exchange gives               | 15 minutes, never renewed                                                         | the token's `expiresAt`                   |
+| An automation credential's lifetime        | 1 hour to 365 days, 7 days by default                                             | `422 validation_failed` outside the range |
+| Source networks a credential is bound to   | at most 8; an automation credential at least 1                                    | `422 validation_failed`                   |
+| Exchanges of one runtime credential        | 10 a minute                                                                       | `429 rate_limited`, `retry-after`         |
+| Requests of one automation credential      | 120 a minute                                                                      | `429 rate_limited`, `retry-after`         |
+| Secrets nobody can attribute (either kind) | 30 a minute per source, shared with the row "Machine tokens nobody can attribute" | `429`                                     |
+
+- Both kinds are marked "expiring soon" 7 days before their expiry, as a 30-day token is.
+- **The exchange's limits are enforced since Run 11.3:** 10 exchanges a minute for each runtime credential, and the miss rule for a client secret nobody can attribute. A bearer that is not of the client secret's shape costs no read and is not counted.
+- **The automation credential's limit is enforced since Run 11.5:** 120 requests a minute for each credential. `automation.md` says what a client does with a `429`.
 
 ## Concurrency
 
@@ -33,6 +52,8 @@ Windows are 60 seconds, cut from the epoch on database time, shared by every API
 | A writer waits 2 s for an environment's lock                                    | the secret and import writes                                              | `503 busy`                                               | status 503                                                                       |
 | Read cool-down 1.5 s after each complete read of an environment                 | the next complete read of it waits it out; writers do not                 | a slower back-to-back read                               | nothing                                                                          |
 | PostgreSQL connections: an API process 20, the provisioner 6, an ops command 4  | the pools                                                                 | `503 dependency_unavailable` when a pool times out (2 s) | `tests/unit/contracts/pools.test.ts` keeps the sum under `max_connections` (100) |
+
+**Instances started together.** The cool-down and the two large slots admit about two complete reads of one environment every 1.6 s; the others get `503 busy` at once and ask again. The CLI asks ten times over 13.75 s from `0.2.0` (five times over 3.75 s before), which starts ten instances of one environment, the slowest after about 10 s (D-83, measured in Run 11.3).
 
 A back-to-back reader of one large environment can still make a person's write wait: the measured worst case is three attempts 1 s apart (6.4 s locally). A write that answers `busy` is safe to send again with the same `Idempotency-Key`.
 

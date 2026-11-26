@@ -112,7 +112,7 @@ describe("buildRelease (P-127)", () => {
       ["provisioner", "provisioner.tar"],
       ["ops", "ops.tar"],
     ]);
-    expect(release.migrations.last).toBe("0018_incarnation");
+    expect(release.migrations.last).toBe("0019_automation_and_runtime");
     expect(JSON.parse(readFileSync(join(dir, "release.json"), "utf8"))).toEqual(release);
     const sums = readFileSync(join(dir, "SHA256SUMS"), "utf8");
     for (const file of ["api.tar", "provisioner.tar", "ops.tar", "release.json"]) {

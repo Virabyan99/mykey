@@ -281,6 +281,80 @@ const CASES: Case[] = [
   ],
   ["maintenance", "cannot create a table", "CREATE TABLE app.x ()", DENIED],
   ["maintenance", "cannot alter a table", "ALTER TABLE app.project ADD COLUMN x integer", DENIED],
+
+  // Session 11 (migration 0019): the two credentials that are verifiers.
+  [
+    "api_runtime",
+    "revokes an automation credential and records its use",
+    "UPDATE app.automation_credential SET state = 'revoked', revoked_at = now(), last_used_at = now()",
+    "ok",
+  ],
+  [
+    "api_runtime",
+    "cannot rewrite an automation credential's verifier",
+    "UPDATE app.automation_credential SET verifier = verifier",
+    DENIED,
+  ],
+  [
+    "api_runtime",
+    "cannot widen an automation credential",
+    "UPDATE app.automation_credential SET rights = rights, bound_cidrs = bound_cidrs, expires_at = expires_at",
+    DENIED,
+  ],
+  [
+    "api_runtime",
+    "cannot move an automation credential to another chain",
+    "UPDATE app.automation_credential SET owner_id = owner_id",
+    DENIED,
+  ],
+  [
+    "api_runtime",
+    "cannot delete automation credentials",
+    "DELETE FROM app.automation_credential",
+    DENIED,
+  ],
+  [
+    "api_runtime",
+    "cannot rewrite a runtime credential's verifier",
+    "UPDATE app.machine_credential SET verifier = verifier, verifier_key_id = verifier_key_id",
+    DENIED,
+  ],
+  [
+    "api_runtime",
+    "cannot change a credential's kind or its bound addresses",
+    "UPDATE app.machine_credential SET kind = kind, bound_cidrs = bound_cidrs",
+    DENIED,
+  ],
+  [
+    "api_runtime",
+    "cannot change who manages a project",
+    "UPDATE app.project SET managed_by = NULL",
+    DENIED,
+  ],
+  [
+    "provisioner_runtime",
+    "cannot read automation credentials",
+    "SELECT * FROM app.automation_credential",
+    DENIED,
+  ],
+  [
+    "maintenance",
+    "revokes every automation credential (a restore)",
+    "UPDATE app.automation_credential SET state = 'revoked', revoked_at = now()",
+    "ok",
+  ],
+  [
+    "backup_reader",
+    "reads automation credentials",
+    "SELECT * FROM app.automation_credential",
+    "ok",
+  ],
+  [
+    "backup_reader",
+    "cannot revoke an automation credential",
+    "UPDATE app.automation_credential SET state = 'revoked'",
+    DENIED,
+  ],
 ];
 
 describe("role privileges", () => {

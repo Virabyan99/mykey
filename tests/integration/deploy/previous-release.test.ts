@@ -1,6 +1,7 @@
 // Run 6.9 Task B (P-131): rolling back to 45b5c1f3cc3a (the release production
 // and staging ran before Session 6) is safe for the data: that commit's API,
-// started from its own checkout, works on a database migrated to 0018 —
+// started from its own checkout, works on a database migrated to the newest
+// revision (0019 since Session 11: its new columns all have defaults) —
 // sign-in, a secret write, a reveal, an issuance and a revocation. It reads a
 // v1 gate record only (rollback across the gate's format: deploy.md). The
 // first run makes the checkout (~/mykey-prev/<commit>, git worktree + pnpm
@@ -68,12 +69,12 @@ afterAll(async () => {
 const call = (method: string, path: string, init: Parameters<typeof requestTo>[3] = {}) =>
   requestTo({ port: old.port, ca }, method, path, init);
 
-describe(`the API of ${PREVIOUS} on a database at 0018 (P-131)`, () => {
+describe(`the API of ${PREVIOUS} on a database at 0019 (P-131)`, () => {
   it("the schema is the new one", async () => {
     const last = await f.api.superuser.query<{ name: string }>(
       "SELECT name FROM meta.schema_migration ORDER BY name DESC LIMIT 1",
     );
-    expect(last.rows[0]?.name.replace(/\.sql$/, "")).toBe("0018_incarnation");
+    expect(last.rows[0]?.name.replace(/\.sql$/, "")).toBe("0019_automation_and_runtime");
   });
 
   it("sign-in, a secret write, a reveal, an issuance and a revocation succeed", async () => {

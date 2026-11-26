@@ -23,6 +23,10 @@ export const RATE_SCOPES = [
   "rl:export",
   "rl:issue",
   "rl:machine-miss",
+  // Session 11 (P-196, D-83): exchanges of one runtime credential, and
+  // requests of one automation credential (enforced from Run 11.5).
+  "rl:exchange",
+  "rl:automation",
 ] as const;
 export type RateScope = (typeof RATE_SCOPES)[number];
 
@@ -37,6 +41,8 @@ const PRODUCT_LIMITS: Readonly<Record<RateScope, number>> = {
   "rl:export": LIMITS.rate.importExportPerMinute,
   "rl:issue": LIMITS.rate.credentialIssuePerMinute,
   "rl:machine-miss": LIMITS.rate.machineMissesPerSourcePerMinute,
+  "rl:exchange": LIMITS.rate.exchangePerCredentialPerMinute,
+  "rl:automation": LIMITS.rate.perAutomationCredentialPerMinute,
 };
 
 /** The product's limit of a scope per minute. */
@@ -53,6 +59,9 @@ export const ROUTE_CLASS_LIMIT: Readonly<Record<string, { scope: RateScope; perM
     "import.resume": { scope: "rl:import", perMinute: PRODUCT_LIMITS["rl:import"] },
     "export.create": { scope: "rl:export", perMinute: PRODUCT_LIMITS["rl:export"] },
     "credentials.issue": { scope: "rl:issue", perMinute: PRODUCT_LIMITS["rl:issue"] },
+    // Session 11: every issuance a person can make shares the one limit.
+    "runtime_credentials.issue": { scope: "rl:issue", perMinute: PRODUCT_LIMITS["rl:issue"] },
+    "automation_credentials.issue": { scope: "rl:issue", perMinute: PRODUCT_LIMITS["rl:issue"] },
   };
 
 /**
@@ -62,6 +71,8 @@ export const ROUTE_CLASS_LIMIT: Readonly<Record<string, { scope: RateScope; perM
  */
 export const SESSION_EXEMPT: ReadonlySet<string> = new Set([
   "credentials.revoke",
+  // Session 11 (review L2): an automation credential is revoked on a route of its own.
+  "automation_credentials.revoke",
   "projects.archive",
   "environments.archive",
 ]);

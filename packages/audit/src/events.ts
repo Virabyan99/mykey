@@ -6,10 +6,11 @@
 import { SECRET_NAME_PATTERN } from "@mykey/contracts";
 import { z } from "zod";
 
+// Session 11: a route id may hold an underscore (`runtime_credentials.issue`).
 const routeId = z
   .string()
   .max(48)
-  .regex(/^[a-z]+(?:\.[a-z]+)+$/);
+  .regex(/^[a-z]+(?:[._][a-z]+)+$/);
 
 /** A secret's name (P-71): the one string up to 128 characters, under the name pattern. */
 const secretName = z.string().max(128).regex(SECRET_NAME_PATTERN);
@@ -61,7 +62,8 @@ export const AUDIT_DETAILS = {
   /** Run 3.7: a request of an authenticated caller that the pipeline refused. */
   "access.denied": z.strictObject({
     routeId,
-    reason: z.enum(["hidden", "action", "state", "fresh"]),
+    // `source` (Session 11): a credential used from outside its networks. No address is kept.
+    reason: z.enum(["hidden", "action", "state", "fresh", "source"]),
   }),
   /** Run 3.8: the organization became active, or stopped for review at a step. */
   "operator.organization_provision": z.strictObject({
@@ -144,6 +146,9 @@ export const AUDIT_DETAILS = {
     credentialId: z.uuid(),
     nameLength: z.int().min(1).max(64),
     ttlSeconds: z.int().positive(),
+    // Session 11 (P-186): absent on a 30-day token's row, as before.
+    kind: z.enum(["token", "runtime"]).optional(),
+    cidrCount: z.int().min(0).max(8).optional(),
   }),
   "credential.revoke": z.strictObject({ credentialId: z.uuid() }),
   /**
@@ -232,6 +237,33 @@ export const AUDIT_DETAILS = {
       .max(40)
       .regex(/^[0-9a-f]{7,40}$/),
   }),
+  /**
+   * Session 11 (P-187): a runtime credential was exchanged for a short-lived
+   * token. Actor: the credential; target: its environment. Never the client
+   * secret, the token or its accessor.
+   */
+  "machine.exchange": z.strictObject({
+    credentialId: z.uuid(),
+    ttlSeconds: z.int().positive(),
+  }),
+  /**
+   * Session 11 (P-191, P-192): an automation credential. Target: the
+   * organization. Its rights as three booleans (`keysCreate` is the right
+   * `secrets.create`: no details key may hold that word); its name by length;
+   * never its secret, its verifier or an address.
+   */
+  "automation_credential.issue": z.strictObject({
+    credentialId: z.uuid(),
+    ownerId: z.uuid(),
+    nameLength: z.int().min(1).max(64),
+    ttlSeconds: z.int().positive(),
+    cidrCount: z.int().min(1).max(8),
+    projectsCreate: z.boolean(),
+    keysCreate: z.boolean(),
+    runtimeCredentialsManage: z.boolean(),
+    replaces: z.uuid().optional(),
+  }),
+  "automation_credential.revoke": z.strictObject({ credentialId: z.uuid() }),
 } as const;
 
 export type AuditAction = keyof typeof AUDIT_DETAILS;
@@ -309,6 +341,9 @@ export const AUDIT_SCOPE: Readonly<Record<AuditAction, AuditScope>> = Object.fre
   "operator.restore_invalidate": "global",
   "operator.restore_verify": "global",
   "operator.deploy": "global",
+  "machine.exchange": "tenant",
+  "automation_credential.issue": "tenant",
+  "automation_credential.revoke": "tenant",
 } satisfies Record<AuditAction, AuditScope>);
 
 /**
@@ -327,7 +362,9 @@ export const SERVED_ACTIONS: readonly AuditAction[] = Object.freeze(
 export const ACTIVITY_ACTIONS: readonly AuditAction[] = Object.freeze(
   AUDIT_ACTIONS.filter(
     (action) =>
-      /^(project|environment|secret|import|credential|machine)\./.test(action) ||
+      /^(project|environment|secret|import|credential|machine|automation_credential)\./.test(
+        action,
+      ) ||
       action === "system.operation_stuck" ||
       action === "system.drift_detected" ||
       action === "system.environment_provision",

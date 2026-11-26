@@ -2,11 +2,12 @@
 // OpenBao service tokens in the files it is given (CI logs, CLI reports) and
 // exits 1 on any; it prints counts per file, never what it found.
 import { spawnSync } from "node:child_process";
-import { randomBytes } from "node:crypto";
+import { randomBytes, randomUUID } from "node:crypto";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, describe, expect, it } from "vitest";
+import { parsePresentedSecret } from "@mykey/contracts";
 import { countFindings } from "../../../scripts/sweep-ci.ts";
 
 const work = mkdtempSync(join(tmpdir(), "mykey-sweep-ci-"));
@@ -39,6 +40,47 @@ describe("sweep-ci", () => {
       canaries: 0,
       tokens: 0,
     });
+  });
+
+  // Session 11 (Run 11.8): the two new secrets are token shapes too.
+  it("counts a runtime credential's client secret and an automation secret, and neither their prefix nor a placeholder", () => {
+    const presented = (prefix: string) =>
+      [prefix, randomUUID(), randomBytes(32).toString("base64url")].join(".");
+    expect(countFindings(`authorization: Bearer ${presented("mkrc")}`)).toEqual({
+      canaries: 0,
+      tokens: 1,
+    });
+    expect(countFindings(`secret=${presented("mkac")};`)).toEqual({ canaries: 0, tokens: 1 });
+    const placeholder = ["mkrc", "<credentialId>", "<43 characters>"].join(".");
+    expect(countFindings(`not.toContain("mkrc.") and "mkac." and ${placeholder}`)).toEqual({
+      canaries: 0,
+      tokens: 0,
+    });
+    // The sample is the product's shape: the day that changes, this turns red.
+    expect(parsePresentedSecret(presented("mkrc"))).not.toBeNull();
+    expect(parsePresentedSecret(presented("mkac"))).not.toBeNull();
+  });
+
+  // The second review of Run 11.8 (M2): two forms a real log holds.
+  it("counts a secret that follows a colour code, and one cut short by a slice", () => {
+    const presented = (prefix: string) =>
+      [prefix, randomUUID(), randomBytes(32).toString("base64url")].join(".");
+    const red = `${String.fromCharCode(27)}[31m`;
+    const reset = `${String.fromCharCode(27)}[0m`;
+    // A downloaded CI log keeps colour codes, and one ends in a letter.
+    expect(countFindings(`error: ${red}${presented("mkrc")}${reset}`)).toEqual({
+      canaries: 0,
+      tokens: 1,
+    });
+    expect(countFindings(`${red}${presented("mkac")}${reset}`)).toEqual({ canaries: 0, tokens: 1 });
+    expect(countFindings(`${red}${serviceToken()}${reset}`)).toEqual({ canaries: 0, tokens: 1 });
+    expect(countFindings(`${red}${canary()}${reset}`)).toEqual({ canaries: 1, tokens: 0 });
+    // A body printed with slice(0, n) can end inside the secret.
+    const cut = presented("mkrc").slice(0, 4 + 1 + 36 + 1 + 30);
+    expect(countFindings(`body: {"clientSecret":"${cut}`)).toEqual({ canaries: 0, tokens: 1 });
+    // Too little of it left to be worth a finding: the id and a few characters.
+    const stub = presented("mkac").slice(0, 4 + 1 + 36 + 1 + 5);
+    expect(countFindings(`body: {"secret":"${stub}`)).toEqual({ canaries: 0, tokens: 0 });
   });
 
   it("exits 1 on a planted canary and a planted token, printing counts but never the strings", () => {
