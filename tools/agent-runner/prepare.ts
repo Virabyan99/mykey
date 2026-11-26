@@ -9,8 +9,8 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-export const CLI_RELEASE = "cli-v0.1.2";
-const FILES = ["install.sh", "mykey-cli-0.1.2.tgz", "SHA256SUMS"] as const;
+export const CLI_RELEASE = "cli-v0.2.0";
+const FILES = ["install.sh", "mykey-cli-0.2.0.tgz", "SHA256SUMS"] as const;
 const BASE = `https://github.com/Virabyan99/mykey/releases/download/${CLI_RELEASE}`;
 
 export const RELEASE_DIR = join(dirname(fileURLToPath(import.meta.url)), "mykey-release");

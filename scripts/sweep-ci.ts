@@ -1,7 +1,8 @@
 // Run 8.4 Step 3 (P-152): node scripts/sweep-ci.ts <file>…
 //
 // Counts canary-shaped strings (the secret scan's rule, any case) and OpenBao
-// token shapes (hvs./hvb./hvr. and the legacy s. + 24) in the files it is
+// token shapes (hvs./hvb./hvr., the legacy s. + 24, and since Session 11 the
+// client secret and the automation secret, mkrc. and mkac.) in the files it is
 // given: CI logs and CLI reports downloaded at the one pass (Run 8.7). It
 // prints one line of counts per file, never what it found, and exits 1 when
 // any file holds one, 2 when it is given no file or a file it cannot read.
@@ -10,11 +11,16 @@ import { basename } from "node:path";
 
 const CANARY = /MYKEY_CANARY_[A-Za-z0-9]{32}/g;
 const TOKEN = /\bhv[sbr]\.[A-Za-z0-9_-]{20,}|(?<![A-Za-z0-9.])s\.[A-Za-z0-9]{24}(?![A-Za-z0-9])/g;
+// Session 11 (Run 11.8): a runtime credential's client secret and an automation
+// secret, `mkrc.` or `mkac.`, the credential's id and 43 characters. Counted
+// with the tokens: either one opens what a token opens, or more.
+const PRESENTED =
+  /\bmk(?:rc|ac)\.[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.[A-Za-z0-9_-]{43}/g;
 
 export function countFindings(text: string): { canaries: number; tokens: number } {
   return {
     canaries: [...text.matchAll(CANARY)].length,
-    tokens: [...text.matchAll(TOKEN)].length,
+    tokens: [...text.matchAll(TOKEN)].length + [...text.matchAll(PRESENTED)].length,
   };
 }
 

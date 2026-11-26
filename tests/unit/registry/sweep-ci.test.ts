@@ -2,7 +2,7 @@
 // OpenBao service tokens in the files it is given (CI logs, CLI reports) and
 // exits 1 on any; it prints counts per file, never what it found.
 import { spawnSync } from "node:child_process";
-import { randomBytes } from "node:crypto";
+import { randomBytes, randomUUID } from "node:crypto";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -36,6 +36,22 @@ describe("sweep-ci", () => {
     expect(countFindings(`X-Vault-Token: ${serviceToken()}`)).toEqual({ canaries: 0, tokens: 1 });
     expect(countFindings(`token=${legacyToken()};`)).toEqual({ canaries: 0, tokens: 1 });
     expect(countFindings("2026-11-20 ok s.short run hvs. done")).toEqual({
+      canaries: 0,
+      tokens: 0,
+    });
+  });
+
+  // Session 11 (Run 11.8): the two new secrets are token shapes too.
+  it("counts a runtime credential's client secret and an automation secret, and neither their prefix nor a placeholder", () => {
+    const presented = (prefix: string) =>
+      [prefix, randomUUID(), randomBytes(32).toString("base64url")].join(".");
+    expect(countFindings(`authorization: Bearer ${presented("mkrc")}`)).toEqual({
+      canaries: 0,
+      tokens: 1,
+    });
+    expect(countFindings(`secret=${presented("mkac")};`)).toEqual({ canaries: 0, tokens: 1 });
+    const placeholder = ["mkrc", "<credentialId>", "<43 characters>"].join(".");
+    expect(countFindings(`not.toContain("mkrc.") and "mkac." and ${placeholder}`)).toEqual({
       canaries: 0,
       tokens: 0,
     });

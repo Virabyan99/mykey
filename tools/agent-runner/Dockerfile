@@ -2,7 +2,7 @@
 # experiment (docs/runbooks/agent-experiment.md). Never part of a release.
 #
 # The build context is this directory with, under mykey-release/, the CLI's
-# release files (cli-v0.1.2: install.sh, the archive, SHA256SUMS) and the
+# release files (cli-v0.2.0: install.sh, the archive, SHA256SUMS) and the
 # official Node archive install.sh pins, fetched as consumer-deploy.md steps
 # 1 to 3 fetch them; and digests.json, written by the staging seed (digests
 # only). No build argument and no layer holds a token: the token is a Docker
