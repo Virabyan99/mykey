@@ -49,6 +49,7 @@ A Stage 1 amendment (D-80) from `docs/mykey-automation-credential-spec.md`. On s
 - **The workspace** has an Automation page (owners and admins) and issues a runtime credential beside the token.
 - **`host-v0.10.0`** (`5e13f421a4e6`) is on staging: 25 staging files green on it. Its migration `0019` means **no rollback**: a host goes back only by a restore.
 - **The manifest** (`--session 11`): 161 PASS (7 `earlier`), 7 NOT YET DUE, 5 NOT PROVEN. `test:consumers` was red once on the candidate (the workstation's memory) and green on its second run.
+- **A second agent guide** (D-84, after the merge): `docs/agents/provision-with-automation.md`, for an agent that writes a provisioning script. `llms.txt` links it in a section of its own, and `tests/unit/agents/automation-guide.test.ts` keeps it equal to the contract. No agent has been run from it yet. The README says what Session 11 added.
 - **Not proven on staging:** the fleet's 20 seconds (ten servers started in 19.7 s and 21.7 s, D-83), and the new kinds' recovery after a restore (integration only).
 - **Run 11.1, the postgres pin, was not done:** no PostgreSQL 18 image without CVE-2026-124851 exists yet. `host-v0.9.3` was never built.
 

@@ -12,7 +12,7 @@ The application keeps reading `process.env` or `os.environ` as before, and no va
 secrets-launch.sh -- npm start      # the application starts with its secrets, no .env file
 ```
 
-**Working with an AI coding agent?** Give it [`llms.txt`](llms.txt). It leads to one guide, [`docs/agents/connect-an-application.md`](docs/agents/connect-an-application.md), which the agent follows on its own. The machine token and every secret value stay with you.
+**Working with an AI coding agent?** Give it [`llms.txt`](llms.txt). It leads to one guide, [`docs/agents/connect-an-application.md`](docs/agents/connect-an-application.md), which the agent follows on its own. The machine token and every secret value stay with you. An agent that writes a provisioning script has a second guide, [`docs/agents/provision-with-automation.md`](docs/agents/provision-with-automation.md).
 
 ## Contents
 
@@ -34,10 +34,14 @@ secrets-launch.sh -- npm start      # the application starts with its secrets, n
   - sign-in with a password and an authenticator app, recovery codes and sessions;
   - secrets: create, edit, reveal (30 seconds, never stored by the page), copy, history;
   - import and export of dotenv files, with a preview before anything is written;
-  - machine credentials: issue, list, revoke;
+  - machine credentials of both kinds: issue, list, revoke;
+  - automation credentials, for the owner and admins: issue, list, revoke;
   - activity and audit.
-- **Machine credentials.** A machine token reads one environment and nothing else. It lives at most 30 days and is shown once at issue. It is stored in a file only its user can read (`~/.config/mykey/machine-token`).
-- **The CLI.** `secrets` reads the whole environment at start. If the set cannot be read completely, nothing starts, and the CLI exits with one documented code (`denied`, `unavailable`, …). Linux and macOS; WSL on Windows.
+- **Machine credentials, two kinds.** Both read one environment and nothing else, and both are shown once at issue.
+  - **A machine token** lives at most 30 days. It is stored in a file only its user can read (`~/.config/mykey/machine-token`).
+  - **A runtime credential** is for a server that must start by itself: it lives at most 365 days. The server keeps its client secret, and at each start the CLI exchanges it for a token of 15 minutes. A revocation stops the credential at once.
+- **Automation.** A script that holds an automation credential creates projects, environments, secrets and runtime credentials through ten routes, with no person at the keyboard. The credential carries only the rights it was given, is bound to source networks, and reaches only the projects its own chain made. It reads no value and deletes nothing.
+- **The CLI.** `secrets` reads the whole environment at start. If the set cannot be read completely, nothing starts, and the CLI exits with one documented code (`denied`, `unavailable`, …). It takes a machine token or a runtime credential's client secret in the same place. Linux and macOS; WSL on Windows.
 - **Audit.** Every change and every reveal is recorded. Both audit streams are archived to Cloudflare R2 as verified, locked segments.
 - **Backup and restore:**
   - a nightly backup pair, which becomes eligible only after read-back, a full check, a scratch restore and a signature;
@@ -48,7 +52,7 @@ What it does **not** do is listed honestly in [`docs/runbooks/known-limits.md`](
 
 ## Where the project stands
 
-The project is in **Stage 1**: nine planned sessions, and a tenth for hardening after Gate F. All ten are done and merged.
+The project is in **Stage 1**: nine planned sessions, a tenth for hardening after Gate F, and an eleventh that added two credentials. All eleven are done and merged.
 
 - **Session 8:** the security review and the controlled-use release. Gate R was signed (D-67).
 - **Session 9:** production opened for real use on 22 Nov 2026. Gate F was decided **HARDEN** (D-74).
@@ -58,8 +62,11 @@ The project is in **Stage 1**: nine planned sessions, and a tenth for hardening 
   - the credential drill on staging;
   - the documentation for AI agents.
 - **Since 25 Nov 2026:** a first real application runs on production.
+- **Session 11** (D-80): the runtime credential with its exchange, the automation credential with its ten routes, and the CLI `cli-v0.2.0`.
+  - It is released as `host-v0.10.0` and runs on **staging**.
+  - **Production does not have it yet.** It still serves the release before it, so an automation credential or a runtime credential cannot be issued there. Production gets it after W-2.
 
-Gate F is decided again at **W-2, 20 Dec 2026**, on the record of 28 days of use. Each session's result is in `docs/evidence/session-<n>/report.md`; Session 10's is [`docs/evidence/session-10/report.md`](docs/evidence/session-10/report.md).
+Gate F is decided again at **W-2, 20 Dec 2026**, on the record of 28 days of use. Each session's result is in `docs/evidence/session-<n>/report.md`; the latest is [`docs/evidence/session-11/report.md`](docs/evidence/session-11/report.md).
 
 **One operator, no sign-up.** MyKey serves one owner on one host, and no one can sign up. The first account is made by the operator's bootstrap. The runbooks below describe this service's own hosts. Running your own copy is possible from them, but it has not been rehearsed for anyone else.
 
@@ -69,16 +76,16 @@ Gate F is decided again at **W-2, 20 Dec 2026**, on the record of 28 days of use
 
 The owner's path, in order:
 
-| Step | What                                                                                       | Document                                                         |
-| ---- | ------------------------------------------------------------------------------------------ | ---------------------------------------------------------------- |
-| 1    | The first sign-in, the authenticator and the recovery codes; the workspace's first screens | [`start-here.md`](docs/runbooks/start-here.md)                   |
-| 2    | The workspace: what each screen does and what to do when it refuses                        | [`workspace.md`](docs/runbooks/workspace.md)                     |
-| 3    | Issue a machine credential, store its token with the one command, rotate it, revoke it     | [`machine-credentials.md`](docs/runbooks/machine-credentials.md) |
-| 4    | Connect an application on your own machine (Linux, macOS or WSL)                           | [`consumer-local.md`](docs/runbooks/consumer-local.md)           |
-| 5    | Run it in a container on a server                                                          | [`consumer-deploy.md`](docs/runbooks/consumer-deploy.md)         |
-| —    | Let a script create projects, secrets and runtime credentials                              | [`automation.md`](docs/runbooks/automation.md)                   |
-| —    | The dotenv format that import and export use                                               | [`dotenv-format-v1.md`](docs/runbooks/dotenv-format-v1.md)       |
-| —    | What the service does not do                                                               | [`known-limits.md`](docs/runbooks/known-limits.md)               |
+| Step | What                                                                                                                                   | Document                                                         |
+| ---- | -------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------- |
+| 1    | The first sign-in, the authenticator and the recovery codes; the workspace's first screens                                             | [`start-here.md`](docs/runbooks/start-here.md)                   |
+| 2    | The workspace: what each screen does and what to do when it refuses                                                                    | [`workspace.md`](docs/runbooks/workspace.md)                     |
+| 3    | Issue a machine credential (a 30-day token, or a runtime credential for a server), store it with the one command, rotate it, revoke it | [`machine-credentials.md`](docs/runbooks/machine-credentials.md) |
+| 4    | Connect an application on your own machine (Linux, macOS or WSL)                                                                       | [`consumer-local.md`](docs/runbooks/consumer-local.md)           |
+| 5    | Run it in a container on a server                                                                                                      | [`consumer-deploy.md`](docs/runbooks/consumer-deploy.md)         |
+| —    | Let a script create projects, secrets and runtime credentials                                                                          | [`automation.md`](docs/runbooks/automation.md)                   |
+| —    | The dotenv format that import and export use                                                                                           | [`dotenv-format-v1.md`](docs/runbooks/dotenv-format-v1.md)       |
+| —    | What the service does not do                                                                                                           | [`known-limits.md`](docs/runbooks/known-limits.md)               |
 
 Each environment's **Connect an application** page in the workspace shows the commands of steps 4 and 5 with the service's address, the project's id and the environment's name filled in. It never fills in the token.
 
@@ -93,12 +100,13 @@ The short version for a local application:
 
 ### For AI coding agents
 
-| File                                                                             | What it is                                                                                          |
-| -------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
-| [`llms.txt`](llms.txt)                                                           | The entry point for an agent: the rule, and the link to the guide                                   |
-| [`docs/agents/connect-an-application.md`](docs/agents/connect-an-application.md) | The one guide. It stands alone: install, find the names, change the start, check it, the exit codes |
-| [`tests/fixtures/consumers/next-app/`](tests/fixtures/consumers/next-app/)       | A small Next.js application that runs on MyKey                                                      |
-| [`tests/fixtures/consumers/fastapi-app/`](tests/fixtures/consumers/fastapi-app/) | A small FastAPI application that runs on MyKey                                                      |
+| File                                                                                   | What it is                                                                                                                                              |
+| -------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [`llms.txt`](llms.txt)                                                                 | The entry point for an agent: the rule, and the link to the guide                                                                                       |
+| [`docs/agents/connect-an-application.md`](docs/agents/connect-an-application.md)       | The guide for the usual job: make an application start from MyKey. It stands alone: install, find the names, change the start, check it, the exit codes |
+| [`docs/agents/provision-with-automation.md`](docs/agents/provision-with-automation.md) | The guide for another job: write or run a script that creates projects, secrets and runtime credentials with an automation credential                   |
+| [`tests/fixtures/consumers/next-app/`](tests/fixtures/consumers/next-app/)             | A small Next.js application that runs on MyKey                                                                                                          |
+| [`tests/fixtures/consumers/fastapi-app/`](tests/fixtures/consumers/fastapi-app/)       | A small FastAPI application that runs on MyKey                                                                                                          |
 
 **The rule:** an agent never reads, prints, copies or asks for a machine token or a secret value. Four steps are the human's, and the guide hands each one over with exact text:
 
@@ -108,6 +116,8 @@ The short version for a local application:
 - `replace-token`: issue a new token when the old one expires or is revoked.
 
 This is a rule the agent keeps, not a barrier the service enforces: the agent runs as your user.
+
+The second guide has the same rule for an automation secret, with two steps of its own: `store-automation-secret` and `replace-automation-secret`. The agent writes the script that carries secrets; it never sees one.
 
 To use it, put one line in your project's agent instructions (`CLAUDE.md`, `AGENTS.md`, …):
 
@@ -121,6 +131,8 @@ A guide that says so first matters: in the proof run, the agent opened `.env` be
 
 - One Claude Code agent connected a fixture application on staging from `llms.txt` alone (`docs/evidence/session-10/agent-guide.md`). No secret value was found anywhere the run left a trace.
 - `tests/unit/agents/guide.test.ts` keeps every command and exit code in the guide equal to the code and the runbooks.
+- `tests/unit/agents/automation-guide.test.ts` does the same for the second guide: its routes, rights and limits are the contract's.
+- **No agent has yet been run from the second guide.** Its client rules are proven by the reference client (`tests/fixtures/automation/tenant-provisioner.ts`) at integration and on staging, not by an agent that read the guide.
 - Other agents have not been tested.
 
 ### For the operator
@@ -158,6 +170,7 @@ All runbooks are in [`docs/runbooks/`](docs/runbooks/). The operator tool is `no
 - **Two stores, one owner per fact.** Secret values live only in OpenBao (KV v2, one namespace per organization). PostgreSQL holds the rest, and never a value or a token.
 - **One contract.** `packages/contracts` is the single source for limits, names, error codes and the route table; `openapi.json` is generated from it.
 - **Authority on every request.** Every route reads current rows; no handler decides authority. Every change needs an idempotency key.
+- **Credentials for machines are verified, not stored.** A machine token is OpenBao's own. For a runtime or an automation credential PostgreSQL keeps a keyed digest, which also covers what the credential is bound to, and never the secret.
 - **Pinned.** Every dependency is pinned exactly, every image by digest and every GitHub Action by commit (`infra/dependencies.lock.json`, enforced by `check`).
 
 The full design is in Doc 06, the technical specification, in `docs/`.
@@ -201,7 +214,7 @@ docs/       specification, plans, decisions, evidence, runbooks, agents
 | [`docs/decisions/`](docs/decisions/) | One page per decision (`D-NN`)                                                                                                       |
 | [`docs/evidence/`](docs/evidence/)   | Run notes, session reports, release manifests, and the evidence registry (`registry.json`)                                           |
 | [`docs/runbooks/`](docs/runbooks/)   | How to operate and use the service                                                                                                   |
-| [`docs/agents/`](docs/agents/)       | The guide for AI coding agents                                                                                                       |
+| [`docs/agents/`](docs/agents/)       | The two guides for AI coding agents                                                                                                  |
 
 ## Rules of this repository
 

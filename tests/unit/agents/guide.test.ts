@@ -105,7 +105,10 @@ describe("llms.txt", () => {
     const firstLink = LLMS.search(/\]\(/);
     expect(rule).toBeGreaterThan(0);
     expect(rule).toBeLessThan(firstLink);
-    const guide = LLMS.slice(LLMS.indexOf("## Guide"), LLMS.indexOf("## Optional"));
+    // To the next heading: a second section, for another job, has a link of its own
+    // (tests/unit/agents/automation-guide.test.ts).
+    const guideStart = LLMS.indexOf("## Guide");
+    const guide = LLMS.slice(guideStart, LLMS.indexOf("\n## ", guideStart + 1));
     expect([...guide.matchAll(/\]\(([^)]+)\)/g)].map((m) => m[1])).toEqual([GUIDE_PATH]);
     for (const match of LLMS.matchAll(/\]\(([^)]+)\)/g)) {
       const target = match[1] ?? "";

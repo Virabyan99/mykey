@@ -2,13 +2,17 @@
 
 > A single-operator secrets service. An application gets its secrets at start from the `secrets` CLI, with no `.env` file. This file is for AI coding agents.
 
-**The rule, before anything else:** an agent never handles a machine token or a secret value. Issuing a credential and storing its token are the human's steps. When you reach one, stop, give the human the exact step from the guide, and wait.
+**The rule, before anything else:** an agent never handles a machine token or a secret value. Issuing a credential and storing its token are the human's steps. When you reach one, stop, give the human the exact step from the guide, and wait. The same holds for an automation secret and for a runtime credential's client secret: a script may carry them, and you never see them.
 
 Every link below is a path in the repository, relative to this file. Outside a checkout, resolve it against the address you read this file from: for `https://raw.githubusercontent.com/Virabyan99/mykey/main/llms.txt`, the guide is `https://raw.githubusercontent.com/Virabyan99/mykey/main/docs/agents/connect-an-application.md`.
 
 ## Guide
 
-- [Connect an application to MyKey](docs/agents/connect-an-application.md): the one document you need. It stands alone.
+- [Connect an application to MyKey](docs/agents/connect-an-application.md): the one document you need to make an application start from MyKey. It stands alone.
+
+## Provisioning by a script
+
+- [Provision projects and secrets by a script](docs/agents/provision-with-automation.md): only if your job is a script that creates projects, environments, secrets and runtime credentials without a person. It needs an automation credential, which the human issues.
 
 ## Optional
 
