@@ -95,74 +95,87 @@
     "run": "11.8",
     "date": "2026-11-26",
     "where": "staging on host-v0.10.0 (5e13f421a4e6), through the public name and the real edge, from the owner's workstation",
-    "note": "Names and numbers only. One run each: figures of a single pass, not bounds.",
+    "note": "Names and numbers only. Figures of single runs, not bounds. Each file ran twice (before and after the second review's changes to the tests); these are the second run's, and the fleet has both.",
     "runtimeCredential": {
       "source": "tests/staging/runtime-credential.staging.test.ts",
-      "issueMs": 244,
-      "exchangeMs": 244,
-      "resolve25ValuesMs": 364,
-      "metadataMs": 311,
-      "revokeMs": 197,
-      "tokenSecondsLeftByTheWorkstationsClock": 901,
-      "tokenSecondsNote": "the token's expiresAt minus the workstation's clock; the test allows 900 s plus 5 s of clock difference"
+      "issueMs": 197,
+      "exchangeMs": 272,
+      "resolve25ValuesMs": 367,
+      "metadataMs": 299,
+      "revokeMs": 236,
+      "tokenSecondsLeftByTheWorkstationsClock": 900,
+      "tokenSecondsNote": "the token's expiresAt minus the workstation's clock; the test allows 900 s plus 5 s of clock difference (the first run read 901)"
     },
     "fleet": {
       "source": "tests/staging/runtime-credential.staging.test.ts, 'the fleet'",
       "servers": 10,
-      "firstRoundMs": 11434,
-      "twoRoundsMs": 19681,
-      "slowestStartMs": 11434,
-      "firstRoundWithinSpec20s": true
+      "specSeconds": 20,
+      "testBoundSeconds": 60,
+      "runs": [
+        {
+          "firstRoundMs": 11434,
+          "twoRoundsMs": 19681,
+          "slowestStartMs": 11434
+        },
+        {
+          "firstRoundMs": 11120,
+          "twoRoundsMs": 21718,
+          "slowestStartMs": 11109
+        }
+      ],
+      "twoRoundsWithinSpec": [true, false],
+      "rateLimited": 0
     },
     "automation": {
       "source": "tests/staging/automation.staging.test.ts",
-      "issueAutomationMs": 528,
-      "provisionOneTenantMs": 19695,
+      "cli": "0.2.0",
+      "issueAutomationMs": 712,
+      "provisionOneTenantMs": 21008,
       "provisionSteps": {
         "project": {
           "count": 1,
-          "ms": 541
+          "ms": 603
         },
         "environment": {
           "count": 1,
-          "ms": 564
+          "ms": 595
         },
         "ready": {
           "count": 1,
-          "ms": 2265
+          "ms": 2374
         },
         "secret": {
           "count": 25,
-          "ms": 15793
+          "ms": 16887
         },
         "runtime-credential": {
           "count": 1,
-          "ms": 531
+          "ms": 545
         }
       },
-      "serverStartByCliMs": 5911,
+      "serverStartByCliMs": 3785,
       "serverStartNote": "includes starting the Linux container the CLI runs in on this workstation",
-      "reissueMs": 2359,
+      "reissueMs": 2428,
       "reissueSteps": {
         "projects": {
           "count": 1,
-          "ms": 620
+          "ms": 636
         },
         "project": {
           "count": 1,
-          "ms": 621
+          "ms": 616
         },
         "runtime-credential": {
           "count": 2,
-          "ms": 1118
+          "ms": 1175
         }
       }
     },
     "publishedCli012": {
-      "source": "tests/staging/cli.staging.test.ts with MYKEY_CLI_DIST (the published bundle)",
+      "source": "tests/staging/cli.staging.test.ts with MYKEY_CLI_DIST (the published bundle) and MYKEY_CLI_EXPECT=0.1.2",
       "version": "0.1.2",
       "thirtyDayTokenJourney": {
-        "credentialId": "33f8133b-f590-4179-b84c-807dabe8ea5c",
+        "credentialId": "53e4be10-efe4-4374-ac37-ccb3ecf67dc5",
         "keys": 0,
         "run": 0,
         "names": 10,
@@ -175,9 +188,20 @@
       },
       "givenARuntimeCredential": {
         "cli": "0.1.2",
+        "published": true,
         "exchanges": false,
-        "run": 77,
-        "started": false
+        "exit": 77,
+        "startedTheChild": false
+      }
+    },
+    "treeCli020": {
+      "source": "tests/staging/cli.staging.test.ts, this tree's build",
+      "givenARuntimeCredential": {
+        "cli": "0.2.0",
+        "published": false,
+        "exchanges": true,
+        "exit": 0,
+        "startedTheChild": true
       }
     }
   }

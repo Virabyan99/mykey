@@ -4,14 +4,23 @@
 // no value and no token is ever on a command line; the docker client takes
 // the values from its own environment. Output that holds the token rejects.
 import { spawn } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { CliResult } from "./cli.ts";
 
 // Session 11 (Run 11.8): MYKEY_CLI_DIST names a directory that holds another
 // `secrets.mjs`, the bundle of a published release unpacked from its archive,
 // so an older CLI can be run against a newer host (spec §6 item 12).
-const DIST = process.env.MYKEY_CLI_DIST ?? join(process.cwd(), "apps", "cli", "dist");
+export function releasedCliDist(): string | undefined {
+  const named = process.env.MYKEY_CLI_DIST;
+  // An empty variable is an unset one, here and for every caller.
+  if (named === undefined || named === "") return undefined;
+  if (!existsSync(join(named, "secrets.mjs")))
+    throw new Error("MYKEY_CLI_DIST names a directory without secrets.mjs");
+  return named;
+}
+
+const DIST = releasedCliDist() ?? join(process.cwd(), "apps", "cli", "dist");
 
 function glibcImage(): string {
   const lock = JSON.parse(readFileSync("infra/dependencies.lock.json", "utf8")) as {

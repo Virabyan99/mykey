@@ -4,12 +4,12 @@
     "released": true
   },
   "project": {
-    "name": "s5-cli-97418b",
-    "id": "e84d9c5a-0183-4d15-9343-8dd99691e33a",
-    "environment": "8fe5127a-1727-4369-9a24-3ea64396f236"
+    "name": "s5-cli-097ae2",
+    "id": "a7b5a1ab-4bf3-41a2-a903-0aeef0f58c94",
+    "environment": "bb9c9dfa-b59c-426a-8b14-e53013f1e4eb"
   },
   "journey": {
-    "credentialId": "33f8133b-f590-4179-b84c-807dabe8ea5c",
+    "credentialId": "53e4be10-efe4-4374-ac37-ccb3ecf67dc5",
     "keys": 0,
     "run": 0,
     "names": 10,

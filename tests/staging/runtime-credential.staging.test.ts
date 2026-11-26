@@ -100,12 +100,14 @@ async function issueRuntime(
   });
   const ms = performance.now() - began;
   expect([answer.status, codeOf(answer)], `issue ${name}`).toEqual([201, undefined]);
-  expect(answer.headers.get("cache-control")).toBe("no-store");
   const body = json(answer) as {
     credential: { credentialId: string; kind: string };
     clientSecret: string;
   };
+  // Remembered before anything else is asserted: a failed assertion below must not leave it unrevoked.
+  issued.add(body.credential.credentialId);
   registerSecret(body.clientSecret);
+  expect(answer.headers.get("cache-control")).toBe("no-store");
   const parts = body.clientSecret.split(".");
   expect(parts.length).toBe(3);
   expect(parts[0]).toBe("mkrc");
@@ -113,7 +115,6 @@ async function issueRuntime(
   registerSecret(parts[2] ?? "");
   held.push(body.clientSecret, parts[2] ?? "");
   expect(body.credential.kind).toBe("runtime");
-  issued.add(body.credential.credentialId);
   return { credentialId: body.credential.credentialId, clientSecret: body.clientSecret, ms };
 }
 
@@ -329,40 +330,54 @@ describe("the runtime credential on staging", () => {
     const since = startedAt.toISOString();
     const credentialIds = [...issued].slice(0, 3);
     expect(credentialIds.length).toBe(3);
-    const surfaces: [string, string, string[]][] = [
+    // The second review of Run 11.8 (M3): the last string of each surface is not
+    // an argument but travels as the needles do. Found, it shows that the
+    // needles reached the search as patterns, not only that the producer ran.
+    const firstExchange = exchangeRequests[0] ?? "";
+    const otherExchanges = exchangeRequests.slice(1);
+    const surfaces: [string, string, string[], string][] = [
       [
         "API log",
         `docker logs --since ${since} mykey-api-1`,
-        ["/v1/machine/exchange", ...exchangeRequests],
+        ["/v1/machine/exchange", ...otherExchanges],
+        firstExchange,
       ],
       [
         "provisioner log",
         `docker logs --since ${since} mykey-provisioner-1`,
         // The job that provisioned this file's environment (its log names operation ids only).
         ['"event":"job"'],
+        '"operationId":"',
       ],
       [
         "pg_dump (database postgres)",
         `docker exec mykey-postgres-1 sh -c 'PGPASSWORD="$(cat "$POSTGRES_PASSWORD_FILE")" pg_dump -U postgres -d postgres'`,
-        credentialIds,
+        credentialIds.slice(0, 2),
+        credentialIds[2] ?? "",
       ],
       [
         "OpenBao audit device",
         "docker exec mykey-openbao-1 cat /openbao/audit/audit.log",
         // Each exchange's token was made under the exchange's request id.
-        [`auth/token/create/machine-env-${environmentId}`, ...exchangeRequests],
+        [`auth/token/create/machine-env-${environmentId}`, ...otherExchanges],
+        firstExchange,
       ],
-      ["Traefik access log", `docker logs --since ${since} mykey-edge-1`, ["/v1/machine/exchange"]],
+      [
+        "Traefik access log",
+        `docker logs --since ${since} mykey-edge-1`,
+        ["/v1/machine/exchange"],
+        `/v1/machine/projects/${projectId}/environments/${ENVIRONMENT}/resolve`,
+      ],
     ];
     const found: Record<string, { searched: number; found: number; controls: string }> = {};
     let total = 0;
-    for (const [surface, producer, controls] of surfaces) {
-      const result = await countOnHost(host, producer, held, controls);
+    for (const [surface, producer, controls, asNeedle] of surfaces) {
+      const result = await countOnHost(host, producer, held, controls, [asNeedle]);
       total += result.found;
       found[surface] = {
         searched: held.length,
         found: result.found,
-        controls: `${String(result.controls)} of ${String(controls.length)}`,
+        controls: `${String(result.controls)} of ${String(controls.length + 1)}, one of them sent as a needle`,
       };
     }
     record("search", found);

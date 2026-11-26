@@ -14,10 +14,10 @@
 // presents it as a token, is refused, exits 77 and starts nothing.
 import { spawnSync } from "node:child_process";
 import { randomBytes, randomUUID } from "node:crypto";
-import { writeFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
 import { setTimeout as sleep } from "node:timers/promises";
 import { beforeAll, describe, expect, it } from "vitest";
-import { runCliInLinux, runShellInLinux } from "../harness/cli-linux.ts";
+import { releasedCliDist, runCliInLinux, runShellInLinux } from "../harness/cli-linux.ts";
 import { registerSecret } from "../harness/staging.ts";
 import { exportedDigests } from "../harness/staging-machine.ts";
 import {
@@ -36,9 +36,25 @@ let projectId: string;
 let environmentPath: string;
 const issued = new Set<string>();
 const evidence: Record<string, unknown> = {};
-const RELEASED = process.env.MYKEY_CLI_DIST !== undefined && process.env.MYKEY_CLI_DIST !== "";
+const RELEASED = releasedCliDist() !== undefined;
+// The second review of Run 11.8 (M1): the run names the version it means to
+// prove. For a published bundle the operator names it (MYKEY_CLI_EXPECT);
+// without one it is this tree's. What the CLI under test says about itself is
+// compared with it and never decides an expectation.
+const EXPECTED_VERSION = RELEASED
+  ? (process.env.MYKEY_CLI_EXPECT ?? "")
+  : (JSON.parse(readFileSync("apps/cli/package.json", "utf8")) as { version: string }).version;
+const expectedParts = EXPECTED_VERSION.split(".");
+if (
+  expectedParts.length !== 3 ||
+  !expectedParts.every((part) => part !== "" && Number.isInteger(Number(part)))
+) {
+  throw new Error("with MYKEY_CLI_DIST, MYKEY_CLI_EXPECT names the bundle's version (x.y.z)");
+}
+/** From 0.2.0 the CLI exchanges a client secret by itself (D-81). */
+const EXCHANGES = Number(expectedParts[0]) > 0 || Number(expectedParts[1]) >= 2;
 const EVIDENCE = RELEASED
-  ? "docs/evidence/session-11/staging-cli-released.json"
+  ? `docs/evidence/session-11/staging-cli-released-${EXPECTED_VERSION}.json`
   : "docs/evidence/session-5/run-5.6-staging-cli.json";
 /** The CLI under test, as it says itself (`secrets --version`). */
 let cliVersion = "";
@@ -68,6 +84,7 @@ async function revokeAll(): Promise<void> {
     });
     if (answer.status === 200 || codeOf(answer) === "state_conflict") issued.delete(credentialId);
   }
+  expect(issued.size, "a credential of this file was not revoked").toBe(0);
 }
 
 // Prints {name: sha256(value)} for the seeded names: what the child was given.
@@ -104,6 +121,7 @@ beforeAll(async () => {
   expect(said.code, said.stderr).toBe(0);
   cliVersion = /^secrets (\d+\.\d+\.\d+) /.exec(said.stdout)?.[1] ?? "";
   expect(cliVersion).not.toBe("");
+  expect(cliVersion, "the CLI under test is not the version this run names").toBe(EXPECTED_VERSION);
   record("cli", { version: cliVersion, released: RELEASED });
   ({ cookie } = await stagingOwnerSession());
   const name = `s5-cli-${randomBytes(3).toString("hex")}`;
@@ -241,8 +259,7 @@ describe("the CLI against staging", () => {
         SECRETS_PROJECT: projectId,
         SECRETS_ENVIRONMENT: ENVIRONMENT,
       };
-      const [major, minor] = cliVersion.split(".").map(Number);
-      const exchanges = (major ?? 0) > 0 || (minor ?? 0) >= 2;
+      const exchanges = EXCHANGES;
       const run = await runCliInLinux(["run", "--", "node", "-e", 'console.log("started")'], {
         env,
       });
@@ -256,6 +273,22 @@ describe("the CLI against staging", () => {
           /^secrets: denied: .*\(code: unauthenticated, requestId: [0-9a-f-]{36}\)\n$/,
         );
       }
+      // Session 11's own record of this test, one file per CLI version: the
+      // journey's file is Session 5's when the CLI is this tree's build.
+      writeFileSync(
+        `docs/evidence/session-11/staging-cli-runtime-credential-${cliVersion}.json`,
+        `${JSON.stringify(
+          {
+            cli: cliVersion,
+            published: RELEASED,
+            exchanges,
+            exit: run.code,
+            startedTheChild: run.stdout.length > 0,
+          },
+          null,
+          2,
+        )}\n`,
+      );
       record("runtimeCredential", {
         cli: cliVersion,
         exchanges,

@@ -175,3 +175,147 @@ Severities are the reviewer's, except L1: it was raised, because a revocation th
 | (f), the four other gaps | **Deferred**                                   | Minor: a missing control in `boundary.test.ts:172` and `:196`, in `tests/cli/exchange.test.ts:234`, and a title that says more than `limits/machine.test.ts:215` asserts. They are listed in the report for the owner.                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
 
 After the fixes: the three changed files' suites, then `tests/integration/machine`, `automation` and `credentials` locally, then the full CI on the pull request (`run-11.8.md`).
+
+---
+
+# The second review: test code changed after the freeze (Run 11.8)
+
+**Date:** 26 Nov 2026. **Reviewer:** one fresh agent, Claude Fable 5.2, read-only (git and file reads; it ran nothing).
+
+**What it got:** `git diff 5e13f42..HEAD -- . ':!docs'` at `0770d9a` (the staging tests, their harness, `scripts/sweep-ci.ts` and its unit test, `tools/agent-runner`), the project's rules for secrets, controls and cleanup, and seven questions. It did not get the plan, the run notes or any conclusion.
+
+**Result:** no Critical, no High, four Medium, eight Low. The four Mediums and two Lows are fixed; the five changed staging files ran again and are green. The answer is in "What was done with the second review" at the end.
+
+The report below is as it came. Two things were changed: it named the workstation's path to the repository, which is now `ROOT`, and its closing list of files with that path is left out.
+
+---
+
+## Review of `git diff 5e13f42..HEAD -- . ':!docs'` (branch session-11)
+
+Read-only: git and file reads only. Nothing was run, so every finding below is from reading the code and the committed evidence.
+
+`ROOT` is the repository's root.
+
+**Verdict:** no Critical and no High. No secret and no caller address is in the committed tree, and I found no path in the changed lines that prints one. There are four Medium findings: one test that is green both ways, a leak counter with two blind spots, searches without a needle control, and cleanup gaps on failure paths. Both "stale test" fixes (transport, deploy) describe the product correctly.
+
+### Critical
+
+None.
+
+### High
+
+None.
+
+### Medium
+
+#### M1. `cli.staging` test 2 takes its expectation from the CLI under test, so it is green both ways
+
+- **Where:** `ROOT\tests\staging\cli.staging.test.ts:244-258` (branch on `cliVersion`), `:39-42` (evidence path), `ROOT\tests\harness\cli-linux.ts:14`.
+- **What is wrong:** `exchanges` is computed from what `secrets --version` prints. The test then asserts exit 0 or exit 77 accordingly. Nothing says which outcome the run was meant to prove.
+- **Failure scenario:** `MYKEY_CLI_DIST` is left set to the unpacked `cli-v0.1.2` after the no-regression run. The next plain run of `cli.staging` is "2 of 2" having asserted that the CLI does not start with a client secret. The only tell is `exchanges: false` in a different evidence file.
+- **Related, same cause:**
+  - Every released run writes `docs/evidence/session-11/staging-cli-released.json`, whatever the version. A 0.2.0 released run and the 0.1.2 run overwrite each other. The committed file holds only 0.1.2.
+  - The tree-build run writes Session 5's file, which was restored. So no committed evidence from this file shows 0.2.0 starting with a client secret; `automation.staging` is what carries that claim.
+  - `automation.staging.test.ts:175-176` always builds the tree's CLI, but `runCliInLinux` runs whatever `MYKEY_CLI_DIST` names, and its evidence records no CLI version. An old CLI fails loudly there; a different 0.2.0 bundle passes unrecorded.
+- **Smallest fix:**
+  - When not `RELEASED`: `expect(cliVersion).toBe(<apps/cli/package.json version>)` and `expect(exchanges).toBe(true)`.
+  - When `RELEASED`: require an expected version (for example `MYKEY_CLI_EXPECT=0.1.2`), assert it, and put the version in the evidence file name.
+  - In `automation.staging`, refuse to start when `MYKEY_CLI_DIST` is set, or record `--version`.
+
+#### M2. `sweep-ci.ts`: the new pattern misses two realistic leak forms
+
+- **Where:** `ROOT\scripts\sweep-ci.ts:17-18`.
+- **The shape itself is right.** It agrees with `ROOT\packages\contracts\src\automation.ts:23` (prefix, lowercase UUID, 43 base64url characters), for both prefixes. The exchanged token is an OpenBao token and falls under the existing `hv[sbr].` rule.
+- **Miss (a), the leading `\b`:** there is no word boundary when the character before `mkrc` is a word character. An ANSI colour code ends in `m`, so `ESC[31m` directly followed by `mkrc.…` is not counted. CI logs downloaded with `gh` keep colour codes. The pre-existing `\bhv[sbr]\.` has the same hole.
+- **Miss (b), the exact `{43}`:** a truncated secret is not counted. The repository's own tests print `answer.body.slice(0, 200)` of issuance answers (`token-sweep.staging.test.ts:93`, `cli.staging.test.ts:147`), which can cut through the secret. The older token rule tolerates this with `{20,}`.
+- **Over-count:** none that matters. The prefix plus UUID makes a non-secret match negligible; a synthetic secret of a CI stack is counted, which is the intended policy.
+- **The unit test** (`ROOT\tests\unit\registry\sweep-ci.test.ts:45-58`) is a real control for the plain case: both prefixes are generated at run time with the product's lengths, plus a negative for the prefix and a placeholder. It covers neither miss, and it builds the sample by hand instead of checking it with `parsePresentedSecret`, so a later change of the product's shape would not turn it red.
+- **Smallest fix:**
+  - In `countFindings`, strip SGR sequences before matching (this also fixes the `hv` rule).
+  - Drop `\b` from `PRESENTED` and use `{20,}`.
+  - Add two unit cases (colour code directly before the secret; a secret cut to 30 characters) and one `expect(parsePresentedSecret(sample)).not.toBeNull()`.
+
+#### M3. The three searches for the new shapes have no needle control
+
+- **Where:** `ROOT\tests\staging\runtime-credential.staging.test.ts:360`, `ROOT\tests\staging\automation.staging.test.ts:439`, `ROOT\tests\staging\token-sweep.staging.test.ts:237`.
+- **What is wrong:** all three call `countOnHost` with argument controls only. The harness says itself (`ROOT\tests\harness\staging.ts:285-286`) that only a needle control "proves the needles arrived as patterns, not only that the producer ran". Only `sweep.staging` passes one.
+- **Failure scenario:** the needles do not reach grep (stdin lost through `sudo sh -c`, or a later change to `searchScript`). The pattern file is then one empty line, the argument controls are still found, and the result is "0 found, controls n of n". That is exactly what S11-13 reads as proof.
+- **Mitigation:** `sweep.staging` proved the same harness path with needle controls in the same pass (10 of 10). Downgrade to Low if you accept that as covering these files.
+- **Smallest fix:** pass one non-secret string known to be on each surface as the fifth argument. For example, a credential id for `pg_dump`, an exchange's request id for the API log and the audit device, and the marker path for the edge log.
+
+#### M4. State left on staging on failure paths
+
+- **`automation.staging.test.ts:228-237`:** if `provision()` throws after its first step, the tenant project exists but is added to `projects` only after `provision` returns. The 25-secret step is the likely place for a throw. The project is never archived, and nothing else archives it. Fix: wrap in `try/catch`; on failure, `GET /v1/automation/projects` with `auto.secret`, add every id to `projects`, and rethrow. The same applies to credentials issued by a `reissue()` that throws midway (`:346-351`).
+- **`automation.staging.test.ts:121-132`:** `automationIssued.add` comes after four `expect`s. If the `cache-control` or shape assertion fails, an automation credential with all three rights and a one-hour life is never revoked. Fix: add the id to the set right after the 201 is parsed. The same order is in `runtime-credential.staging.test.ts:102-116`, where it is harmless only because the project's archive revokes its credentials.
+- **`token-sweep.staging.test.ts:153-178`:** `expect` sits inside the `finally` loops. The first failed revocation skips every later one, including the new runtime and automation credentials (one hour each). This project is never archived, so nothing else revokes them. Fix: collect the statuses, revoke everything, then assert.
+- **`cli.staging.test.ts:63-71, 265-267`:** `revokeAll()` never asserts that `issued` is empty. A failed revocation of the new unbound runtime credential (one hour) is silent. Fix: `expect(issued.size).toBe(0)` after it.
+
+The two new files' `afterAll` hooks are otherwise sound: they revoke all, archive, record, then assert.
+
+### Low
+
+- **L1. `deploy.staging.test.ts:165` — stale title.** It still says "host-v0.6.0, back to host-v0.5.9 … each ends open; quarantined while closed". In the downgrade branch the middle step is a refusal, so a reader of "1 of 1" under that title reads a rollback that did not happen. Fix: build the title from the release directories and `downgrade`. Two small tightenings in the branch (`:177-193`):
+  - `expect(samples.length).toBeGreaterThan(0)` before the "nothing quarantined" check, so it cannot pass on an empty poll.
+  - Compare `reportSha256` with the one from step 1, so "the gate never closed" is shown by an unchanged record.
+- **L2. `token-sweep.staging.test.ts:88-141` — no spare issuance budget.** It now issues five credentials in a row. All three kinds share `rl:issue`, five a minute (`apps/api/src/pipeline/rate.ts:61-64`). There is no `nextMinute()`, so one issuance by the previous file in the same clock minute makes the file red. Fix: `await nextMinute()` before the `try`.
+- **L3. `transport.staging.test.ts:108-128` — prints the owner's address on failure (pre-existing lines, changed file).** `wg show wg0 endpoints` comes back without `secretOutput`, and `toMatchObject({ forwardedFor: workstation[0] })` prints the address if the assertion fails. That contradicts the rule `callerNetwork` keeps. Fix: `registerSecret` it and compare as a boolean.
+- **L4. `tools/agent-runner/prepare.ts:27-39` — a stale build context passes.** Files are downloaded only if missing, and only the names in the `SHA256SUMS` on disk are checked. A context left from `cli-v0.1.2` keeps the old `install.sh` and sums, never checks the new archive, and the Dockerfile's `--ignore-missing` (`Dockerfile:15`) then installs 0.1.2 under a 0.2.0 label. On this workstation the directory holds only the Node archive, so it is not live here. Fix: fail unless `SHA256SUMS` lists the archive named in `FILES`.
+- **L5. `cli-linux.ts:14` and `cli.staging.test.ts:39` disagree on an empty variable.** `??` keeps `""` while the test treats `""` as unset. `MYKEY_CLI_DIST=` gives a confusing Docker mount error, and a wrong directory is not checked. It fails loudly, not silently. Fix: export one `cliDist()` from the harness that treats `""` as unset and checks `secrets.mjs` exists.
+- **L6. The two new files search five surfaces, not six.** There is no PostgreSQL log (`runtime-credential…:332-356`, `automation…:412-435`). `acceptance.md` S11-13 says they search "the same way" as `token-sweep`. Add the surface or correct the sentence.
+- **L7. `tests/consumers/runbook.test.ts` — the changed deploy half has never been green.** `run-11.8.md` says so. Two more points for when it reruns:
+  - It still writes Session 5's evidence file (`:67`) and records neither the credential kind nor the CLI version.
+  - The search covers the whole client secret only (`:489`), not its secret part.
+- **L8. The fleet's 20 s is recorded, not asserted, and is read two ways.** The test's bound is 60 s (`runtime-credential…:315`). The evidence field `firstRoundWithinSpec20s` compares the first round (`:322`), while `acceptance.md` S11-8 compares both rounds (19.7 s). The acceptance text is honest about the bound; pick one reading.
+
+### Answers to the seven questions
+
+1. **Asserts less than its title, or vacuous:** M1 (green both ways), M3 (controls do not cover needle delivery), L1 (stale title).
+2. **Weakened assertions:** none.
+   - **Transport:** production is open and in service, so 200 "up" is the correct fixed expectation. It still fails if production goes down. It does make this staging file red while production is closed for a `--stay-closed` deploy.
+   - **Deploy:** the refusal is the product's behaviour (`ROOT\scripts\host-deploy.ts:42-45`, `ROOT\scripts\host.ts:3491-3493`, `deploy.md` "Rollback", `known-limits.md:143`). The branch catches both regressions: a downgrade that is no longer refused fails on the exit code and the message, and a same-schema rollback wrongly refused fails `toBe(0)`. What it no longer shows is a rollback on staging for this release pair.
+3. **Secrets or the address reaching evidence, messages, output, argv or the tree:** no finding in the changed lines; L3 is the one pre-existing path.
+   - `callerNetwork` returns the address under `secretOutput`, puts only the marker in the command, and throws a generic error.
+   - No `expect` message, thrown error or `record` holds the address or a secret; `ProvisionerError` carries step, status and code only.
+   - Needles cross on stdin; only ids, paths and request ids are on command lines.
+   - Scanning the added lines of the whole diff (docs included) for the three shapes, canaries and addresses found only `192.0.2.0/24`.
+4. **Undo on failure paths:** M4.
+5. **`sweep-ci`:** M2.
+6. **`MYKEY_CLI_DIST`:** M1 and L5.
+7. **Anything else:** L1, L4, L6, L7, L8.
+
+### Checked and found sound
+
+- **`callerNetwork`** (`ROOT\tests\harness\staging-machine.ts:45-64`): the address is validated with `net.isIP` and registered; no caller prints or records it.
+- **Committed evidence** (`staging-automation.json`, `staging-runtime-credential.json`, `staging-cli-released.json`, `token-sweep.txt`): ids, counts and times only. The counts match the code (48, 14 and 9 values).
+- **Boundary denials each have a control in the same run:** another network against a served bound credential; a foreign project against an absent one and an owned one; 403 without the right against 201 with it; a revoked credential against a survivor.
+- **Empty or short needles** cannot make a search match everything: `countOnHost` refuses needles under 8 bytes.
+- **Rate windows:** the fleet takes `nextMinute()` before each batch of five issuances and before the timed start.
+- **`runbook.test.ts`:** the diff removed a body slice from an `expect` message, which is an improvement, and asserts `credential.kind`.
+- **`machineRequest`:** the method change is equivalent for `keys` and `resolve`; `metadata` is a GET.
+
+### Not reviewed
+
+- Product code frozen at `5e13f42`, including whether credential listings or audit rows expose a bound network that another test's evidence writer could capture.
+- `tests/fixtures/automation/tenant-provisioner.ts` beyond its error messages and step tracking (not in the diff).
+- Actual grep behaviour of `searchScript` with an empty pattern file: nothing was executed, so M3 rests on the harness's own comment.
+- `docs/` changes, beyond reading `run-11.8.md`, `acceptance.md` and the four evidence files for context.
+- The Windows Docker egress address against the address `callerNetwork` reads: a mismatch would fail loudly, and the committed run passed.
+
+---
+
+## What was done with the second review
+
+| Finding | Grade kept | What was done                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| ------- | ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| M1      | Medium     | **Fixed.** `cli.staging` takes the expected version from this tree, or from `MYKEY_CLI_EXPECT` with a published bundle, and compares the CLI under test with it; the exit it expects follows from that version. The published run's journey file carries the version in its name, and the second test writes `staging-cli-runtime-credential-<version>.json` for both CLIs. `automation.staging` refuses `MYKEY_CLI_DIST` and records its CLI's version. Rerun: the tree's build 2 of 2, the published `0.1.2` 2 of 2, and the bundle with no version named does not start. |
+| M2      | Medium     | **Fixed, test first.** The new unit test failed ("expected tokens 0 to be 1"), then passed: colour codes are removed before counting, and twenty characters of the secret count. The sample is checked with `parsePresentedSecret`.                                                                                                                                                                                                                                                                                                                                         |
+| M3      | Medium     | **Fixed.** In all three files one control of each surface travels as the needles do (a request id, a credential or project id, a path, a second fixed line). Rerun: found on every surface, with 0 values found.                                                                                                                                                                                                                                                                                                                                                            |
+| M4      | Medium     | **Fixed.** The four places. No failure path was forced on staging: the proof is that the files still pass and clean up (`cleanup` in both evidence files).                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| L2      | Low        | **Fixed:** `nextMinute()` before the token sweep's five issuances.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| L5      | Low        | **Fixed with M1:** `releasedCliDist()` in the harness.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| L6      | Low        | **Fixed:** `acceptance.md` says five surfaces.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| L8      | Low        | **Answered by a result.** The reruns gave a second fleet run of 21.7 s. `acceptance.md` S11-8 now reads both rounds against the 20 s and says it is not proven on staging. The evidence field's name is unchanged.                                                                                                                                                                                                                                                                                                                                                          |
+| L1      | Low        | Deferred: the deploy test's title, and its two tightenings, need a deploy run of their own.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| L3      | Low        | Deferred: `transport.staging` can print the workstation's address when its forwarded-header assertion fails. The line is older than this session.                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| L4      | Low        | Deferred: `tools/agent-runner/prepare.ts` and a stale build context.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| L7      | Low        | Open with `test:consumers`: the deploy half has not been green yet. Its two smaller points are deferred.                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |

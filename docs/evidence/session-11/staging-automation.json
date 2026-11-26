@@ -1,36 +1,39 @@
 {
   "note": "Names, ids, counts and times only. No address, token or secret is in this file.",
+  "cli": {
+    "version": "0.2.0"
+  },
   "provisioned": {
-    "tenant": "s11-tenant-0c5a2a",
-    "project": "b934aeac-5aff-43db-84f5-7b08440fea79",
-    "environment": "66f30bd5-8d22-4359-ad1b-011b8175afc7",
-    "automationCredential": "726b180b-9d79-45d6-9e0b-e88d76a7f135",
-    "runtimeCredential": "2ea5b2ed-dbb8-4d2c-a64b-7c5d8bb7079c",
-    "issueAutomationMs": 528,
-    "provisionMs": 19695,
+    "tenant": "s11-tenant-343ce6",
+    "project": "bc704c4a-2eb5-4119-afca-1c87dcfb5d4a",
+    "environment": "8b1bf5ad-3caa-4a20-8620-c6b5087a524a",
+    "automationCredential": "03fd0069-03b0-450b-a031-81b741789215",
+    "runtimeCredential": "192e4c27-76d0-454d-a926-369db1282103",
+    "issueAutomationMs": 712,
+    "provisionMs": 21008,
     "steps": {
       "project": {
         "count": 1,
-        "ms": 541
+        "ms": 603
       },
       "environment": {
         "count": 1,
-        "ms": 564
+        "ms": 595
       },
       "ready": {
         "count": 1,
-        "ms": 2265
+        "ms": 2374
       },
       "secret": {
         "count": 25,
-        "ms": 15793
+        "ms": 16887
       },
       "runtime-credential": {
         "count": 1,
-        "ms": 531
+        "ms": 545
       }
     },
-    "serverStartByCliMs": 5911,
+    "serverStartByCliMs": 3785,
     "valuesTheServerGot": 25
   },
   "boundary": {
@@ -49,53 +52,53 @@
     "serverAfterItsCredentialWasRevoked": 77,
     "projects": 1,
     "credentialsIssued": 2,
-    "reissueMs": 2359,
+    "reissueMs": 2428,
     "steps": {
       "projects": {
         "count": 1,
-        "ms": 620
+        "ms": 636
       },
       "project": {
         "count": 1,
-        "ms": 621
+        "ms": 616
       },
       "runtime-credential": {
         "count": 2,
-        "ms": 1118
+        "ms": 1175
       }
     },
     "valuesTheServerGot": 26
   },
   "search-controls": {
-    "project": "b934aeac-5aff-43db-84f5-7b08440fea79",
-    "environment": "66f30bd5-8d22-4359-ad1b-011b8175afc7",
-    "automationCredential": "726b180b-9d79-45d6-9e0b-e88d76a7f135"
+    "project": "bc704c4a-2eb5-4119-afca-1c87dcfb5d4a",
+    "environment": "8b1bf5ad-3caa-4a20-8620-c6b5087a524a",
+    "automationCredential": "03fd0069-03b0-450b-a031-81b741789215"
   },
   "search": {
     "API log": {
       "searched": 14,
       "found": 0,
-      "controls": "1 of 1"
+      "controls": "2 of 2, one of them sent as a needle"
     },
     "provisioner log": {
       "searched": 14,
       "found": 0,
-      "controls": "1 of 1"
+      "controls": "2 of 2, one of them sent as a needle"
     },
     "pg_dump (database postgres)": {
       "searched": 14,
       "found": 0,
-      "controls": "1 of 1"
+      "controls": "2 of 2, one of them sent as a needle"
     },
     "OpenBao audit device": {
       "searched": 14,
       "found": 0,
-      "controls": "1 of 1"
+      "controls": "2 of 2, one of them sent as a needle"
     },
     "Traefik access log": {
       "searched": 14,
       "found": 0,
-      "controls": "1 of 1"
+      "controls": "2 of 2, one of them sent as a needle"
     }
   },
   "cleanup": {

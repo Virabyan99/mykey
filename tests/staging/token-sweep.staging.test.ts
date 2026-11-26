@@ -18,7 +18,7 @@ import { randomBytes, randomUUID } from "node:crypto";
 import { writeFileSync } from "node:fs";
 import { setTimeout as sleep } from "node:timers/promises";
 import { describe, expect, it } from "vitest";
-import { countOnHost, loadHosts, registerSecret } from "../harness/staging.ts";
+import { countOnHost, loadHosts, nextMinute, registerSecret } from "../harness/staging.ts";
 import { callerNetwork, exchangeRequest, machineRequest } from "../harness/staging-machine.ts";
 import { publicRequest, stagingOwnerSession, type PublicAnswer } from "../harness/staging-owner.ts";
 
@@ -84,6 +84,10 @@ describe("the token sweep on staging", () => {
       registerSecret(part);
       presented.push(secret, part);
     };
+    // Five issuances follow, and a person has five a minute (Run 6.3): a fresh minute.
+    await nextMinute();
+    /** What each revocation answered: asserted after every one was tried. */
+    const revocations: number[] = [];
     try {
       for (let index = 0; index < 3; index += 1) {
         const answer = await send("POST", `${environmentPath}/credentials`, {
@@ -158,7 +162,7 @@ describe("the token sweep on staging", () => {
           `${environmentPath}/credentials/${credentialId}/revoke`,
           { confirmed: true },
         );
-        expect(revoked.status, revoked.body.slice(0, 200)).toBe(200);
+        revocations.push(revoked.status);
       }
       for (const credentialId of runtimeIds) {
         const revoked = await send(
@@ -166,7 +170,7 @@ describe("the token sweep on staging", () => {
           `${environmentPath}/credentials/${credentialId}/revoke`,
           { confirmed: true },
         );
-        expect(revoked.status).toBe(200);
+        revocations.push(revoked.status);
       }
       for (const credentialId of automationIds) {
         const revoked = await send(
@@ -174,9 +178,12 @@ describe("the token sweep on staging", () => {
           `/v1/organizations/${ORGANIZATION}/automation-credentials/${credentialId}/revoke`,
           { confirmed: true },
         );
-        expect(revoked.status).toBe(200);
+        revocations.push(revoked.status);
       }
     }
+    // Every revocation was tried before any is judged: one refusal must not leave the rest alive.
+    expect(revocations.length).toBe(issued.length + runtimeIds.length + automationIds.length);
+    expect(revocations.every((status) => status === 200)).toBe(true);
 
     // What must have been made, or the search below would prove less than it says.
     expect(runtimeIds.length).toBe(1);
@@ -184,41 +191,46 @@ describe("the token sweep on staging", () => {
     expect(presented.length).toBe(5);
     const values = [...issued.map((entry) => entry.token), canary, ...presented];
     const resolvePath = `/v1/machine/projects/${projectId}/environments/${ENVIRONMENT}/resolve`;
-    const surfaces: [string, string, string[]][] = [
+    // The second review of Run 11.8 (M3): the last string of each surface is not
+    // an argument but travels as the needles do. Found, it shows that the
+    // needles reached the search as patterns, not only that the producer ran.
+    const surfaces: [string, string, string[], string][] = [
       [
         "API log",
         `docker logs --since ${startedAt} mykey-api-1`,
-        [
-          "/v1/machine/projects/:project/environments/:envName/resolve",
-          "/v1/machine/exchange",
-          "/v1/automation/projects",
-        ],
+        ["/v1/machine/projects/:project/environments/:envName/resolve", "/v1/machine/exchange"],
+        "/v1/automation/projects",
       ],
       [
         "provisioner log",
         `docker logs --since ${startedAt} mykey-provisioner-1`,
         // The job that provisioned this file's environment (its log names operation ids only).
         ['"event":"job"'],
+        '"operationId":"',
       ],
       [
         "pg_dump (database postgres)",
         `docker exec mykey-postgres-1 sh -c 'PGPASSWORD="$(cat "$POSTGRES_PASSWORD_FILE")" pg_dump -U postgres -d postgres'`,
-        [...issued.map((entry) => entry.credentialId), ...runtimeIds, ...automationIds],
+        [...issued.map((entry) => entry.credentialId), ...runtimeIds],
+        automationIds[0] ?? "",
       ],
       [
         "PostgreSQL log",
         "docker logs mykey-postgres-1",
         ["database system is ready to accept connections"],
+        "starting PostgreSQL",
       ],
       [
         "OpenBao audit device",
         "docker exec mykey-openbao-1 cat /openbao/audit/audit.log",
         [`kv/data/p/${projectId}/e/${environmentId}/${secretName}`],
+        `auth/token/create/machine-env-${environmentId}`,
       ],
       [
         "Traefik access log",
         `docker logs --since ${startedAt} mykey-edge-1`,
-        [resolvePath, "/v1/machine/exchange", "/v1/automation/projects"],
+        [resolvePath, "/v1/machine/exchange"],
+        "/v1/automation/projects",
       ],
     ];
     const lines = [
@@ -230,14 +242,15 @@ describe("the token sweep on staging", () => {
       "# (which resolved the canary too), and one automation secret (whole, and its secret part) that listed its projects.",
       "# Values reach the host on fd 3 of the search, never the pipe; only counts come back (countOnHost).",
       "# Each surface has controls, strings that are not secret and must be found there; a search missing one fails.",
+      "# The last control of each surface is sent as the values are (a needle control): found, it shows the values arrived as patterns.",
       "# surface | command | values searched | values found | controls found",
     ];
     let total = 0;
-    for (const [surface, producer, controls] of surfaces) {
-      const result = await countOnHost(host, producer, values, controls);
+    for (const [surface, producer, controls, asNeedle] of surfaces) {
+      const result = await countOnHost(host, producer, values, controls, [asNeedle]);
       total += result.found;
       lines.push(
-        `${surface} | ${producer} | ${String(values.length)} | ${String(result.found)} | ${String(result.controls)} of ${String(controls.length)}`,
+        `${surface} | ${producer} | ${String(values.length)} | ${String(result.found)} | ${String(result.controls)} of ${String(controls.length + 1)}`,
       );
     }
     lines.push(`# total values found outside the responses: ${String(total)}`);

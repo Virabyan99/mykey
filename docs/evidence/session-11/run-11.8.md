@@ -36,13 +36,13 @@ Staging serves `host-v0.10.0` (source `5e13f421a4e6`), gate open. Every staging 
 
 ### The two new files
 
-| File                         | Result | Figures (one run)                                                                                                                                                                                                                                 |
-| ---------------------------- | ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `runtime-credential.staging` | 3 of 3 | issue 244 ms, exchange 244 ms, 25 values 364 ms, metadata 311 ms, revoke 197 ms. The fleet: ten servers, the first round 11.4 s, both rounds 19.7 s. 48 values searched on five host surfaces, 0 found, every control found.                      |
-| `automation.staging`         | 2 of 2 | one tenant in 19.7 s (25 secrets 15.8 s); the CLI starts a server with 25 values; five denials beside their controls; a revoked server exits 77 and comes back by `reissue` in 2.4 s with 26 values. 14 values searched, 0 found, controls found. |
+| File                         | Result        | Figures (one run)                                                                                                                                                                                                                                 |
+| ---------------------------- | ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `runtime-credential.staging` | 3 of 3, twice | issue 197 ms, exchange 272 ms, 25 values 367 ms, metadata 299 ms, revoke 236 ms. The fleet: ten servers, both rounds in 19.7 s on the first run and 21.7 s on the second. 48 values searched on five host surfaces, 0 found, every control found. |
+| `automation.staging`         | 2 of 2, twice | one tenant in 21.0 s (25 secrets 16.9 s); the CLI starts a server with 25 values; five denials beside their controls; a revoked server exits 77 and comes back by `reissue` in 2.4 s with 26 values. 14 values searched, 0 found, controls found. |
 
-- **The exchanged token's lifetime read 901 s** by the workstation's clock: `expiresAt` is the host's, and the test allows 5 s of difference.
-- **The fleet's 19.7 s is 0.3 s inside the specification's 20 s.** The test's own bound is 60 s. One run is not a bound (`acceptance.md`, S11-8).
+- **The exchanged token's lifetime read 901 s on the first run and 900 s on the second** by the workstation's clock: `expiresAt` is the host's, and the test allows 5 s of difference.
+- **The fleet met the specification's 20 s once in two runs:** 19.7 s, then 21.7 s for both rounds (the first round 11.4 s and 11.1 s). All ten servers started both times and none was rate-limited. The test's own bound is 60 s. So the 20 s is not proven on staging (`acceptance.md`, S11-8).
 - `callerNetwork` reads the caller's address from the edge's log on the host. The address is registered as a secret and is in no evidence file.
 
 ### No regression
@@ -52,7 +52,7 @@ The published `cli-v0.1.2` (downloaded, sums checked, its bundle unpacked) ran `
 - with a 30-day token: keys, run, export with mode 600, then exit 77 after the revocation, as in Session 5;
 - given a runtime credential's client secret: exit 77, nothing started. `cli-v0.2.0` starts with it.
 
-Evidence: `staging-cli-released.json`. The plan's command for this (`test:cli --release` against staging) does not exist in that form: `test:cli` runs against a local server.
+Evidence: `staging-cli-released-0.1.2.json` (the journey) and `staging-cli-runtime-credential-0.1.2.json` beside `staging-cli-runtime-credential-0.2.0.json`. The plan's command for this (`test:cli --release` against staging) does not exist in that form: `test:cli` runs against a local server.
 
 The staging files of Session 10's results, one at a time (UTC, 26 Nov):
 
@@ -94,6 +94,19 @@ Not run, as the plan says: `drill`, `redrill`, `key-loss`, `kms-expiry`, the thr
 - So valve 3 is neither taken nor closed: the file is red, and a red file proves nothing. It needs one run with memory free.
 - Its leftovers (four containers, two images) were removed by hand. The credentials it issued on staging live an hour.
 
+## The second review: the test code changed after the freeze
+
+One fresh agent, read-only, got `git diff 5e13f42..HEAD` without `docs/` and seven questions (`review.md`, the second part). No Critical, no High, four Medium, eight Low. The Mediums were fixed and the five changed files run again on staging:
+
+| Finding                                                                                 | What was done                                                                                                                                                                                                             | The proof                                                                                                                                 |
+| --------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| M1. `cli.staging`'s second test took its expectation from what the CLI under test says  | The run names the version it proves: this tree's, or `MYKEY_CLI_EXPECT` with a published bundle. `automation.staging` refuses a published bundle and records its CLI's version.                                           | `cli.staging` 2 of 2 with the tree's build and 2 of 2 with the published `0.1.2`; with the bundle and no version named it does not start. |
+| M2. `sweep-ci.ts` missed a secret behind a colour code and one cut short                | Colour codes are removed before counting; twenty characters of the secret are enough.                                                                                                                                     | `tests/unit/registry/sweep-ci.test.ts`: the new test failed first, then 5 of 5.                                                           |
+| M3. The three searches for the new shapes had no control that travels as the needles do | One control of each surface is sent as a needle.                                                                                                                                                                          | `token-sweep` 1 of 1, `runtime-credential` 3 of 3, `automation` 2 of 2: every such control found on every surface.                        |
+| M4. Credentials or a project could stay behind when an assertion failed early           | An id is remembered as soon as its 201 is read; the token sweep tries every revocation before it judges one; a script that stops half way leaves its project to the end's archive; `cli.staging` asserts nothing is left. | The same reruns.                                                                                                                          |
+
+Of the Lows: the token sweep takes a fresh minute for its five issuances (L2), and `acceptance.md` says five surfaces where it said "the same way" (L6). The others are deferred and listed in `review.md`.
+
 ## Stale tests and plan defects, fixed as tests
 
 - **`transport.staging`** expected production's `/health` to answer 503 ("closed"). Production is open since 22 Nov. Both hosts now expect 200; the chain, HSTS and the forwarded-header checks are the same on each.
@@ -110,17 +123,17 @@ Not run, as the plan says: `drill`, `redrill`, `key-loss`, `kms-expiry`, the thr
 
 ## Commands and results
 
-| Command                                                              | Result                             |
-| -------------------------------------------------------------------- | ---------------------------------- |
-| `gh workflow run ci --ref session-11` at `87d7871`, and at `5e13f42` | green, green                       |
-| `gh workflow run ci … -f jobs=cli-matrix -f cli_release=cli-v0.2.0`  | green, four targets                |
-| `deploy.staging.test.ts` (`host-v0.10.0` over `host-v0.9.2`)         | 1 of 1                             |
-| the two new staging files                                            | 3 of 3, 2 of 2                     |
-| `MYKEY_CLI_DIST=<cli-v0.1.2> … cli.staging.test.ts`                  | 2 of 2                             |
-| 24 staging files, one at a time                                      | all green; two on their second run |
-| `pnpm run test:consumers`                                            | **2 passed, 3 failed** (memory)    |
-| `pnpm run check`                                                     | green                              |
-| CI on the draft pull request (#27) after `15400d5`                   | green (`check` and `secret-scan`)  |
+| Command                                                                    | Result                                                        |
+| -------------------------------------------------------------------------- | ------------------------------------------------------------- |
+| `gh workflow run ci --ref session-11` at `87d7871`, and at `5e13f42`       | green, green                                                  |
+| `gh workflow run ci … -f jobs=cli-matrix -f cli_release=cli-v0.2.0`        | green, four targets                                           |
+| `deploy.staging.test.ts` (`host-v0.10.0` over `host-v0.9.2`)               | 1 of 1                                                        |
+| the two new staging files                                                  | 3 of 3, 2 of 2; again after the second review: 3 of 3, 2 of 2 |
+| `MYKEY_CLI_DIST=<cli-v0.1.2> MYKEY_CLI_EXPECT=0.1.2 … cli.staging.test.ts` | 2 of 2 (twice)                                                |
+| 24 staging files, one at a time                                            | all green; two on their second run                            |
+| `pnpm run test:consumers`                                                  | **2 passed, 3 failed** (memory)                               |
+| `pnpm run check`                                                           | green                                                         |
+| CI on the draft pull request (#27) after `15400d5`                         | green (`check` and `secret-scan`)                             |
 
 ## Open issues
 

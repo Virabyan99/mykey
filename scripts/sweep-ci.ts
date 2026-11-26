@@ -13,11 +13,18 @@ const CANARY = /MYKEY_CANARY_[A-Za-z0-9]{32}/g;
 const TOKEN = /\bhv[sbr]\.[A-Za-z0-9_-]{20,}|(?<![A-Za-z0-9.])s\.[A-Za-z0-9]{24}(?![A-Za-z0-9])/g;
 // Session 11 (Run 11.8): a runtime credential's client secret and an automation
 // secret, `mkrc.` or `mkac.`, the credential's id and 43 characters. Counted
-// with the tokens: either one opens what a token opens, or more.
+// with the tokens: either one opens what a token opens, or more. Twenty
+// characters of the secret are enough to count: a body printed with a slice
+// can end inside it (the token rule above allows the same).
 const PRESENTED =
-  /\bmk(?:rc|ac)\.[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.[A-Za-z0-9_-]{43}/g;
+  /mk(?:rc|ac)\.[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.[A-Za-z0-9_-]{20,}/g;
+// A downloaded CI log keeps its colour codes, and one ends in a letter: with it
+// in front, a word boundary is not where the secret starts.
+// eslint-disable-next-line no-control-regex
+const COLOUR = /\u001b\[[0-9;]*m/g;
 
-export function countFindings(text: string): { canaries: number; tokens: number } {
+export function countFindings(input: string): { canaries: number; tokens: number } {
+  const text = input.replace(COLOUR, " ");
   return {
     canaries: [...text.matchAll(CANARY)].length,
     tokens: [...text.matchAll(TOKEN)].length + [...text.matchAll(PRESENTED)].length,

@@ -28,7 +28,7 @@ import {
   timings,
   type ProvisionerApi,
 } from "../fixtures/automation/tenant-provisioner.ts";
-import { runCliInLinux } from "../harness/cli-linux.ts";
+import { releasedCliDist, runCliInLinux } from "../harness/cli-linux.ts";
 import { countOnHost, loadHosts, registerSecret } from "../harness/staging.ts";
 import { callerNetwork, exchangeRequest, exportedDigests } from "../harness/staging-machine.ts";
 import {
@@ -119,17 +119,18 @@ async function issueAutomation(body: {
   const answer = await send("POST", `${ORG}/automation-credentials`, { ...body, ttlSeconds: 3600 });
   const ms = performance.now() - began;
   expect(outcome(answer), `issue ${body.name}`).toEqual([201, undefined]);
-  expect(answer.headers.get("cache-control")).toBe("no-store");
   const issued = json(answer) as {
     credential: { credentialId: string; ownerId: string };
     secret: string;
   };
+  // Remembered before anything else is asserted: a failed assertion below must not leave it unrevoked.
+  automationIssued.add(issued.credential.credentialId);
   hold(issued.secret);
+  expect(answer.headers.get("cache-control")).toBe("no-store");
   const parts = issued.secret.split(".");
   expect(parts.length).toBe(3);
   expect(parts[0]).toBe("mkac");
   expect(parts[1]).toBe(issued.credential.credentialId);
-  automationIssued.add(issued.credential.credentialId);
   return {
     credentialId: issued.credential.credentialId,
     ownerId: issued.credential.ownerId,
@@ -172,8 +173,13 @@ async function ownerExport(projectId: string, environmentId: string) {
 }
 
 beforeAll(async () => {
+  // This file proves the tree's CLI: a published bundle named for another file's run must not be it.
+  expect(releasedCliDist(), "MYKEY_CLI_DIST is set").toBeUndefined();
   const built = spawnSync(process.execPath, ["apps/cli/build.ts"], { encoding: "utf8" });
   expect(built.status, built.stderr).toBe(0);
+  const said = await runCliInLinux(["--version"]);
+  expect(said.code, said.stderr).toBe(0);
+  record("cli", { version: said.stdout.split(" ")[1] ?? "" });
   ({ cookie } = await stagingOwnerSession());
   caller = await callerNetwork(host);
 }, 300_000);
@@ -230,6 +236,12 @@ describe("the automation credential on staging", () => {
       secrets: values,
       environment: TENANT_ENVIRONMENT,
       cidrs: [caller],
+    }).catch(async (error: unknown) => {
+      // A script that stopped half way has made a project already: the end archives it.
+      const left = await automation(auto.secret, "GET", "/v1/automation/projects");
+      if (left.status === 200)
+        for (const project of json(left).projects as { id: string }[]) projects.add(project.id);
+      throw error;
     });
     const provisionMs = performance.now() - provisionStarted;
     hold(made.clientSecret);
@@ -409,39 +421,52 @@ describe("the automation credential on staging", () => {
     if (controls === undefined) return;
     expect(held.length).toBeGreaterThan(0);
     const since = startedAt.toISOString();
-    const surfaces: [string, string, string[]][] = [
-      ["API log", `docker logs --since ${since} mykey-api-1`, ["/v1/automation/projects"]],
+    // The second review of Run 11.8 (M3): the last string of each surface is not
+    // an argument but travels as the needles do. Found, it shows that the
+    // needles reached the search as patterns, not only that the producer ran.
+    const kv = `kv/data/p/${controls.project}/e/${controls.environment}/${PREFIX}`;
+    const surfaces: [string, string, string[], string][] = [
+      [
+        "API log",
+        `docker logs --since ${since} mykey-api-1`,
+        ["/v1/automation/projects"],
+        "/v1/machine/exchange",
+      ],
       [
         "provisioner log",
         `docker logs --since ${since} mykey-provisioner-1`,
         // The job that provisioned the tenant's environment (its log names operation ids only).
         ['"event":"job"'],
+        '"operationId":"',
       ],
       [
         "pg_dump (database postgres)",
         `docker exec mykey-postgres-1 sh -c 'PGPASSWORD="$(cat "$POSTGRES_PASSWORD_FILE")" pg_dump -U postgres -d postgres'`,
         [controls.automationCredential],
+        controls.project,
       ],
       [
         "OpenBao audit device",
         "docker exec mykey-openbao-1 cat /openbao/audit/audit.log",
-        [`kv/data/p/${controls.project}/e/${controls.environment}/${PREFIX}00`],
+        [`${kv}00`],
+        `${kv}01`,
       ],
       [
         "Traefik access log",
         `docker logs --since ${since} mykey-edge-1`,
         ["/v1/automation/projects"],
+        "/v1/machine/exchange",
       ],
     ];
     const found: Record<string, { searched: number; found: number; controls: string }> = {};
     let total = 0;
-    for (const [surface, producer, wanted] of surfaces) {
-      const result = await countOnHost(host, producer, held, wanted);
+    for (const [surface, producer, wanted, asNeedle] of surfaces) {
+      const result = await countOnHost(host, producer, held, wanted, [asNeedle]);
       total += result.found;
       found[surface] = {
         searched: held.length,
         found: result.found,
-        controls: `${String(result.controls)} of ${String(wanted.length)}`,
+        controls: `${String(result.controls)} of ${String(wanted.length + 1)}, one of them sent as a needle`,
       };
     }
     record("search", found);
