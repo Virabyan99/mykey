@@ -991,7 +991,14 @@
       "files": ["tests/consumers/fixtures.test.ts", "tests/consumers/runbook.test.ts"],
       "green": false,
       "release": "host-v0.10.0",
-      "ref": "pnpm run test:consumers against staging on host-v0.10.0, Run 11.8, 26 Nov 2026: 2 passed, 3 failed; the workstation ran short of memory (spawn failures, a worker exit)"
+      "ref": "pnpm run test:consumers against staging on host-v0.10.0, Run 11.8, 26 Nov 2026 (first run): 2 passed, 3 failed; the workstation ran short of memory (spawn failures, a worker exit)"
+    },
+    {
+      "kind": "consumers",
+      "files": ["tests/consumers/fixtures.test.ts", "tests/consumers/runbook.test.ts"],
+      "green": true,
+      "release": "host-v0.10.0",
+      "ref": "pnpm run test:consumers against staging on host-v0.10.0, Run 11.9, 26 Nov 2026 12:54Z to 13:06Z (second run, alone, on mains power): 2 files, 7/7, 731 s; the deploy half with runtime credentials"
     },
     {
       "kind": "ci",

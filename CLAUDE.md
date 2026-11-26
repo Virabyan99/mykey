@@ -48,7 +48,7 @@ A Stage 1 amendment (D-80) from `docs/mykey-automation-credential-spec.md`. On s
 - **`cli-v0.2.0`** exchanges a client secret by itself; a 30-day token works as before. The published `cli-v0.1.2` given a runtime credential exits 77.
 - **The workspace** has an Automation page (owners and admins) and issues a runtime credential beside the token.
 - **`host-v0.10.0`** (`5e13f421a4e6`) is on staging: 25 staging files green on it. Its migration `0019` means **no rollback**: a host goes back only by a restore.
-- **The manifest** (`--session 11`): 159 PASS (9 `earlier`), 7 NOT YET DUE, 7 NOT PROVEN. AC-1.20 and PO-20 are NOT PROVEN because `test:consumers` was red on the candidate (the workstation's memory) and was not run again.
+- **The manifest** (`--session 11`): 161 PASS (7 `earlier`), 7 NOT YET DUE, 5 NOT PROVEN. `test:consumers` was red once on the candidate (the workstation's memory) and green on its second run.
 - **Not proven on staging:** the fleet's 20 seconds (ten servers started in 19.7 s and 21.7 s, D-83), and the new kinds' recovery after a restore (integration only).
 - **Run 11.1, the postgres pin, was not done:** no PostgreSQL 18 image without CVE-2026-124851 exists yet. `host-v0.9.3` was never built.
 
@@ -136,7 +136,7 @@ A Stage 1 amendment (D-80) from `docs/mykey-automation-credential-spec.md`. On s
 
   Production deploys need the owner's permission. Every one is `--stay-closed`, then the owner's journey in the `tunnel verify --browser` window, then `--owner-confirmed` (`production.md`).
 
-- **Evidence registry:** 161 `PASS`, 20 `SPIKE_PASS`, 10 `OPEN`. Session 11's manifest (`--session 11`): 159 PASS (9 `earlier`), 7 NOT YET DUE, 7 NOT PROVEN (AC-1.20, AC-1.25, AC-1.26, AC-1.36, AC-1.52, AC-1.55, PO-20). `--apply` never lowers a PASS, so AC-1.20 and PO-20 are PASS in the registry by Session 10's manifest only.
+- **Evidence registry:** 161 `PASS` (from Session 11's manifest, `--session 11`: 7 of them `earlier`), 20 `SPIKE_PASS`, 10 `OPEN`. The manifest: 161 PASS, 7 NOT YET DUE, 5 NOT PROVEN (AC-1.25, AC-1.26, AC-1.36, AC-1.52, AC-1.55). `--apply` sets PASS and never lowers one.
 
 ### Open items
 
@@ -146,7 +146,8 @@ A Stage 1 amendment (D-80) from `docs/mykey-automation-credential-spec.md`. On s
   - Outside the list: the reviewers' M1 change (R3-1, D-65), in Stage 2.
 - **The owner's console step:** delete the KMS certificates `staging-seal-2`, and `drill-seal-1` if it is still listed.
 - **Session 11 left open** (`session-11/report.md`):
-  - `pnpm run test:consumers` on `host-v0.10.0` (AC-1.20, PO-20): alone, with memory free, on the owner's word;
+  - the fleet's 20 seconds on staging (D-83);
+  - two fault tests that fail sometimes on CI (above, under "CI and scans");
   - nothing bounds what one automation credential makes, and `machine.metadata` is not audited: the owner's design questions;
   - nine deferred minors of its two reviews.
 - **Dated:**
@@ -347,6 +348,7 @@ Scripts in `scripts/` and `infra/` are TypeScript run directly by Node (type str
   - Integration runs in two shards, about 12 and 14 minutes, each with a 30-minute limit; `browser` takes about 7.
   - Runners cost nothing (the repository is public).
 - **Watch CI after every push** (`gh run list --branch <branch>`). Session 3 was red for its whole length unnoticed.
+- **Two fault tests were red once on a documents-only commit** (Session 11's gate) and green on `gh run rerun <id> --failed`: `tests/fault/audit/exhaustion.test.ts` ("after space is freed", 503 `quarantined`) and `tests/fault/capture/compete.test.ts` (a 5xx that is not `busy`). The cause is not known.
 - **Linux CI sees file ownership; Windows Docker hides it.** Test containers that write into a bind mount run as the caller (`tests/harness/restic.ts`).
 - **The image scan** covers the pinned upstream images and the API image. It is green only through `.trivyignore.images`: reviewed upstream CVEs with no fix possible in this repository without moving an image pin, all expiring on 14 Dec 2026.
   - A new upstream CVE can turn it red overnight. Review it, add an entry that gives the reason, and name what is exposed.

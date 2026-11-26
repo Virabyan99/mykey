@@ -13,7 +13,7 @@
 | **The workspace**                             | **Done** (Run 11.6). An Automation page, and the runtime credential beside the token.                                                                                                                               |
 | **The documents**                             | **Done** (Run 11.7). `automation.md`, both kinds in `machine-credentials.md`, fourteen new lines of `known-limits.md`.                                                                                              |
 | **The candidate on staging**                  | **Done** (Run 11.8). `host-v0.10.0` (`5e13f421a4e6`) with `cli-v0.2.0`. 25 staging files green on it.                                                                                                               |
-| **The consumer rehearsal** (`test:consumers`) | **Red, and not run again.** 2 passed, 3 failed, with the workstation short of memory. Claude Code stopped the job and asks for the owner's word before another start.                                               |
+| **The consumer rehearsal** (`test:consumers`) | **Done, on its second run.** 2 files, 7 of 7, 731 s, alone and on mains power, the deploy half with runtime credentials. The first run was red for the workstation's memory.                                        |
 | **The postgres pin** (Run 11.1, question 8)   | **Not moved.** The newest PostgreSQL 18 image still has CVE-2026-124851, so the image the plan asks for does not exist yet. `host-v0.9.3` was never built.                                                          |
 | **Production**                                | **Untouched**, as decided (question 6). It serves `host-v0.9.2`.                                                                                                                                                    |
 
@@ -21,25 +21,24 @@
 
 ## The release manifest
 
-`node scripts/release-manifest.ts --session 11`, applied: **159 PASS** (9 of them `earlier`), **7 NOT YET DUE**, **7 NOT PROVEN** for `host-v0.10.0` with `cli-v0.2.0`.
+`node scripts/release-manifest.ts --session 11`, applied: **161 PASS** (7 of them `earlier`), **7 NOT YET DUE**, **5 NOT PROVEN** for `host-v0.10.0` with `cli-v0.2.0`. The counts are Session 10's; what changed is how much of it rests on this candidate.
 
-- **26 ids are no longer `earlier`:** every staging file of theirs ran green on this candidate. Session 10 had 35 `earlier`.
-- **Still `earlier`, nine:** PO-1, KMS-L1 and AC-1.57 (`key-loss` did not run, as planned), AC-1.43, AC-1.44, PO-22 and R2-L1 (their clean-host item), and AC-1.42 and AC-1.50 (the rehearsal, below).
-- **NOT PROVEN, seven:** the five of Session 10 (AC-1.25, AC-1.26, AC-1.36, AC-1.52, AC-1.55), and **AC-1.20 and PO-20** for the red consumer rehearsal.
-- **The registry still counts 161 PASS.** `--apply` sets PASS and never lowers one, so AC-1.20 and PO-20 stay PASS there by Session 10's manifest (`host-v0.9.2`). For this candidate they are not proven.
+- **28 ids are no longer `earlier`:** every staging file of theirs, and the consumer rehearsal where they name it, ran green on this candidate. Session 10 had 35 `earlier`.
+- **Still `earlier`, seven:** PO-1, KMS-L1 and AC-1.57 (`key-loss` did not run, as planned), and AC-1.43, AC-1.44, PO-22 and R2-L1 (their clean-host item).
+- **NOT PROVEN, five,** as in Session 10: AC-1.25, AC-1.26, AC-1.36, AC-1.52, AC-1.55.
 - **The CI results** are the full run at the candidate's source (45720586150) and the ready pull request's full run at `be03675` (45815246889). What differs from the candidate's source outside tests and documents is listed as tooling in `candidate.json`: `tools/agent-runner/` and `.gitleaksignore`.
+- **The manifest was built twice.** First with the rehearsal red: 159 PASS, with AC-1.20 and PO-20 NOT PROVEN. Then, after the owner's "continue" and a green run, as it stands.
 
-**A hole in the manifest tool, found here and fixed.** It never compared a consumer rehearsal's release, so any green rehearsal of an earlier release counted. With today's red run the four ids that rest on it still read PASS. A consumers result is now a result of the host release, as a staging file's is (unit test first). By this rule Session 9's manifest counted AC-1.20 and PO-20 on the rehearsal of `host-v0.8.1` while its candidate was `host-v0.9.1`. Session 10 ran the rehearsal on its own candidate. No earlier file was changed.
+**A hole in the manifest tool, found here and fixed.** It never compared a consumer rehearsal's release, so any green rehearsal of an earlier release counted. With the red run recorded, the four ids that rest on the rehearsal still read PASS. A consumers result is now a result of the host release, as a staging file's is (unit test first). By this rule Session 9's manifest counted AC-1.20 and PO-20 on the rehearsal of `host-v0.8.1` while its candidate was `host-v0.9.1`. Session 10 ran the rehearsal on its own candidate. No earlier file was changed.
 
 ## The specification's acceptance items (`acceptance.md`)
 
-14 items: 9 PASS, and five with a remark.
+14 items: 10 PASS, and four with a remark.
 
 - **S11-3:** PASS for create; update by automation is not in scope (question 4).
 - **S11-8, the fleet:** ten servers started in both rounds, on staging twice, none rate-limited. Both rounds took 19.7 s and then 21.7 s against the specification's 20 s. **The 20 seconds are not proven on staging.**
 - **S11-10:** not applicable.
 - **S11-11, recovery after a restore:** PASS at integration; not proven on a host (cut 3 of question 7).
-- **S11-12, no regression:** PASS for the staging files and the published `cli-v0.1.2`; the consumer rehearsal is not proven.
 
 ## Staging figures (`measurements.json`; single runs, not bounds)
 
@@ -56,6 +55,7 @@
 - **No rollback across migration 0019.** `deploy.staging`'s middle step is refused as a downgrade (D-57). From `host-v0.10.0` a host goes back only by a restore. The plan expected a rollback: a plan defect, and a line of `known-limits.md`.
 - **The secret scan was red three times** on synthetic material: a token-shaped literal in a unit test (Run 11.4), and credential ids under keys named "…Credential" in an evidence file, on two pushes (Run 11.8). Fingerprints recorded with their reasons; the literal is assembled at run time and the keys are renamed.
 - **The manifest tool's hole** (above).
+- **Two fault tests were red once on CI** at the gate (`exhaustion.test.ts`, `compete.test.ts`), on a commit that changed documents only; green on the rerun of the same commit (`run-11.9.md`). The cause was not looked for.
 - **Stale tests, fixed as tests:** `transport.staging` expected production closed; `deploy.staging` expected a rollback; `factors-http` and `replay` pins.
 - **A line of ours was wrong:** `known-limits.md` said no test shows the edge replacing a client's forwarded header. `transport.staging` shows it on both hosts.
 - **`node scripts/web-runbooks.ts --check` reports "stale"** at this branch and its parent. Nothing runs the flag; `connect-commands.test.ts` is the guard. Not changed.
@@ -66,7 +66,7 @@
 - **The staging pass took two days of clock.** The laptop shut down on low battery during `alerts.staging`, and Claude Code stopped background jobs for memory twice. A stopped job loses only its wrapper: once the script went on and two staging files overlapped for about a minute (both passed).
 - **Docker Desktop was stopped between the files that need it**, on the owner's offer.
 - **The published `cli-v0.1.2` ran through `cli.staging`** by `MYKEY_CLI_DIST`, since the plan's command for it does not exist.
-- **The consumer rehearsal's deploy half now uses runtime credentials.** It got through every block in the red run and has never been green.
+- **The consumer rehearsal's deploy half now uses runtime credentials.** Its first run was red for memory; the second, alone and on mains power, was green.
 
 ## The reviews (`review.md`)
 
@@ -87,8 +87,8 @@
 
 ## Open issues
 
-- **The consumer rehearsal on `host-v0.10.0`** (AC-1.20, PO-20): one run of about 15 minutes with Docker, alone, on the owner's word.
 - **The fleet's 20 seconds** on staging (S11-8, D-83).
+- **Two fault tests that fail sometimes on CI:** `tests/fault/audit/exhaustion.test.ts` and `tests/fault/capture/compete.test.ts`.
 - **Nothing bounds what one automation credential makes** (review L3): a design question for the owner.
 - **`machine.metadata` writes no audit row** (review L4): as specified; the owner may want it otherwise.
 - **The postgres pin** (Run 11.1): `.trivyignore.images` expires on 14 Dec 2026. Either a fixed image exists by then, or the entries are reviewed and extended.
@@ -216,3 +216,5 @@ Copied from the execution ledger, in the order they were made. Each says what wa
 - Task 9: Finding: the release manifest never compared a consumers result's release. With the rehearsal red on `host-v0.10.0`, the four ids that rest on it (AC-1.20, AC-1.42, AC-1.50, PO-20) still read PASS on the green runs of earlier releases. Ruling: fixed in `scripts/release-manifest.ts` — a consumers result is a result of the host release, as a staging file's — `tests/unit/registry/release-manifest.test.ts` "a consumer rehearsal counts on the candidate's host release only" RED→GREEN, registry unit tests 31/31 — the gate's instrument must not hide a red run — if wrong, a rehearsal must be run on every candidate that names its ids, which is what the plan asks anyway.
 - Task 9: Ruling: the manifest is built with the rehearsal as it is, red: AC-1.20 and PO-20 NOT PROVEN, AC-1.42 and AC-1.50 kept `earlier` on `host-v0.8.1`. 159 PASS (9 earlier), 7 NOT YET DUE, 7 NOT PROVEN — the rehearsal may be started again only on the owner's word — if the owner says go and it is green, the manifest is rebuilt and applied again (161 PASS, 5 NOT PROVEN).
 - Task 9: Ruling: `candidate.json` lists `tools/agent-runner/` and `.gitleaksignore` as tooling (they differ from the candidate's source and build nothing).
+- Task 9: Ruling: the owner's "continue" (26 Nov 2026, the laptop on mains power) is read as the word for `pnpm run test:consumers`, and not as a yes to the merge — the rehearsal was the one piece of work waiting for a word, and it changes nothing that cannot be undone — if wrong, one 12-minute test run happened that the owner did not mean. It ran alone: 2 files, 7 of 7, 731 s. The manifest was rebuilt and applied: 161 PASS (7 earlier), 7 NOT YET DUE, 5 NOT PROVEN.
+- Task 9: Finding: the full CI run at `d856896` (45820861908) had integration shard 1 red on a commit that changed documents and evidence files only: `tests/fault/audit/exhaustion.test.ts` ("after space is freed both succeed again": 503 quarantined) and `tests/fault/capture/compete.test.ts` (one 5xx that is not busy among forty captures; 444 s). Ruling: the shard was run again on the same commit, green, and the cause is left as an open issue — the diff cannot have caused it, and both tests depend on the runner's speed — if wrong, a real fault of the capture barrier or of the gate after a full disk shows only sometimes.

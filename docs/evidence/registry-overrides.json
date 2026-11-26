@@ -1236,7 +1236,8 @@
         "docs/evidence/session-5/run-5.6.md",
         "docs/evidence/session-8/manifest.md",
         "docs/evidence/session-9/manifest.md",
-        "docs/evidence/session-10/manifest.md"
+        "docs/evidence/session-10/manifest.md",
+        "docs/evidence/session-11/manifest.md"
       ],
       "note": "Argument vectors, collisions, stdin, size limits, pre-spawn cancellation and signals without double forwarding on Linux; the Next.js/FastAPI fixtures are Run 5.8 and the four platforms Run 5.7."
     },
@@ -1308,7 +1309,8 @@
         "docs/evidence/session-5/run-5.8.md",
         "docs/evidence/session-8/manifest.md",
         "docs/evidence/session-9/manifest.md",
-        "docs/evidence/session-10/manifest.md"
+        "docs/evidence/session-10/manifest.md",
+        "docs/evidence/session-11/manifest.md"
       ],
       "note": "Credential setup and replacement (rotation, after a restore) for a workstation and a first deployment, Next.js and FastAPI fixtures, staging; the four-platform part is PO-8 (macOS open)."
     },

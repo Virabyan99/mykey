@@ -569,6 +569,34 @@
         }
       ]
     },
+    "AC-1.20": {
+      "files": [
+        {
+          "path": "tests/cli/run.test.ts",
+          "kind": "cli"
+        },
+        {
+          "path": "tests/unit/cli/child-env.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/unit/cli/args.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/consumers/fixtures.test.ts",
+          "kind": "consumers"
+        },
+        {
+          "path": "tests/consumers/runbook.test.ts",
+          "kind": "consumers"
+        },
+        {
+          "path": "tests/staging/cli.staging.test.ts",
+          "kind": "staging"
+        }
+      ]
+    },
     "AC-1.21": {
       "files": [
         {
@@ -1243,16 +1271,7 @@
           "path": "tests/staging/token-sweep.staging.test.ts",
           "kind": "staging"
         }
-      ],
-      "earlier": {
-        "evidence": "docs/evidence/session-8/manifest.md",
-        "changedSince": "host-v0.8.1 → host-v0.9.1: the workspace (apps/web, D-70), the restore code (R4-2, R4-3, R4-4, R4-7, R4-10, RR-1, RR-3; proven by tests/fault and tests/integration/restore), operator scripts and tools; no route, schema or API change (D-69); host-v0.9.1 → host-v0.9.2: the connect panel's token step and its texts only (apps/web/src/connect, copy, help; F-9.2-1, D-76), the probe Worker's config; host files and operator tools after it (field-day.sh, scripts/host-restore.ts: candidate.json tooling); no route, schema or API change; host-v0.9.2 → host-v0.10.0 (Session 11, D-80 to D-83): runtime and automation credentials, the exchange, machine.metadata and the automation routes (new routes; no existing route's body changed), migration 0019, the pipeline's two new authentications with their limits, the workspace's credential screens, cli-v0.2.0's exchange; the restore's invalidation and verification also cover the two new tables (proven by tests/integration/automation/recovery.test.ts on real stores, not on a host)",
-        "covering": [
-          "tests/staging/credentials.staging.test.ts",
-          "tests/staging/token-sweep.staging.test.ts"
-        ],
-        "release": "host-v0.8.1"
-      }
+      ]
     },
     "AC-1.43": {
       "files": [
@@ -1535,13 +1554,7 @@
           "path": "tests/consumers/runbook.test.ts",
           "kind": "consumers"
         }
-      ],
-      "earlier": {
-        "evidence": "docs/evidence/session-8/manifest.md",
-        "changedSince": "host-v0.8.1 → host-v0.9.1: the workspace (apps/web, D-70), the restore code (R4-2, R4-3, R4-4, R4-7, R4-10, RR-1, RR-3; proven by tests/fault and tests/integration/restore), operator scripts and tools; no route, schema or API change (D-69); host-v0.9.1 → host-v0.9.2: the connect panel's token step and its texts only (apps/web/src/connect, copy, help; F-9.2-1, D-76), the probe Worker's config; host files and operator tools after it (field-day.sh, scripts/host-restore.ts: candidate.json tooling); no route, schema or API change; host-v0.9.2 → host-v0.10.0 (Session 11, D-80 to D-83): runtime and automation credentials, the exchange, machine.metadata and the automation routes (new routes; no existing route's body changed), migration 0019, the pipeline's two new authentications with their limits, the workspace's credential screens, cli-v0.2.0's exchange; the restore's invalidation and verification also cover the two new tables (proven by tests/integration/automation/recovery.test.ts on real stores, not on a host)",
-        "covering": ["tests/staging/token-sweep.staging.test.ts"],
-        "release": "host-v0.8.1"
-      }
+      ]
     },
     "AC-1.51": {
       "files": [
@@ -2109,6 +2122,30 @@
         }
       ]
     },
+    "PO-20": {
+      "files": [
+        {
+          "path": "tests/consumers/runbook.test.ts",
+          "kind": "consumers"
+        },
+        {
+          "path": "tests/consumers/fixtures.test.ts",
+          "kind": "consumers"
+        },
+        {
+          "path": "tests/cli/keys.test.ts",
+          "kind": "cli"
+        },
+        {
+          "path": "tests/unit/cli/token.test.ts",
+          "kind": "ci"
+        },
+        {
+          "path": "tests/staging/cli.staging.test.ts",
+          "kind": "staging"
+        }
+      ]
+    },
     "PO-21": {
       "files": [
         {
@@ -2581,8 +2618,6 @@
     "AC-1.26": "'A revoked certificate prevents unseal' ran once, in Run 2.7 (12 Nov 2026, the owner deleted staging-seal-1 in the console); on a rerun unseal.staging.test.ts only checks that the old key is gone and the current certificate unseals. 'Certificate reissued without old host' is the drill of Run 6.8 only. The expired-certificate case is checkpoint kms-cert-expiry (due 12 Dec 2026), not run.",
     "AC-1.36": "'Referenced KMS key destruction refused' has no test: unseal.staging.test.ts ('rights are what was granted') shows only that the seal certificate cannot create a key, and keyReadable reports a destroyed key; no file tries to destroy a referenced key.",
     "AC-1.52": "The owner's hour starts from an operator reset of the existing staging owner; install/deploy and bootstrap are proven by the agent's automated files (deploy.staging, api.staging, ops/bootstrap), not executed independently by the owner.",
-    "AC-1.55": "'Delayed events' (a row committed late into a day already counted) are not simulated for the summary; metrics.test.ts writes the earlier days' rows directly before reading.",
-    "AC-1.20": "The consumer rehearsal (pnpm run test:consumers) was red against staging on host-v0.10.0: 2 passed, 3 failed, with the workstation short of memory (Run 11.8). Its green runs are of host-v0.8.1 and host-v0.9.2. The entry's other files ran green on the candidate.",
-    "PO-20": "The consumer rehearsal (pnpm run test:consumers) was red against staging on host-v0.10.0: 2 passed, 3 failed, with the workstation short of memory (Run 11.8). Its green runs are of host-v0.8.1 and host-v0.9.2. The entry's other files ran green on the candidate."
+    "AC-1.55": "'Delayed events' (a row committed late into a day already counted) are not simulated for the summary; metrics.test.ts writes the earlier days' rows directly before reading."
   }
 }

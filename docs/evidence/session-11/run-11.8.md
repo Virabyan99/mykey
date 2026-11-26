@@ -139,6 +139,6 @@ Of the Lows: the token sweep takes a fresh minute for its five issuances (L2), a
 
 ## Open issues
 
-- **`test:consumers` must run again** before the gate counts the deploy runbook with a runtime credential.
+- **`test:consumers` ran again in Run 11.9,** alone and on mains power: 2 files, 7 of 7, 731 s (`run-11.9.md`).
 - **No rollback across migration `0019`:** staging, and later production, go back only by a restore.
 - **L3 and L4 of the review** are design questions for the owner: nothing bounds what one automation credential makes but its 120 requests a minute, and `machine.metadata` writes no audit row.
