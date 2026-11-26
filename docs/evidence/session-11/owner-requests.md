@@ -26,3 +26,12 @@ Each was asked with its options, what each costs, and a recommendation. "All as 
 | ----------- | ----------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 25 Nov 2026 | 1 to 8, all eight | "Start executing session 11". No recommendation was changed. **The agent reads this as "all as recommended"**; the owner did not say those words. An answer may still be changed. |
 | —           | 8, production     | The deploy itself waits for the owner's explicit yes before its first command.                                                                                                    |
+
+## Asked during Run 11.8 and at the gate (26 Nov 2026)
+
+| Date        | Asked                                                                                                                       | Answer                                                                                                                  |
+| ----------- | --------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| 26 Nov 2026 | Claude Code stopped the staging pass for low memory: may it go on?                                                          | Yes. The laptop had shut down on low battery; Docker Desktop may be stopped, and the owner will close VS Code if asked. |
+| 26 Nov 2026 | Plug the laptop in, and say "go" for `pnpm run test:consumers` (stopped for memory; about 15 minutes, alone, with Docker).  | Not answered yet. The rehearsal was not started again.                                                                  |
+| 26 Nov 2026 | The sign-off: merge PR #27, yes or no?                                                                                      | Not answered yet. Nothing is merged without it.                                                                         |
+| 26 Nov 2026 | Two design questions the review left: a bound on what one automation credential makes; an audit row for `machine.metadata`. | Not answered yet. Both are lines of `known-limits.md`.                                                                  |
