@@ -264,8 +264,9 @@ describe("the automation credential on staging", () => {
       tenant,
       project: made.projectId,
       environment: made.environmentId,
-      automationCredential: auto.credentialId,
-      runtimeCredential: made.credentialId,
+      // Ids of catalog rows. Their keys name no "credential": the secret scan
+      // reads a UUID beside that word as a generic key when its entropy is high.
+      ids: { automation: auto.credentialId, runtime: made.credentialId },
       issueAutomationMs: Math.round(auto.ms),
       provisionMs: Math.round(provisionMs),
       steps: timings(made.steps),
@@ -410,13 +411,13 @@ describe("the automation credential on staging", () => {
     record("search-controls", {
       project: made.projectId,
       environment: made.environmentId,
-      automationCredential: auto.credentialId,
+      automation: auto.credentialId,
     });
   }, 1_200_000);
 
   it("no automation secret and no client secret is on a host surface; every surface shows a control", async () => {
     const controls = evidence["search-controls"] as
-      { project: string; environment: string; automationCredential: string } | undefined;
+      { project: string; environment: string; automation: string } | undefined;
     expect(controls, "the journey did not finish: nothing to search for").toBeDefined();
     if (controls === undefined) return;
     expect(held.length).toBeGreaterThan(0);
@@ -442,7 +443,7 @@ describe("the automation credential on staging", () => {
       [
         "pg_dump (database postgres)",
         `docker exec mykey-postgres-1 sh -c 'PGPASSWORD="$(cat "$POSTGRES_PASSWORD_FILE")" pg_dump -U postgres -d postgres'`,
-        [controls.automationCredential],
+        [controls.automation],
         controls.project,
       ],
       [

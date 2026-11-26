@@ -95,7 +95,7 @@
     "run": "11.8",
     "date": "2026-11-26",
     "where": "staging on host-v0.10.0 (5e13f421a4e6), through the public name and the real edge, from the owner's workstation",
-    "note": "Names and numbers only. Figures of single runs, not bounds. Each file ran twice (before and after the second review's changes to the tests); these are the second run's, and the fleet has both.",
+    "note": "Names and numbers only. Figures of single runs, not bounds. Each file ran at least twice (before and after the second review's changes to the tests); these are the last run's, and the fleet has both of its runs.",
     "runtimeCredential": {
       "source": "tests/staging/runtime-credential.staging.test.ts",
       "issueMs": 197,
@@ -129,45 +129,45 @@
     "automation": {
       "source": "tests/staging/automation.staging.test.ts",
       "cli": "0.2.0",
-      "issueAutomationMs": 712,
-      "provisionOneTenantMs": 21008,
+      "issueAutomationMs": 615,
+      "provisionOneTenantMs": 20823,
       "provisionSteps": {
         "project": {
           "count": 1,
-          "ms": 603
+          "ms": 1121
         },
         "environment": {
           "count": 1,
-          "ms": 595
+          "ms": 711
         },
         "ready": {
           "count": 1,
-          "ms": 2374
+          "ms": 1484
         },
         "secret": {
           "count": 25,
-          "ms": 16887
+          "ms": 16974
         },
         "runtime-credential": {
           "count": 1,
-          "ms": 545
+          "ms": 529
         }
       },
-      "serverStartByCliMs": 3785,
+      "serverStartByCliMs": 4030,
       "serverStartNote": "includes starting the Linux container the CLI runs in on this workstation",
-      "reissueMs": 2428,
+      "reissueMs": 2284,
       "reissueSteps": {
         "projects": {
           "count": 1,
-          "ms": 636
+          "ms": 533
         },
         "project": {
           "count": 1,
-          "ms": 616
+          "ms": 564
         },
         "runtime-credential": {
           "count": 2,
-          "ms": 1175
+          "ms": 1187
         }
       }
     },
