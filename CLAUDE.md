@@ -20,7 +20,7 @@ The project is in **Stage 1**, a 14-day plan of nine sessions.
 
 ## Where we stand
 
-_Last updated: 26 Nov 2026, at the end of Session 11 (PR #27). Gate F was decided HARDEN (D-74): Stage 1 stays open._
+_Last updated: 27 Nov 2026: Session 11 (PR #27) and its deploy to production (D-85). Gate F was decided HARDEN (D-74): Stage 1 stays open._
 
 | Session | Topic                                       | State                                             |
 | ------- | ------------------------------------------- | ------------------------------------------------- |
@@ -40,14 +40,14 @@ Each session's detail is in `docs/evidence/session-N/report.md`. Gate R's docume
 
 ### Session 11 (two new credentials, 25–26 Nov 2026; `session-11/report.md`)
 
-A Stage 1 amendment (D-80) from `docs/mykey-automation-credential-spec.md`. On staging only; production gets it after W-2.
+A Stage 1 amendment (D-80) from `docs/mykey-automation-credential-spec.md`. On staging from 26 Nov 2026, and on production from 27 Nov 2026, before W-2, on the owner's word (D-85, `run-11.10.md`).
 
 - **The runtime credential** (D-81): a client secret `mkrc.<id>.<secret>` for one environment, up to 365 days, exchanged at `POST /v1/machine/exchange` for a 900-second token. PostgreSQL keeps a verifier, never the secret. A revocation stops the credential at once; a token already exchanged lives out its 15 minutes in OpenBao.
 - **`machine.metadata`:** names, versions and times of an environment, no value, no audit row.
 - **The automation credential** (D-82): `mkac.<id>.<secret>`, 1 hour to 365 days, bound to 1 to 8 networks, with up to three rights. Ten `/v1/automation` routes make a project, an environment, secrets and runtime credentials. A credential reaches only what its own chain made (`project.managed_by`); everything else is one 404. It reads no value and deletes nothing.
 - **`cli-v0.2.0`** exchanges a client secret by itself; a 30-day token works as before. The published `cli-v0.1.2` given a runtime credential exits 77.
 - **The workspace** has an Automation page (owners and admins) and issues a runtime credential beside the token.
-- **`host-v0.10.0`** (`5e13f421a4e6`) is on staging: 25 staging files green on it. Its migration `0019` means **no rollback**: a host goes back only by a restore.
+- **`host-v0.10.0`** (`5e13f421a4e6`) is on staging (25 staging files green on it) and on production. Its migration `0019` means **no rollback**: a host goes back only by a restore.
 - **The manifest** (`--session 11`): 161 PASS (7 `earlier`), 7 NOT YET DUE, 5 NOT PROVEN. `test:consumers` was red once on the candidate (the workstation's memory) and green on its second run.
 - **A second agent guide** (D-84, after the merge): `docs/agents/provision-with-automation.md`, for an agent that writes a provisioning script. `llms.txt` links it in a section of its own, and `tests/unit/agents/automation-guide.test.ts` keeps it equal to the contract. No agent has been run from it yet. The README says what Session 11 added.
 - **Not proven on staging:** the fleet's 20 seconds (ten servers started in 19.7 s and 21.7 s, D-83), and the new kinds' recovery after a restore (integration only).
@@ -129,11 +129,12 @@ A Stage 1 amendment (D-80) from `docs/mykey-automation-credential-spec.md`. On s
   - The pair signing key is still `k1`, back from custody.
   - Session 2's 16 spike organizations are retired (`failed`, their environments `archived`), so `reviewOpen` is 0.
   - The KMS instance `expiry` was put back, stopped.
-- **Production** runs `host-v0.9.2` **open and in service** (epoch 11, opened 23 Nov 2026 18:14Z through the owner's journey; the probe's `inService: true`):
+- **Production** runs `host-v0.10.0` **open and in service** (epoch 15, opened 27 Nov 2026 07:21:57Z through the owner's journey, D-85; before it `host-v0.9.2` from 23 Nov 2026). From `0019` it goes back only by a restore:
   - its own OpenBao, unsealed by `mykey-prod-seal-1` (KMS domain `mykey-prod-kms`; the seal policy keeps five rights, create refused);
   - custody in `~/.mykey/custody/prod/` and the password manager; backup timers; its first pair eligible;
   - the owner's account and one organization, with the owner's secrets. Their ids, names and the owner's address never go into Git;
-  - eight job timers, `mykey-field-day` among them; migrations up to `0018`.
+  - eight job timers, `mykey-field-day` among them; migrations up to `0019`.
+  - No runtime or automation credential has been issued on it yet. consumer-1 keeps its 30-day token and `cli-v0.1.2`, which work on `host-v0.10.0`.
 
   Production deploys need the owner's permission. Every one is `--stay-closed`, then the owner's journey in the `tunnel verify --browser` window, then `--owner-confirmed` (`production.md`).
 
@@ -160,7 +161,7 @@ A Stage 1 amendment (D-80) from `docs/mykey-automation-credential-spec.md`. On s
   - The checkpoint `pair-30-day` is due from 17 Dec 2026 19:00 UTC, before the 05:00 retention of 18 Dec.
   - **consumer-1's token** expires by about 22 Dec 2026: rotate it around 20 Dec, with the one-command form.
   - **W-2,** the 28-day report: 20 Dec 2026 (D-05, D-72). **W-1,** retention ageing: 23 to 26 Dec 2026.
-  - **After W-2:** production gets `host-v0.10.x` (the owner's journey; from then no way back but a restore), and consumer-1 `cli-v0.2.0`.
+  - **W-2's report covers two releases** (D-85): `host-v0.9.x` until 27 Nov 2026 07:13 UTC, `host-v0.10.0` after. A production fix before W-2 is a new `host-v0.10.x`. consumer-1 moves to `cli-v0.2.0` only if it takes a runtime credential.
   - Weekly from 29 Nov: `host.ts prod field-pull` and `node scripts/field-report.ts prod --week <n>`.
 
 ## Commands
